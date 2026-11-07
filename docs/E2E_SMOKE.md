@@ -230,3 +230,44 @@ $L.Settings = U8 '<base64>'
 | 导出进相册 | ✅ 每次 +1（`/sdcard/Pictures/班级工具站/`） |
 | 每步截图 | ✅ 22 张 + release_launch.png，均 1080×2400 |
 | 脚本质量 | ✅ AST 0 错误、纯 ASCII、约 960 行 |
+
+---
+
+## 8. v1.0.1 最终回归（Round 4，2026-11-08 01:40–01:57）
+
+> 版本：**versionName 1.0.1 / versionCode 2**；主树 `assembleDebug` BUILD SUCCESSFUL、全量单测 **466/0**（Lead 验证）。
+> 脚本在 v1.0.0 的 28 项基础上**新增 3 项**（原有步骤全部保留），共 **31 项**（完整模式）。
+
+### 8.1 新增覆盖（v1.0.1 功能点）
+
+| 步骤 | 动作 / 断言 | 结果 |
+|---|---|---|
+| `appearance_about` | 我的 →「外观」卡片：断言「壁纸取色（Material You）」存在 → 点 Switch 一次（0→1）并验证状态确实变化 → 截图 `23_appearance.png` → 滚到「关于」断言版本含 `1.0.1` | PASS（switch=True；version=1.0.1） |
+| `appearance_persist` | `force-stop` + 重启 App → 恢复 Debug 会话 → 我的 → 外观 → 断言 Switch 状态与切换后一致（本地 DataStore 持久化） | PASS（persisted=True） |
+| `settings_redirect` | 全部 →（滚动到系统分类）点「设置」卡片 → 断言落到「我的」页（出现「壁纸取色」「关于」，且**不出现**「原生版开发中」占位）→ 截图 `24_settings_redirect.png` → BACK 回全部 | PASS（settings card → profile page） |
+
+说明：Debug 构建「关于」版本显示 `v1.0.1-debug`，断言按「包含 1.0.1」；Release 包为 `v1.0.1`（见 `RELEASE_BUILD.md` §7）。
+
+### 8.2 运行结果
+
+| 项目 | 结果 |
+|---|---|
+| 完整模式 `-Build -Install` | **31 PASS / 0 WARN / 0 FAIL，462.0 s，退出码 0** |
+| 快速模式（无参） | **29 PASS / 0 WARN / 0 FAIL，452.1 s，退出码 0** |
+| 导航 10 连击（`nav_probe_10x`） | ✅ **10/10**（两轮均 10/10，持续回归通过） |
+| 抽签→分组→BACK STEP3 / 真实鉴权 / 隐私二次确认 | ✅ 全部保持 PASS（v1.0.0 基线未回归） |
+| FATAL/ANR | ✅ 0（完整/快速两轮均 0） |
+| 导出进相册 | ✅ 完整 20→21（`抽签结果_20261107-1742_…png` 115,118 B）；快速 21→22（`…-1750_…png` 115,914 B） |
+
+### 8.3 v1.0.1 截图（新增 2 张 + 全量 24 张 + release）
+
+| 文件 | 字节 | 说明 |
+|---|---|---|
+| `23_appearance.png` | 321,413 | 我的→外观（壁纸取色开关已切换为开） |
+| `24_settings_redirect.png` | 295,543 | 全部→设置 落到「我的」页（外观/关于/v1.0.1） |
+| 其余 22 张 | — | 与 v1.0.0 基线同名同步骤（01–22；`20_auth_error`/`21_privacy`/`22_draw_to_group` 等均重新生成） |
+| `release_launch_v101.png` | 531,180 | Release v1.0.1 启动截图（身份页，无开发预览） |
+
+### 8.4 结论
+
+v1.0.1 在保持 v1.0.0 全部基线功能不回归的前提下，新增「外观（壁纸取色，本地持久化）」「设置卡片跳转我的页」「版本号 1.0.1」三项均验证通过；两轮 E2E、导航探针、logcat 全绿，Release 签名/安装/启动复验通过，具备交付条件（真实账号业务链路仍需用户测试身份另测，见 `RELEASE_BUILD.md` §7）。

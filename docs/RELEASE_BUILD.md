@@ -114,3 +114,48 @@ cmd /c "`"$adb`" exec-out screencap -p > artifacts\e2e\release_launch.png"
 2. 版本号仍为 `1.0.0`（本轮未发布）；正式上传前按 §4 递增 `versionCode`。
 3. 安装 release 包不会覆盖 debug 包（包名不同：`com.furina.classtools` vs `com.furina.classtools.debug`），两者可共存。
 4. 签名证书有效期至 2054-03-25（`signingReport` 实测），请务必按 §5 完成 keystore 离线备份。
+
+---
+
+## 7. v1.0.1 复验（2026-11-08 01:57，Round 4 收尾）
+
+> 版本：**versionName `1.0.1` / versionCode `2`**；主树 `assembleDebug` + 全量单测 466/0 通过。
+> 本节不覆盖 §3/§6 的 v1.0.0 记录，仅追加 v1.0.1 的复验证据。
+
+### 7.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| `:app:assembleRelease` | **BUILD SUCCESSFUL in 13 s**（52 tasks；增量，packageRelease/assembleRelease 复用已构建产物） |
+| Release APK | `C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\app\build\outputs\apk\release\app-release.apk` |
+| APK 字节数 | **2,274,622 B**（约 2.17 MiB） |
+| APK SHA-256 | `72135018511DE666CB1AF6222988FD7FE39FF527F21C20D70C1B80D98D144DD2` |
+| `apksigner verify --verbose --print-certs` | **Verifies**；v2 scheme = true；Number of signers = 1 |
+| 签名证书 | `CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`；证书 SHA-256 `974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a`；RSA 2048（与 v1.0.0 同一 keystore，可覆盖升级） |
+
+### 7.2 安装与启动
+
+| 项 | 结果 |
+|---|---|
+| 安装 | `adb install -r` → `Performing Streamed Install` → **Success**（v1.0.0 → v1.0.1 覆盖升级成功） |
+| 包信息（dumpsys） | `com.furina.classtools`，**versionName=1.0.1，versionCode=2**，minSdk 26，targetSdk 37 |
+| 启动 | `topResumedActivity = com.furina.classtools/.MainActivity` |
+| 首屏 | 身份核验页（无「开发预览」入口），`v1.0.1 · Android 17 设计语言` |
+| 启动截图 | `artifacts\e2e\release_launch_v101.png`（1080×2400，531,180 B） |
+| logcat | `artifacts\e2e\release_logcat_v101.txt`（569 行 / 86,799 B）中 **FATAL/ANR = 0** |
+
+### 7.3 证据文件（artifacts/e2e/）
+
+- `release_build_v101.log`（构建日志）
+- `release_apksigner_verify_v101.txt`（验签完整输出）
+- `release_launch_v101.png`（启动截图）
+- `release_ui_v101.xml`（启动后 UI dump：身份页、无开发预览、v1.0.1）
+- `release_logcat_v101.txt`（启动期间全量 logcat，0 FATAL/ANR）
+
+### 7.4 v1.0.1 相对 v1.0.0 的主要变化（供交付说明）
+
+privacy 数据页（导出/清除云端/清除本机/协议回看）、water/roster 真实页、fitrecs 云端读写、通知附件预览、全部工具长按拖动排序（prefs.toolOrder 同步）、抽签/分组状态 `rememberSaveable` 持久化、底部导航 liveRoute 修复、外观「壁纸取色（Material You）」本地开关、设置卡片跳转「我的」页、关于版本 v1.0.1。
+
+### 7.5 边界（与 v1.0.0 相同）
+
+Release 包**真实账号业务全链路**（真实身份登录 → 云端数据加载）未在本轮测试，需要用户提供测试身份后另测；Debug「开发预览」链路的完整 E2E 已全绿（见 `docs/E2E_SMOKE.md` §8）。
