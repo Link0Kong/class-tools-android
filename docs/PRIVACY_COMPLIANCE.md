@@ -36,3 +36,12 @@
 - 同步：userdata v6 14 键逐 section LWW；marks 为作业完成/通知已处理唯一真源；本机退出登录清除会话。
 - 电费展示例外：仅本人关注宿舍（楼栋+房间+电量），不导出、不分享（与 web/AGENTS.md 例外条款一致）。
 - 名册：显示姓名/座号/职务，**不显示学号**，不导出名单。
+
+## 4. v2.0.0 新增（2026-11-08）
+
+| 项 | 实现 | 位置 |
+|---|---|---|
+| 通知权限 | 「我的 → 权限与提醒」四态管理 + 理由说明 + 永久拒绝跳系统设置；提醒设置页引导 | `ui/screens/settings/PermissionSettingsScreen.kt`、`data/permission/*` |
+| 日历权限 | 同上；写日程前检查 READ/WRITE_CALENDAR，未授权退回系统 ACTION_INSERT（用户确认后保存） | `data/calendar/*`、`MainNavHost.writeCalendarEvent` |
+| 本机通知提醒 | 作业截止/上课提醒仅本机 WorkManager 调度，不联网、不上传；通知权限关闭时静默跳过 | `data/reminder/*` |
+| 权限隐私口径 | 通知仅用于作业/上课提醒；日历仅写入用户主动选择的课表/通知日程；均可随时关闭，拒绝不影响其他功能 | `ui/screens/privacy/PrivacyTexts.kt` |

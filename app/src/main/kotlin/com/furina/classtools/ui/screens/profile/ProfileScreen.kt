@@ -56,6 +56,8 @@ fun ProfileScreen(
     onSyncEnabledChange: (Boolean) -> Unit = {},
     onClearLocalCache: () -> Unit = {},
     onOpenDataPrivacy: () -> Unit = {},
+    onOpenPermissions: () -> Unit = {},
+    onOpenReminderSettings: () -> Unit = {},
     dynamicColorEnabled: Boolean = false,
     onDynamicColorChange: (Boolean) -> Unit = {},
 ) {
@@ -134,6 +136,19 @@ fun ProfileScreen(
                     actionText = "清除",
                     onAction = onClearLocalCache,
                 )
+            }
+
+            SettingCard(title = "权限与提醒") {
+                SettingActionRow(
+                    label = "权限管理",
+                    actionText = "管理",
+                    onAction = onOpenPermissions,
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SettingActionRow(label = "提醒设置", actionText = "设置", onAction = onOpenReminderSettings)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SettingRow(label = "通知 / 日历", value = "本地功能 · 不上传")
             }
 
             SettingCard(title = "外观") {

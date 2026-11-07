@@ -109,6 +109,8 @@ fun TimetableViewScreen(
     initialDayView: Boolean = false,
     skipLoad: Boolean = false,
     nowMillis: Long = System.currentTimeMillis(),
+    /** v2：写系统日历（课程 → 指定周/开学日；null = 不显示入口）。 */
+    onAddToCalendar: ((Course, Int, LocalDate) -> Unit)? = null,
 ) {
     var phase by remember(skipLoad, initialError) {
         mutableStateOf(
@@ -300,7 +302,12 @@ fun TimetableViewScreen(
 
         selectedCourse?.let { course ->
             CtBottomSheet(onDismissRequest = { selectedCourse = null }) {
-                CourseDetailSheet(course = course, termStart = termStart, displayWeek = displayWeek)
+                CourseDetailSheet(
+                    course = course,
+                    termStart = termStart,
+                    displayWeek = displayWeek,
+                    onAddToCalendar = onAddToCalendar,
+                )
             }
         }
 
@@ -873,6 +880,7 @@ private fun CourseDetailSheet(
     course: Course,
     termStart: LocalDate?,
     displayWeek: Int?,
+    onAddToCalendar: ((Course, Int, LocalDate) -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -921,6 +929,22 @@ private fun CourseDetailSheet(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (onAddToCalendar != null) {
+            val week = displayWeek
+            val term = termStart
+            if (week != null && term != null) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { onAddToCalendar(course, week, term) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("添加到系统日历（本周）") }
+            } else {
+                Text(
+                    text = "开学日未知，暂时无法写日程",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(8.dp))
     }
 }

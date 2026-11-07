@@ -4,6 +4,8 @@ import android.content.Context
 import com.furina.classtools.data.auth.ApiAuthRepository
 import com.furina.classtools.data.auth.AuthRepository
 import com.furina.classtools.data.fitrecs.DefaultFitRecsRepository
+import com.furina.classtools.data.calendar.AndroidCalendarWriter
+import com.furina.classtools.data.calendar.CalendarWriter
 import com.furina.classtools.data.fitrecs.FitRecsRepository
 import com.furina.classtools.data.homework.DefaultHomeworkRepository
 import com.furina.classtools.data.homework.HomeworkRepository
@@ -17,10 +19,17 @@ import com.furina.classtools.data.notices.DefaultNoticesRepository
 import com.furina.classtools.data.notices.NoticesRepository
 import com.furina.classtools.data.power.DefaultPowerRepository
 import com.furina.classtools.data.power.PowerRepository
+import com.furina.classtools.data.permission.AndroidPermissionController
+import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.privacy.CallbackLocalCleaner
 import com.furina.classtools.data.privacy.DefaultPrivacyRepository
 import com.furina.classtools.data.privacy.PrivacyRepository
 import com.furina.classtools.data.privacy.RepositoryPrivacyUserDataAccess
+import com.furina.classtools.data.reminder.DataStoreReminderSettingsStore
+import com.furina.classtools.data.reminder.ReminderRuntime
+import com.furina.classtools.data.reminder.ReminderScheduler
+import com.furina.classtools.data.reminder.ReminderSettingsStore
+import com.furina.classtools.data.reminder.WorkManagerReminderScheduler
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionStore
 import com.furina.classtools.data.settings.AppSettingsStore
@@ -138,6 +147,46 @@ class AppContainer(context: Context) {
 
     /** 本机外观偏好（壁纸取色等）：设备级设置，不进云端 userdata。 */
     val appSettings: AppSettingsStore = AppSettingsStore(appContext)
+
+    /** 运行时权限（通知/日历）：四态判定 + 请求 + 跳系统设置。 */
+    val permissionController: PermissionController = AndroidPermissionController(appContext)
+
+    /** 本机提醒设置（设备偏好，不进云端；作业/课表提醒开关与提前量）。 */
+    val reminderSettingsStore: ReminderSettingsStore = DataStoreReminderSettingsStore(appContext)
+
+    /** 写系统日历：有权限直接插入；无权限返回 NeedsPermission 由 UI 走 ACTION_INSERT 兜底。 */
+    val calendarWriter: CalendarWriter = AndroidCalendarWriter(
+        context = appContext,
+        permissionController = permissionController,
+    )
+
+    /** 本地通知提醒调度（WorkManager 15min 周期，幂等）。 */
+    val reminderScheduler: ReminderScheduler = WorkManagerReminderScheduler(appContext)
+
+    init {
+        runCatching { reminderScheduler.ensureScheduled() }
+    }
+
+    /** 用户修改提醒设置后重建调度（或关闭时取消）。 */
+    fun rescheduleReminders() {
+        runCatching { ReminderRuntime.reschedule(appContext) }
+    }
+
+    fun cancelReminders() {
+        runCatching { ReminderRuntime.cancel(appContext) }
+    }
+
+    /**
+     * 登录后预热提醒所需的本机缓存（作业/课表/marks），保证次日提醒的数据可用。
+     * 只读网络拉取，幂等（各仓库有 TTL）。
+     */
+    fun warmReminderCaches() {
+        appScope.launch {
+            runCatching { homeworkRepository.load(force = false) }
+            runCatching { timetableRepository.load(force = false) }
+            runCatching { marksRepository.refresh(force = false) }
+        }
+    }
 
     /** 退出登录：清内存会话、名单缓存（本机业务数据按账号隔离，下次登录同账号仍可用）。 */
     suspend fun signOut() {

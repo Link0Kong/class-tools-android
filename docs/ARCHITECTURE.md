@@ -42,6 +42,12 @@ data/
   notices/        通知仓库（两级签名拉取、CLASS_NOTICE_V1 解析、override/hidden）
   timetable/      课表仓库（site_assets id=tt，6h TTL，周次/下一节纯函数）
   power/          电费仓库（power / power_history，2min/5min 缓存，慢频统计）
+  fitrecs/        体测历史云端读写（最多 2 条、arch 软删、pending 补发）
+  privacy/        数据与隐私（导出 JSON 脱敏/清除云端与本机）
+  settings/       AppSettingsStore（壁纸取色等本机外观偏好）
+  reminder/       本机提醒（设置/规划纯函数/WorkManager/通知渠道/去重/BootReceiver）
+  calendar/       写系统日历（CalendarContract + ACTION_INSERT 兜底 + 课表/通知 Mapper）
+  permission/     运行时权限四态判定 + 请求/设置跳转（通知/日历）
   tool/           工具目录（id/名称/图标/分类，与 homeTools 同步契约对齐）
 features/
   draw/           抽签领域层（引擎/校验/状态机/编解码/导出 payload）
@@ -51,10 +57,12 @@ features/
   export/         导出卡 v2 原生 Canvas 渲染 + MediaStore/FileProvider + payload 映射
 ui/
   theme/          设计令牌（颜色/字体/形状/动效/主题/Tokens）
+  adaptive/       自适应断点/内容限宽/双栏 helper（compact/medium/expanded）
   components/     品牌标记、顶栏、工具卡、状态视图、表达性背景
+  components/dock/ ColorOS 17 浮岛底栏 + 三 Tab Pager + push 转场
   components/expressive/  自建 M3 Expressive 组件（8 个）
-  screens/        identity / home / all / profile / draw / group / fit / homework / notices / timetable / power
-  navigation/     自适应导航（底部短导航 / NavigationRail；工具页全屏 push）
+  screens/        identity / home / all / profile / draw / group / fit / homework / notices / timetable / power / water / roster / data / settings
+  navigation/     根页 Pager（工作台/工具/我的）+ push 工具页转场
   preview/        全部 @Preview（android preview render / IDE 共同使用）
 ```
 
@@ -95,13 +103,16 @@ ui/
 ## 7. Android 17 / Material 3 Expressive 落地
 
 - **颜色**：品牌色作为种子（雾青 `#4E9082` / 灰蓝 `#6E8CA8` / 暖沙 `#B98F63` / 暖白 `#F7F8F8`），明暗两套完整 M3 色板；设置中可选「跟随壁纸动态取色」。
+- **品牌图标**：启动图标与应用内 BrandMark 统一为网页 favicon / 微信小程序 `app-icon-1024.png` 的三圆点几何。
+- **浮岛式导航（v2）**：ColorOS 17 风格半透明胶囊悬浮离底（导航栏 insets 之上 10dp），选中项弹性药丸跟手（滑动中拉伸 8% / 压扁 2%，spring 吸附），按压柔性反馈；平板限宽 480dp。
+- **页面切换（v2）**：根页 工作台/工具/我的 横向 Pager（8% 位移 + 淡出 + 0.98 缩放跟手）；工具页 push 转场（slide+fade+scale spring，360ms）。
 - **字体**：系统 Roboto Flex（拉丁）+ Noto Sans CJK（中文）；中文行高整体为 1.5–1.6×，标题使用中等字重避免中文过粗。
 - **形状**：大圆角与「超级椭圆」语义；工具卡 26dp、英雄卡 30dp+ 异形圆角、胶囊 50%。
 - **动效**：弹簧为主（spatial / effects / emphasized 三档），页面转场 320/220 ms；按压时卡片轻微缩放 + 形状回弹。
-- **自适应**：edge-to-edge + WindowInsets 安全区；手机竖屏单列/双列网格；横屏/平板 ≥600dp 时工具网格改为 3–4 列、详情页左右分栏（后续）。
+- **自适应（v2）**：`ui/adaptive` 断点 compact <600 / medium 600–839 / expanded ≥840；平板内容限宽 1200dp 居中、工作台双栏、工具网格 2/3/4 列。
 - **预测式返回**：Manifest `enableOnBackInvokedCallback=true` + Compose 返回处理。
 - **克制玻璃感**：用径向渐变与层次色（无真实模糊 API 依赖）模拟 Android 17 的柔和层级，低端机不牺牲性能；仅弹层可评估 `Modifier.blur`（API 31+）。
-- **无障碍**：可点区 ≥48dp、对比度 ≥4.5:1、全部图标有 contentDescription。
+- **无障碍**：可点区 ≥48dp、对比度 ≥4.5:1、全部图标有 contentDescription；全部工具 TalkBack「上移/下移」排序。
 
 ## 8. 导出卡片 v2（原生）
 

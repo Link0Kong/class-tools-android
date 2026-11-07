@@ -38,6 +38,10 @@ object CtTokens {
         /** 卡片内边距。 */
         val cardPaddingCompact = 16.dp
         val cardPaddingExpanded = 20.dp
+
+        /** 语义别名（v2 新页面通用）：随窗口自适应的默认值（见 ui/adaptive 的 spec 覆盖）。 */
+        val pageHorizontal: androidx.compose.ui.unit.Dp get() = pageHorizontalCompact
+        val cardGap: androidx.compose.ui.unit.Dp get() = cardGapCompact
     }
 
     /** 圆角数值（需要动画插值/自定义 RoundedCornerShape 时用）。 */
@@ -173,3 +177,4 @@ object CtTokens {
         const val maxFontScale = 2.0f
     }
 }
+

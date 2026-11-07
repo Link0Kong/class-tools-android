@@ -161,6 +161,8 @@ fun NoticesScreen(
     marksRepository: MarksRepository?,
     noticesRepository: NoticesRepository?,
     rawAttachmentLoader: NoticeRawAttachmentLoader? = null,
+    /** v2：把有明确时间的结构化通知写入系统日历（null = 不显示入口）。 */
+    onAddToCalendar: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
     modifier: Modifier = Modifier,
     initialData: NoticesData? = null,
     initialMarks: MarksSnapshot? = null,
@@ -421,6 +423,7 @@ fun NoticesScreen(
         NoticeDetailDialog(
             item = item,
             rawAttachmentLoader = rawAttachmentLoader,
+            onAddToCalendar = onAddToCalendar,
             onDismiss = { selected = null },
             onToggleDone = {
                 (item as? NoticeUiItem.Auto)?.let {
@@ -677,6 +680,7 @@ private fun NoticeDetailDialog(
     onDismiss: () -> Unit,
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
+    onAddToCalendar: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -698,8 +702,15 @@ private fun NoticeDetailDialog(
         },
         confirmButton = {
             when (item) {
-                is NoticeUiItem.Auto -> TextButton(onClick = onToggleDone) {
-                    Text(if (item.done) "标记未处理" else "标记已处理")
+                is NoticeUiItem.Auto -> Row {
+                    if (onAddToCalendar != null) {
+                        TextButton(onClick = { onAddToCalendar(item.entry.group) }) {
+                            Text("加入日程")
+                        }
+                    }
+                    TextButton(onClick = onToggleDone) {
+                        Text(if (item.done) "标记未处理" else "标记已处理")
+                    }
                 }
 
                 is NoticeUiItem.Manual -> TextButton(onClick = onTogglePin) {

@@ -6,7 +6,7 @@
 - 版本：1.0.0（versionCode 1），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v1.0.1 发布候选**——8 个工具全部原生可运行（抽签/分组/体测/作业/通知/课表/电费/水量/名册），身份门禁/同步/导出/隐私与数据管理完整；新增壁纸取色开关、无障碍排序、离线本机状态恢复等收尾项。Release 签名 APK 交付桌面（v1.0.1）。全量单测 **466/0**、@Preview **78 张**、模拟器 E2E 28+ 项 PASS。详见 `docs/CHANGELOG.md` 与 `docs/REPORT_ROUND4_20261108.md`
+- 状态：**v2.0.0（视觉/交互大版本）**——8 个工具 + 品牌图标统一、ColorOS 17 浮岛底栏、三 Tab 滑动切换、工作台对齐微信小程序、多比例/平板自适应、权限管理、原生通知提醒（作业/课表）、课表/通知写系统日历。全量单测 **552/0**、双尺寸模拟器手测通过、签名 APK 已交付桌面（2.41MB）。详见 [docs/REPORT_ROUND5_20261108.md](docs/REPORT_ROUND5_20261108.md) 与 [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## 目录
 

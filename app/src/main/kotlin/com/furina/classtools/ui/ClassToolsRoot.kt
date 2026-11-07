@@ -32,7 +32,11 @@ import kotlinx.coroutines.launch
  * 身份门禁是唯一入口（对齐站点红线：先学号+姓名，后加载班级数据）。
  */
 @Composable
-fun ClassToolsRoot(container: AppContainer) {
+fun ClassToolsRoot(
+    container: AppContainer,
+    pendingToolId: String? = null,
+    onPendingToolConsumed: () -> Unit = {},
+) {
     val sessionState by container.sessionStore.state.collectAsStateWithLifecycle(
         initialValue = SessionState.Loading,
     )
@@ -49,6 +53,7 @@ fun ClassToolsRoot(container: AppContainer) {
                     runCatching { container.userDataRepository.hydrateFromLocal() }
                     container.userDataRepository.setSyncEnabled(!state.session.debug)
                     container.classMembersRepository.load(force = false)
+                    container.warmReminderCaches()
                 } else {
                     container.updateActiveSession(null)
                     container.sessionStore.clear()
@@ -80,6 +85,8 @@ fun ClassToolsRoot(container: AppContainer) {
             MainNavHost(
             container = container,
             session = state.session,
+            initialToolId = pendingToolId,
+            onInitialToolConsumed = onPendingToolConsumed,
             onSignOut = {
                 scope.launch {
                     container.authRepository.logout()
