@@ -22,7 +22,7 @@
 | 项 | 结果 |
 |---|---|
 | 全量单测 | **552 tests / 0 failures**（43 个测试类；本轮新增 86：dock/adaptive/workbench 27 + reminder/calendar/permission 59） |
-| @Preview | v2 新增 20 张（浮岛底栏 6 / 工作台 9 / 自适应 5），全量渲染见 `artifacts/previews/` |
+| @Preview | 全量 **97 张** 渲染通过（v2 新增 20：浮岛底栏 6 / 工作台 9 / 自适应 5） |
 | 模拟器手测 | 1080×2400 真机尺寸（第二台 headless）已验证：浮岛底栏渲染/选中药丸；左右滑动切换 工作台↔工具↔我的；工作台新结构（时段问候/今日课表空态/电费卡/作业/通知/常用工具）；权限管理页（通知/日历四态）；提醒设置页（总开关/作业/上课/提前档位/安静时段）；启动图标三圆点 |
 | 构建 | `assembleDebug` / `assembleRelease` SUCCESSFUL |
 | Release | APK **2,413,297 B**；SHA-256 `9E6759686402C56B5CA43FE6E59A84863F78E05104951A0AAB00DA5CAB53D3A3`；apksigner V2 通过（证书 `974854df…4a1a`） |
@@ -41,7 +41,7 @@
 | # | 项 | 说明 |
 |---|---|---|
 | 1 | v2 E2E 未跑 | 旧 E2E 脚本基于旧底栏文案（「全部」），v2 改为「工具」+ Pager，需 toolchain 更新脚本（底栏点击/滑动断言、权限页/提醒页/写日程入口）后跑完整回归；本轮用手测+单测+预览兜底 |
-| 2 | 多设备适配矩阵 | toolchain 正在重跑（首轮因 Lead 并发启动第二台模拟器抢 WHPX 失败）；结果补入 `docs/ADAPTIVE_TEST_MATRIX.md` |
+| 2 | 多设备适配矩阵 | 首轮因 Lead 并发启动第二台模拟器抢 WHPX，toolchain 的 AVD 未能 boot；已协调下一轮单独重跑，结果补入 `docs/ADAPTIVE_TEST_MATRIX.md` |
 | 3 | 启动图标 launcher 渲染 | Pixel Launcher（API 37 模拟器）在图标外圈显示一圈随背景色变化的浅色环；三圆点本体正确。需真机复核（若存在则改用 legacy PNG 图标或调整 monochrome 层） |
 | 4 | MP 功能对齐剩余 P1 | 反馈建议(fb)、使用说明(ug)、我的数据指标卡、单条通知提醒、结果单复制/点名导出等（见 `docs/MP_PARITY_AUDIT.md`） |
 | 5 | 工具网格 3/4 列 | 自适应 helper 已提供，AllToolsScreen 拖拽几何仍固定 2 列，需参数化（`V2_ADAPTIVE_SPEC.md §5`） |
