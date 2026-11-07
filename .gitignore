@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.iml
+.idea/
+
+# 生成的交付物 / 过程产物（源码与文档入仓，产物不入仓）
+artifacts/
+*.apk
+*.aab
+
+# 工具链/临时
+*.log
+
+# 本机签名与密钥（绝不提交）
+key/
+keystore.properties
+*.jks
