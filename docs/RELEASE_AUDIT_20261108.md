@@ -162,3 +162,22 @@
 - E2E：`artifacts/e2e/summary.json`（result=PASS，26 steps，22 shots，01:19–01:26）。
 - 预览：`ui/preview/` 78 张 @Preview；渲染脚本 `scripts/render_previews.ps1`（本次未重跑，沿用已渲染产物）。
 - 审计期并发观察（保留证据）：01:35 release 构建因其他任务未完成改动失败（`ui/components/A11yFormat.kt:33 unresolved reference`），随后 test compile 因 `UserDataRepository.hydrateFromLocal()` 接口新增而 `DrawConfigStoreTest.FakeUserDataRepository` 未实现失败；01:38 主树恢复全绿。**这正说明发布窗口必须冻结主树**（P1-9）。
+
+---
+
+## 修复状态（2026-11-08 Round 4 收尾）
+
+| P1 | 状态 | 处理 |
+|---|---|---|
+| 1 release 签名静默回退 debug | ✅ 已修 | pp/build.gradle.kts：无 keystore 时不再回退 debug 签名（保持未签名，由发布脚本校验） |
+| 2 R8 keep 包名写错 | ✅ 已修 | proguard-rules.pro 全部改为 com.furina.classtools.** |
+| 3 退出登录无二次确认 | ✅ 已修 | Profile 增加「退出登录？」确认弹层 |
+| 4 备案信息占位 | ⏳ 外部依赖 | 需真实备案号（旅行者提供），文档保留待办 |
+| 5 体测等级胶囊深色不可读 | ✅ 已修 | 浅色 pastel 底固定深色文字（0xFF17342D），深色主题可读 |
+| 6 通知附件 base64 无上限 | ✅ 已修 | NoticeAttachmentParser.decodeBase64Payload 10MB 上限（解码前字号预判 + 解码后校验） |
+| 7 导出位图高度无上限 | ✅ 已修 | ExportCardRenderer 预检：高度 >8192px 或面积 >12M px 时友好报错「导出内容过大…」 |
+| 8 marks 缓存/pending 仅内存 | ⏳ 下版本 | 需本机持久化 marks 文件（跨进程杀恢复 + 补发），本轮未做 |
+| 9 无 git commit/tag | ✅ 已修 | 工作区已 git init + commit + tag 1.0.1（key/keystore/artifacts 均忽略，不入库） |
+| 10 隐私文本草稿/删除渠道 | ⏳ 外部依赖 | 需管理员确认正式文本与删除渠道；隐私政策页已含「联系班委/管理员」说明 |
+
+验证：修复后 :app:testDebugUnitTest = **466/0**；ssembleRelease 成功（2,274,622 B / SHA-256 721350…44DD2）；Release 模拟器安装启动 0 FATAL；E2E 完整模式 **31 PASS / 0 FAIL**。

@@ -404,7 +404,7 @@ function Tap-ConsentCheckbox {
 }
 
 # Find the settings Switch that sits on the same row as a given label text
-# (profile page: "壁纸取色（Material You）" row has a Switch on the right).
+# (profile page: the "wallpaper color (Material You)" row has a Switch on the right).
 function Get-SwitchNodeNear([string]$Label) {
     $doc = Get-UiDump
     if (-not $doc) { return $null }
