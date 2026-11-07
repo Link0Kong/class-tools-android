@@ -271,3 +271,6 @@ $L.Settings = U8 '<base64>'
 ### 8.4 结论
 
 v1.0.1 在保持 v1.0.0 全部基线功能不回归的前提下，新增「外观（壁纸取色，本地持久化）」「设置卡片跳转我的页」「版本号 1.0.1」三项均验证通过；两轮 E2E、导航探针、logcat 全绿，Release 签名/安装/启动复验通过，具备交付条件（真实账号业务链路仍需用户测试身份另测，见 `RELEASE_BUILD.md` §7）。
+
+**回归口径**：以**完整模式 31 项（462.0 s）**为准；快速模式 29 项（452.1 s，跳过 build/install）为同轮补充，两轮均 0 FAIL。
+**交付包**（Lead 构建/交付，已核验与构建产物一致）：`android-class-tools\artifacts\classtools-1.0.1-release-signed.apk`，**2,274,622 B，SHA-256 `72135018511DE666CB1AF6222988FD7FE39FF527F21C20D70C1B80D98D144DD2`**，versionName 1.0.1 / versionCode 2。

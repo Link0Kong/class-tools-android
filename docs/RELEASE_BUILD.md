@@ -119,7 +119,8 @@ cmd /c "`"$adb`" exec-out screencap -p > artifacts\e2e\release_launch.png"
 
 ## 7. v1.0.1 复验（2026-11-08 01:57，Round 4 收尾）
 
-> 版本：**versionName `1.0.1` / versionCode `2`**；主树 `assembleDebug` + 全量单测 466/0 通过。
+> 版本：**versionName `1.0.1` / versionCode `2`**；主树 `assembleDebug` + 全量单测 **466/0** 通过。
+> 本次为**最终构建**（已包含审计 P1 修复：无 keystore 时保持未签名、R8 keep 包名 `com.furina`、退出登录二次确认、体测等级胶囊深色可读、通知附件 10MB 上限、导出超大卡片预检报错、userdata 本机状态离线恢复）。
 > 本节不覆盖 §3/§6 的 v1.0.0 记录，仅追加 v1.0.1 的复验证据。
 
 ### 7.1 构建与签名
@@ -128,8 +129,9 @@ cmd /c "`"$adb`" exec-out screencap -p > artifacts\e2e\release_launch.png"
 |---|---|
 | `:app:assembleRelease` | **BUILD SUCCESSFUL in 13 s**（52 tasks；增量，packageRelease/assembleRelease 复用已构建产物） |
 | Release APK | `C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\app\build\outputs\apk\release\app-release.apk` |
+| 交付副本 | `android-class-tools\artifacts\classtools-1.0.1-release-signed.apk`（与构建产物逐字节一致，供交付桌面） |
 | APK 字节数 | **2,274,622 B**（约 2.17 MiB） |
-| APK SHA-256 | `72135018511DE666CB1AF6222988FD7FE39FF527F21C20D70C1B80D98D144DD2` |
+| APK SHA-256 | `72135018511DE666CB1AF6222988FD7FE39FF527F21C20D70C1B80D98D144DD2`（构建产物与交付副本实测一致） |
 | `apksigner verify --verbose --print-certs` | **Verifies**；v2 scheme = true；Number of signers = 1 |
 | 签名证书 | `CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`；证书 SHA-256 `974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a`；RSA 2048（与 v1.0.0 同一 keystore，可覆盖升级） |
 
@@ -141,7 +143,7 @@ cmd /c "`"$adb`" exec-out screencap -p > artifacts\e2e\release_launch.png"
 | 包信息（dumpsys） | `com.furina.classtools`，**versionName=1.0.1，versionCode=2**，minSdk 26，targetSdk 37 |
 | 启动 | `topResumedActivity = com.furina.classtools/.MainActivity` |
 | 首屏 | 身份核验页（无「开发预览」入口），`v1.0.1 · Android 17 设计语言` |
-| 启动截图 | `artifacts\e2e\release_launch_v101.png`（1080×2400，531,180 B） |
+| 启动截图 | `artifacts\release_launch_v101.png`（Lead 复验截图，78,370 B）；E2E 轮另存 `artifacts\e2e\release_launch_v101.png`（1080×2400，531,180 B） |
 | logcat | `artifacts\e2e\release_logcat_v101.txt`（569 行 / 86,799 B）中 **FATAL/ANR = 0** |
 
 ### 7.3 证据文件（artifacts/e2e/）
@@ -159,3 +161,4 @@ privacy 数据页（导出/清除云端/清除本机/协议回看）、water/ros
 ### 7.5 边界（与 v1.0.0 相同）
 
 Release 包**真实账号业务全链路**（真实身份登录 → 云端数据加载）未在本轮测试，需要用户提供测试身份后另测；Debug「开发预览」链路的完整 E2E 已全绿（见 `docs/E2E_SMOKE.md` §8）。
+> 回归口径：以**完整模式 31 项**（`docs/E2E_SMOKE.md` §8）为准；快速模式 29 项为同轮补充（跳过 build/install），两轮均 0 FAIL。审计 P1 修复未触及 E2E 覆盖路径，断言与修复不冲突。
