@@ -9,6 +9,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.WaterDrop
@@ -141,6 +142,19 @@ object ToolCatalog {
             accent = Color(0xFF6F7A77),
             category = ToolCategory.SYSTEM,
             features = listOf("账号信息与退出", "同步开关与清除", "关于与备案信息"),
+        ),
+        AppTool(
+            id = "diag",
+            name = "诊断",
+            subtitle = "服务健康 · 设备 · AI 修复",
+            icon = Icons.Rounded.HealthAndSafety,
+            accent = teal,
+            category = ToolCategory.SYSTEM,
+            features = listOf(
+                "服务健康分组（脱敏展示）",
+                "设备诊断（本机检查 + 重新检测）",
+                "AI 分析原因/建议与修复流程时间线",
+            ),
         ),
     )
 

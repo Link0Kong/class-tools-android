@@ -1,5 +1,8 @@
 package com.furina.classtools.ui.theme
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
@@ -10,8 +13,10 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -221,6 +226,15 @@ fun ClassToolsTheme(
     }
 
     // 品牌语义色 / 玻璃材质 / 表达性字型：随明暗切换。
+    // 系统栏图标随主题切换：深色模式状态栏/导航栏图标用浅色，避免「黑字压暗底」不可读。
+    LaunchedEffect(darkTheme) {
+        val activity = context.findActivity() ?: return@LaunchedEffect
+        WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
+            isAppearanceLightStatusBars = !darkTheme
+            isAppearanceLightNavigationBars = !darkTheme
+        }
+    }
+
     val brandColors = if (darkTheme) DarkCtBrandColors else LightCtBrandColors
     val glassColors = if (darkTheme) DarkCtGlassColors else LightCtGlassColors
 
@@ -239,4 +253,11 @@ fun ClassToolsTheme(
             )
         },
     )
+}
+
+/** 从 Compose Context 向上找 Activity（系统栏外观设置用）。 */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

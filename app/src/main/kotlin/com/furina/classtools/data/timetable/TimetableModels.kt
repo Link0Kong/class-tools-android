@@ -121,12 +121,26 @@ enum class TtFailureKind {
     FORMAT,
 }
 
+/** 课表数据来源（个人教务登录 ttLocal 优先于公共 site_assets 快照；契约 §4）。 */
+enum class TtSource {
+    /** 个人课表（userdata v6 `tt.ttLocal`，来自「登录教务」）。 */
+    PERSONAL,
+
+    /** 公共课表（CloudBase `site_assets?id=eq.tt` 教务快照）。 */
+    PUBLIC,
+
+    /** 本机落盘缓存（网络失败兜底）。 */
+    CACHE,
+}
+
 /** 课表加载结果（失败时 UI 显示错误态；有本机缓存则 fromCache=true）。 */
 sealed interface TtLoadResult {
     data class Success(
         val snapshot: TtSnapshot,
         val fromCache: Boolean,
         val fetchedAt: Long,
+        /** 数据来源；默认 PUBLIC 保持既有调用方/预览兼容。 */
+        val source: TtSource = TtSource.PUBLIC,
     ) : TtLoadResult
 
     /**

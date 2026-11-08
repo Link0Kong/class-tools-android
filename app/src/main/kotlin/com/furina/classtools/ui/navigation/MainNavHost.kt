@@ -1,15 +1,21 @@
 package com.furina.classtools.ui.navigation
 
 import android.content.Intent
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,8 +23,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -38,6 +47,10 @@ import com.furina.classtools.data.fitrecs.FitRecsLoadResult
 import com.furina.classtools.data.fitrecs.FitRecsWriteResult
 import com.furina.classtools.data.permission.PermissionType
 import com.furina.classtools.data.privacy.LocalDataStats
+import com.furina.classtools.data.reminder.OneShotPlannedTime
+import com.furina.classtools.data.reminder.OneShotScheduleResult
+import com.furina.classtools.data.reminder.ReminderOneShot
+import com.furina.classtools.data.reminder.ReminderOneShotFactory
 import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
@@ -58,6 +71,7 @@ import com.furina.classtools.ui.components.dock.CtTabPager
 import com.furina.classtools.ui.components.dock.rememberCtTabPagerState
 import com.furina.classtools.ui.screens.all.AllToolsScreen
 import com.furina.classtools.ui.screens.data.DataPrivacyScreen
+import com.furina.classtools.ui.screens.diag.DiagScreen
 import com.furina.classtools.ui.screens.draw.DrawScreen
 import com.furina.classtools.ui.screens.fit.FitScreen
 import com.furina.classtools.ui.screens.group.GroupScreen
@@ -355,27 +369,80 @@ fun MainNavHost(
                     homeworkRepository = container.homeworkRepository,
                 )
 
-                "nt" -> NoticesScreen(
-                    onBack = { navController.popBackStack() },
-                    session = session,
-                    marksRepository = container.marksRepository,
-                    noticesRepository = container.noticesRepository,
-                    rawAttachmentLoader = ApiNoticeRawAttachmentLoader(container.apiClient),
-                    onAddToCalendar = { group ->
-                        if (NoticeCalendarMapper.eligible(group)) {
-                            writeCalendarEvent(NoticeCalendarMapper.eventFor(group))
-                        } else {
-                            toast(context, "该通知没有可写入日程的时间")
-                        }
-                    },
-                )
+                "nt" -> {
+                    val oneShotScheduler = remember {
+                        runCatching {
+                            ReminderOneShotFactory.create(context, container.permissionController)
+                        }.getOrNull()
+                    }
+                    var remindTarget by remember {
+                        mutableStateOf<com.furina.classtools.data.notices.NoticeGroupDto?>(null)
+                    }
+                    NoticesScreen(
+                        onBack = { navController.popBackStack() },
+                        session = session,
+                        marksRepository = container.marksRepository,
+                        noticesRepository = container.noticesRepository,
+                        rawAttachmentLoader = ApiNoticeRawAttachmentLoader(container.apiClient),
+                        onAddToCalendar = { group ->
+                            if (NoticeCalendarMapper.eligible(group)) {
+                                writeCalendarEvent(NoticeCalendarMapper.eventFor(group))
+                            } else {
+                                toast(context, "该通知没有可写入日程的时间")
+                            }
+                        },
+                        onRemindNotice = { group -> remindTarget = group },
+                    )
+                    remindTarget?.let { group ->
+                        NoticeReminderDialog(
+                            group = group,
+                            onDismiss = { remindTarget = null },
+                            onPick = { planned ->
+                                remindTarget = null
+                                val scheduler = oneShotScheduler
+                                if (scheduler == null) {
+                                    toast(context, "提醒服务不可用")
+                                } else {
+                                    scope.launch {
+                                        when (
+                                            val result = scheduler.scheduleNoticeReminder(
+                                                groupId = group.id,
+                                                fireAtMillis = planned.fireAtMillis,
+                                                label = group.title,
+                                                targetAtMillis = planned.targetAtMillis,
+                                            )
+                                        ) {
+                                            is OneShotScheduleResult.Scheduled -> toast(
+                                                context,
+                                                "已设置提醒：" + formatReminderTime(result.fireAtMillis),
+                                            )
+                                            OneShotScheduleResult.PermissionMissing ->
+                                                toast(context, "请先开启通知权限")
+                                            is OneShotScheduleResult.TooLate ->
+                                                toast(context, "提醒时间已过，请选择更晚的时间")
+                                            is OneShotScheduleResult.LimitReached ->
+                                                toast(context, "提醒数量已达上限（${result.limit} 条）")
+                                            OneShotScheduleResult.EmptyTarget ->
+                                                toast(context, "该通知没有可提醒的时间")
+                                            is OneShotScheduleResult.Failed ->
+                                                toast(context, "设置失败：${result.message}")
+                                        }
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
 
                 "tt" -> TimetableViewScreen(
                     onBack = { navController.popBackStack() },
                     repository = container.timetableRepository,
+                    loginRepository = container.timetableLoginRepository,
+                    sessionSid = session.sid,
                     onAddToCalendar = { course, week, termStart ->
                         writeCalendarEvent(CourseCalendarMapper.eventFor(course, week, termStart))
                     },
+                    onExportTimetable = { spec -> launchExport(spec) },
                 )
 
                 "power" -> PowerScreen(
@@ -396,6 +463,15 @@ fun MainNavHost(
                     session = session,
                     classMembersRepository = container.classMembersRepository,
                     userDataRepository = container.userDataRepository,
+                )
+
+                "diag" -> DiagScreen(
+                    onBack = { navController.popBackStack() },
+                    session = session,
+                    repository = container.diagRepository,
+                    deviceProbe = container.deviceProbe,
+                    reporter = container.clientDiagReporter,
+                    appVersion = com.furina.classtools.BuildConfig.VERSION_NAME,
                 )
 
                 else -> {
@@ -595,24 +671,11 @@ private fun RootTabs(
         courseLeadMinutes = reminderSettings.courseLeadMinutes,
     )
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = Color.Transparent,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            CtFloatingDock(
-                destinations = destinations,
-                selectedIndex = pagerState.currentPage,
-                onSelect = onSelectTab,
-                pagerOffsetFraction = pagerState.currentPageOffsetFraction,
-            )
-        },
-    ) { innerPadding ->
+
+    Box(modifier = Modifier.fillMaxSize()) {
         CtTabPager(
             pagerState = pagerState,
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize(),
+            modifier = Modifier.fillMaxSize(),
         ) { page ->
             when (page) {
                 0 -> HomeScreen(
@@ -657,5 +720,48 @@ private fun RootTabs(
                 }
             }
         }
+
+        CtFloatingDock(
+            destinations = destinations,
+            selectedIndex = pagerState.currentPage,
+            onSelect = onSelectTab,
+            pagerOffsetFraction = pagerState.currentPageOffsetFraction,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
+
+/** 单条通知提醒：选择提醒时间（截止/活动前）并交回 Lead 排程。 */
+@Composable
+private fun NoticeReminderDialog(
+    group: com.furina.classtools.data.notices.NoticeGroupDto,
+    onDismiss: () -> Unit,
+    onPick: (OneShotPlannedTime) -> Unit,
+) {
+    val options = remember(group) { ReminderOneShot.noticePlannedTimes(group) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("提醒我") },
+        text = {
+            Column {
+                if (options.isEmpty()) {
+                    Text("该通知没有可提醒的时间（无截止/活动时间）")
+                } else {
+                    Text("选择提醒时间（本机通知）：")
+                    options.forEach { planned ->
+                        TextButton(onClick = { onPick(planned) }, modifier = Modifier.fillMaxWidth()) {
+                            Text("${planned.label} · ${formatReminderTime(planned.fireAtMillis)}")
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
+}
+
+private fun formatReminderTime(millis: Long): String =
+    java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date(millis))

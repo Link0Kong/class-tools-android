@@ -10,7 +10,6 @@ import com.furina.classtools.data.network.asObjectOrNull
 import com.furina.classtools.data.network.asStringOrNull
 import com.furina.classtools.data.network.parseJsonOrNull
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -20,24 +19,33 @@ import kotlinx.serialization.json.JsonPrimitive
 /**
  * 课表仓库（契约：docs/api/ENDPOINTS.md E24 + docs/BACKEND_CONTRACT.md §7.4）。
  *
- * 数据源优先级：CloudBase `site_assets?id=eq.tt`（body 兼容 jsonb 对象/JSON 字符串）
- * → 失败回退本机缓存（旧域名 `tool.furina.xx/tt.json` 自 2026-11-07 起 DNS 已暂停，不再请求）。
- *
- * 缓存：内存 L1 + [FileTimetableCache] 落盘，TTL 6h；失败时即使缓存过期也作为兜底返回（fromCache=true）。
+ * 数据源优先级（2026-11-08 课表登录）：**个人 ttLocal > 公共 `site_assets?id=eq.tt` 快照 > 本机缓存**。
+ * - 个人课表 = userdata v6 `tt.ttLocal`（`{c,t}`，与 web/mp 同字段；由 [TimetablePersonalStore] 读写）；
+ * - 公共快照 body 兼容 jsonb 对象/JSON 字符串；6h TTL；失败回退本机缓存（旧域名自 2026-11-07 起不再请求）。
  */
 interface TimetableRepository {
-    /** 拉取课表（TTL 内直接返回缓存）。 */
+    /** 拉取课表（TTL 内直接返回缓存；有个人课表时永远优先返回个人课表）。 */
     suspend fun load(force: Boolean = false): TtLoadResult
 
-    /** 只读本机缓存（不发起请求；预览/离线首帧用）。 */
+    /** 只读本机缓存/个人课表（不发起请求；预览/离线首帧用）。 */
     suspend fun cached(): TtSnapshot?
 
     suspend fun clear()
+
+    /** 只读个人课表（ttLocal）；无 → null。默认 null 保持既有 Fake 实现兼容。 */
+    suspend fun personal(): TtSnapshot? = null
+
+    /** 保存个人课表到 userdata v6 `tt.ttLocal`（默认空实现，供预览/测试 Fake 复用）。 */
+    suspend fun savePersonal(snapshot: TtSnapshot) = Unit
+
+    /** 清除个人课表（回退公共课表）。 */
+    suspend fun clearPersonal() = Unit
 }
 
 class DefaultTimetableRepository(
     private val api: ApiClient,
     private val cache: FileTimetableCache,
+    private val personalStore: TimetablePersonalStore? = null,
     private val clock: () -> Long = System::currentTimeMillis,
     private val ttlMs: Long = DEFAULT_TTL_MS,
     private val json: Json = NetJson,
@@ -59,10 +67,20 @@ class DefaultTimetableRepository(
 
     private suspend fun loadLocked(force: Boolean): TtLoadResult {
         val now = clock()
+        // 0) 个人课表（登录教务产生）永远优先于公共快照与缓存。
+        val personal = personalSnapshot()
+        if (personal != null) {
+            return TtLoadResult.Success(
+                snapshot = personal,
+                fromCache = false,
+                fetchedAt = now,
+                source = TtSource.PERSONAL,
+            )
+        }
         // 1) 内存 L1（TTL 内）
         val memory = memorySnapshot
         if (!force && memory != null && now - memorySavedAt < ttlMs) {
-            return TtLoadResult.Success(memory, fromCache = true, fetchedAt = memorySavedAt)
+            return TtLoadResult.Success(memory, fromCache = true, fetchedAt = memorySavedAt, source = TtSource.CACHE)
         }
         // 2) 落盘缓存（TTL 内直接用；过期但请求失败时作为兜底）
         val cached = cache.read()?.also { file ->
@@ -70,7 +88,12 @@ class DefaultTimetableRepository(
             memorySavedAt = file.savedAt
         }
         if (!force && cached != null && now - cached.savedAt < ttlMs) {
-            return TtLoadResult.Success(cached.snapshot, fromCache = true, fetchedAt = cached.savedAt)
+            return TtLoadResult.Success(
+                cached.snapshot,
+                fromCache = true,
+                fetchedAt = cached.savedAt,
+                source = TtSource.CACHE,
+            )
         }
 
         // 3) 云端请求
@@ -86,7 +109,7 @@ class DefaultTimetableRepository(
                     memorySnapshot = snapshot
                     memorySavedAt = now
                     cache.write(snapshot, now)
-                    TtLoadResult.Success(snapshot, fromCache = false, fetchedAt = now)
+                    TtLoadResult.Success(snapshot, fromCache = false, fetchedAt = now, source = TtSource.PUBLIC)
                 }
 
                 TtParseOutcome.Empty -> cachedFallback(cached, MSG_EMPTY, TtFailureKind.EMPTY)
@@ -95,13 +118,21 @@ class DefaultTimetableRepository(
         }
     }
 
+    private suspend fun personalSnapshot(): TtSnapshot? =
+        runCatching { personalStore?.read() }.getOrNull()?.takeIf { it.c.isNotEmpty() }
+
     private fun cachedFallback(
         cached: FileTimetableCache.Cached?,
         message: String,
         kind: TtFailureKind,
     ): TtLoadResult =
         if (cached != null) {
-            TtLoadResult.Success(cached.snapshot, fromCache = true, fetchedAt = cached.savedAt)
+            TtLoadResult.Success(
+                snapshot = cached.snapshot,
+                fromCache = true,
+                fetchedAt = cached.savedAt,
+                source = TtSource.CACHE,
+            )
         } else {
             TtLoadResult.Failure(message, kind)
         }
@@ -118,6 +149,7 @@ class DefaultTimetableRepository(
     override suspend fun cached(): TtSnapshot? {
         mutex.lock()
         try {
+            personalSnapshot()?.let { return it }
             memorySnapshot?.let { return it }
             return cache.read()?.also { file ->
                 memorySnapshot = file.snapshot
@@ -137,6 +169,16 @@ class DefaultTimetableRepository(
         } finally {
             mutex.unlock()
         }
+    }
+
+    override suspend fun personal(): TtSnapshot? = personalSnapshot()
+
+    override suspend fun savePersonal(snapshot: TtSnapshot) {
+        personalStore?.save(snapshot)
+    }
+
+    override suspend fun clearPersonal() {
+        personalStore?.clear()
     }
 
     companion object {
@@ -175,10 +217,23 @@ class DefaultTimetableRepository(
                 }
                 else -> return TtParseOutcome.Format
             }
+            return parseBodyObject(json, body, row["meta"].asObjectOrNull())
+        }
+
+        /**
+         * 解析「课表 body」对象（`{c:[course],t:"YYYY-MM-DD",meta:{...}}`）。
+         *
+         * 公共快照 body、userdata `tt.ttLocal`、登录 RPC `result` 共用同一结构/校验，
+         * 区别只在 meta 来源（公共快照的 meta 可能在行上、也可能在 body 内）。
+         */
+        fun parseBodyObject(
+            json: Json,
+            body: JsonObject,
+            rowMeta: JsonObject? = null,
+        ): TtParseOutcome {
             val coursesArrayElement = body["c"] ?: return TtParseOutcome.Empty
             val coursesArray = coursesArrayElement as? JsonArray ?: return TtParseOutcome.Format
             if (coursesArray.isEmpty()) return TtParseOutcome.Empty
-            val rowMeta = row["meta"].asObjectOrNull()
             val bodyMeta = body["meta"].asObjectOrNull()
 
             fun metaString(key: String): String =
@@ -230,13 +285,16 @@ class DefaultTimetableRepository(
             )
         }
 
+        /** 直接解析课表 body（ttLocal / 登录 result 用）：成功返回快照，空/坏数据返回 null。 */
+        fun parseSnapshotBody(json: Json, body: JsonObject): TtSnapshot? =
+            (parseBodyObject(json, body) as? TtParseOutcome.Success)?.snapshot
+
         /** 兼容旧调用方：只要成功快照（空数据/格式错误都返回 null）。 */
         fun parseSnapshot(json: Json, raw: String): TtSnapshot? =
             (parse(json, raw) as? TtParseOutcome.Success)?.snapshot
 
         private fun JsonPrimitive.contentOrNullSafe(): String? =
             if (isString) content else null
-
     }
 }
 
@@ -250,5 +308,3 @@ sealed interface TtParseOutcome {
     /** 响应结构不符合契约：坏 JSON、body 非对象、c 非数组、课程全部非法。 */
     data object Format : TtParseOutcome
 }
-
-

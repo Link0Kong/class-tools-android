@@ -3,6 +3,7 @@ package com.furina.classtools.ui.components.dock
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
@@ -87,6 +89,8 @@ fun CtFloatingDock(
     pagerOffsetFraction: Float = 0f,
     translucent: Boolean = true,
     showLabels: Boolean = true,
+    /** 真实玻璃效果（Haze 等绘制在 Surface 上的 Modifier；null = 仅半透明色层）。 */
+    glassModifier: Modifier? = null,
 ) {
     if (destinations.isEmpty()) return
     val safeIndex = selectedIndex.coerceIn(0, destinations.lastIndex)
@@ -116,7 +120,7 @@ fun CtFloatingDock(
     )
 
     val containerColor = if (translucent) {
-        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.82f)
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
     } else {
         MaterialTheme.colorScheme.surfaceContainer
     }
@@ -132,9 +136,10 @@ fun CtFloatingDock(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 480.dp),
+                .widthIn(max = 480.dp)
+                .then(glassModifier ?: Modifier),
             shape = RoundedCornerShape(32.dp),
-            color = containerColor,
+            color = if (glassModifier != null) Color.Transparent else containerColor,
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = 0.dp,
             shadowElevation = 12.dp,
@@ -154,10 +159,31 @@ fun CtFloatingDock(
                         indicatorPosition * itemWidthPx -
                         pillWidthPx / 2f
 
+                // 顶部镜面高光（液态玻璃折射感；置于内容之下）
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(26.dp)
+                        .align(androidx.compose.ui.Alignment.TopCenter)
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.surfaceBright.copy(alpha = if (translucent) 0.55f else 0.2f),
+                                    Color.Transparent,
+                                ),
+                            ),
+                        ),
+                )
+
                 // 弹性药丸底（选中项背后）
                 Surface(
                     modifier = Modifier
-                        .offset { IntOffset(pillOffsetPx.roundToInt(), 0) }
+                        .offset {
+                            IntOffset(
+                                pillOffsetPx.roundToInt(),
+                                ((CtDockLogic.DOCK_HEIGHT_DP.dp - 44.dp).toPx() / 2f).roundToInt(),
+                            )
+                        }
                         .width(pillWidth)
                         .height(44.dp)
                         .graphicsLayer {

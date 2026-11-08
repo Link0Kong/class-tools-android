@@ -105,7 +105,7 @@ fun ProfileScreen(
                         modifier = Modifier
                             .weight(layout.mainPaneWeight)
                             .verticalScroll(rememberScrollState())
-                            .padding(top = layout.headerTopPaddingDp.dp, bottom = 24.dp),
+                            .padding(top = layout.headerTopPaddingDp.dp, bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(layout.cardGapDp.dp),
                     ) {
                         ProfileHeader()
@@ -138,7 +138,7 @@ fun ProfileScreen(
                         modifier = Modifier
                             .weight(1f - layout.mainPaneWeight)
                             .verticalScroll(rememberScrollState())
-                            .padding(top = layout.headerTopPaddingDp.dp, bottom = 24.dp),
+                            .padding(top = layout.headerTopPaddingDp.dp, bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(layout.cardGapDp.dp),
                     ) {
                         layout.right.forEach { card ->
@@ -166,7 +166,7 @@ fun ProfileScreen(
                 Column(
                     modifier = baseModifier
                         .verticalScroll(rememberScrollState())
-                        .padding(top = layout.headerTopPaddingDp.dp, bottom = 24.dp),
+                        .padding(top = layout.headerTopPaddingDp.dp, bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(layout.cardGapDp.dp),
                 ) {
                     ProfileHeader()

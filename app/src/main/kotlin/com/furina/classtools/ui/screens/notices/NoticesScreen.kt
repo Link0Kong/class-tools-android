@@ -163,6 +163,8 @@ fun NoticesScreen(
     rawAttachmentLoader: NoticeRawAttachmentLoader? = null,
     /** v2：把有明确时间的结构化通知写入系统日历（null = 不显示入口）。 */
     onAddToCalendar: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
+    /** v3：单条通知提醒（Lead 弹出提醒时间选项并排程）。 */
+    onRemindNotice: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
     modifier: Modifier = Modifier,
     initialData: NoticesData? = null,
     initialMarks: MarksSnapshot? = null,
@@ -424,6 +426,7 @@ fun NoticesScreen(
             item = item,
             rawAttachmentLoader = rawAttachmentLoader,
             onAddToCalendar = onAddToCalendar,
+            onRemindNotice = onRemindNotice,
             onDismiss = { selected = null },
             onToggleDone = {
                 (item as? NoticeUiItem.Auto)?.let {
@@ -681,6 +684,8 @@ private fun NoticeDetailDialog(
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
     onAddToCalendar: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
+    /** v3：单条通知提醒（Lead 弹出提醒时间选项并排程）。 */
+    onRemindNotice: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -706,6 +711,11 @@ private fun NoticeDetailDialog(
                     if (onAddToCalendar != null) {
                         TextButton(onClick = { onAddToCalendar(item.entry.group) }) {
                             Text("加入日程")
+                        }
+                    }
+                    if (onRemindNotice != null) {
+                        TextButton(onClick = { onRemindNotice(item.entry.group) }) {
+                            Text("提醒我")
                         }
                     }
                     TextButton(onClick = onToggleDone) {

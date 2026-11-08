@@ -19,16 +19,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,8 +43,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.permission.PermissionState
 import com.furina.classtools.data.permission.PermissionType
+import com.furina.classtools.data.reminder.ReminderActions
+import com.furina.classtools.data.reminder.ReminderDiagnostics
+import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.reminder.ReminderSettingsStore
+import com.furina.classtools.data.reminder.ReminderTestNotificationResult
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -68,6 +77,8 @@ fun ReminderSettingsScreen(
     )
     val notificationsGranted =
         permissionController.state(PermissionType.NOTIFICATIONS).isGranted
+    var diagnostics by remember { mutableStateOf<ReminderDiagnostics?>(null) }
+    var testingNotification by remember { mutableStateOf(false) }
 
     fun update(transform: (ReminderSettings) -> ReminderSettings) {
         scope.launch {
@@ -205,6 +216,65 @@ fun ReminderSettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
+                            "通知测试与诊断",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "先发一条测试通知确认系统链路（渠道/权限/图标）；诊断可查看本机缓存与上次运行摘要。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (testingNotification) return@OutlinedButton
+                                    testingNotification = true
+                                    scope.launch {
+                                        val result = ReminderActions.testNotification(context)
+                                        testingNotification = false
+                                        val message = when (result) {
+                                            ReminderTestNotificationResult.Sent ->
+                                                "测试通知已发送，请查看通知栏"
+                                            ReminderTestNotificationResult.PermissionMissing -> {
+                                                onOpenPermissions()
+                                                "通知权限未开启：请先开启通知"
+                                            }
+                                            is ReminderTestNotificationResult.Failed ->
+                                                "发送失败：${result.message}"
+                                        }
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            message,
+                                            android.widget.Toast.LENGTH_LONG,
+                                        ).show()
+                                    }
+                                },
+                                enabled = !testingNotification,
+                            ) { Text(if (testingNotification) "发送中…" else "发送测试通知") }
+                            OutlinedButton(
+                                onClick = {
+                                    ReminderRuntime.runNow(context)
+                                    scope.launch {
+                                        diagnostics = runCatching {
+                                            ReminderActions.diagnostics(context)
+                                        }.getOrNull()
+                                    }
+                                },
+                            ) { Text("立即检查 + 诊断") }
+                        }
+                    }
+                }
+
+                Surface(
+                    shape = CtShapeTokens.hero,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
                             "说明",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
@@ -223,6 +293,41 @@ fun ReminderSettingsScreen(
                 Spacer(Modifier.height(12.dp))
             }
         }
+    }
+
+    diagnostics?.let { diag ->
+        AlertDialog(
+            onDismissRequest = { diagnostics = null },
+            title = { Text("通知诊断") },
+            text = {
+                Text(
+                    buildString {
+                        appendLine("权限：${diag.permission.name}")
+                        appendLine("设置：${diag.settingsSummary}")
+                        appendLine(
+                            "缓存：作业 ${diag.homeworkCacheCount} 条 / 通知 ${diag.noticeCacheCount} 条 / " +
+                                "课表${if (diag.timetableReady) "可用" else "不可用"}",
+                        )
+                        appendLine(
+                            "小图标：${if (diag.smallIconFallback) "系统占位（待加专用图标）" else "专用图标"}",
+                        )
+                        val lastRun = diag.lastRunAtMillis?.let {
+                            java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+                                .format(java.util.Date(it))
+                        } ?: "尚未运行"
+                        appendLine("上次运行：$lastRun")
+                        diag.lastRunSummary?.let { appendLine("摘要：$it") }
+                        (diag.lastRunResult?.reason)?.takeIf { it.isNotBlank() }?.let {
+                            appendLine("原因：$it")
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { diagnostics = null }) { Text("关闭") }
+            },
+        )
     }
 }
 

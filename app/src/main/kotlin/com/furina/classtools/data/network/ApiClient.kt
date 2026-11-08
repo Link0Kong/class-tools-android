@@ -125,6 +125,45 @@ class ApiClient(
         authenticated: Boolean = true,
     ): ApiResult<JsonElement> = patch(path, body, prefer, authenticated).flatMapJson()
 
+    /**
+     * 诊断用：单次 GET 并返回「耗时 + 服务器 Date 头」。
+     *
+     * - 不做网络失败重试（延迟测量只认一次真实往返）；
+     * - [TimedResponse.serverEpochMs] 为响应头 `Date` 解析结果（毫秒，UTC），缺失/非法 → null；
+     *   Android 端用它估算本机时钟偏差（诊断页「时钟偏差」检查），不涉及任何隐私数据。
+     */
+    suspend fun getTimed(
+        pathAndQuery: String,
+        authenticated: Boolean = true,
+    ): ApiResult<TimedResponse> {
+        if (baseUrl.isBlank() || publishableKey.isBlank()) {
+            return ApiResult.Failure(ApiError.Config("云端未配置（baseUrl/publishableKey 为空）"))
+        }
+        val request = ApiRequest(
+            method = HttpMethod.GET,
+            url = url(pathAndQuery),
+            headers = buildHeaders(authenticated),
+            body = null,
+        )
+        val startedNanos = System.nanoTime()
+        val response = try {
+            transport.execute(request)
+        } catch (t: Throwable) {
+            return ApiResult.Failure(ApiError.Network(cause = t))
+        }
+        val latencyMs = (System.nanoTime() - startedNanos) / 1_000_000L
+        return when (val result = interpretResponse(response)) {
+            is ApiResult.Failure -> result
+            is ApiResult.Success -> ApiResult.Success(
+                TimedResponse(
+                    body = result.value,
+                    latencyMs = latencyMs,
+                    serverEpochMs = headerEpochMs(response.headers),
+                ),
+            )
+        }
+    }
+
     private fun ApiResult<String>.flatMapJson(): ApiResult<JsonElement> = when (this) {
         is ApiResult.Failure -> ApiResult.Failure(error)
         is ApiResult.Success -> {
@@ -218,5 +257,29 @@ class ApiClient(
 
         /** 解析形如 `[{...}, ...]` 的数组；不是数组返回 null。 */
         fun asArrayOrNull(element: JsonElement?): JsonArray? = element as? JsonArray
+
+        /** 取响应头（大小写不敏感）；不存在 → null。 */
+        fun headerValue(headers: Map<String, String>, name: String): String? =
+            headers.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value
+
+        /** 解析 HTTP `Date` 头（RFC 1123，如 `Wed, 08 Nov 2026 12:00:00 GMT`）→ epoch ms。 */
+        fun headerEpochMs(headers: Map<String, String>): Long? {
+            val raw = headerValue(headers, "Date")?.trim().orEmpty()
+            if (raw.isEmpty()) return null
+            return try {
+                java.time.ZonedDateTime.parse(raw, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+                    .toInstant()
+                    .toEpochMilli()
+            } catch (_: Throwable) {
+                null
+            }
+        }
     }
 }
+
+/** 一次计时请求的结果（诊断页网关延迟 / 服务器时钟偏差用）。 */
+data class TimedResponse(
+    val body: String,
+    val latencyMs: Long,
+    val serverEpochMs: Long? = null,
+)

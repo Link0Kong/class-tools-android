@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色系统栏：状态栏/导航栏图标改为浅色；窗口底色深色，避免冷启动/转场白闪 -->
+    <style name="Theme.ClassTools" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ct_window_background</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

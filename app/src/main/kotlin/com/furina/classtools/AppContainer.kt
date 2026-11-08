@@ -3,6 +3,14 @@ package com.furina.classtools
 import android.content.Context
 import com.furina.classtools.data.auth.ApiAuthRepository
 import com.furina.classtools.data.auth.AuthRepository
+import com.furina.classtools.data.diag.AndroidDeviceProbe
+import com.furina.classtools.data.diag.ClientDiagPendingStore
+import com.furina.classtools.data.diag.ClientDiagReporter
+import com.furina.classtools.data.diag.CrashDiagRecorder
+import com.furina.classtools.data.diag.DefaultDiagRepository
+import com.furina.classtools.data.diag.DiagRepository
+import com.furina.classtools.data.diag.FileClientDiagPendingStore
+import com.furina.classtools.data.diag.installCrashHandler
 import com.furina.classtools.data.fitrecs.DefaultFitRecsRepository
 import com.furina.classtools.data.calendar.AndroidCalendarWriter
 import com.furina.classtools.data.calendar.CalendarWriter
@@ -39,9 +47,13 @@ import com.furina.classtools.data.sync.DefaultUserDataRepository
 import com.furina.classtools.data.sync.FileUserDataLocalStore
 import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.data.sync.UserdataV6
+import com.furina.classtools.data.timetable.DefaultTimetableLoginRepository
 import com.furina.classtools.data.timetable.DefaultTimetableRepository
 import com.furina.classtools.data.timetable.FileTimetableCache
+import com.furina.classtools.data.timetable.TimetableLoginRepository
+import com.furina.classtools.data.timetable.TimetablePersonalStore
 import com.furina.classtools.data.timetable.TimetableRepository
+import com.furina.classtools.data.timetable.UserDataTimetablePersonalStore
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -72,7 +84,12 @@ class AppContainer(context: Context) {
         get() = activeSession
 
     fun updateActiveSession(session: Session?) {
+        val previousSid = activeSession?.sid
         activeSession = session
+        // 启动/登录后在线时补报本机待发的崩溃/诊断队列（契约 §2：启动后补报）。
+        if (session != null && !session.debug && previousSid != session.sid) {
+            appScope.launch { runCatching { clientDiagReporter.drainPending() } }
+        }
     }
 
     val apiClient: ApiClient = ApiClient(
@@ -117,10 +134,67 @@ class AppContainer(context: Context) {
         isAdmin = { activeSession?.isAdmin == true },
     )
 
+    /** 个人课表存储：userdata v6 `tt.ttLocal`（课表登录产物，跨端同步）。 */
+    val timetablePersonalStore: TimetablePersonalStore = UserDataTimetablePersonalStore(
+        userDataRepository = userDataRepository,
+    )
+
+    /** 课表仓库：个人 ttLocal > 公共 site_assets 快照 > 本机缓存。 */
     val timetableRepository: TimetableRepository = DefaultTimetableRepository(
         api = apiClient,
         cache = FileTimetableCache(File(appContext.cacheDir, "timetable")),
+        personalStore = timetablePersonalStore,
     )
+
+    /** 课表登录（rpc/tt_login_enqueue + rpc/tt_login_status；密码只在请求体内存中出现一次）。 */
+    val timetableLoginRepository: TimetableLoginRepository = DefaultTimetableLoginRepository(api = apiClient)
+
+    // ---------------------------------------------------------------- 诊断 v2
+
+    /** 本机设备检查采集（Build/屏幕/语言/内存/存储/网络/本地目录）。 */
+    val deviceProbe: AndroidDeviceProbe = AndroidDeviceProbe(
+        context = appContext,
+        appVersion = BuildConfig.VERSION_NAME,
+        appVersionCode = BuildConfig.VERSION_CODE,
+    )
+
+    /** 诊断数据仓库：service_health / diag_analysis / repair_tasks / rpc/diag_agent_info / client_diag。 */
+    val diagRepository: DiagRepository = DefaultDiagRepository(
+        api = apiClient,
+        currentSid = { activeSession?.sid },
+    )
+
+    private val diagPendingStore: ClientDiagPendingStore =
+        FileClientDiagPendingStore(File(appContext.filesDir, "diag"))
+
+    /** client_diag 上报器（fingerprint 10 分钟去重 + 每批 ≤3 条 + 失败/崩溃落本机队列补报）。 */
+    val clientDiagReporter: ClientDiagReporter = ClientDiagReporter(
+        repository = diagRepository,
+        pending = diagPendingStore,
+    )
+
+    /** 崩溃设备信息快照（启动时算一次；崩溃线程不做系统查询）。 */
+    private val crashDeviceSnapshot: Map<String, String> by lazy {
+        runCatching { deviceProbe.collectBase().deviceMap() }.getOrDefault(emptyMap())
+    }
+
+    /** 未捕获异常记录器（只落脱敏行到本机队列，不打印堆栈/不发网络）。 */
+    val crashDiagRecorder: CrashDiagRecorder = CrashDiagRecorder(
+        pending = diagPendingStore,
+        appVersion = BuildConfig.VERSION_NAME,
+        sidProvider = { activeSession?.sid },
+        deviceProvider = { crashDeviceSnapshot },
+    )
+
+    /** 安装 Application 级全局 uncaught exception handler（幂等由调用方控制）。 */
+    fun installGlobalCrashHandler() {
+        runCatching { installCrashHandler(crashDiagRecorder) }
+    }
+
+    /** 补报本机待发诊断/崩溃队列（在线时调用；失败保留队列下次再试）。 */
+    fun drainPendingDiagReports() {
+        appScope.launch { runCatching { clientDiagReporter.drainPending() } }
+    }
 
     val powerRepository: PowerRepository = DefaultPowerRepository(api = apiClient)
 

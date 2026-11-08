@@ -40,6 +40,8 @@ data class ApiRequest(
 data class ApiResponse(
     val status: Int,
     val body: String = "",
+    /** 响应头（键大小写不敏感访问由调用方处理；诊断页「服务器时钟偏差」读 Date）。 */
+    val headers: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -71,7 +73,11 @@ class OkHttpTransport(
             )
         }
         client.newCall(builder.build()).execute().use { response ->
-            ApiResponse(status = response.code, body = response.body.string())
+            val headers = LinkedHashMap<String, String>()
+            for (i in 0 until response.headers.size) {
+                headers[response.headers.name(i)] = response.headers.value(i)
+            }
+            ApiResponse(status = response.code, body = response.body.string(), headers = headers)
         }
     }
 

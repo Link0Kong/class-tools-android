@@ -349,7 +349,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .weight(spec.mainPaneWeight)
                             .verticalScroll(rememberScrollState())
-                            .padding(top = 6.dp, bottom = 24.dp),
+                            .padding(top = 6.dp, bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                     ) {
                         GreetingHeader(session, ttPlan, today, nowMillis)
@@ -368,7 +368,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .weight(1f - spec.mainPaneWeight)
                             .verticalScroll(rememberScrollState())
-                            .padding(top = 6.dp, bottom = 24.dp),
+                            .padding(top = 6.dp, bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                     ) {
                         HomeworkCard(
@@ -407,7 +407,7 @@ fun HomeScreen(
                     modifier = contentModifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(top = 10.dp, bottom = 28.dp),
+                        .padding(top = 10.dp, bottom = 124.dp),
                     verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                 ) {
                     GreetingHeader(session, ttPlan, today, nowMillis)
@@ -446,14 +446,7 @@ fun HomeScreen(
                         onOpenTool = onOpenTool,
                         onOpenAll = onOpenAll,
                     )
-                    Text(
-                        text = "数据与网页 / 小程序互通 · 身份已核验",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp),
-                    )
+
                 }
             }
         }

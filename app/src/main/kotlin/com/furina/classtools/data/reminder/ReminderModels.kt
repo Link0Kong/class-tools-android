@@ -139,6 +139,30 @@ data class ReminderRunResult(
     val skipped: Int = 0,
     val candidates: Int = 0,
     val disabledReason: String? = null,
+    // ---- v3 诊断字段（默认值兼容旧调用/旧测试） ----
+    /** 人类可读原因，如「已发送 2 条」「未到提醒时间」「通知权限未开启」。 */
+    val reason: String = "",
+    /** 本次运行时的通知权限状态。 */
+    val permission: String = "",
+    /** 设置摘要（不含敏感信息）：如「总开关=开；作业=开；课表=开；通知=开」。 */
+    val settingsSummary: String = "",
+    /** 本机缓存摘要：作业条数/课表是否可用/通知条数。 */
+    val cacheSummary: String = "",
+    /** 本次运行时间（epoch ms）。 */
+    val checkedAtMillis: Long = 0L,
+    /** 本次补发的错过事件数（Doze/省电延迟补偿）。 */
+    val catchUpEvents: Int = 0,
 ) {
     val enabled: Boolean get() = disabledReason == null
+
+    /** 便于 Worker logcat / 诊断页：单行摘要（不含通知正文/隐私数据）。 */
+    fun logSummary(): String = buildString {
+        append("sent=").append(sent)
+        append(" skipped=").append(skipped)
+        append(" candidates=").append(candidates)
+        append(" catchUp=").append(catchUpEvents)
+        if (permission.isNotBlank()) append(" permission=").append(permission)
+        if (reason.isNotBlank()) append(" reason=").append(reason)
+        if (disabledReason != null) append(" disabled=").append(disabledReason)
+    }
 }

@@ -329,7 +329,7 @@ fun AllToolsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = spec.horizontalPadding, end = spec.horizontalPadding, top = 18.dp, bottom = 28.dp),
+                        .padding(start = spec.horizontalPadding, end = spec.horizontalPadding, top = 18.dp, bottom = 124.dp),
                 )
             }
 
