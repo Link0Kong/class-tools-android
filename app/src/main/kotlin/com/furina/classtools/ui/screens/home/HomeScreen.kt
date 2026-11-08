@@ -79,8 +79,10 @@ import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
 import com.furina.classtools.features.home.HomeToolsEditor
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
+import com.furina.classtools.ui.components.CtBrandDots
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.ToolCard
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -727,11 +729,9 @@ private fun TaskCard(
     accent: Color,
     content: @Composable () -> Unit,
 ) {
-    Surface(
+    CtGlassCard(
         onClick = onOpen,
-        modifier = Modifier.fillMaxWidth(),
         shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(
             modifier = Modifier
@@ -823,6 +823,8 @@ private fun QuickToolsSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            CtBrandDots()
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "常用工具",
                 style = MaterialTheme.typography.titleSmall,
@@ -849,11 +851,9 @@ private fun QuickToolsSection(
                 onClick = { tool -> onToggle(tool.id) },
             )
         } else if (quickTools.isEmpty()) {
-            Surface(
+            CtGlassCard(
                 onClick = onOpenAll,
-                modifier = Modifier.fillMaxWidth(),
                 shape = CtShapeTokens.toolCard,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
@@ -956,11 +956,9 @@ private fun HomeCard(
     header: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
     content: @Composable () -> Unit,
 ) {
-    Surface(
+    CtGlassCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
         shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
             modifier = Modifier

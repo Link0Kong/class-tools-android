@@ -6,7 +6,7 @@
 - 版本：1.0.0（versionCode 1），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v3.0.0**——DeepSeek/ColorOS17 风格精修第一轮：深色模式全链路、悬浮玻璃底栏（对齐修复）、通知系统 v3（诊断/测试/单条提醒/错过补发）、课表重构（比例/滑周/16色/详情/导出/教务登录）、全局视觉规范 + Glass 组件；并行新增诊断工具。单测 **779/0**、Release 冷启动 0 FATAL/ANR、签名 APK 已交付桌面（2.58MB）。详见 [docs/REPORT_ROUND8_20261108.md](docs/REPORT_ROUND8_20261108.md)
+- 状态：**v3.1.0**——v3 视觉精修 P1：工作台/我的/全部工具玻璃卡、品牌三圆点、底栏 pill 高光、深色玻璃适配；功能与 v3.0.0 相同（深色全链路/悬浮底栏/通知 v3/课表重构/诊断/教务登录）。单测 **779/0**、Release 冷启动 0 FATAL/ANR、签名 APK 已交付桌面（2.58MB）。详见 [docs/REPORT_ROUND9_20261108.md](docs/REPORT_ROUND9_20261108.md)
 
 ## 目录
 

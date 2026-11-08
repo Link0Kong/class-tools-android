@@ -1,6 +1,7 @@
 package com.furina.classtools.ui.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -62,5 +63,31 @@ fun BrandMark(
             radius = s * (5f / 64f),
             center = Offset(s * (49f / 64f), s * (49f / 64f)),
         )
+    }
+}
+
+/** 品牌三圆点小标记（页头/分组标题用；与 [BrandMark] 同色）。 */
+@Composable
+fun CtBrandDots(
+    modifier: Modifier = Modifier,
+    dotSize: Dp = 6.dp,
+    gap: Dp = 4.dp,
+) {
+    androidx.compose.foundation.layout.Row(
+        modifier = modifier,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(gap),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        listOf(
+            Color(0xFF6E8CA8),
+            Color(0xFF4E9082),
+            Color(0xFFB98F63),
+        ).forEach { color ->
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .size(dotSize)
+                    .background(color, androidx.compose.foundation.shape.CircleShape),
+            )
+        }
     }
 }

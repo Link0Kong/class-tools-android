@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,8 +47,10 @@ import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
 import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
+import com.furina.classtools.ui.components.CtBrandDots
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.ToolCard
+import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.reorderableSemantics
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -224,18 +227,31 @@ fun AllToolsScreen(
                     .statusBarsPadding()
                     .verticalScroll(scrollState),
             ) {
-                Column(modifier = Modifier.padding(horizontal = spec.horizontalPadding, vertical = 10.dp)) {
-                    Text(
-                        text = "全部工具",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "长按卡片拖动排序 · 松手自动保存",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                CtGlassCard(
+                    modifier = Modifier.padding(horizontal = spec.horizontalPadding, vertical = 8.dp),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+                        androidx.compose.foundation.layout.Row(
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            CtBrandDots(dotSize = 7.dp, gap = 5.dp)
+                            androidx.compose.foundation.layout.Spacer(
+                                modifier = androidx.compose.ui.Modifier.width(10.dp),
+                            )
+                            Text(
+                                text = "全部工具",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.onBackground,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "长按卡片拖动排序 · 松手自动保存",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
                 // 2 列网格：custom Layout 保证拖动重排时卡片节点 identity 稳定（不会中断手势）

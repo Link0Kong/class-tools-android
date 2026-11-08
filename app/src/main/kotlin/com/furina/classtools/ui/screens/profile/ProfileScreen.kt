@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.BuildConfig
@@ -46,6 +47,7 @@ import com.furina.classtools.ui.screens.me.MeStats
 import com.furina.classtools.ui.screens.me.MeStatsSection
 import com.furina.classtools.ui.screens.me.ReminderStatus
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
@@ -348,10 +350,8 @@ private fun ProfileCardContent(
 
 @Composable
 private fun AccountCard(session: Session) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
+    CtGlassCard(
         shape = CtShapeTokens.hero,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
@@ -383,10 +383,8 @@ private fun SettingCard(
     title: String,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
+    CtGlassCard(
         shape = CtShapeTokens.hero,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(

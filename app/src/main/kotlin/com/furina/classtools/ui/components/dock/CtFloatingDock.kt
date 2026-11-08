@@ -192,6 +192,11 @@ fun CtFloatingDock(
                         },
                     shape = CtShapeTokens.pill,
                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.95f),
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.surfaceBright.copy(alpha = 0.55f),
+                    ),
+                    shadowElevation = 6.dp,
                 ) {}
 
                 Row(

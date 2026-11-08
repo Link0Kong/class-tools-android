@@ -49,7 +49,7 @@ fun ExpressiveBackground(
             val h = size.height
             drawRect(
                 brush = Brush.radialGradient(
-                    colors = listOf(primary.copy(alpha = 0.16f), Color.Transparent),
+                    colors = listOf(primary.copy(alpha = 0.22f), Color.Transparent),
                     center = Offset(w * 0.12f, h * 0.04f),
                     radius = w * 0.75f,
                 ),
@@ -57,7 +57,7 @@ fun ExpressiveBackground(
             )
             drawRect(
                 brush = Brush.radialGradient(
-                    colors = listOf(tertiary.copy(alpha = 0.12f), Color.Transparent),
+                    colors = listOf(tertiary.copy(alpha = 0.16f), Color.Transparent),
                     center = Offset(w * 0.95f, h * 0.18f),
                     radius = w * 0.65f,
                 ),
@@ -65,7 +65,7 @@ fun ExpressiveBackground(
             )
             drawRect(
                 brush = Brush.radialGradient(
-                    colors = listOf(secondary.copy(alpha = 0.09f), Color.Transparent),
+                    colors = listOf(secondary.copy(alpha = 0.12f), Color.Transparent),
                     center = Offset(w * 0.5f, h * 1.02f),
                     radius = w * 0.85f,
                 ),
