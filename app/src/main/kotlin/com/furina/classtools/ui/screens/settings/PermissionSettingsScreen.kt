@@ -48,6 +48,7 @@ import com.furina.classtools.data.permission.PermissionTexts
 import com.furina.classtools.data.permission.PermissionType
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtTokens
@@ -106,10 +107,8 @@ fun PermissionSettingsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
             ) {
-                Surface(
+                CtGlassCard(
                     shape = CtShapeTokens.hero,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Text(
@@ -141,10 +140,8 @@ fun PermissionSettingsScreen(
                 )
 
                 if (onOpenReminderSettings != null) {
-                    Surface(
+                    CtGlassCard(
                         shape = CtShapeTokens.hero,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
@@ -167,10 +164,8 @@ fun PermissionSettingsScreen(
                     }
                 }
 
-                Surface(
+                CtGlassCard(
                     shape = CtShapeTokens.hero,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
@@ -256,10 +251,8 @@ private fun PermissionCard(
     onAction: () -> Unit,
 ) {
     val copy = remember(type) { PermissionTexts.of(type) }
-    Surface(
+    CtGlassCard(
         shape = CtShapeTokens.hero,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

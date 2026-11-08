@@ -50,6 +50,7 @@ import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.reminder.ReminderSettingsStore
 import com.furina.classtools.data.reminder.ReminderTestNotificationResult
 import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtTokens
@@ -209,10 +210,8 @@ fun ReminderSettingsScreen(
                     onCheckedChange = { value -> update { it.copy(quietHoursEnabled = value) } },
                 )
 
-                Surface(
+                CtGlassCard(
                     shape = CtShapeTokens.hero,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -268,10 +267,8 @@ fun ReminderSettingsScreen(
                     }
                 }
 
-                Surface(
+                CtGlassCard(
                     shape = CtShapeTokens.hero,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(

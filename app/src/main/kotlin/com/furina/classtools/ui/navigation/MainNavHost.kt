@@ -362,12 +362,65 @@ fun MainNavHost(
                     )
                 }
 
-                "hw" -> HomeworkScreen(
-                    onBack = { navController.popBackStack() },
-                    session = session,
-                    marksRepository = container.marksRepository,
-                    homeworkRepository = container.homeworkRepository,
-                )
+                "hw" -> {
+                    val oneShotScheduler = remember {
+                        runCatching {
+                            ReminderOneShotFactory.create(context, container.permissionController)
+                        }.getOrNull()
+                    }
+                    var remindTarget by remember {
+                        mutableStateOf<com.furina.classtools.data.homework.HomeworkRow?>(null)
+                    }
+                    HomeworkScreen(
+                        onBack = { navController.popBackStack() },
+                        session = session,
+                        marksRepository = container.marksRepository,
+                        homeworkRepository = container.homeworkRepository,
+                        onRemindHomework = { row -> remindTarget = row },
+                    )
+                    remindTarget?.let { row ->
+                        HomeworkReminderDialog(
+                            row = row,
+                            onDismiss = { remindTarget = null },
+                            onPick = { planned ->
+                                remindTarget = null
+                                val scheduler = oneShotScheduler
+                                if (scheduler == null) {
+                                    toast(context, "提醒服务不可用")
+                                } else {
+                                    scope.launch {
+                                        val label = row.subject.ifBlank {
+                                            row.content.lineSequence().firstOrNull().orEmpty()
+                                        }.ifBlank { "作业" }
+                                        when (
+                                            val result = scheduler.scheduleHomeworkReminder(
+                                                rowId = row.id,
+                                                fireAtMillis = planned.fireAtMillis,
+                                                label = label,
+                                                targetAtMillis = planned.targetAtMillis,
+                                            )
+                                        ) {
+                                            is OneShotScheduleResult.Scheduled -> toast(
+                                                context,
+                                                "已设置提醒：" + formatReminderTime(result.fireAtMillis),
+                                            )
+                                            OneShotScheduleResult.PermissionMissing ->
+                                                toast(context, "请先开启通知权限")
+                                            is OneShotScheduleResult.TooLate ->
+                                                toast(context, "提醒时间已过，请选择更晚的时间")
+                                            is OneShotScheduleResult.LimitReached ->
+                                                toast(context, "提醒数量已达上限（${result.limit} 条）")
+                                            OneShotScheduleResult.EmptyTarget ->
+                                                toast(context, "该作业没有可提醒的时间")
+                                            is OneShotScheduleResult.Failed ->
+                                                toast(context, "设置失败：${result.message}")
+                                        }
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
 
                 "nt" -> {
                     val oneShotScheduler = remember {
@@ -746,6 +799,37 @@ private fun NoticeReminderDialog(
             Column {
                 if (options.isEmpty()) {
                     Text("该通知没有可提醒的时间（无截止/活动时间）")
+                } else {
+                    Text("选择提醒时间（本机通知）：")
+                    options.forEach { planned ->
+                        TextButton(onClick = { onPick(planned) }, modifier = Modifier.fillMaxWidth()) {
+                            Text("${planned.label} · ${formatReminderTime(planned.fireAtMillis)}")
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
+}
+
+/** 单条作业提醒：选择提醒时间（截止前）并交回 Lead 排程。 */
+@Composable
+private fun HomeworkReminderDialog(
+    row: com.furina.classtools.data.homework.HomeworkRow,
+    onDismiss: () -> Unit,
+    onPick: (OneShotPlannedTime) -> Unit,
+) {
+    val options = remember(row) { ReminderOneShot.homeworkPlannedTimes(row) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("提醒我") },
+        text = {
+            Column {
+                if (options.isEmpty()) {
+                    Text("该作业没有可提醒的截止时间")
                 } else {
                     Text("选择提醒时间（本机通知）：")
                     options.forEach { planned ->

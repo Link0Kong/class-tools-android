@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,9 @@ fun CtTopBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .background(
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+            )
             .heightIn(min = if (tight) 52.dp else 56.dp)
             .padding(horizontal = if (tight) 4.dp else 8.dp, vertical = if (tight) 4.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically,

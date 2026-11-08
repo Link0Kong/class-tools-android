@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.automirrored.rounded.Assignment
 import androidx.compose.material3.AlertDialog
@@ -108,6 +109,8 @@ fun HomeworkScreen(
     initialMarks: MarksSnapshot? = null,
     forcedErrorMessage: String? = null,
     skipLoad: Boolean = false,
+    /** v3.2：单条作业提醒（Lead 弹提醒时间选项并排程）。 */
+    onRemindHomework: ((com.furina.classtools.data.homework.HomeworkRow) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -273,6 +276,7 @@ fun HomeworkScreen(
                                     nowMillis = nowMillis,
                                     onToggle = { item -> toggleDone(item) },
                                     onOpen = { item -> detail = item },
+                                    onRemind = onRemindHomework?.let { cb -> { item -> cb(item.row) } },
                                 )
                             }
                         }
@@ -322,6 +326,7 @@ fun HomeworkScreen(
     detail?.let { item ->
         HomeworkDetailDialog(
             item = item,
+            onRemind = onRemindHomework?.let { cb -> { cb(item.row) } },
             onToggle = {
                 toggleDone(item)
                 detail = item.copy(done = !item.done)
@@ -341,6 +346,7 @@ private fun HomeworkList(
     nowMillis: Long,
     onToggle: (HomeworkItem) -> Unit,
     onOpen: (HomeworkItem) -> Unit,
+    onRemind: ((HomeworkItem) -> Unit)? = null,
 ) {
     val grouped = LinkedHashMap<String, MutableList<HomeworkItem>>()
     for (item in items) {
@@ -371,6 +377,7 @@ private fun HomeworkList(
                     item = item,
                     onToggle = { onToggle(item) },
                     onOpen = { onOpen(item) },
+                    onRemind = onRemind?.let { cb -> { cb(item) } },
                 )
             }
         }
@@ -382,6 +389,7 @@ private fun HomeworkCard(
     item: HomeworkItem,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
+    onRemind: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -470,6 +478,19 @@ private fun HomeworkCard(
                         )
                     }
                 }
+            if (onRemind != null) {
+                IconButton(
+                    onClick = onRemind,
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.NotificationsActive,
+                        contentDescription = "提醒我",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
             }
         }
     }
@@ -521,6 +542,7 @@ private fun HomeworkDetailDialog(
     item: HomeworkItem,
     onToggle: () -> Unit,
     onDismiss: () -> Unit,
+    onRemind: (() -> Unit)? = null,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -566,8 +588,13 @@ private fun HomeworkDetailDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onToggle) {
-                Text(if (item.done) "取消完成" else "标记完成")
+            Row {
+                if (onRemind != null) {
+                    TextButton(onClick = onRemind) { Text("提醒我") }
+                }
+                TextButton(onClick = onToggle) {
+                    Text(if (item.done) "取消完成" else "标记完成")
+                }
             }
         },
         dismissButton = {
