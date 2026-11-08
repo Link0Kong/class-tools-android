@@ -301,3 +301,48 @@ Release 包**真实账号业务全链路**（真实身份登录 → 云端数据
 - Release 包**真实账号业务全链路**（真实登录/云端数据/提醒真实到达/教务登录完整流程）仍需测试身份或真实账号另测。
 - 本复验**未触发**诊断上报/自动修复/发送测试通知/反馈提交（避免云端写与系统通知副作用）。
 - 深色可读性为截图人工审图结论（无自动化对比度断言）。
+
+---
+
+## 11. v3.1.0 Release 复验（视觉精修 P1）
+
+> 版本：**versionName `3.1.0` / versionCode `7`**（功能与 v3.0.0 相同；单测 779/0，Lead 数据）
+> 日期：2026-11-09 00:08
+> 本节为追加，保留 §7–§10 历史记录。
+
+### 11.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| 交付 APK | `android-class-tools\artifacts\classtools-3.1.0-release-signed.apk` |
+| 构建产物一致性 | `app\build\outputs\apk\release\app-release.apk` 与交付副本 **SHA-256 完全一致** |
+| APK 字节数 | **2,577,485 B** |
+| APK SHA-256 | **`AF97EC07DA78BE0AC87AFB4D86843F7B1EAA5B14BCA2BE61D263CEBAECCD4A8C`** |
+| `apksigner verify --verbose --print-certs` | **Verifies**；v2 scheme = true；Number of signers = 1 |
+| 签名证书 | `CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`；证书 SHA-256 `974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a`；RSA 2048（同一 keystore） |
+
+### 11.2 安装与两次冷启动
+
+| 项 | 结果 |
+|---|---|
+| `adb install -r` | **Success**（覆盖升级 v3.0.0 → v3.1.0） |
+| 冷启动 #1 | `Status: ok`，`TotalTime: 1,764 ms`；身份核验页（`v3.1.0 · Android 17 设计语言`） |
+| 冷启动 #2（force-stop 后） | `Status: ok`（`WaitTime: 746 ms`）；界面一致 |
+| 进程 | `com.furina.classtools` 存活；`topResumedActivity=com.furina.classtools/.MainActivity` |
+| 包信息（dumpsys） | **versionName=3.1.0，versionCode=7**，minSdk 26，targetSdk 37 |
+| 启动截图 | `artifacts/e2e/release_fix_v310_identity.png`（545,081 B）、`release_fix_v310_second.png`（545,687 B）、`release_launch_v310.png`（545,687 B），均 1080×2400 |
+| UI dump | `artifacts/e2e/release_ui_v310.xml`（身份页含 `v3.1.0`，无开发预览） |
+| logcat | `artifacts/e2e/release_logcat_v310_fixed.txt`（7,773 行）中 **FATAL/ANR = 0**、无 `NoSuchMethodException` |
+
+### 11.3 v3.1.0 相对 v3.0.0 的变化（交付说明）
+
+- 工作台/我的/全部工具**页头玻璃卡**（半透明 + 描边，无阴影避免 GPU 伪影）；
+- **品牌三圆点**加入「常用工具」「全部工具」页头；
+- 背景光晕加强；
+- 底栏选中 **pill 高光描边 + 悬浮阴影**；
+- 功能与 v3.0.0 完全相同（779/0 单测未变）。
+
+### 11.4 边界
+
+- 视觉精修版：本轮只做 Release 启动/签名复验 + 快速 E2E 回归（见 `E2E_SMOKE.md` §12），未重跑 v3.0.0 的完整 40 项/矩阵。
+- 真实账号业务链路、提醒实际到达、教务登录完整流程仍需测试账号另测；未触发任何云端写。

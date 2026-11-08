@@ -34,3 +34,17 @@
 
 - 代码：`ui/components/glass/CtGlassCard.kt`、`CtBrandDots`（BrandMark.kt）、Home/Profile/AllTools 接线。
 - toolchain 追加：`docs/E2E_SMOKE.md §12`、`docs/RELEASE_BUILD.md §11`。
+
+## 5. 最终验证结果（toolchain task-31，2026-11-09 凌晨）
+
+| 项 | 结果 |
+|---|---|
+| 快速 E2E v3.1.0（Debug vc7） | **38 PASS / 0 WARN / 0 FAIL（870.0s）**；导航 10/10；logcat 0 FATAL/ANR；导出 +1 PNG |
+| 重点回归 | `dock_overlay` PASS（pill 唯一、Tab 文字水平偏差 0px、120dp 留白生效）；玻璃页头不改变语义，工作台/Pager/权限/提醒/诊断/课表/反馈/说明断言全命中 |
+| 视觉人工审图 | 工作台/我的/全部工具玻璃卡无伪影；品牌三圆点出现；背景光晕加强；底栏 pill 高光描边+阴影可见（深色亦可）；无文字截断/错位 |
+| Release v3.1.0 | **2,577,485 B** / SHA-256 `AF97EC07…4A8C`；apksigner V2 通过；install Success；两次冷启动 OK（1.76s / 0.75s）；logcat 7,773 行 0 FATAL/ANR/NoSuchMethodException |
+| 截图 | `5x_v31_workbench/tools/profile.png` + `5x_v31_dark.png`（1080×2400）；沿用 `4x_dock_*`/`4x_dark_*`；e2e 共 50 张 |
+| 文档 | `E2E_SMOKE.md §12`（481 行）、`RELEASE_BUILD.md §11`（348 行） |
+| 残余 | 平板/折叠真机视觉复核、真实背景模糊方案、P2 页面玻璃化、作业单条提醒入口、用户第 6 点 |
+
+**结论：v3.1.0 视觉精修完成并通过回归/Release 验证，APK 已交付桌面。**
