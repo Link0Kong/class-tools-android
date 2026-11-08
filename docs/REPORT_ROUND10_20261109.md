@@ -44,3 +44,15 @@
 | 边界 | 作业「提醒我」铃铛/详情提醒（截止前1天/1小时/截止时刻）需真实作业数据验证实际排程与到达；本轮空态仅验证入口与布局 |
 
 **结论：v3.2.0（P2 顶栏/权限/提醒页玻璃 + 作业单条提醒）完成并通过回归/Release 验证，APK 已交付桌面。**
+
+## 6. 真实背景模糊尝试记录（v3.3 实验，未随版本发布）
+
+目标：让浮岛底栏实现真正的「背景取样模糊」而非半透明。
+
+| 方案 | 结果 |
+|---|---|
+| Haze 2.1.0（新绘图 API） | API 复杂（HazeEffectFactory/HazeInput），且 1.7 版在 `HorizontalPager` 图层取样失败，fallback tint 使底栏发灰 |
+| Haze 1.7.3（`hazeSource`/`hazeEffect`） | 编译通过，运行时 blur fallback 发灰、底栏变暗，不可用；已卸载依赖 |
+| Compose `LocalGraphicsContext` + `GraphicsLayer.record` + `drawLayer` + `graphicsLayer { renderEffect = BlurEffect(30f,30f) }` | 编译通过、运行无 FATAL；底栏可见内容但模糊极弱/不稳定（模拟器软渲染下 RenderEffect 对 drawLayer 内容作用有限），且每帧全屏录层有性能风险，未采用 |
+
+结论：当前 Compose 1.10.6 / 目标机型（含软渲染模拟器）下没有稳定、低成本的实时背景模糊路径；保留半透明+镜面高光+描边+悬浮阴影的「毛玻璃」方案，并在文档中标注为已知边界。
