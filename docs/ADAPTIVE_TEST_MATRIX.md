@@ -266,3 +266,58 @@ pwsh -NoProfile -File artifacts\adaptive\v2\shoot_device_v211.ps1 `
 - 旋转覆盖：小屏竖/横 + 平板竖/横；折叠展开/折叠两态。
 - 横屏适配专项（工作台紧凑双列、底栏横屏位置）。
 - 小屏身份页：可再验证软键盘弹出时「进入工具站」不被遮挡。
+
+---
+
+## 10. v3.0.0 自适应矩阵（深色 / 玻璃底栏 / 课表新布局）
+
+> 版本：**v3.0.0 / versionCode 6**（2026-11-08 23:14–23:27）
+> 包：Release `artifacts/classtools-3.0.0-release-signed.apk`（2,577,485 B / SHA-256 `615351BF…5012`，身份页）；Debug `app-debug.apk`（24,072,553 B，开发预览其余页面）。
+> 脚本：`artifacts/adaptive/v3/shoot_device_v3.ps1` + `run_v3_matrix.ps1`（单实例、固定端口 5554、启动前 adb kill/start-server、启动后强制浅色）。
+> 结果：**2/2 设备成功，共 19 张截图**（small 12 + tablet 7）。
+
+### 10.1 设备与截图清单
+
+| 设备 | 分辨率@dpi | 宽度 dp | 截图数 | 清单 |
+|---|---|---|---|---|
+| 小屏 `ct-a37-small` | 720×1280 @320 | 360×640 | **12** | `00_release_identity`、`01_identity`（首屏）、`02_workbench`、`03_tools`、`04_profile`、`05_permissions`、`4x_timetable`、`4x_dark_workbench`、`4x_dark_tools`、`4x_dark_profile`、`4x_dark_timetable`、`4x_light_restore` |
+| 平板 `ct-a37-tablet` | 2560×1600 @320 | 1280×800 | **7** | `00_release_identity`、`01_identity`、`02_workbench`、`03_tools`、`04_profile`、`05_permissions`、**`4x_timetable`（课表新布局）** |
+
+> 各目录含 `device-info.txt`（wm size/density/dark 标记）、`run.log`、`emulator.log`。
+
+### 10.2 v3 重点结论
+
+| 检查项 | 结论 | 证据 |
+|---|---|---|
+| **深色矩阵（小屏 1 台，6 张深色 + 1 张恢复）** | ✅ 工作台/工具/我的/课表均深色底+浅色文字，状态栏图标反色，浮岛底栏深色对比正常；`night no` 后浅色恢复截图正常 | `small-720x1280/4x_dark_*.png`、`4x_light_restore.png` |
+| **悬浮玻璃底栏 overlay** | ✅ 底栏悬浮于内容之上、选中 pill 与图标/文字居中；小屏/平板均无内容被遮挡（E2E `dock_overlay` 断言：pill 唯一、标签水平偏差 **0 px**、滚到底内容底边 < dock 顶边） | `small/tablet 02_workbench.png`、E2E `4x_dock_*` |
+| **120dp 内容底部留白** | ✅ 工作台滚动到底后最后一张卡片完整显示在底栏上方（E2E 实测 contentBottom < dockTop） | E2E `4x_dock_workbench.png`、本矩阵 `02_workbench` |
+| **课表新布局（小屏）** | ✅ 空态：`暂无课表数据/教务快照为空，稍后刷新试试` + 顶部「登录教务」入口图标 + 刷新；页面正常 | `small-720x1280/4x_timetable.png`（253,635 B） |
+| **课表新布局（平板）** | ✅ 周视图标题 + 空态居中 + 右上「登录教务/刷新」；宽屏留白正常（无数据的表格/双栏态需真实课表验证） | `tablet-2560x1600/4x_timetable.png`（1,588,141 B） |
+| **小屏身份页首屏（回归）** | ✅ 仍保持 v2.1.1 修复：首屏直接可见「进入工具站」（禁用态）+ 协议两行，无需滚动 | `small-720x1280/01_identity.png` |
+| 深色 + 底栏 + 内容留白组合 | ✅ 深色工作台滚动/底栏叠加无异常 | `4x_dark_workbench.png` |
+
+### 10.3 残余问题 / 边界
+
+1. 平板课表为**空态**（无真实课表数据），新布局的「周表格/日视图/左右切周」几何未在真数据下验证；需 Lead 提供测试教务数据或真机账号补测。
+2. 深色矩阵仅覆盖小屏 1 台（按 task 要求）；平板/折叠深色未覆盖（v2.1.1 平板深色曾通过，v3 视觉变化有限）。
+3. 折叠屏本轮未重跑（v2.1.1 展开态 6 张通过）；如 v3 有新布局需要可补。
+4. 课表「登录教务」入口仅验证存在，**未提交**任何教务账号。
+5. 通知测试/诊断上报按钮均未点击（避免系统副作用与云端写）。
+
+### 10.4 复现命令
+
+```powershell
+# 小屏：标准 6 页 + 课表 + 深色组（含浅色恢复）
+pwsh -NoProfile -File artifacts\adaptive\v3\shoot_device_v3.ps1 `
+  -Avd ct-a37-small -Label small-720x1280 -OutDir artifacts\adaptive\v3\small-720x1280 -DarkMode
+# 平板：标准 6 页 + 课表新布局
+pwsh -NoProfile -File artifacts\adaptive\v3\shoot_device_v3.ps1 `
+  -Avd ct-a37-tablet -Label tablet-2560x1600 -OutDir artifacts\adaptive\v3\tablet-2560x1600
+```
+
+### 10.5 下轮建议
+
+- 提供测试教务数据后补：平板课表双栏/周表、左右滑动切周、日视图、导出课表图片。
+- 折叠屏 + 平板深色补测；底栏在折叠/横屏下的 overlay 与 120dp 间距。
+- 通知测试通知/诊断在**测试环境**下做一次端到端（可接受云端写时）。

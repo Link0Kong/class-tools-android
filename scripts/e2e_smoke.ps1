@@ -183,6 +183,22 @@ $L = @{
     FeedbackEmpty  = U8 '6L+Y5rKh5pyJ5Y+N6aaI'                       # feedback page: empty state
     FeedbackLoad   = U8 '5Yqg6L295Y+N6aaI'                           # feedback page: loading state
     GuideTitle     = U8 '5L2/55So6K+05piO'                           # guide page title
+    FooterMark     = U8 '6Lqr5Lu95bey5qC46aqM'                       # workbench footer: identity verified
+    NotifTestTitle = U8 '6YCa55+l5rWL6K+V5LiO6K+K5pat'               # reminder: notification test section (v3)
+    NotifTestBtn   = U8 '5Y+R6YCB5rWL6K+V6YCa55+l'                   # reminder: send test notification (v3)
+    NotifDiagBtn   = U8 '56uL5Y2z5qOA5p+l'                           # reminder: run check + diagnostics (v3)
+    LoginEdu       = U8 '55m75b2V5pWZ5Yqh'                           # timetable: login entry (v3)
+    ExportTt       = U8 '5a+85Ye66K++6KGo5Zu+54mH'                   # timetable: export button (v3)
+    DiagTool       = U8 '6K+K5pat'                                   # all tools: diagnosis card (v3)
+    DiagSub        = U8 '5pyN5Yqh5YGl5bq3'                           # diag page: service health subtitle
+    DiagLocal      = U8 '5pys5py65Luj55CG'                           # diag section: local agent
+    DiagDevice     = U8 '6K6+5aSH6K+K5pat'                           # diag section: device diagnostics
+    DiagAI         = U8 'QUkg5YiG5p6Q'                               # diag section: AI analysis
+    DiagFix        = U8 '5L+u5aSN5Lu75Yqh'                           # diag section: repair tasks
+    DiagHealth     = U8 '5pyN5Yqh5YGl5bq3'                           # diag section: service health
+    DockTabPattern = U8 '56ysIFxkKyDkuKogVGFi'                       # dock item semantics: di tab marker
+    DockSelMark    = U8 '5bey6YCJ5Lit'                               # dock item semantics: selected marker
+    DockLabelPat   = U8 'Xijlt6XkvZzlj7B85bel5YW3fOaIkeeahCkk'       # dock visible label pattern
     PermManage     = U8 '5p2D6ZmQ566h55CG'                           # profile row: permission management
     NotifyWord     = U8 '6YCa55+l'                                   # permission card: notifications
     CalendarWord   = U8 '5pel5Y6G'                                   # permission card: calendar
@@ -823,6 +839,72 @@ function Invoke-Scenario {
     if (-not (Wait-UiText -Label $L.QuickTools -TimeoutSec 20)) { throw 'pager swipe right did not return to workbench' }
     Add-Step 'pager_swipe' 'PASS' 'workbench->tools->profile->workbench' $swStep.ElapsedMilliseconds
 
+    # STEP 1d (v3): floating glass dock overlay - item/pill alignment + content bottom inset (120dp)
+    Write-Line '--- step: floating dock overlay + content insets'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    $dockDoc = Get-UiDump
+    if (-not $dockDoc) { throw 'dock: UI dump failed' }
+    $dockItems = @($dockDoc.SelectNodes('//node') | Where-Object { ([string]$_."content-desc") -match $L.DockTabPattern })
+    if ($dockItems.Count -lt 3) { throw ("dock: expected 3 tab items, found {0}" -f $dockItems.Count) }
+    $labelNodes = @($dockDoc.SelectNodes('//node') | Where-Object { [string]$_.text -match $L.DockLabelPat })
+    if ($labelNodes.Count -lt 3) { throw ("dock: expected 3 tab labels, found {0}" -f $labelNodes.Count) }
+    $dockTop = 999999
+    $dockSelected = 0
+    $itemCenters = @()
+    foreach ($it in $dockItems) {
+        $im = [regex]::Match([string]$it.bounds, '\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
+        if (-not $im.Success) { continue }
+        $iy1 = [int]$im.Groups[2].Value
+        $icx = ([int]$im.Groups[1].Value + [int]$im.Groups[3].Value) / 2
+        $itemCenters += [int]$icx
+        if ($iy1 -lt $dockTop) { $dockTop = $iy1 }
+        if (([string]$it."content-desc") -match $L.DockSelMark) { $dockSelected++ }
+    }
+    if ($dockSelected -ne 1) { throw ("dock: selected pill count {0} (expected 1)" -f $dockSelected) }
+    $alignDeltas = @()
+    foreach ($ln in $labelNodes) {
+        $lm = [regex]::Match([string]$ln.bounds, '\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
+        if (-not $lm.Success) { continue }
+        $lcx = ([int]$lm.Groups[1].Value + [int]$lm.Groups[3].Value) / 2
+        $nearest = $itemCenters | Sort-Object { [Math]::Abs($_ - $lcx) } | Select-Object -First 1
+        $alignDeltas += [Math]::Abs($nearest - $lcx)
+    }
+    if ($alignDeltas.Count -lt 3) { throw 'dock: could not match tab labels to items' }
+    $maxDelta = [int](($alignDeltas | Measure-Object -Maximum).Maximum)
+    if ($maxDelta -gt 12) { throw ("dock: label/item horizontal misalignment {0}px" -f $maxDelta) }
+    $scrollBottoms = @()
+    for ($i = 0; $i -lt 6; $i++) {
+        $null = Invoke-Adb @('shell', 'input', 'swipe', '540', '1900', '540', '800', '300')
+        Start-Sleep -Milliseconds 500
+        $sd = Get-UiDump
+        $mb = -1
+        foreach ($n in $sd.SelectNodes('//node')) {
+            if (-not ([string]$n.text)) { continue }
+            $bm = [regex]::Match([string]$n.bounds, '\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
+            if (-not $bm.Success) { continue }
+            $y1 = [int]$bm.Groups[2].Value
+            if ($y1 -ge ($dockTop - 12)) { continue }
+            $y2 = [int]$bm.Groups[4].Value
+            if ($y2 -gt $mb) { $mb = $y2 }
+        }
+        $scrollBottoms += [int]$mb
+    }
+    $lastBottom = $scrollBottoms[$scrollBottoms.Count - 1]
+    $prevBottom = $scrollBottoms[$scrollBottoms.Count - 2]
+    if ($lastBottom -ne $prevBottom) { throw 'dock: workbench did not reach scroll bottom (content may be blocked)' }
+    if ($lastBottom -gt ($dockTop + 8)) { throw ("dock: content overlaps dock (contentBottom={0} dockTop={1})" -f $lastBottom, $dockTop) }
+    Write-Line ("  dock: contentBottom={0} dockTop={1} (120dp bottom inset ok)" -f $lastBottom, $dockTop)
+    Save-Shot '4x_dock_workbench.png'
+    Tap-UiText -Label $L.AllTab -Exact -TimeoutSec 10
+    if (-not (Wait-ScreenKind 'ALL' 15)) { throw 'dock: tools page not visible' }
+    Save-Shot '4x_dock_tools.png'
+    Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
+    if (-not (Wait-UiAny -Labels @($L.MyData, $L.PermTitle) -TimeoutSec 15)) { throw 'dock: profile page not visible' }
+    Save-Shot '4x_dock_profile.png'
+    Tap-UiText -Label $L.Workbench -Exact -TimeoutSec 10
+    if (-not (Wait-ScreenKind 'HOME' 15)) { throw 'dock: workbench not reachable' }
+    Add-Step 'dock_overlay' 'PASS' ("pill centered, max label delta {0}px, content above dock" -f $maxDelta) $swStep.ElapsedMilliseconds
+
     # STEP 2: bottom dock "tools" tab
     Write-Line '--- step: all tools'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
@@ -955,6 +1037,42 @@ function Invoke-Scenario {
     }
     Add-Step 'tool_pages' 'PASS' ('{0} pages' -f $pages.Count) $swStep.ElapsedMilliseconds
 
+    # STEP 5b (v3): timetable new layout (login entry / export button / empty state) - open, assert, BACK
+    Write-Line '--- step: timetable v3 layout'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    Go-AllTools
+    if (-not (Wait-UiTextScroll -Label $L.Tt -ScrollTries 3 -TimeoutSec 10)) { throw 'timetable card not visible' }
+    Tap-UiTextScroll -Label $L.Tt -ScrollTries 2 -TimeoutSec 8
+    if (-not (Wait-UiAny -Labels @($L.TtNoData, $L.TtLoading, $L.TtEmpty, $L.TtNetError, $L.TtError, $L.TtParseError) -TimeoutSec 20)) { throw 'timetable page not visible' }
+    $ttLogin = Wait-UiText -Label $L.LoginEdu -TimeoutSec 5
+    $ttExport = Wait-UiText -Label $L.ExportTt -TimeoutSec 3
+    if (-not $ttLogin -and -not $ttExport) { Write-Line '  note: timetable login/export entries not visible in this state' }
+    Save-Shot '4x_timetable_v3.png'
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    if (-not (Wait-ScreenKind 'ALL' 15)) { Go-AllTools }
+    Add-Step 'timetable_v3' 'PASS' ("login={0} export={1}" -f [bool]$ttLogin, [bool]$ttExport) $swStep.ElapsedMilliseconds
+
+    # STEP 5c (v3): diagnosis tool - open page, assert >=3 sections, BACK; never press report/fix buttons
+    Write-Line '--- step: diagnosis tool page'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    Go-AllTools
+    if (-not (Wait-UiTextScroll -Label $L.DiagTool -ScrollTries 4 -TimeoutSec 12)) { throw 'diag tool card not visible' }
+    Tap-UiTextScroll -Label $L.DiagTool -ScrollTries 2 -TimeoutSec 8
+    if (-not (Wait-UiText -Label $L.DiagSub -TimeoutSec 25)) { throw 'diag page not visible (service-health subtitle missing)' }
+    $diagSections = 0
+    if (Wait-UiText -Label $L.DiagLocal -TimeoutSec 5) { $diagSections++ }
+    if (Wait-UiTextScroll -Label $L.DiagDevice -ScrollTries 3 -TimeoutSec 8) { $diagSections++ }
+    if (Wait-UiTextScroll -Label $L.DiagAI -ScrollTries 3 -TimeoutSec 8) { $diagSections++ }
+    if (Wait-UiTextScroll -Label $L.DiagFix -ScrollTries 3 -TimeoutSec 8) { $diagSections++ }
+    if (Wait-UiTextScroll -Label $L.DiagHealth -ScrollTries 3 -TimeoutSec 8) { $diagSections++ }
+    if ($diagSections -lt 3) { throw ("diag: only {0} sections visible (need >= 3)" -f $diagSections) }
+    Save-Shot '4x_diag.png'
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    if (-not (Wait-ScreenKind 'ALL' 15)) { Go-AllTools }
+    Add-Step 'diag_page' 'PASS' ("{0} sections; no report/fix pressed" -f $diagSections) $swStep.ElapsedMilliseconds
+
     # STEP 9a: profile -> data & privacy page. Opens the clear-cloud confirm dialog
     # and cancels it (never actually clears anything). If the page cannot load the
     # overview without a real token, record WARN instead of failing.
@@ -990,8 +1108,8 @@ function Invoke-Scenario {
     if (-not (Wait-UiTextScroll -Label $L.Appearance -ScrollTries 3 -TimeoutSec 5)) { throw 'appearance card title not visible' }
     $script:AppearanceState = Toggle-SwitchNear -Label $L.WallpaperColor
     Save-Shot '23_appearance.png'
-    if (-not (Wait-UiTextScroll -Label '2.' -ScrollTries 4 -TimeoutSec 10)) { throw 'about version (contains 2.) not visible' }
-    Add-Step 'appearance_about' 'PASS' ("wallpaperColor=" + $script:AppearanceState + "; version-family=2.x") $swStep.ElapsedMilliseconds
+    if (-not (Wait-UiTextScroll -Label '3.' -ScrollTries 4 -TimeoutSec 10)) { throw 'about version (contains 3.) not visible' }
+    Add-Step 'appearance_about' 'PASS' ("wallpaperColor=" + $script:AppearanceState + "; version-family=3.x") $swStep.ElapsedMilliseconds
 
     # STEP 9c: restart the app and verify the appearance switch value persisted (DataStore)
     Write-Line '--- step: appearance persists after restart'
@@ -1047,6 +1165,9 @@ function Invoke-Scenario {
     if (-not (Wait-UiText -Label $L.HomeworkRem -TimeoutSec 8)) { throw 'reminder: homework reminder row missing' }
     if (-not (Wait-UiText -Label $L.ClassRem -TimeoutSec 8)) { throw 'reminder: class reminder row missing' }
     if (-not (Wait-UiText -Label $L.NoticeRemind -TimeoutSec 8)) { throw 'reminder: notice reminder row missing (v2.1.1)' }
+    if (-not (Wait-UiTextScroll -Label $L.NotifTestTitle -ScrollTries 4 -TimeoutSec 12)) { throw 'reminder: notification test section missing (v3)' }
+    if (-not (Wait-UiTextScroll -Label $L.NotifTestBtn -ScrollTries 3 -TimeoutSec 8)) { throw 'reminder: send-test-notification button missing (v3)' }
+    if (-not (Wait-UiTextScroll -Label $L.NotifDiagBtn -ScrollTries 3 -TimeoutSec 8)) { throw 'reminder: run-check+diagnostics button missing (v3)' }
     $remBefore = Toggle-SwitchNear -Label $L.HomeworkRem
     $null = Toggle-SwitchNear -Label $L.HomeworkRem
     $remAfter = Get-SwitchStateNear -Label $L.HomeworkRem
@@ -1190,6 +1311,48 @@ function Invoke-Scenario {
     if (-not $leftEditor) { throw 'did not return to workbench from quick tools editor' }
     Add-Step 'home_quick_edit' 'PASS' '' $swStep.ElapsedMilliseconds
 
+    # STEP 10b (v3): dark mode full chain (identity/workbench/tools/profile/permissions/timetable) + light restore
+    Write-Line '--- step: dark mode screenshot group'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    $null = Invoke-Adb @('shell', 'cmd', 'uimode', 'night', 'yes')
+    Start-Sleep -Seconds 2
+    $null = Invoke-Adb @('shell', 'am', 'force-stop', $Pkg)
+    $null = Invoke-Adb @('shell', 'pm', 'clear', $Pkg)
+    $null = Invoke-Adb @('shell', 'am', 'start', '-n', $Act)
+    if (-not (Wait-UiText -Label $L.DevPreview -TimeoutSec 45)) { throw 'dark: identity page not visible' }
+    Save-Shot '4x_dark_identity.png'
+    Tap-UiText -Label $L.DevPreview -TimeoutSec 10
+    if (-not (Wait-UiText -Label $L.QuickTools -TimeoutSec 35)) { throw 'dark: workbench not visible' }
+    Save-Shot '4x_dark_workbench.png'
+    Tap-UiText -Label $L.AllTab -Exact -TimeoutSec 10
+    if (-not (Wait-UiText -Label $L.AllToolsTitle -TimeoutSec 20)) { throw 'dark: tools page not visible' }
+    Save-Shot '4x_dark_tools.png'
+    Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
+    if (-not (Wait-UiAny -Labels @($L.MyData, $L.PermTitle) -TimeoutSec 20)) { throw 'dark: profile page not visible' }
+    Save-Shot '4x_dark_profile.png'
+    if (-not (Wait-UiTextScroll -Label $L.PermManage -ScrollTries 4 -TimeoutSec 15)) { throw 'dark: permission row not visible' }
+    Tap-ActionNearLabel -Label $L.PermManage -ActionText $L.Manage
+    if (-not (Wait-UiText -Label $L.PermTitle -TimeoutSec 15)) { throw 'dark: permission page not visible' }
+    Save-Shot '4x_dark_permissions.png'
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    $null = Wait-ScreenKind 'PROFILE' 10
+    Tap-UiText -Label $L.AllTab -Exact -TimeoutSec 10
+    if (-not (Wait-ScreenKind 'ALL' 15)) { throw 'dark: tools tab not reachable' }
+    if (-not (Wait-UiTextScroll -Label $L.Tt -ScrollTries 3 -TimeoutSec 10)) { throw 'dark: timetable card not visible' }
+    Tap-UiTextScroll -Label $L.Tt -ScrollTries 2 -TimeoutSec 8
+    if (-not (Wait-UiAny -Labels @($L.TtNoData, $L.TtLoading, $L.TtEmpty, $L.TtNetError, $L.TtError, $L.TtParseError) -TimeoutSec 20)) { throw 'dark: timetable page not visible' }
+    Save-Shot '4x_dark_timetable.png'
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    $null = Invoke-Adb @('shell', 'cmd', 'uimode', 'night', 'no')
+    Start-Sleep -Seconds 2
+    $null = Invoke-Adb @('shell', 'am', 'force-stop', $Pkg)
+    $null = Invoke-Adb @('shell', 'am', 'start', '-n', $Act)
+    if (-not (Wait-ScreenKind 'HOME' 30)) { throw 'light restore: workbench not visible' }
+    Save-Shot '4x_light_restore.png'
+    Add-Step 'dark_mode_group' 'PASS' 'identity/workbench/tools/profile/permissions/timetable dark + light restore' $swStep.ElapsedMilliseconds
+
     Write-Line ("scenario done in {0}s" -f [int]$sw.Elapsed.TotalSeconds)
 }
 
@@ -1301,6 +1464,10 @@ Write-Line "summary: $summaryPath"
 $script:Log | Out-File -FilePath $LogFile -Encoding utf8
 Remove-Item $TmpUi -Force -ErrorAction SilentlyContinue
 if ($failed) { exit 1 } else { exit 0 }
+
+
+
+
 
 
 

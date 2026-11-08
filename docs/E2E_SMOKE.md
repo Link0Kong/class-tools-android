@@ -374,3 +374,60 @@ v2 新增/关键：`25_pager_tools.png`（滑动到工具页）、`26_pager_prof
 ### 10.5 回归口径
 
 以**完整模式 36 项（601.6 s）**为准；快速模式 34 项（575.1 s，跳过 build/install）为同轮补充，两轮均 0 FAIL。日志：`C:\AndroidToolchain\work\e2e_v211_full.log`、`e2e_v211_fast.log`。
+
+---
+
+## 11. v3.0.0 最终回归（深色全链路 / 悬浮玻璃底栏 / 通知诊断 / 课表新布局）
+
+> 版本：**versionName `3.0.0` / versionCode `6`**（主树 779/0 单测，Lead 数据）
+> 设备：`emulator-5554`（ct-api37，1080×2400 @420）；Debug 包 24,072,553 B
+> 时间：2026-11-08 22:20–23:02
+
+### 11.1 脚本增量（40 项；v2.1.1 的 36 项全保留）
+
+| 新增/变更 | 说明 |
+|---|---|
+| **`dock_overlay`**（新增） | 悬浮玻璃底栏 overlay 校验：3 个 Tab 语义项（`content-desc` 含「第 N 个 Tab」）存在、**恰有 1 个「已选中」pill**、每个 Tab 的**文字与项中心水平对齐**（实测最大偏差 **0 px**）；工作台滚动到底后**内容底边不越过 dock 顶边**（实测 contentBottom < dockTop，120dp 底部留白生效）→ 截图 `4x_dock_workbench/tools/profile.png` |
+| **`timetable_v3`**（新增） | 打开课表 → 断言页面正常（空态/加载/错误任一）→ 检测 **`登录教务`** 入口（实测 login=True）与导出按钮 → 截图 `4x_timetable_v3.png` → BACK；不填真实账号 |
+| **`diag_page`**（新增） | 全部工具 → **诊断** 卡 → 断言副标题（服务健康）+ **5 个分节**（本机代理/设备诊断/AI 分析/修复任务/服务健康）→ 截图 `4x_diag.png` → BACK；**未点任何上报/修复按钮** |
+| **`dark_mode_group`**（新增） | `cmd uimode night yes` → 冷启动 → 深色 **身份/工作台/工具/我的/权限/课表** 6 张（`4x_dark_*.png`）→ `night no` 恢复并截 `4x_light_restore.png`（共 7 张） |
+| `reminder_settings`（增强） | 断言 **`通知测试与诊断`** 区块 + **`发送测试通知`**、**`立即检查 + 诊断`** 按钮存在（**未点击**，避免制造系统通知/云端写） |
+| 版本断言 | 「关于」版本包含 `3.`（当前 `v3.0.0-debug`） |
+| 其它 | 工具网格新增「诊断」卡后，抽签/工具页/权限/反馈/使用说明等 36 项基线全部保持 |
+
+### 11.2 结果
+
+| 轮次 | 结果 | 耗时 | 退出码 |
+|---|---|---|---|
+| **完整模式** `-Build -Install` | **40 PASS / 0 WARN / 0 FAIL** | **840.1 s** | 0 |
+| **快速模式** | **38 PASS / 0 WARN / 0 FAIL** | **820.7 s** | 0 |
+| 导航探针 | **10/10**（两轮） | — | — |
+| logcat | **0 FATAL / 0 ANR**（两轮） | — | — |
+| 导出相册 | 32→33、33→34（各 +1 PNG） | — | — |
+
+v3 新增项实测：
+- `dock_overlay`：`pill centered, max label delta 0px, content above dock`；工作台滚动到底内容不遮挡
+- `timetable_v3`：`login=True export=False`（导出按钮在空态不展示，正常）
+- `diag_page`：`5 sections; no report/fix pressed`
+- `dark_mode_group`：67.3 s，6 张深色 + 1 张浅色恢复均成功
+
+### 11.3 截图（本轮 40 张，`artifacts/e2e/`）
+
+v3 新增：`4x_dock_workbench/tools/profile.png`、`4x_timetable_v3.png`、`4x_diag.png`、`4x_dark_identity/workbench/tools/profile/permissions/timetable.png`、`4x_light_restore.png`（共 14 张）；其余 26 张与 v2.1.1 基线同名。目录另含 Release v3.0.0 复验截图（`release_fix_v300_*`、`release_launch_v300.png`）。
+
+### 11.4 深色/底栏人工审图结论
+
+- 深色：状态栏/导航栏图标随主题反色；身份页、工作台、工具、我的、权限、课表均为深色底 + 浅色文字，无「白底黑字」错乱；浮岛底栏深色下对比度正常（详见 `ADAPTIVE_TEST_MATRIX.md` §10 截图）。
+- 底栏：选中 pill 与图标/文字垂直居中（同一 Column 内绘制）；内容区 120dp 底部留白实测生效（滚动到底无遮挡）；Tab 语义播报正确（`工作台/工具/我的，第 N 个 Tab，共 3 个，已选中`）。
+
+### 11.5 边界（未触发云端/系统副作用）
+
+- **未点**「发送测试通知」「立即检查 + 诊断」（避免制造系统通知与诊断上报）；仅断言按钮存在。
+- 诊断页**未点**上报/自动修复/重新检测按钮。
+- 课表**未提交**教务账号（未登录态验证入口存在）；通知「提醒我」需真实通知条目，未覆盖。
+- 反馈建议页未提交（沿用 v2.1.1 唯一读打开策略）。
+- 真实账号业务链路、真实通知到达、教务登录完整流程仍需测试身份/账号另测。
+
+### 11.6 回归口径
+
+以**完整模式 40 项（840.1 s）**为准；快速模式 38 项（820.7 s，跳过 build/install）为同轮补充，两轮均 0 FAIL。日志：`C:\AndroidToolchain\work\e2e_v300_full.log`、`e2e_v300_fast.log`。

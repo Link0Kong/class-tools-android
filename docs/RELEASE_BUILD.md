@@ -253,3 +253,51 @@ Release 包**真实账号业务全链路**（真实身份登录 → 云端数据
 - Release 包**真实账号业务全链路**（真实身份登录/云端数据/提醒实际到达/权限实际授权）仍需用户测试身份另测。
 - 反馈建议页 E2E 仅打开未提交（避免云端写），提交链路由真实账号验证。
 - 通知提醒的实际通知到达需要真实作业/通知数据 + 通知权限，本轮未做到达断言（设置页开关已 E2E 覆盖）。
+
+---
+
+## 10. v3.0.0 Release 复验
+
+> 版本：**versionName `3.0.0` / versionCode `6`**；主树 779/0 单测（Lead 数据）
+> 日期：2026-11-08 23:02–23:04
+> 本节为追加，保留 §7（v1.0.1）、§8（v2.1.0）、§9（v2.1.1）历史记录。
+
+### 10.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| `:app:assembleRelease` | 通过（Lead 构建；含 v3 新增：深色全链路、悬浮玻璃底栏、通知测试/诊断、诊断工具、课表新布局+教务登录） |
+| 交付 APK | `android-class-tools\artifacts\classtools-3.0.0-release-signed.apk` |
+| APK 字节数 | **2,577,485 B**（约 2.46 MiB） |
+| APK SHA-256 | **`615351BF40B45A7FD234D9B53E3E3C5747775A51A2E1C10FDB000D8AD4EE5012`** |
+| `apksigner verify --verbose --print-certs` | **Verifies**；v2 scheme = true；Number of signers = 1 |
+| 签名证书 | `CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`；证书 SHA-256 `974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a`；RSA 2048（同一 keystore，可覆盖升级） |
+
+### 10.2 安装与两次冷启动
+
+| 项 | 结果 |
+|---|---|
+| `adb install -r` | **Success**（覆盖升级 v2.1.1 → v3.0.0） |
+| 冷启动 #1 | `Status: ok`，`TotalTime: 2,666 ms`；身份核验页（`v3.0.0 · Android 17 设计语言`） |
+| 冷启动 #2（force-stop 后） | `Status: ok`（`WaitTime: 1,538 ms`）；界面一致 |
+| 进程 | `com.furina.classtools` 存活；`topResumedActivity=com.furina.classtools/.MainActivity` |
+| 包信息（dumpsys） | **versionName=3.0.0，versionCode=6**，minSdk 26，targetSdk 37 |
+| 启动截图 | `artifacts/e2e/release_fix_v300_identity.png`、`release_fix_v300_second.png`、`release_launch_v300.png`（均 1080×2400，约 509 KB） |
+| UI dump | `artifacts/e2e/release_ui_v300.xml`（身份页，含 `v3.0.0`，无开发预览） |
+| logcat | `artifacts/e2e/release_logcat_v300_fixed.txt`（8,801 行）中 **FATAL/ANR = 0**、无 `NoSuchMethodException` |
+
+> 说明：冷启动耗时较 v2.1.1（682 ms）上升，属 v3 首次冷启动（新版本 dex/资源初始化）+ 模拟器负载所致；两次启动均 `Status: ok` 且无崩溃，未达异常阈值。
+
+### 10.3 v3.0.0 相对 v2.1.1 的用户可见变化（交付说明）
+
+- **深色模式全链路**：状态栏/导航栏图标随主题、values-night 窗口背景、全页面深色适配。
+- **底栏改为内容 overlay 悬浮玻璃**：不再占 Scaffold bottomBar；选中 pill 垂直居中；页面底部 120dp 内容留白。
+- **通知能力**：提醒设置页「发送测试通知」「立即检查 + 诊断」；通知详情「提醒我」。
+- **工具页新增「诊断」**：服务健康 · 设备诊断 · AI 分析 · 修复任务。
+- **课表新布局**：新比例、左右滑动切周、日视图、导出课表图片、教务登录入口。
+
+### 10.4 边界
+
+- Release 包**真实账号业务全链路**（真实登录/云端数据/提醒真实到达/教务登录完整流程）仍需测试身份或真实账号另测。
+- 本复验**未触发**诊断上报/自动修复/发送测试通知/反馈提交（避免云端写与系统通知副作用）。
+- 深色可读性为截图人工审图结论（无自动化对比度断言）。

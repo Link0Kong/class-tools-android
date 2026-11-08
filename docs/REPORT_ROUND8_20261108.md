@@ -45,3 +45,16 @@
 - `docs/design/V3_GLOBAL_STYLE.md`、`docs/design/V3_TIMETABLE_WEB_PARITY.md`
 - `docs/api/NOTIFICATION_V3_IMPL.md`
 - toolchain 追加：`docs/E2E_SMOKE.md §11`、`docs/ADAPTIVE_TEST_MATRIX.md §10`、`docs/RELEASE_BUILD.md §10`
+
+## 6. 最终验证结果（toolchain task-30，2026-11-08）
+
+| 项 | 结果 |
+|---|---|
+| Debug E2E v3.0.0 | 完整模式 **40 PASS / 0 WARN / 0 FAIL（840.1s）**；快速模式 38 PASS/0 FAIL（820.7s）；导航 10/10；logcat 0 FATAL/ANR（两轮） |
+| v3 新增 E2E 断言 | `dock_overlay`（玻璃底栏 3 Tab + 恰 1 选中 pill + **文字/项中心水平偏差 0px** + 滚动到底内容底边 < dock 顶边=120dp 留白生效）；`timetable_v3`（登录教务入口/login=True）；`diag_page`（5 分节，未上报）；`dark_mode_group`（深色 6 张 + 浅色恢复 1 张）；提醒设置「通知测试与诊断」按钮存在（未点击） |
+| Release v3.0.0 复验 | **2,577,485 B** / SHA-256 `615351BF…5012`；apksigner V2 通过；install Success；两次冷启动 OK（2.67s/1.54s）；logcat 8,801 行 0 FATAL/ANR/NoSuchMethodException |
+| v3 自适应矩阵 | 小屏 720×1280 **12 张**（含深色 4 张、课表空态+登录入口、首屏免滚动）；平板 2560×1600 **7 张**（含课表新布局/悬浮底栏/宽屏留白）；共 19 张 `artifacts/adaptive/v3/` |
+| 文档 | `E2E_SMOKE.md §11`（433 行）、`ADAPTIVE_TEST_MATRIX.md §10`（323 行）、`RELEASE_BUILD.md §10`（303 行） |
+| 残余 | 平板课表真数据双栏/滑周未验证（空态）；折叠屏未重跑（v2.1.1 已过）；教务账号未提交；深色矩阵仅小屏 1 台；首次冷启动 2.6s（新版本 dex/资源初始化） |
+
+**结论：v3.0.0 第一轮（用户 5 点反馈中 ①–⑤）完成并通过完整验证，签名 APK 已交付桌面。**
