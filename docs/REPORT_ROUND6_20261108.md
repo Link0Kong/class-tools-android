@@ -48,3 +48,11 @@
 - `docs/api/PARITY_P1_IMPL.md`
 - `docs/ui/V2_ADAPTIVE_SPEC.md`（§6 列数/双栏/深色/预览）
 - `docs/MP_PARITY_AUDIT.md`、`docs/ADAPTIVE_TEST_MATRIX.md`（待 v2 小节）
+
+## 6. P0 修复记录（Release 冷启动崩溃）
+
+- **现象**：v2.1.0 Release 包（versionCode 4）冷启动即崩：`RuntimeException: Unable to get provider androidx.startup.InitializationProvider` ← `NoSuchMethodException: androidx.work.impl.WorkDatabase_Impl.<init>`；Debug 与 E2E 不受影响。
+- **根因**：v2 新增 WorkManager（内部 Room）后，R8 release 构建裁掉 Room 生成数据库实现类的无参构造（`androidx.startup` 反射实例化）。
+- **修复**：`app/proguard-rules.pro` 增加 Room/WorkManager keep 规则（`androidx.work.impl.WorkDatabase_Impl`、所有 `RoomDatabase` 子类构造器、`ReminderWorker`、`-dontwarn androidx.room/**/androidx.work/**`）。
+- **修复后验证**（2560×1600 平板模拟器）：`assembleRelease` 成功；APK **2,478,833 B**，SHA-256 `DCBB1EAE01D79BF3EFF5A70B02742CDC08FA65922C9C9CA8CD9C3DC7FB490B93`；`adb install -r` + **两次冷启动** `Status: ok`（314/317ms）、进程存活、logcat FATAL=0；身份页截图 `artifacts/release_fix_v21_identity.png` / `_second.png`。
+- 交付桌面 APK 已替换为修复后构建；toolchain 复验 Release + 多设备 Release 身份页 + 文档 §8。

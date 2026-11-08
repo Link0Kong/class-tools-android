@@ -85,7 +85,7 @@ $L = @{
     IdentityTitle  = U8 '6Lqr5Lu95qC46aqM'                           # identity gate title
     QuickTools     = U8 '5bi455So5bel5YW3'                           # quick tools section
     Today          = U8 '5LuK5pel'                                   # today section
-    AllTab         = U8 '5bel5YW3'                                   # bottom dock: tools tab (v2 "工具")
+    AllTab         = U8 '5bel5YW3'                                   # bottom dock: tools tab (v2)
     AllToolsTitle  = U8 '5YWo6YOo5bel5YW3'                           # all tools title
     Draw           = U8 '5oq9562+'                                   # draw tool card
     DrawParams     = U8 '5oq9562+5Y+C5pWw'                            # draw params card
@@ -172,10 +172,15 @@ $L = @{
     HomeTtSync     = U8 '6K++6KGo5pyq5ZCM5q2l'                       # workbench: timetable not synced
     HomeNoClass    = U8 '5LuK5aSp5rKh6K++'                           # workbench: no class today
     PermTitle      = U8 '5p2D6ZmQ5LiO5o+Q6YaS'                       # profile card / permission page title
+    MyData         = U8 '5oiR55qE5pWw5o2u'                           # profile v2.1: my-data stats card
+    GuideEntry     = U8 '5L2/55So6K+05piO'                           # profile: user guide entry
+    FeedbackEntry  = U8 '5Y+N6aaI5bu66K6u'                           # profile: feedback entry
     PermManage     = U8 '5p2D6ZmQ566h55CG'                           # profile row: permission management
     NotifyWord     = U8 '6YCa55+l'                                   # permission card: notifications
     CalendarWord   = U8 '5pel5Y6G'                                   # permission card: calendar
     GrantPerm      = U8 '5byA5ZCv5p2D6ZmQ'                           # permission card action: grant
+    GrantGo        = U8 '5Y675byA5ZCv'                               # in-app rationale dialog: go enable
+    CancelPerm     = U8 '5pqC5LiN'                                   # in-app rationale dialog: cancel
     PermOff        = U8 '5pyq5byA5ZCv'                               # permission state: not enabled
     PermOn         = U8 '5bey5byA5ZCv'                               # permission state: enabled
     PermNeedSet    = U8 '6ZyA57O757uf6K6+572u'                      # permission state: needs system settings
@@ -299,7 +304,8 @@ function Get-ScreenKind {
     if ($joined.Contains($L.EditTitle)) { return 'HOME_EDIT' }
     if ($joined.Contains($L.IdentityTitle)) { return 'IDENTITY' }
     if ($joined.Contains($L.QuickTools)) { return 'HOME' }
-    if ($joined.Contains($L.ProfileMark) -or $joined.Contains($L.PermTitle)) { return 'PROFILE' }    # All-tools grid may be scrolled, so the "all tools" title is not always on screen.
+    if ($joined.Contains($L.ProfileMark) -or $joined.Contains($L.PermTitle) -or $joined.Contains($L.MyData)) { return 'PROFILE' }
+    # All-tools grid may be scrolled, so the "all tools" title is not always on screen.
     # Fall back to the triple bottom-nav labels (only top-level pages have them).
     if ($joined.Contains($L.Workbench) -and $joined.Contains($L.AllTab) -and $joined.Contains($L.MyTab)) { return 'ALL' }
     return 'OTHER'
@@ -337,13 +343,9 @@ function Go-AllTools {
 
 function Go-Workbench {
     if ((Get-ScreenKind) -eq 'HOME') { return }
-    if ((Get-ScreenKind) -eq 'ALL') {
-        Write-Line '  ALL -> HOME via system BACK (tab tap is a known app rough edge)'
-        $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-        Start-Sleep -Milliseconds 1000
-        if (Wait-ScreenKind 'HOME' 8) { return }
-    }
-    for ($i = 1; $i -le 2; $i++) {
+    # v2 root is a 3-tab Pager inside one Activity: system BACK at root exits the app,
+    # so always use the floating dock tab instead of BACK.
+    for ($i = 1; $i -le 3; $i++) {
         Tap-UiText -Label $L.Workbench -Exact -TimeoutSec 8
         if (Wait-ScreenKind 'HOME' 6) { return }
         Write-Line ("  nav tap workbench did not reach home (attempt {0})" -f $i)
@@ -355,13 +357,7 @@ function Go-Workbench {
         Tap-UiText -Label $L.Workbench -Exact -TimeoutSec 8
         if (Wait-ScreenKind 'HOME' 6) { return }
     }
-    if ((Get-ScreenKind) -eq 'ALL') {
-        Write-Line '  fallback: system BACK from all tools'
-        $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-        Start-Sleep -Milliseconds 1000
-        if (Wait-ScreenKind 'HOME' 8) { return }
-    }
-    throw 'cannot reach workbench (direct + fallbacks failed)'
+    throw 'cannot reach workbench (dock taps failed)'
 }
 
 function Tap-UiText([string]$Label, [int]$TimeoutSec = 20, [switch]$Exact, [int]$ScrollTries = 3) {
@@ -450,7 +446,7 @@ function Tap-UiAnyText([string[]]$Labels, [int]$TimeoutSec = 12) {
     return $false
 }
 
-# Tap the action text (e.g. "管理" / "设置") on the same row as a settings label.
+# Tap the action text (e.g. manage / settings) on the same row as a settings label.
 function Tap-ActionNearLabel([string]$Label, [string]$ActionText) {
     $doc = Get-UiDump
     if (-not $doc) { throw "UI dump failed while looking for '$Label' action" }
@@ -476,7 +472,8 @@ function Tap-ActionNearLabel([string]$Label, [string]$ActionText) {
     Start-Sleep -Milliseconds 900
 }
 
-# Find the settings Switch on the same row as a label (profile / reminder pages).function Get-SwitchNodeNear([string]$Label) {
+# Find the settings Switch on the same row as a label (profile / reminder pages).
+function Get-SwitchNodeNear([string]$Label) {
     $doc = Get-UiDump
     if (-not $doc) { return $null }
     $labelNode = Find-UiNode -Doc $doc -Label $Label
@@ -697,13 +694,27 @@ function Invoke-Install {
 }
 
 function Invoke-AppLaunch {
+    $null = Invoke-Adb @('shell', 'am', 'force-stop', $Pkg)
     if (-not $KeepData) {
         $null = Invoke-Adb @('shell', 'pm', 'clear', $Pkg)
     }
-    $null = Invoke-Adb @('shell', 'am', 'force-stop', $Pkg)
     $null = Invoke-Adb @('logcat', '-c')
     $null = Invoke-Adb @('shell', 'am', 'start', '-n', $Act)
     Write-Line "launched $Act"
+    # a leftover in-app permission rationale dialog from a previous run may still be on top
+    Start-Sleep -Milliseconds 1500
+    $doc = Get-UiDump
+    if ($doc) {
+        $cancelNode = Find-UiNode -Doc $doc -Label $L.CancelPerm
+        if ($cancelNode) {
+            $pt = Get-NodeCenter $cancelNode
+            if ($pt) {
+                $null = Invoke-Adb @('shell', 'input', 'tap', "$($pt[0])", "$($pt[1])")
+                Write-Line '  dismissed stray permission rationale dialog'
+                Start-Sleep -Milliseconds 800
+            }
+        }
+    }
 }
 
 function Dump-FailureContext {
@@ -779,7 +790,7 @@ function Invoke-Scenario {
     Save-Shot '02_workbench.png'
     Add-Step 'workbench' 'PASS' 'due/notices/quick-tools cards visible' $swStep.ElapsedMilliseconds
 
-    # STEP 1c (v2): three-tab horizontal Pager (工作台 / 工具 / 我的) - swipe + title assertions
+# STEP 1c (v2): three-tab horizontal Pager (workbench / tools / me) - swipe + title assertions
     Write-Line '--- step: pager swipe (root tabs)'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     for ($i = 1; $i -le 2; $i++) {
@@ -792,9 +803,9 @@ function Invoke-Scenario {
     for ($i = 1; $i -le 2; $i++) {
         $null = Invoke-Adb @('shell', 'input', 'swipe', '950', '620', '130', '620', '260')
         Start-Sleep -Milliseconds 900
-        if (Wait-UiText -Label $L.PermTitle -TimeoutSec 15) { break }
+        if (Wait-UiAny -Labels @($L.MyData, $L.ProfileMark, $L.PermTitle) -TimeoutSec 8) { break }
     }
-    if (-not (Wait-UiText -Label $L.PermTitle -TimeoutSec 5)) { throw 'pager swipe left did not reach profile page' }
+    if (-not (Wait-UiAny -Labels @($L.MyData, $L.ProfileMark, $L.PermTitle) -TimeoutSec 12)) { throw 'pager swipe left did not reach profile page' }
     Save-Shot '26_pager_profile.png'
     for ($i = 1; $i -le 2; $i++) {
         $null = Invoke-Adb @('shell', 'input', 'swipe', '130', '620', '950', '620', '260')
@@ -970,8 +981,8 @@ function Invoke-Scenario {
     if (-not (Wait-UiTextScroll -Label $L.Appearance -ScrollTries 3 -TimeoutSec 5)) { throw 'appearance card title not visible' }
     $script:AppearanceState = Toggle-SwitchNear -Label $L.WallpaperColor
     Save-Shot '23_appearance.png'
-    if (-not (Wait-UiTextScroll -Label '2.0.0' -ScrollTries 4 -TimeoutSec 10)) { throw 'about version 2.0.0 not visible' }
-    Add-Step 'appearance_about' 'PASS' ("wallpaperColor=" + $script:AppearanceState + "; version=2.0.0") $swStep.ElapsedMilliseconds
+    if (-not (Wait-UiTextScroll -Label '2.' -ScrollTries 4 -TimeoutSec 10)) { throw 'about version (contains 2.) not visible' }
+    Add-Step 'appearance_about' 'PASS' ("wallpaperColor=" + $script:AppearanceState + "; version-family=2.x") $swStep.ElapsedMilliseconds
 
     # STEP 9c: restart the app and verify the appearance switch value persisted (DataStore)
     Write-Line '--- step: appearance persists after restart'
@@ -987,12 +998,12 @@ function Invoke-Scenario {
     }
     Add-Step 'appearance_persist' 'PASS' ("persisted=" + $persisted) $swStep.ElapsedMilliseconds
 
-    # STEP 9e (v2): profile -> 权限与提醒 -> 权限管理: request notification permission,
-    # deny the system dialog, assert graceful state text (未开启/需系统设置) and no crash.
+# STEP 9e (v2): profile -> permission & reminder -> permission management: request notification permission,
+# deny the system dialog, assert graceful state text (off / needs system settings) and no crash.
     Write-Line '--- step: permission management (deny system dialog)'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     if (-not (Wait-UiTextScroll -Label $L.PermManage -ScrollTries 4 -TimeoutSec 15)) { throw 'profile: permission management row not visible' }
-    Tap-UiTextScroll -Label $L.PermManage -ScrollTries 3 -TimeoutSec 8
+    Tap-ActionNearLabel -Label $L.PermManage -ActionText $L.Manage
     if (-not (Wait-UiText -Label $L.PermTitle -TimeoutSec 15)) { throw 'permission page not visible' }
     if (-not (Wait-UiText -Label $L.NotifyWord -TimeoutSec 8)) { throw 'permission page: notifications card missing' }
     if (-not (Wait-UiText -Label $L.CalendarWord -TimeoutSec 8)) { throw 'permission page: calendar card missing' }
@@ -1000,9 +1011,16 @@ function Invoke-Scenario {
     $permDetail = 'no system dialog shown'
     if (Wait-UiText -Label $L.GrantPerm -TimeoutSec 8) {
         Tap-UiText -Label $L.GrantPerm -TimeoutSec 10
-        if (Tap-UiAnyText -Labels @($L.DenyPerm, $L.DenyPermAlt, "Don't allow", 'Do not allow') -TimeoutSec 12) {
+        Start-Sleep -Milliseconds 1200
+        # app shows a rationale dialog first (later / go-enable) -> tap go-enable to trigger the system dialog
+        if (Wait-UiText -Label $L.GrantGo -TimeoutSec 8) {
+            Tap-UiText -Label $L.GrantGo -Exact -TimeoutSec 10
+            Start-Sleep -Milliseconds 1500
+        }
+        $denyLabels = @($L.DenyPerm, $L.DenyPermAlt, "Don't allow", 'Do not allow', ('Don' + [char]0x2019 + 't allow'), 'DENY')
+        if (Tap-UiAnyText -Labels $denyLabels -TimeoutSec 15) {
             $permDetail = 'system dialog denied'
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 1500
         }
     }
     $stateNode = Wait-UiAny -Labels @($L.PermOff, $L.PermNeedSet, $L.PermOn) -TimeoutSec 12
@@ -1015,7 +1033,7 @@ function Invoke-Scenario {
     Write-Line '--- step: reminder settings'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     if (-not (Wait-UiTextScroll -Label $L.ReminderEntry -ScrollTries 3 -TimeoutSec 10)) { throw 'reminder settings entry not visible' }
-    Tap-UiTextScroll -Label $L.ReminderEntry -ScrollTries 2 -TimeoutSec 8
+    Tap-ActionNearLabel -Label $L.ReminderEntry -ActionText $L.Settings
     if (-not (Wait-UiText -Label $L.ReminderMain -TimeoutSec 15)) { throw 'reminder page not visible' }
     if (-not (Wait-UiText -Label $L.HomeworkRem -TimeoutSec 8)) { throw 'reminder: homework reminder row missing' }
     if (-not (Wait-UiText -Label $L.ClassRem -TimeoutSec 8)) { throw 'reminder: class reminder row missing' }
@@ -1241,4 +1259,11 @@ Write-Line "summary: $summaryPath"
 $script:Log | Out-File -FilePath $LogFile -Encoding utf8
 Remove-Item $TmpUi -Force -ErrorAction SilentlyContinue
 if ($failed) { exit 1 } else { exit 0 }
+
+
+
+
+
+
+
 

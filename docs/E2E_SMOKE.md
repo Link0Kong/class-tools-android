@@ -274,3 +274,55 @@ v1.0.1 在保持 v1.0.0 全部基线功能不回归的前提下，新增「外�
 
 **回归口径**：以**完整模式 31 项（462.0 s）**为准；快速模式 29 项（452.1 s，跳过 build/install）为同轮补充，两轮均 0 FAIL。
 **交付包**（Lead 构建/交付，已核验与构建产物一致）：`android-class-tools\artifacts\classtools-1.0.1-release-signed.apk`，**2,274,622 B，SHA-256 `72135018511DE666CB1AF6222988FD7FE39FF527F21C20D70C1B80D98D144DD2`**，versionName 1.0.1 / versionCode 2。
+
+---
+
+## 9. v2.1.0 最终回归（浮动底栏 / Pager 滑动 / 权限 / 提醒）
+
+> 版本：**versionName `2.1.0` / versionCode `4`**（主树 603/0 单测，Lead 数据）
+> 脚本：`scripts/e2e_smoke.ps1`（v2 升级版，纯 ASCII，AST 0 错误）
+> 设备：`emulator-5554`（ct-api37，1080×2400 @420），Debug 包 23,199,118 B
+> 时间：2026-11-08 08:28–09:19（含 v2 断言调试轮）
+
+### 9.1 脚本 v2 升级内容（在 v1.0.1 的 31 项基线上扩展为 34 项）
+
+| 变更 | 说明 |
+|---|---|
+| 底栏文案 | 底部导航从「全部」改为 **`工作台 / 工具 / 我的`**（`AllTab` 标签更新；Go-AllTools / nav probe 同步适配） |
+| **Pager 滑动**（新增 `pager_swipe`） | 工作台 ←左滑→ 工具页（`全部工具`）；再左滑 → 我的页（`我的数据`/`云同步`/`权限与提醒`）；右滑×2 回工作台；两端断言页面标题后截图 |
+| 工作台新结构（`workbench`） | 断言 `常用工具` + **`作业待交`** + **`通知待处理`** 卡片，以及 `课表未同步`/`今天没课`/`课表` 其一 |
+| **权限管理**（新增 `permission_management`） | 我的 → 权限与提醒 →「管理」→ 权限页（`权限与提醒`/`通知`/`日历`）→ 点 `开启权限` → 应用内说明弹层点 `去开启` → **系统通知权限弹窗** → 点 **`Don’t allow` 拒绝** → 断言页面状态文案（`未开启`/`需系统设置`/`已开启`）且页面仍在、无 crash |
+| **提醒设置**（新增 `reminder_settings`） | 权限页「提醒设置」→ 断言 `提醒总开关`/`作业提醒`/`上课提醒` → **作业提醒开关切换两次并验证状态变化** → 截图 → BACK 两级回「我的」 |
+| 设置卡片跳转（`settings_redirect` 适配） | v2 根页是同一个 Activity 内的 Pager，「设置」=切到「我的」Tab（非 push），**不再用系统 BACK**（根页 BACK 会退出应用），改为点底栏「工具」返回 |
+| 关于版本 | 断言改为包含 `2.`（当前 `v2.1.0-debug`） |
+| 导航探针 | 「工具 → 工作台」底栏点击 10 连击（每轮重启 app），保持 WARN 语义 |
+| 其余 28 项 | 身份门禁、真实鉴权失败路径、抽签三步/结果单/分组联动/BACK 状态恢复、8 个工具页、隐私页、外观页、首页编辑、导出相册、logcat 0 FATAL 全部保留 |
+
+> v2.1.0 小屏身份页两行布局、工具网格 2/3/4 列拖拽几何、「我的」平板双栏等自适应改动对 E2E 文本路径无影响（见 `ADAPTIVE_TEST_MATRIX.md` §8）。
+
+### 9.2 结果
+
+| 轮次 | 结果 | 耗时 | 退出码 | 备注 |
+|---|---|---|---|---|
+| **完整模式** `-Build -Install` | **34 PASS / 0 WARN / 0 FAIL** | **525.1 s** | 0 | build 8 s + install；全量断言 |
+| **快速模式**（无参数） | **32 PASS / 0 WARN / 0 FAIL** | **518.2 s** | 0 | 跳过 build/install，其余断言相同 |
+| 导航探针 | **10/10**（两轮） | — | — | 底栏「工具 → 工作台」连续 10 次全部命中 |
+| logcat | **0 FATAL / 0 ANR**（两轮） | — | — | 结束时全量检查 |
+| 导出相册 | 27→28、28→29（各 +1 PNG） | — | — | `抽签结果_20261108-*_*.png` |
+
+完整模式 34 项：`build`、`install`、`identity_gate`、`auth_failure_path`、`workbench`、`pager_swipe`、`all_tools`、`draw_step1/2/3`、`export_image`、`draw_result_actions`、`back_to_all_tools`、`tool_hw/nt/tt/power/water/group/fit/roster`、`tool_pages`(8)、`privacy_page`、`privacy_back_home`、`appearance_about`(version 2.x)、`appearance_persist`、`permission_management`（system dialog denied）、`reminder_settings`、`settings_redirect`、`back_to_workbench`、`nav_probe_10x`、`home_quick_edit`、`logcat_no_fatal`、`gallery_export_file`。
+
+### 9.3 截图（29 张，`artifacts/e2e/`）
+
+v2 新增/关键：`25_pager_tools.png`（滑动到工具页）、`26_pager_profile.png`（滑动到我的页）、`27_permissions.png`（权限管理页）、`28_permission_denied.png`（拒绝系统弹窗后状态）、`29_reminder.png`（提醒设置，作业提醒开关切换后）；其余 24 张与 v1.0.1 基线同名（`01_identity`、`02_workbench`、`03_all_tools`、`04–07` 抽签流程、`11–20` 工具页、`21_privacy`、`23_appearance`、`24_settings_redirect`、`08_back_all_tools`、`09_home_after_back`、`18_home_edit`、`20_auth_error` 等）。
+
+### 9.4 已知行为与边界
+
+- **根页系统 BACK 退出应用**：v2 根页是 3-Tab Pager（单 Activity），在任何顶层 Tab 按 BACK 会退出应用（符合 Android 惯例）；脚本所有根页导航改用底栏点击，不再依赖 BACK。
+- **写日程入口在空态不展示**：课表 `添加到系统日历（本周）` 需要已有课程数据、通知 `加入日程` 需要「自动/活动」且有时间，Debug 预览空态下不出现（页面本身断言正常，见 `tool_tt`/`tool_nt`）。
+- 反馈建议 / 使用说明 / 我的数据指标卡为 v2.1.0 新增（task-24 接线），本轮 34 项脚本未覆盖（`我的数据` 卡仅作为 Pager 断言 marker）；建议下一轮加入 E2E（见 ADAPTIVE 矩阵 v2 小节的待验证项）。
+- **Release v2.1.0 当前被 P0 阻断**：R8 裁剪 `androidx.work.impl.WorkDatabase_Impl` 导致冷启动崩溃，详见 `RELEASE_BUILD.md` §8；Debug 包无此问题，不影响本 E2E 结论。
+
+### 9.5 回归口径
+
+以**完整模式 34 项（525.1 s）**为准；快速模式 32 项（518.2 s，跳过 build/install）为同轮补充，两轮均 0 FAIL。日志：`C:\AndroidToolchain\work\e2e_v21_full.log`、`e2e_v21_fast.log`。
