@@ -156,3 +156,60 @@ pwsh -NoProfile -File artifacts\adaptive\shoot_device.ps1 `
 | `ct-api37` (1080×2400@420) | 常规手机参考 / E2E 主用 | ✅ 保留 |
 
 > 截图与设备信息：`android-class-tools/artifacts/adaptive/<设备>/`；驱动脚本：`artifacts/adaptive/shoot_device.ps1`；v1.0.1 debug APK：`artifacts/adaptive/classtools-1.0.1-debug.apk`。
+
+---
+
+## 8. v2.1.0 自适应矩阵复验（浮岛底栏 / 限宽双栏 / 小屏修复 / 深色）
+
+> 版本：**v2.1.0 / versionCode 4**（2026-11-08 09:30–09:40）
+> 包：Release `artifacts/classtools-2.1.0-release-signed.apk`（2,478,833 B / SHA-256 `DCBB1EAE…4B93`，用于身份页）；Debug `app-debug.apk`（23,199,118 B，用于「开发预览」其余页面）。
+> 流程：一次一台 AVD → 启动 → 安装 release（截身份页）→ 安装 debug → 开发预览 → 工作台/工具/我的/权限页 → 平板额外深色两屏 → 关闭。脚本：`artifacts/adaptive/v2/shoot_device_v2.ps1`。
+> 结果：**4/4 设备采集成功，共 26 张截图**（`artifacts/adaptive/v2/<设备>/`）。
+
+### 8.1 设备矩阵与截图
+
+| 设备 | AVD | 分辨率 @density | 宽度 dp | 截图数 | 截图清单 |
+|---|---|---|---|---|---|
+| 平板 | `ct-a37-tablet` | 2560×1600 @320 | **1280×800dp**（landscape） | 8 | `00_release_identity`、`01_identity`、`02_workbench`、`03_tools`、`04_profile`、`05_permissions`、`06_dark_workbench`、`07_dark_tools` |
+| 小屏 | `ct-a37-small` | 720×1280 @320 | **360×640dp** | 6 | 00–05（同上，无深色） |
+| 超长屏 | `ct-a37-tall` | 1440×3200 @560 | **411×914dp**（21:9） | 6 | 00–05 |
+| 折叠屏 | `ct-a37-fold` | 2208×1840 @420 | **841×701dp**（展开态 landscape） | 6 | 00–05 |
+
+> 每目录另有 `device-info.txt`、`run.log`、`emulator.log`；总字节约 18 MB。
+
+### 8.2 重点修复验证结论（对照 §4 的 v1.0.1 P1）
+
+| 原问题 | v2.1.0 结论 | 证据 |
+|---|---|---|
+| **P1-1 平板无限宽/无多栏** | ✅ **已修复**：平板工作台为**左右双栏**（左：今日课程+电费，右：作业待交/通知待处理+常用工具），内容居中限宽；「全部工具」为 **4 列网格**，卡片不再拉伸至 700dp；品牌条/顶栏左右留白收紧 | `tablet-2560x1600/02_workbench.png`、`03_tools.png` |
+| **P1-2 小屏身份页溢出 + 隐私链接竖排** | ✅ **主要修复**：同意区改为**两行布局**（勾选框+「我已阅读并同意」一行；《用户协议》《隐私政策》第二行），不再逐字竖排，链接可正常阅读 | `small-720x1280/01_identity.png` |
+| 超长屏底栏遮挡 | ✅ 浮岛底栏与手势条无遮挡，页面内容不被底栏裁切 | `tall-1440x3200/02_workbench.png`、`03_tools.png` |
+| 折叠屏展开态 | ✅ 841×701dp 双栏/多列布局正常，浮岛底栏居中、无重叠 | `fold-2208x1840/02_workbench.png`、`03_tools.png` |
+| 深色模式（平板） | ✅ 工作台/工具页深色配色正常，浮岛底栏/卡片/文字对比达标 | `tablet-2560x1600/06_dark_workbench.png`、`07_dark_tools.png` |
+| 权限页（新） | ✅ 四台均可从「我的 → 权限与提醒 → 管理」进入权限页；通知/日历卡片与开关状态正常 | 各设备 `05_permissions.png` |
+| 我的页「我的数据」卡（新增） | ✅ 各设备 `04_profile.png` 可见指标卡（待交作业/已完成作业/抽签记录/体测记录/提醒设置入口） | 各设备 `04_profile.png` |
+
+### 8.3 残余问题（P2，不阻断）
+
+1. **小屏（360×640dp）身份页首屏仍需 1 次轻扫**才能看到「开发预览/进入工具站」：隐私链接两行修复后总高度仍略超视口（约 1 屏半）；建议 v2.2 进一步压缩顶部 logo/间距，或允许提交按钮 sticky 底部。
+2. 平板工作台左列（课表/电费）在无数据时留白较多（设计可接受）；如需更紧凑可折叠空态卡。
+3. 小屏隐私链接行紧贴手势条（约 20dp），建议底部再留 8–12dp inset（当前未遮挡点击）。
+4. 折叠屏/超长屏暂未覆盖横竖旋转切换下的布局（本轮仅固定方向截图）。
+
+### 8.4 复现命令
+
+```powershell
+# AVD（已保留）：ct-a37-tablet / ct-a37-small / ct-a37-tall / ct-a37-fold
+# 一次一台，固定端口 + 重启 adb server（避免 adb 半挂）
+pwsh -NoProfile -File artifacts\adaptive\v2\shoot_device_v2.ps1 `
+  -Avd ct-a37-tablet -Label tablet-2560x1600 -OutDir artifacts\adaptive\v2\tablet-2560x1600 -DarkMode
+# 脚本步骤：install release(v2.1.0) → 身份页截图 → install debug(v2.1.0) → 开发预览 →
+#           工作台/工具/我的/权限页截图 →（平板）深色两屏 → 关闭模拟器
+```
+
+### 8.5 给下一轮的验收建议
+
+- 保留每设备 ≥6 张（身份/工作台/工具/我的/权限 + 深色或旋转各 1）。
+- 新增页（反馈建议/使用说明/我的数据指标卡）纳入矩阵逐设备验证。
+- 平板补「竖屏 800×1280dp」与折叠「折叠态」截图；旋转前后各 1 张。
+- 浮岛底栏重点断言：手势条 insets、选中态药丸、横滑切 Tab 不误触发。

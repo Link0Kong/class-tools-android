@@ -312,7 +312,7 @@ v1.0.1 在保持 v1.0.0 全部基线功能不回归的前提下，新增「外�
 
 完整模式 34 项：`build`、`install`、`identity_gate`、`auth_failure_path`、`workbench`、`pager_swipe`、`all_tools`、`draw_step1/2/3`、`export_image`、`draw_result_actions`、`back_to_all_tools`、`tool_hw/nt/tt/power/water/group/fit/roster`、`tool_pages`(8)、`privacy_page`、`privacy_back_home`、`appearance_about`(version 2.x)、`appearance_persist`、`permission_management`（system dialog denied）、`reminder_settings`、`settings_redirect`、`back_to_workbench`、`nav_probe_10x`、`home_quick_edit`、`logcat_no_fatal`、`gallery_export_file`。
 
-### 9.3 截图（29 张，`artifacts/e2e/`）
+### 9.3 截图（E2E 轮 29 张；`artifacts/e2e/` 目录另含 3 张 Release v2.1.0 复验截图）
 
 v2 新增/关键：`25_pager_tools.png`（滑动到工具页）、`26_pager_profile.png`（滑动到我的页）、`27_permissions.png`（权限管理页）、`28_permission_denied.png`（拒绝系统弹窗后状态）、`29_reminder.png`（提醒设置，作业提醒开关切换后）；其余 24 张与 v1.0.1 基线同名（`01_identity`、`02_workbench`、`03_all_tools`、`04–07` 抽签流程、`11–20` 工具页、`21_privacy`、`23_appearance`、`24_settings_redirect`、`08_back_all_tools`、`09_home_after_back`、`18_home_edit`、`20_auth_error` 等）。
 

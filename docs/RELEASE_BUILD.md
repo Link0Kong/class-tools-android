@@ -162,3 +162,49 @@ privacy 数据页（导出/清除云端/清除本机/协议回看）、water/ros
 
 Release 包**真实账号业务全链路**（真实身份登录 → 云端数据加载）未在本轮测试，需要用户提供测试身份后另测；Debug「开发预览」链路的完整 E2E 已全绿（见 `docs/E2E_SMOKE.md` §8）。
 > 回归口径：以**完整模式 31 项**（`docs/E2E_SMOKE.md` §8）为准；快速模式 29 项为同轮补充（跳过 build/install），两轮均 0 FAIL。审计 P1 修复未触及 E2E 覆盖路径，断言与修复不冲突。
+
+---
+
+## 8. v2.1.0 Release 复验（含 R8/WorkManager P0 修复）
+
+> 版本：**versionName `2.1.0` / versionCode `4`**；主树 603/0 单测（Lead 数据）
+> 日期：2026-11-08 09:19–09:35
+> 本节为追加，保留 §7 的 v1.0.1 历史记录。
+
+### 8.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| `:app:assembleRelease` | **BUILD SUCCESSFUL**（修复 R8 规则后，11 s；52 tasks） |
+| Release APK | `C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\app\build\outputs\apk\release\app-release.apk` |
+| 交付副本（Lead） | `android-class-tools\artifacts\classtools-2.1.0-release-signed.apk`（与构建产物 SHA-256 实测一致） |
+| APK 字节数 | **2,478,833 B**（约 2.36 MiB） |
+| APK SHA-256 | **`DCBB1EAE01D79BF3EFF5A70B02742CDC08FA65922C9C9CA8CD9C3DC7FB490B93`** |
+| `apksigner verify --verbose --print-certs` | **Verifies**；v2 scheme = true；Number of signers = 1 |
+| 签名证书 | `CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`；证书 SHA-256 `974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a`；RSA 2048（与 v1.0.1/v2.0.0 同一 keystore） |
+
+### 8.2 安装与启动复验（两次冷启动）
+
+| 项 | 结果 |
+|---|---|
+| `adb install -r`（v2.0.0 → v2.1.0 覆盖升级） | **Success** |
+| 冷启动 #1 | `Status: ok`，`TotalTime: 802 ms`；身份核验页（身份核验/学号/姓名/我已阅读并同意/进入工具站） |
+| 冷启动 #2（force-stop 后重启） | `Status: ok`；界面与 #1 一致（`release_fix_v21_second.png`） |
+| 进程 | `com.furina.classtools` 存活；`topResumedActivity=com.furina.classtools/.MainActivity` |
+| 包信息（dumpsys） | **versionName=2.1.0，versionCode=4**，minSdk 26，targetSdk 37 |
+| 启动截图 | `artifacts/e2e/release_fix_v21_identity.png`、`release_fix_v21_second.png`、`release_launch_v21.png`（均 1080×2400，509,385 B） |
+| UI dump | `artifacts/e2e/release_ui_v21_fixed.xml`（身份页，含 `v2.1.0 · Android 17 设计语言`，**无开发预览**） |
+| logcat | `artifacts/e2e/release_logcat_v21_fixed.txt`（8,484 行）中 **FATAL/ANR = 0**、无 `NoSuchMethodException` |
+
+### 8.3 P0 事件记录（R8/WorkManager，修复前构建作废）
+
+- **现象**：v2.1.0 首次构建（`1BDDA067F4A5E65C984C31B7ECE700E2828082C29DBF49D31DB5CB0A7AB41760`，2,429,681 B）安装成功但**冷启动必崩**，进程退出：
+  `java.lang.RuntimeException: Unable to get provider androidx.startup.InitializationProvider` → `NoSuchMethodException: androidx.work.impl.WorkDatabase_Impl.<init> []`
+- **根因**：v2.1.0 新增 WorkManager/Reminder（内部 Room），release R8 裁剪/重命名了 Room 生成类的无参构造器；`proguard-rules.pro` 缺少 WorkManager/Room keep 规则（Debug 不混淆，故 E2E 全绿掩盖了该问题）。
+- **修复**（Lead，`app/proguard-rules.pro`）：`-keep class androidx.work.impl.WorkDatabase_Impl { *; }`、`-keep class * extends androidx.room.RoomDatabase { *; }`、`-keepclassmembers class * extends androidx.room.RoomDatabase { <init>(); }`、`-dontwarn androidx.room.** / androidx.work.**`，并保留 `com.furina.classtools.data.reminder.ReminderWorker`。
+- **修复后验证**：见 §8.1/§8.2（两次冷启动 + 0 FATAL）。**旧 SHA `1BDDA067…` 与大小 2,429,681 B 作废，不作为交付物。**
+- **教训**：v2 起 Release 包必须做「冷启动 + logcat 0 FATAL」门禁（本复验已固化为 §8.2 流程）；Debug E2E 不能替代 release 混淆验证。
+
+### 8.4 边界
+
+Release 包**真实账号业务全链路**（真实身份登录 → 云端数据加载 → 提醒/权限实际授权）仍需用户提供测试身份后另测；Debug「开发预览」链路的 v2.1.0 E2E 全绿（见 `docs/E2E_SMOKE.md` §9），多设备截图为 Debug 包 + Release 身份页（见 `docs/ADAPTIVE_TEST_MATRIX.md` §8）。

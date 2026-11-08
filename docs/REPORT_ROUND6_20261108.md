@@ -56,3 +56,16 @@
 - **修复**：`app/proguard-rules.pro` 增加 Room/WorkManager keep 规则（`androidx.work.impl.WorkDatabase_Impl`、所有 `RoomDatabase` 子类构造器、`ReminderWorker`、`-dontwarn androidx.room/**/androidx.work/**`）。
 - **修复后验证**（2560×1600 平板模拟器）：`assembleRelease` 成功；APK **2,478,833 B**，SHA-256 `DCBB1EAE01D79BF3EFF5A70B02742CDC08FA65922C9C9CA8CD9C3DC7FB490B93`；`adb install -r` + **两次冷启动** `Status: ok`（314/317ms）、进程存活、logcat FATAL=0；身份页截图 `artifacts/release_fix_v21_identity.png` / `_second.png`。
 - 交付桌面 APK 已替换为修复后构建；toolchain 复验 Release + 多设备 Release 身份页 + 文档 §8。
+
+## 7. 最终验证结果（toolchain，2026-11-08）
+
+| 项 | 结果 |
+|---|---|
+| E2E v2.1.0（Debug） | 完整模式 **34 PASS / 0 WARN / 0 FAIL（525.1s）**；快速模式 32 PASS/0 FAIL；导航 10 连击 10/10；logcat 0 FATAL/ANR |
+| v2 新增 E2E 断言 | 底栏点击 + Pager 左右滑动逐页断言、工作台新结构、权限管理（系统弹窗拒绝后状态正常）、提醒设置开关切换、设置卡跳「我的」、版本 2.x；原 28–31 项基线保留 |
+| Release v2.1.0（修复后） | APK **2,478,833 B** / SHA-256 `DCBB1EAE…0B93`；apksigner V2 通过；覆盖安装成功；**两次冷启动 OK（802ms）**；logcat 8,484 行 0 FATAL/ANR/NoSuchMethodException |
+| 4 设备矩阵 | 平板 1280dp：P1-1 修复（工作台双栏+限宽、工具页 4 列、深色正常）；小屏 360dp：P1-2 主要修复（协议两行、不竖排；余 1 次轻扫可见按钮为 P2）；超长屏 411dp：底栏/手势条无遮挡；折叠屏 841dp：双栏/多列正常；共 26 张截图 |
+| 残余 P2 | 小屏首屏仍需轻扫、平板无数据留白、手势条 20dp 间距、旋转/折叠态未覆盖；反馈/使用说明页下一轮纳入 E2E |
+| 文档 | `E2E_SMOKE.md §9`、`ADAPTIVE_TEST_MATRIX.md §8`、`RELEASE_BUILD.md §8`（含 P0 事件与旧 SHA 作废） |
+
+**结论：v2.1.0 为可交付版本**（Debug E2E 全绿、Release 冷启动/签名/安装验证通过、多设备适配 P1 修复确认）。
