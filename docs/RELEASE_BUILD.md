@@ -346,3 +346,48 @@ Release 包**真实账号业务全链路**（真实身份登录 → 云端数据
 
 - 视觉精修版：本轮只做 Release 启动/签名复验 + 快速 E2E 回归（见 `E2E_SMOKE.md` §12），未重跑 v3.0.0 的完整 40 项/矩阵。
 - 真实账号业务链路、提醒实际到达、教务登录完整流程仍需测试账号另测；未触发任何云端写。
+
+---
+
+## 12. v3.2.0 Release 复验（视觉 P2 + 作业单条提醒）
+
+> 版本：**versionName `3.2.0` / versionCode `8`**（单测 779/0，Lead 数据）
+> 日期：2026-11-09 00:37
+> 本节为追加，保留 §7–§11 历史记录。
+
+### 12.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| 交付 APK | `android-class-tools\artifacts\classtools-3.2.0-release-signed.apk` |
+| 构建产物一致性 | `app\build\outputs\apk\release\app-release.apk` 与交付副本 **SHA-256 完全一致**（均 2,577,485 B） |
+| APK 字节数 | **2,577,485 B** |
+| APK SHA-256 | **`1307A06DD5FB755F14811FEF5A4D9961A0EB64405762702B232CBF8339C29456`** |
+| `apksigner verify --verbose --print-certs` | **Verifies**；v2 scheme = true；Number of signers = 1 |
+| 签名证书 | `CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`；证书 SHA-256 `974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a`；RSA 2048（同一 keystore） |
+
+### 12.2 安装与两次冷启动
+
+| 项 | 结果 |
+|---|---|
+| `adb install -r` | **Success**（覆盖升级 v3.1.0 → v3.2.0） |
+| 冷启动 #1 | `Status: ok`，`TotalTime: 2,388 ms`；身份核验页（`v3.2.0 · Android 17 设计语言`） |
+| 冷启动 #2（force-stop 后） | `Status: ok`（`WaitTime: 1,344 ms`）；界面一致 |
+| 进程 | `com.furina.classtools` 存活；`topResumedActivity=com.furina.classtools/.MainActivity` |
+| 包信息（dumpsys） | **versionName=3.2.0，versionCode=8**，minSdk 26，targetSdk 37 |
+| 启动截图 | `artifacts/e2e/release_fix_v320_identity.png`（545,509 B）、`release_fix_v320_second.png`（545,466 B）、`release_launch_v320.png`（545,466 B），均 1080×2400 |
+| UI dump | `artifacts/e2e/release_ui_v320.xml`（身份页含 `v3.2.0`，无开发预览） |
+| logcat | `artifacts/e2e/release_logcat_v320_fixed.txt`（9,574 行）中 **FATAL/ANR = 0**、无 `NoSuchMethodException` |
+
+### 12.3 v3.2.0 相对 v3.1.0 的变化（交付说明）
+
+- **全局顶栏半透明玻璃**（工作台/我的/全部工具等页头统一玻璃卡）；
+- **权限与提醒页 / 提醒设置页卡片玻璃化**；
+- **作业列表每行新增「提醒我」铃铛** + 作业详情「提醒我」（选截止前 1 天/1 小时/截止时刻，走本机单条提醒排程）；
+- 功能其他不变（779/0 单测未变）。
+
+### 12.4 边界
+
+- 本轮只做快速 E2E 回归（38 项）+ Release 启动/签名复验，未重跑 v3.0.0 的完整 40 项/矩阵。
+- 作业「提醒我」的排程行为需真实作业数据 + 通知权限后另测；未触发云端写。
+- 真实账号业务链路、提醒实际到达、教务登录完整流程仍需测试账号另测。

@@ -31,3 +31,16 @@
 
 - 代码：`CtTopBar.kt`、`PermissionSettingsScreen.kt`、`ReminderSettingsScreen.kt`、`HomeworkScreen.kt`、`MainNavHost.kt`（作业提醒接线）。
 - toolchain 追加：`docs/E2E_SMOKE.md §13`、`docs/RELEASE_BUILD.md §12`。
+
+## 5. 最终验证结果（toolchain task-32，2026-11-09 凌晨）
+
+| 项 | 结果 |
+|---|---|
+| 快速 E2E v3.2.0（Debug vc8） | **38 PASS / 0 WARN / 0 FAIL（818.1s）**；导航 10/10；logcat 0 FATAL/ANR；导出 +1 PNG |
+| 重点回归 | `tool_hw` PASS（空态 + 筛选 + 玻璃顶栏，「提醒我」铃铛仅在有数据行渲染，不破坏布局）；`permission_management`/`reminder_settings` PASS（玻璃化后文字断言命中）；`dock_overlay` PASS（pill 唯一、0px 偏差、120dp 留白） |
+| 截图 | `6x_v32_homework.png`、`6x_v32_permissions.png`、`6x_v32_reminder.png`、`6x_v32_dark_permission.png`（1080×2400） |
+| Release v3.2.0 | **2,577,485 B** / SHA-256 `1307A06D…9456`；apksigner V2 通过；install Success；两次冷启动 OK（2.39s / 1.34s）；logcat 9,574 行 0 FATAL/ANR/NoSuchMethodException |
+| 文档 | `E2E_SMOKE.md §13`（526 行）、`RELEASE_BUILD.md §12`（393 行） |
+| 边界 | 作业「提醒我」铃铛/详情提醒（截止前1天/1小时/截止时刻）需真实作业数据验证实际排程与到达；本轮空态仅验证入口与布局 |
+
+**结论：v3.2.0（P2 顶栏/权限/提醒页玻璃 + 作业单条提醒）完成并通过回归/Release 验证，APK 已交付桌面。**
