@@ -6,7 +6,7 @@
 - 版本：1.0.0（versionCode 1），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v2.1.1**——v2 大版本全部落地（品牌图标/ColorOS 17 浮岛底栏/三 Tab 滑动切换/工作台与反馈、使用说明、我的数据对齐小程序/权限管理/通知提醒/写日程/多比例平板自适应）+ 通知提醒与数据隐私增强与小屏修复。全量单测 **639/0**、@Preview 116 张、签名 APK 已交付桌面（2.50MB）；Debug E2E 与矩阵最终回归进行中。详见 [docs/REPORT_ROUND7_20261108.md](docs/REPORT_ROUND7_20261108.md)
+- 状态：**v2.1.1（v2 大版本完成）**——品牌图标、ColorOS 17 浮岛底栏、三 Tab 滑动切换、工作台/反馈/使用说明/我的数据对齐微信小程序、权限管理、作业/课表/通知原生提醒、课表/通知写系统日历、多比例与平板/折叠屏自适应。全量单测 **639/0**、@Preview 116 张、Debug E2E **36/0**、Release 两次冷启动/签名复验通过、4+2 设备矩阵验证；签名 APK 已交付桌面（2.50MB）。详见 [docs/REPORT_ROUND7_20261108.md](docs/REPORT_ROUND7_20261108.md)
 
 ## 目录
 

@@ -41,3 +41,17 @@
 - `docs/api/NOTICE_REMINDER_DATA_PRIVACY.md`
 - `docs/CHANGELOG.md`（v2.1.1）
 - `docs/E2E_SMOKE.md §10`、`docs/ADAPTIVE_TEST_MATRIX.md §9`、`docs/RELEASE_BUILD.md §9`（toolchain 追加）
+
+## 6. 最终验证结果（toolchain，2026-11-08）
+
+| 项 | 结果 |
+|---|---|
+| E2E v2.1.1（Debug） | 完整模式 **36 PASS / 0 WARN / 0 FAIL（601.6s）**；快速模式 34 PASS/0 FAIL；导航 10 连击 10/10；logcat 0 FATAL/ANR |
+| 新增 E2E 断言 | 使用说明（标题+≥3 分节+滚动截图）、反馈建议（READY 空态，不提交）、提醒设置「通知提醒」行；原 34 项基线保留 |
+| 小屏矩阵 | 360×640dp：**首屏「进入工具站」无需滚动可见**（脚本断言 True）、协议两行不竖排；横屏 1280×720 工作台/我的正常、浮岛底栏无遮挡 |
+| 折叠屏矩阵 | 841×701dp 展开：工作台/工具/我的/权限页正常、底栏居中 |
+| Release v2.1.1 | APK **2,495,213 B** / SHA-256 `62E5C4C9…CF3F`；apksigner V2 通过；覆盖安装成功；**两次冷启动 OK（682ms/294ms）**；logcat 5,931 行 0 FATAL/ANR/NoSuchMethodException |
+| 文档 | `E2E_SMOKE.md §10`、`ADAPTIVE_TEST_MATRIX.md §9`、`RELEASE_BUILD.md §9` |
+| 残余 P2 | 横屏短屏信息密度、折叠半折态未覆盖、真实账号/提醒到达/反馈真实提交需测试身份 |
+
+**结论：v2.1.1 完成全部 v2 需求并验证通过，可交付。**

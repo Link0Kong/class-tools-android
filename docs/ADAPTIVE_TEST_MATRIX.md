@@ -213,3 +213,56 @@ pwsh -NoProfile -File artifacts\adaptive\v2\shoot_device_v2.ps1 `
 - 新增页（反馈建议/使用说明/我的数据指标卡）纳入矩阵逐设备验证。
 - 平板补「竖屏 800×1280dp」与折叠「折叠态」截图；旋转前后各 1 张。
 - 浮岛底栏重点断言：手势条 insets、选中态药丸、横滑切 Tab 不误触发。
+
+---
+
+## 9. v2.1.1 小屏首屏修复 + 旋转/折叠态复测
+
+> 版本：**v2.1.1 / versionCode 5**（2026-11-08 10:11–10:18）
+> 包：Release `artifacts/classtools-2.1.1-release-signed.apk`（2,495,213 B / SHA-256 `62E5C4C9…CF3F`，身份页）；Debug `app-debug.apk`（23,231,886 B，开发预览页）。
+> 脚本：`artifacts/adaptive/v2/shoot_device_v211.ps1` + `run_v211_matrix.ps1`（一次一台、固定端口、启动前重启 adb server）。
+> 结果：**2/2 设备成功；small 8 张（含横屏）、fold 6 张**；v2.1.0 已测的 tablet/tall 结论继续有效。
+
+### 9.1 设备与截图
+
+| 设备 | 分辨率@dpi | 宽度 dp | 截图 | 说明 |
+|---|---|---|---|---|
+| 小屏 `ct-a37-small` | 720×1280 @320 | 360×640 | **8 张** | `00_release_identity`、`01_identity`（首屏验证）、`02_workbench`、`03_tools`、`04_profile`、`05_permissions`、**`06_landscape_workbench`（横屏）**、**`07_landscape_profile`（横屏）** |
+| 折叠 `ct-a37-fold` | 2208×1840 @420 | 841×701 | **6 张** | 00–05（展开态，含工作台/工具/我的/权限页） |
+
+> `small-720x1280/device-info.txt` 记录 `rotate=True; identity_first_frame_login=True`；`fold-2208x1840` 记录 `rotate=False`。
+
+### 9.2 修复验证结论（对照 §8 残余 P2）
+
+| 项 | v2.1.1 结论 | 证据 |
+|---|---|---|
+| **小屏身份页首屏**（原 P2：需滚动才能看到「进入工具站」） | ✅ **已修复**：顶部 logo/间距压缩后，**首屏直接可见「进入工具站」**（禁用态）+ 身份说明 + 版本文案；无需滚动。脚本断言 `identity_first_frame_login=True` | `small-720x1280/01_identity.png` |
+| 小屏协议链接两行 | ✅ 保持 v2.1.0 修复：`《用户协议》  《隐私政策》` 第二行并排，不竖排、不裁切 | 同上 |
+| **小屏横屏**（新增） | ✅ 1280×720（640×360dp）正常：浮岛底栏可点、无手势条遮挡；工作台/我的页布局正常；横屏高度小，工作台首屏仅「今天」卡（可滚动，预期） | `06_landscape_workbench.png`、`07_landscape_profile.png` |
+| **折叠屏展开态** | ✅ 841×701dp 正常（工作台/工具/我的/权限页），底栏居中 | `fold-2208x1840/*.png` |
+| 权限页/我的数据卡 | ✅ 小屏/折叠均正常 | `05_permissions.png`、`04_profile.png` |
+
+### 9.3 残余问题（不阻断）
+
+1. 横屏短屏（360dp 高）工作台首屏信息量有限（仅课表卡），需纵向滚动查看更多卡片——移动端横屏属低频场景，可接受；v2.2 可考虑横屏紧凑布局。
+2. Debug 构建的「开发预览」入口仍在首屏下方（需一次滚动）；Release 无此入口，不影响用户。
+3. 本轮未重跑 tablet/tall（v2.1.0 已通过），亦未截权限页横屏；下轮可补。
+4. 折叠屏「折叠态」（半折 1800×840 类）仍未覆盖，建议 v2.2 增加。
+
+### 9.4 复现命令
+
+```powershell
+# 小屏：首屏断言 + 横屏（脚本会自动：清数据→identity 首帧→开发预览→工作台/工具/我的/权限→横屏 2 张→恢复）
+pwsh -NoProfile -File artifacts\adaptive\v2\shoot_device_v211.ps1 `
+  -Avd ct-a37-small -Label small-720x1280 -OutDir artifacts\adaptive\v2\small-720x1280 -Rotate
+
+# 折叠屏展开态
+pwsh -NoProfile -File artifacts\adaptive\v2\shoot_device_v211.ps1 `
+  -Avd ct-a37-fold -Label fold-2208x1840 -OutDir artifacts\adaptive\v2\fold-2208x1840
+```
+
+### 9.5 下轮建议
+
+- 旋转覆盖：小屏竖/横 + 平板竖/横；折叠展开/折叠两态。
+- 横屏适配专项（工作台紧凑双列、底栏横屏位置）。
+- 小屏身份页：可再验证软键盘弹出时「进入工具站」不被遮挡。

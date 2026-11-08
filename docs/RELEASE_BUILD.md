@@ -208,3 +208,48 @@ Release 包**真实账号业务全链路**（真实身份登录 → 云端数据
 ### 8.4 边界
 
 Release 包**真实账号业务全链路**（真实身份登录 → 云端数据加载 → 提醒/权限实际授权）仍需用户提供测试身份后另测；Debug「开发预览」链路的 v2.1.0 E2E 全绿（见 `docs/E2E_SMOKE.md` §9），多设备截图为 Debug 包 + Release 身份页（见 `docs/ADAPTIVE_TEST_MATRIX.md` §8）。
+
+---
+
+## 9. v2.1.1 Release 复验
+
+> 版本：**versionName `2.1.1` / versionCode `5`**；主树 639/0 单测（Lead 数据）
+> 日期：2026-11-08 10:19–10:23
+> 本节为追加，保留 §7（v1.0.1）、§8（v2.1.0）历史记录。
+
+### 9.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| `:app:assembleRelease` | 通过（含 v2.1.1 新增：通知提醒 ntremind、数据隐私同步范围/本机 8 计数、小屏身份页压缩、反馈建议/使用说明接线） |
+| 交付 APK | `android-class-tools\artifacts\classtools-2.1.1-release-signed.apk` |
+| APK 字节数 | **2,495,213 B**（约 2.38 MiB） |
+| APK SHA-256 | **`62E5C4C9C9E374B9CDD0BF357335D87F66792A85F0B1FC37A4152E3A206ECF3F`** |
+| `apksigner verify --verbose --print-certs` | **Verifies**；v2 scheme = true；Number of signers = 1 |
+| 签名证书 | `CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`；证书 SHA-256 `974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a`；RSA 2048（同一 keystore，可覆盖升级） |
+
+### 9.2 安装与两次冷启动
+
+| 项 | 结果 |
+|---|---|
+| `adb install -r` | **Success**（覆盖升级 v2.1.0 → v2.1.1） |
+| 冷启动 #1 | `Status: ok`，`TotalTime: 682 ms`；身份核验页（`v2.1.1 · Android 17 设计语言`） |
+| 冷启动 #2（force-stop 后） | `Status: ok`（`WaitTime: 294 ms`）；界面一致 |
+| 进程 | `com.furina.classtools` 存活；`topResumedActivity=com.furina.classtools/.MainActivity` |
+| 包信息（dumpsys） | **versionName=2.1.1，versionCode=5**，minSdk 26，targetSdk 37 |
+| 启动截图 | `artifacts/e2e/release_fix_v211_identity.png`、`release_fix_v211_second.png`、`release_launch_v211.png`（均 1080×2400，508,686 B） |
+| UI dump | `artifacts/e2e/release_ui_v211.xml`（身份页，含 `v2.1.1`，无开发预览） |
+| logcat | `artifacts/e2e/release_logcat_v211_fixed.txt`（5,931 行）中 **FATAL/ANR = 0**、无 `NoSuchMethodException` |
+
+### 9.3 v2.1.1 相对 v2.1.0 的用户可见变化（交付说明）
+
+- **通知提醒**（ntremind）：设置页「通知提醒」开关；有明确时间/截止的通知并入本机提醒（每日汇总 + 24h 临近），点击通知跳通知页。
+- **数据与隐私页**：新增「同步范围清单」与「本机数据 8 计数」。
+- **小屏身份页**：压缩顶部品牌/间距，360×640dp 首屏直接可见「进入工具站」；协议链接两行布局。
+- 我的页新增「反馈建议」「使用说明」入口（P1 对齐）。
+
+### 9.4 边界
+
+- Release 包**真实账号业务全链路**（真实身份登录/云端数据/提醒实际到达/权限实际授权）仍需用户测试身份另测。
+- 反馈建议页 E2E 仅打开未提交（避免云端写），提交链路由真实账号验证。
+- 通知提醒的实际通知到达需要真实作业/通知数据 + 通知权限，本轮未做到达断言（设置页开关已 E2E 覆盖）。
