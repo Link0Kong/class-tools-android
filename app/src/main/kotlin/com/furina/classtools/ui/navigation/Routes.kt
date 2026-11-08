@@ -10,6 +10,8 @@ object Routes {
     const val DATA_PRIVACY = "dataPrivacy"
     const val PERMISSIONS = "permissions"
     const val REMINDER_SETTINGS = "reminderSettings"
+    const val FEEDBACK = "feedback"
+    const val GUIDE = "guide"
 
     const val TOOL_ARG = "toolId"
     const val TOOL = "tool/{$TOOL_ARG}"

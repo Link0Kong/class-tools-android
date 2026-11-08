@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -35,11 +36,14 @@ fun CtTopBar(
     onBack: (() -> Unit)? = null,
     actions: @Composable () -> Unit = {},
 ) {
+    // 平板横屏（≥840dp）收紧左右/上下 padding（P2：大屏信息密度/留白）
+    val widthDp = LocalConfiguration.current.screenWidthDp
+    val tight = widthDp >= 840
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .heightIn(min = if (tight) 52.dp else 56.dp)
+            .padding(horizontal = if (tight) 4.dp else 8.dp, vertical = if (tight) 4.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -150,3 +154,4 @@ fun CtPill(
         )
     }
 }
+

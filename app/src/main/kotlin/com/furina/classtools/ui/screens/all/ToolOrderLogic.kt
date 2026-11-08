@@ -74,15 +74,44 @@ object ToolOrderLogic {
         spacing: Float,
         itemCount: Int,
         draggedIndex: Int,
+        columns: Int = 2,
     ): Int {
         if (itemCount <= 0) return 0
-        val column = if (pointerX < itemWidth + spacing / 2f) 0 else 1
-        val rowStep = max(1f, itemHeight + spacing)
-        val row = floor(pointerY / rowStep).toInt().coerceAtLeast(0)
+        val cols = columns.coerceIn(1, 8)
+        val (column, row) = gridCellOf(pointerX, pointerY, itemWidth, itemHeight, spacing, cols)
         // 指针落在第 slot 格 → 被拖卡片移动到该下标（移除自身后插入同一下标即可）；
         // 指针仍在自己格子上时不移动（避免抖动）。
-        val slot = (row * 2 + column).coerceIn(0, itemCount - 1)
+        val slot = (row * cols + column).coerceIn(0, itemCount - 1)
         return if (slot == draggedIndex) draggedIndex else slot
+    }
+
+    /**
+     * 指针在网格内容坐标系中的格子（列 0-based, 行 0-based）。
+     *
+     * 列以「列间隙中线」为分界（第 i 列区间 `[i*step - spacing/2, (i+1)*step - spacing/2)`），
+     * 与 2 列旧实现一致；行按 `itemHeight + spacing` 取整。
+     */
+    fun gridCellOf(
+        pointerX: Float,
+        pointerY: Float,
+        itemWidth: Float,
+        itemHeight: Float,
+        spacing: Float,
+        columns: Int,
+    ): Pair<Int, Int> {
+        val cols = columns.coerceIn(1, 8)
+        val colStep = max(1f, itemWidth + spacing)
+        val column = ((pointerX + spacing / 2f) / colStep).toInt().coerceIn(0, cols - 1)
+        val rowStep = max(1f, itemHeight + spacing)
+        val row = floor(pointerY / rowStep).toInt().coerceAtLeast(0)
+        return column to row
+    }
+
+    /** 网格行数（用于高度/边缘滚动计算与测试）。 */
+    fun gridRows(itemCount: Int, columns: Int): Int {
+        if (itemCount <= 0) return 0
+        val cols = columns.coerceAtLeast(1)
+        return (itemCount + cols - 1) / cols
     }
 
     /**
@@ -177,6 +206,8 @@ object ToolOrderPrefs {
     @Suppress("unused")
     private fun roundForTest(value: Float): Int = value.roundToInt()
 }
+
+
 
 
 

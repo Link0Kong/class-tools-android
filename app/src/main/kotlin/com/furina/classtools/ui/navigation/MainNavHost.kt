@@ -36,6 +36,8 @@ import com.furina.classtools.data.calendar.CourseCalendarMapper
 import com.furina.classtools.data.calendar.NoticeCalendarMapper
 import com.furina.classtools.data.fitrecs.FitRecsLoadResult
 import com.furina.classtools.data.fitrecs.FitRecsWriteResult
+import com.furina.classtools.data.permission.PermissionType
+import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
@@ -58,7 +60,12 @@ import com.furina.classtools.ui.screens.data.DataPrivacyScreen
 import com.furina.classtools.ui.screens.draw.DrawScreen
 import com.furina.classtools.ui.screens.fit.FitScreen
 import com.furina.classtools.ui.screens.group.GroupScreen
+import com.furina.classtools.ui.screens.feedback.FeedbackScreen
+import com.furina.classtools.ui.screens.guide.UserGuideScreen
 import com.furina.classtools.ui.screens.home.HomeScreen
+import com.furina.classtools.ui.screens.me.MeStats
+import com.furina.classtools.ui.screens.me.MeStatsBuilder
+import com.furina.classtools.ui.screens.me.ReminderStatus
 import com.furina.classtools.ui.screens.homework.HomeworkScreen
 import com.furina.classtools.ui.screens.notices.ApiNoticeRawAttachmentLoader
 import com.furina.classtools.ui.screens.notices.NoticesScreen
@@ -227,6 +234,8 @@ fun MainNavHost(
                 onOpenDataPrivacy = { navController.navigate(Routes.DATA_PRIVACY) },
                 onOpenPermissions = { navController.navigate(Routes.PERMISSIONS) },
                 onOpenReminderSettings = { navController.navigate(Routes.REMINDER_SETTINGS) },
+                onOpenFeedback = { navController.navigate(Routes.FEEDBACK) },
+                onOpenGuide = { navController.navigate(Routes.GUIDE) },
                 dynamicColorEnabled = dynamicColor,
                 onDynamicColorChange = { enabled ->
                     scope.launch { runCatching { container.appSettings.setDynamicColor(enabled) } }
@@ -449,6 +458,38 @@ fun MainNavHost(
                 },
             )
         }
+
+        composable(
+            route = Routes.FEEDBACK,
+            enterTransition = { CtPageTransitions.pushEnter() },
+            exitTransition = { CtPageTransitions.pushExit() },
+            popEnterTransition = { CtPageTransitions.popEnter() },
+            popExitTransition = { CtPageTransitions.popExit() },
+        ) {
+            var members by remember {
+                mutableStateOf<List<com.furina.classtools.data.member.ClassMember>>(emptyList())
+            }
+            LaunchedEffect(Unit) {
+                members = runCatching { container.classMembersRepository.cached() }
+                    .getOrDefault(emptyList())
+            }
+            FeedbackScreen(
+                onBack = { navController.popBackStack() },
+                session = session,
+                repository = container.feedbackRepository,
+                nameOfSid = { sid -> members.firstOrNull { it.sid == sid }?.name },
+            )
+        }
+
+        composable(
+            route = Routes.GUIDE,
+            enterTransition = { CtPageTransitions.pushEnter() },
+            exitTransition = { CtPageTransitions.pushExit() },
+            popEnterTransition = { CtPageTransitions.popEnter() },
+            popExitTransition = { CtPageTransitions.popExit() },
+        ) {
+            UserGuideScreen(onBack = { navController.popBackStack() })
+        }
     }
 }
 
@@ -473,6 +514,8 @@ private fun RootTabs(
     onOpenDataPrivacy: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenReminderSettings: () -> Unit,
+    onOpenFeedback: () -> Unit,
+    onOpenGuide: () -> Unit,
     dynamicColorEnabled: Boolean,
     onDynamicColorChange: (Boolean) -> Unit,
     onSelectTab: (Int) -> Unit,
@@ -487,6 +530,45 @@ private fun RootTabs(
             CtDockDestination("me", "我的", Icons.Rounded.Person),
         )
     }
+
+    // 「我的 → 我的数据」聚合（只读本机缓存，进入「我的」时刷新一次；不新增网络请求）。
+    var meStats by remember { mutableStateOf(MeStats()) }
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage == 2) {
+            val homeworkRows = runCatching { container.homeworkRepository.cached() }
+                .getOrDefault(emptyList())
+            val marks = container.marksRepository.marks.value
+            val fitCount = runCatching {
+                (container.fitRecsRepository.load(force = false) as? FitRecsLoadResult.Success)
+                    ?.records?.size ?: 0
+            }.getOrDefault(0)
+            val memberCount = runCatching {
+                container.classMembersRepository.cached().size
+            }.getOrNull()
+            meStats = MeStatsBuilder.fromCached(
+                homeworkRows = homeworkRows,
+                marks = marks,
+                fitRecords = fitCount,
+                drawRecords = 0,
+            ).copy(classMembers = memberCount)
+        }
+    }
+    val reminderSettings by container.reminderSettingsStore.settings.collectAsStateWithLifecycle(
+        initialValue = ReminderSettings.DEFAULT,
+    )
+    val notificationGranted = remember(pagerState.currentPage) {
+        runCatching {
+            container.permissionController.state(PermissionType.NOTIFICATIONS).isGranted
+        }.getOrDefault(false)
+    }
+    val reminderStatus = ReminderStatus(
+        enabled = reminderSettings.enabled,
+        notificationPermission = notificationGranted,
+        homeworkEnabled = reminderSettings.homeworkEnabled,
+        courseEnabled = reminderSettings.courseEnabled,
+        homeworkLeadDays = reminderSettings.homeworkLeadDays,
+        courseLeadMinutes = reminderSettings.courseLeadMinutes,
+    )
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -540,6 +622,10 @@ private fun RootTabs(
                         onOpenDataPrivacy = onOpenDataPrivacy,
                         onOpenPermissions = onOpenPermissions,
                         onOpenReminderSettings = onOpenReminderSettings,
+                        meStats = meStats,
+                        reminderStatus = reminderStatus,
+                        onOpenFeedback = onOpenFeedback,
+                        onOpenGuide = onOpenGuide,
                         dynamicColorEnabled = dynamicColorEnabled,
                         onDynamicColorChange = onDynamicColorChange,
                     )

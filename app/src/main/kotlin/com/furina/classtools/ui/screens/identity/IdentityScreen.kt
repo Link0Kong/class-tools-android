@@ -198,24 +198,32 @@ fun IdentityScreen(
                         )
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(
-                            checked = consentAccepted,
-                            onCheckedChange = { consentAccepted = it },
-                        )
-                        Text(
-                            text = "我已阅读并同意",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        TextButton(onClick = { showAgreement = true }) {
-                            Text("《用户协议》", style = MaterialTheme.typography.bodySmall)
+                    // 小屏（360dp）适配：勾选说明与两个协议链接分两行，避免逐字竖排/溢出。
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = consentAccepted,
+                                onCheckedChange = { consentAccepted = it },
+                            )
+                            Text(
+                                text = "我已阅读并同意",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                        TextButton(onClick = { showPrivacy = true }) {
-                            Text("《隐私政策》", style = MaterialTheme.typography.bodySmall)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(start = 4.dp),
+                        ) {
+                            TextButton(onClick = { showAgreement = true }) {
+                                Text("《用户协议》", style = MaterialTheme.typography.bodySmall)
+                            }
+                            TextButton(onClick = { showPrivacy = true }) {
+                                Text("《隐私政策》", style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
 

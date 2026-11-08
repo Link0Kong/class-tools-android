@@ -85,7 +85,7 @@ $L = @{
     IdentityTitle  = U8 '6Lqr5Lu95qC46aqM'                           # identity gate title
     QuickTools     = U8 '5bi455So5bel5YW3'                           # quick tools section
     Today          = U8 '5LuK5pel'                                   # today section
-    AllTab         = U8 '5YWo6YOo'                                   # bottom nav: all
+    AllTab         = U8 '5bel5YW3'                                   # bottom dock: tools tab (v2 "工具")
     AllToolsTitle  = U8 '5YWo6YOo5bel5YW3'                           # all tools title
     Draw           = U8 '5oq9562+'                                   # draw tool card
     DrawParams     = U8 '5oq9562+5Y+C5pWw'                            # draw params card
@@ -167,6 +167,30 @@ $L = @{
     TtNoDataHint   = U8 '5pWZ5Yqh5b+r54Wn5Li656m6'                   # timetable: snapshot empty hint
     TtNetError     = U8 '572R57uc5byC5bi4'                           # timetable: network error
     TtParseError   = U8 '6K++6KGo5pWw5o2u5qC85byP5byC5bi4'           # timetable: parse error
+    HomeDue        = U8 '5L2c5Lia5b6F5Lqk'                           # workbench: homework due card
+    HomeNotices    = U8 '6YCa55+l5b6F5aSE55CG'                       # workbench: notices pending card
+    HomeTtSync     = U8 '6K++6KGo5pyq5ZCM5q2l'                       # workbench: timetable not synced
+    HomeNoClass    = U8 '5LuK5aSp5rKh6K++'                           # workbench: no class today
+    PermTitle      = U8 '5p2D6ZmQ5LiO5o+Q6YaS'                       # profile card / permission page title
+    PermManage     = U8 '5p2D6ZmQ566h55CG'                           # profile row: permission management
+    NotifyWord     = U8 '6YCa55+l'                                   # permission card: notifications
+    CalendarWord   = U8 '5pel5Y6G'                                   # permission card: calendar
+    GrantPerm      = U8 '5byA5ZCv5p2D6ZmQ'                           # permission card action: grant
+    PermOff        = U8 '5pyq5byA5ZCv'                               # permission state: not enabled
+    PermOn         = U8 '5bey5byA5ZCv'                               # permission state: enabled
+    PermNeedSet    = U8 '6ZyA57O757uf6K6+572u'                      # permission state: needs system settings
+    GrantPermSys   = U8 '5Y6757O757uf6K6+572u5byA5ZCv'              # permission action: open system settings
+    ReminderEntry  = U8 '5o+Q6YaS6K6+572u'                           # profile row: reminder settings
+    ReminderTitle  = U8 '5o+Q6YaS'                                   # reminder page title
+    ReminderMain   = U8 '5o+Q6YaS5oC75byA5YWz'                      # reminder: master switch
+    HomeworkRem    = U8 '5L2c5Lia5o+Q6YaS'                           # reminder: homework reminder
+    ClassRem       = U8 '5LiK6K++5o+Q6YaS'                           # reminder: class reminder
+    QuietHours     = U8 '5a6J6Z2Z5pe25q61'                           # reminder: quiet hours
+    DenyPerm       = U8 '5LiN5YWB6K64'                               # system permission dialog: deny
+    DenyPermAlt    = U8 '5ouS57ud'                                   # system permission dialog: reject (alt)
+    HomeEditHint   = U8 '6aaW6aG15b+r5o23'                           # workbench edit mode hint: home shortcuts
+    AddToCalendar  = U8 '5re75Yqg5Yiw57O757uf5pel5Y6G'               # timetable: add to system calendar
+    JoinCalendar   = U8 '5Yqg5YWl5pel56iL'                           # notices: add to calendar
     WallpaperColor = U8 '5aOB57q45Y+W6Imy'                           # profile: wallpaper color (Material You) switch row
     About          = U8 '5YWz5LqO'                                   # profile: about card
     Settings       = U8 '6K6+572u'                                   # all-tools: settings card
@@ -275,7 +299,7 @@ function Get-ScreenKind {
     if ($joined.Contains($L.EditTitle)) { return 'HOME_EDIT' }
     if ($joined.Contains($L.IdentityTitle)) { return 'IDENTITY' }
     if ($joined.Contains($L.QuickTools)) { return 'HOME' }
-    if ($joined.Contains($L.ProfileMark)) { return 'PROFILE' }    # All-tools grid may be scrolled, so the "all tools" title is not always on screen.
+    if ($joined.Contains($L.ProfileMark) -or $joined.Contains($L.PermTitle)) { return 'PROFILE' }    # All-tools grid may be scrolled, so the "all tools" title is not always on screen.
     # Fall back to the triple bottom-nav labels (only top-level pages have them).
     if ($joined.Contains($L.Workbench) -and $joined.Contains($L.AllTab) -and $joined.Contains($L.MyTab)) { return 'ALL' }
     return 'OTHER'
@@ -401,6 +425,95 @@ function Tap-ConsentCheckbox {
     $null = Invoke-Adb @('shell', 'input', 'tap', "$x", "$($pt[1])")
     Write-Line "  tap consent checkbox fallback at ($x,$($pt[1]))"
     Start-Sleep -Milliseconds 500
+}
+
+# Tap the first of several candidate labels that appears (used for system permission dialogs).
+function Tap-UiAnyText([string[]]$Labels, [int]$TimeoutSec = 12) {
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    while ($sw.Elapsed.TotalSeconds -lt $TimeoutSec) {
+        $doc = Get-UiDump
+        foreach ($lbl in $Labels) {
+            $n = Find-UiNode -Doc $doc -Label $lbl
+            if ($n) {
+                $pt = Get-NodeCenter $n
+                if ($pt) {
+                    Start-Sleep -Milliseconds 300
+                    $null = Invoke-Adb @('shell', 'input', 'tap', "$($pt[0])", "$($pt[1])")
+                    Write-Line "  tap '$lbl' at ($($pt[0]),$($pt[1]))"
+                    Start-Sleep -Milliseconds 800
+                    return $true
+                }
+            }
+        }
+        Start-Sleep -Milliseconds 800
+    }
+    return $false
+}
+
+# Tap the action text (e.g. "管理" / "设置") on the same row as a settings label.
+function Tap-ActionNearLabel([string]$Label, [string]$ActionText) {
+    $doc = Get-UiDump
+    if (-not $doc) { throw "UI dump failed while looking for '$Label' action" }
+    $labelNode = Find-UiNode -Doc $doc -Label $Label
+    if (-not $labelNode) { throw "settings label '$Label' not found" }
+    $lm = [regex]::Match([string]$labelNode.bounds, '\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
+    $labelY = ([int]$lm.Groups[2].Value + [int]$lm.Groups[4].Value) / 2
+    $best = $null; $bestDist = 99999
+    foreach ($n in $doc.SelectNodes('//node')) {
+        if ([string]$n.text -ne $ActionText) { continue }
+        $m = [regex]::Match([string]$n.bounds, '\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
+        if (-not $m.Success) { continue }
+        $cy = ([int]$m.Groups[2].Value + [int]$m.Groups[4].Value) / 2
+        $d = [Math]::Abs($cy - $labelY)
+        if ($d -lt $bestDist) { $bestDist = $d; $best = $n }
+    }
+    if (-not $best -or $bestDist -gt 120) { throw "action '$ActionText' near '$Label' not found" }
+    $pt = Get-NodeCenter $best
+    if (-not $pt) { throw "cannot parse action bounds for '$Label'" }
+    Start-Sleep -Milliseconds 300
+    $null = Invoke-Adb @('shell', 'input', 'tap', "$($pt[0])", "$($pt[1])")
+    Write-Line "  tap action '$ActionText' near '$Label' at ($($pt[0]),$($pt[1]))"
+    Start-Sleep -Milliseconds 900
+}
+
+# Find the settings Switch on the same row as a label (profile / reminder pages).function Get-SwitchNodeNear([string]$Label) {
+    $doc = Get-UiDump
+    if (-not $doc) { return $null }
+    $labelNode = Find-UiNode -Doc $doc -Label $Label
+    if (-not $labelNode) { return $null }
+    $lm = [regex]::Match([string]$labelNode.bounds, '\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
+    if (-not $lm.Success) { return $null }
+    $labelY = ([int]$lm.Groups[2].Value + [int]$lm.Groups[4].Value) / 2
+    $best = $null; $bestDist = 99999
+    foreach ($n in $doc.SelectNodes('//node')) {
+        $cls = [string]$n.class
+        if (-not (([string]$n.checkable) -eq 'true' -or $cls -match 'Switch')) { continue }
+        $m = [regex]::Match([string]$n.bounds, '\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
+        if (-not $m.Success) { continue }
+        $cy = ([int]$m.Groups[2].Value + [int]$m.Groups[4].Value) / 2
+        $d = [Math]::Abs($cy - $labelY)
+        if ($d -lt $bestDist) { $bestDist = $d; $best = $n }
+    }
+    if ($best -and $bestDist -le 80) { return $best }
+    return $null
+}
+function Get-SwitchStateNear([string]$Label) {
+    $node = Get-SwitchNodeNear $Label
+    if (-not $node) { throw "switch near '$Label' not found" }
+    return (([string]$node.checked) -eq 'true')
+}
+function Toggle-SwitchNear([string]$Label) {
+    $node = Get-SwitchNodeNear $Label
+    if (-not $node) { throw "switch near '$Label' not found" }
+    $before = ([string]$node.checked) -eq 'true'
+    $pt = Get-NodeCenter $node
+    if (-not $pt) { throw "cannot parse switch bounds near '$Label'" }
+    $null = Invoke-Adb @('shell', 'input', 'tap', "$($pt[0])", "$($pt[1])")
+    Write-Line "  tap switch near '$Label' at ($($pt[0]),$($pt[1]))"
+    Start-Sleep -Milliseconds 800
+    $after = Get-SwitchStateNear $Label
+    if ($after -eq $before) { throw "switch near '$Label' did not change state" }
+    return $after
 }
 
 # Find the settings Switch that sits on the same row as a given label text
@@ -658,14 +771,39 @@ function Invoke-Scenario {
     Write-Line '--- step: enter workbench (Dev Preview)'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     Tap-UiText -Label $L.DevPreview -TimeoutSec 10
-    $null = Wait-UiAny -Labels @($L.QuickTools, $L.Today) -TimeoutSec 30
-    $quick = Wait-UiText -Label $L.QuickTools -TimeoutSec 8
-    if (-not $quick) { throw "workbench not visible ('$($L.QuickTools)' missing)" }
-    $null = Wait-UiText -Label $L.Today -TimeoutSec 8
+    if (-not (Wait-UiText -Label $L.QuickTools -TimeoutSec 35)) { throw "workbench not visible ('$($L.QuickTools)' missing)" }
+    # v2 workbench new structure: schedule / power / homework-due / notices / quick tools
+    if (-not (Wait-UiText -Label $L.HomeDue -TimeoutSec 12)) { throw 'workbench: homework-due card missing' }
+    if (-not (Wait-UiText -Label $L.HomeNotices -TimeoutSec 12)) { throw 'workbench: notices-pending card missing' }
+    $null = Wait-UiAny -Labels @($L.HomeTtSync, $L.HomeNoClass, $L.Tt) -TimeoutSec 10
     Save-Shot '02_workbench.png'
-    Add-Step 'workbench' 'PASS' '' $swStep.ElapsedMilliseconds
+    Add-Step 'workbench' 'PASS' 'due/notices/quick-tools cards visible' $swStep.ElapsedMilliseconds
 
-    # STEP 2: bottom tab "All"
+    # STEP 1c (v2): three-tab horizontal Pager (工作台 / 工具 / 我的) - swipe + title assertions
+    Write-Line '--- step: pager swipe (root tabs)'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    for ($i = 1; $i -le 2; $i++) {
+        $null = Invoke-Adb @('shell', 'input', 'swipe', '950', '620', '130', '620', '260')
+        Start-Sleep -Milliseconds 900
+        if (Wait-UiText -Label $L.AllToolsTitle -TimeoutSec 15) { break }
+    }
+    if (-not (Wait-UiText -Label $L.AllToolsTitle -TimeoutSec 5)) { throw 'pager swipe left did not reach tools page' }
+    Save-Shot '25_pager_tools.png'
+    for ($i = 1; $i -le 2; $i++) {
+        $null = Invoke-Adb @('shell', 'input', 'swipe', '950', '620', '130', '620', '260')
+        Start-Sleep -Milliseconds 900
+        if (Wait-UiText -Label $L.PermTitle -TimeoutSec 15) { break }
+    }
+    if (-not (Wait-UiText -Label $L.PermTitle -TimeoutSec 5)) { throw 'pager swipe left did not reach profile page' }
+    Save-Shot '26_pager_profile.png'
+    for ($i = 1; $i -le 2; $i++) {
+        $null = Invoke-Adb @('shell', 'input', 'swipe', '130', '620', '950', '620', '260')
+        Start-Sleep -Milliseconds 900
+    }
+    if (-not (Wait-UiText -Label $L.QuickTools -TimeoutSec 20)) { throw 'pager swipe right did not return to workbench' }
+    Add-Step 'pager_swipe' 'PASS' 'workbench->tools->profile->workbench' $swStep.ElapsedMilliseconds
+
+    # STEP 2: bottom dock "tools" tab
     Write-Line '--- step: all tools'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     Go-AllTools
@@ -824,7 +962,7 @@ function Invoke-Scenario {
     Go-Workbench
     Add-Step 'privacy_back_home' 'PASS' '' 0
 
-    # STEP 9b: profile appearance (wallpaper color switch) + about version (v1.0.1)
+    # STEP 9b: profile appearance (wallpaper color switch) + about version (v2.0.0)
     Write-Line '--- step: profile appearance + about version'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
@@ -832,8 +970,8 @@ function Invoke-Scenario {
     if (-not (Wait-UiTextScroll -Label $L.Appearance -ScrollTries 3 -TimeoutSec 5)) { throw 'appearance card title not visible' }
     $script:AppearanceState = Toggle-SwitchNear -Label $L.WallpaperColor
     Save-Shot '23_appearance.png'
-    if (-not (Wait-UiTextScroll -Label '1.0.1' -ScrollTries 4 -TimeoutSec 10)) { throw 'about version 1.0.1 not visible' }
-    Add-Step 'appearance_about' 'PASS' ("wallpaperColor=" + $script:AppearanceState + "; version=1.0.1") $swStep.ElapsedMilliseconds
+    if (-not (Wait-UiTextScroll -Label '2.0.0' -ScrollTries 4 -TimeoutSec 10)) { throw 'about version 2.0.0 not visible' }
+    Add-Step 'appearance_about' 'PASS' ("wallpaperColor=" + $script:AppearanceState + "; version=2.0.0") $swStep.ElapsedMilliseconds
 
     # STEP 9c: restart the app and verify the appearance switch value persisted (DataStore)
     Write-Line '--- step: appearance persists after restart'
@@ -849,6 +987,50 @@ function Invoke-Scenario {
     }
     Add-Step 'appearance_persist' 'PASS' ("persisted=" + $persisted) $swStep.ElapsedMilliseconds
 
+    # STEP 9e (v2): profile -> 权限与提醒 -> 权限管理: request notification permission,
+    # deny the system dialog, assert graceful state text (未开启/需系统设置) and no crash.
+    Write-Line '--- step: permission management (deny system dialog)'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    if (-not (Wait-UiTextScroll -Label $L.PermManage -ScrollTries 4 -TimeoutSec 15)) { throw 'profile: permission management row not visible' }
+    Tap-UiTextScroll -Label $L.PermManage -ScrollTries 3 -TimeoutSec 8
+    if (-not (Wait-UiText -Label $L.PermTitle -TimeoutSec 15)) { throw 'permission page not visible' }
+    if (-not (Wait-UiText -Label $L.NotifyWord -TimeoutSec 8)) { throw 'permission page: notifications card missing' }
+    if (-not (Wait-UiText -Label $L.CalendarWord -TimeoutSec 8)) { throw 'permission page: calendar card missing' }
+    Save-Shot '27_permissions.png'
+    $permDetail = 'no system dialog shown'
+    if (Wait-UiText -Label $L.GrantPerm -TimeoutSec 8) {
+        Tap-UiText -Label $L.GrantPerm -TimeoutSec 10
+        if (Tap-UiAnyText -Labels @($L.DenyPerm, $L.DenyPermAlt, "Don't allow", 'Do not allow') -TimeoutSec 12) {
+            $permDetail = 'system dialog denied'
+            Start-Sleep -Milliseconds 1200
+        }
+    }
+    $stateNode = Wait-UiAny -Labels @($L.PermOff, $L.PermNeedSet, $L.PermOn) -TimeoutSec 12
+    if (-not $stateNode) { throw 'permission page state text not visible after request' }
+    Save-Shot '28_permission_denied.png'
+    if (-not (Wait-UiText -Label $L.PermTitle -TimeoutSec 8)) { throw 'permission page lost after denying dialog (possible crash)' }
+    Add-Step 'permission_management' 'PASS' $permDetail $swStep.ElapsedMilliseconds
+
+    # STEP 9f (v2): reminder settings - assert rows and toggle the homework reminder on then off
+    Write-Line '--- step: reminder settings'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    if (-not (Wait-UiTextScroll -Label $L.ReminderEntry -ScrollTries 3 -TimeoutSec 10)) { throw 'reminder settings entry not visible' }
+    Tap-UiTextScroll -Label $L.ReminderEntry -ScrollTries 2 -TimeoutSec 8
+    if (-not (Wait-UiText -Label $L.ReminderMain -TimeoutSec 15)) { throw 'reminder page not visible' }
+    if (-not (Wait-UiText -Label $L.HomeworkRem -TimeoutSec 8)) { throw 'reminder: homework reminder row missing' }
+    if (-not (Wait-UiText -Label $L.ClassRem -TimeoutSec 8)) { throw 'reminder: class reminder row missing' }
+    $remBefore = Toggle-SwitchNear -Label $L.HomeworkRem
+    $null = Toggle-SwitchNear -Label $L.HomeworkRem
+    $remAfter = Get-SwitchStateNear -Label $L.HomeworkRem
+    if ($remAfter -eq $remBefore) { throw 'reminder homework switch did not toggle back' }
+    Save-Shot '29_reminder.png'
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    $null = Wait-ScreenKind 'PROFILE' 10
+    Add-Step 'reminder_settings' 'PASS' 'homework reminder toggled on/off' $swStep.ElapsedMilliseconds
+
     # STEP 9d: all tools -> "settings" card must land on the profile page (not a placeholder)
     Write-Line '--- step: settings card redirects to profile'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
@@ -863,13 +1045,10 @@ function Invoke-Scenario {
         if ($placeholder) { throw 'settings card opened a placeholder page instead of profile' }
     }
     Save-Shot '24_settings_redirect.png'
-    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-    Start-Sleep -Milliseconds 1200
-    if (-not (Wait-ScreenKind 'ALL' 10)) {
-        Write-Line '  back from profile did not reach all tools, relaunching app'
-        $null = Invoke-Adb @('shell', 'am', 'force-stop', $Pkg)
-        $null = Invoke-Adb @('shell', 'am', 'start', '-n', $Act)
-        $null = Wait-ScreenKind 'HOME' 25
+    # v2: settings card switches the root Pager to the profile tab (no nav push), so use the dock
+    Tap-UiText -Label $L.AllTab -Exact -TimeoutSec 10
+    if (-not (Wait-ScreenKind 'ALL' 15)) {
+        Write-Line '  dock tap did not reach tools page, retrying via Go-AllTools'
         Go-AllTools
     }
     Add-Step 'settings_redirect' 'PASS' 'settings card -> profile page' $swStep.ElapsedMilliseconds
@@ -938,11 +1117,10 @@ function Invoke-Scenario {
     $editorOpen = $false
     for ($try = 1; $try -le 2; $try++) {
         Tap-UiText -Label $L.Edit -Exact -TimeoutSec 15
-        if (Wait-UiText -Label $L.EditTitle -TimeoutSec 8) { $editorOpen = $true; break }
+        if (Wait-UiText -Label $L.HomeEditHint -TimeoutSec 8) { $editorOpen = $true; break }
         Write-Line "  quick tools editor did not open (attempt $try), retrying"
     }
-    if (-not $editorOpen) { throw "quick tools editor not visible ('$($L.EditTitle)' missing)" }
-    if (-not (Wait-UiText -Label $L.EditSelected -TimeoutSec 8)) { throw "quick tools editor selected counter not visible ('$($L.EditSelected)' missing)" }
+    if (-not $editorOpen) { throw "quick tools editor not visible ('$($L.HomeEditHint)' missing)" }
     Save-Shot '18_home_edit.png'
     $leftEditor = $false
     for ($try = 1; $try -le 2; $try++) {
@@ -1063,3 +1241,4 @@ Write-Line "summary: $summaryPath"
 $script:Log | Out-File -FilePath $LogFile -Encoding utf8
 Remove-Item $TmpUi -Force -ErrorAction SilentlyContinue
 if ($failed) { exit 1 } else { exit 0 }
+

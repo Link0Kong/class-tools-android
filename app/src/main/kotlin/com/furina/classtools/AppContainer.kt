@@ -6,6 +6,8 @@ import com.furina.classtools.data.auth.AuthRepository
 import com.furina.classtools.data.fitrecs.DefaultFitRecsRepository
 import com.furina.classtools.data.calendar.AndroidCalendarWriter
 import com.furina.classtools.data.calendar.CalendarWriter
+import com.furina.classtools.features.feedback.DefaultFeedbackRepository
+import com.furina.classtools.features.feedback.FeedbackRepository
 import com.furina.classtools.data.fitrecs.FitRecsRepository
 import com.furina.classtools.data.homework.DefaultHomeworkRepository
 import com.furina.classtools.data.homework.HomeworkRepository
@@ -124,6 +126,12 @@ class AppContainer(context: Context) {
 
     /** 体测历史云端读写（E14/E15/E16：最多 2 条、软删 arch、pending 补发、2min TTL）。 */
     val fitRecsRepository: FitRecsRepository = DefaultFitRecsRepository(
+        api = apiClient,
+        currentSid = { activeSession?.sid },
+    )
+
+    /** 反馈建议（E19/E20/E21：GET 30s TTL、POST、管理员 PATCH done）。 */
+    val feedbackRepository: FeedbackRepository = DefaultFeedbackRepository(
         api = apiClient,
         currentSid = { activeSession?.sid },
     )

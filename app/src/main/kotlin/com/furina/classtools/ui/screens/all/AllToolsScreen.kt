@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +45,7 @@ import androidx.compose.ui.zIndex
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
 import com.furina.classtools.data.sync.UserDataRepository
+import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.ToolCard
 import com.furina.classtools.ui.components.reorderableSemantics
@@ -92,6 +95,8 @@ fun AllToolsScreen(
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     val naturalIds = remember { ToolCatalog.tools.map { it.id } }
+    val spec = rememberCtAdaptiveSpec()
+    val columns = spec.gridColumns
 
     var order by remember { mutableStateOf(ToolOrderLogic.normalize(initialOrder, naturalIds)) }
     var restored by remember { mutableStateOf(skipRestore || initialOrder.isNotEmpty()) }
@@ -191,6 +196,7 @@ fun AllToolsScreen(
             spacing = spacingPx,
             itemCount = order.size,
             draggedIndex = draggedIndex,
+            columns = columns,
         )
         if (target != draggedIndex) {
             order = ToolOrderLogic.moveToIndex(order, draggingId ?: return, target)
@@ -212,11 +218,13 @@ fun AllToolsScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .widthIn(max = spec.contentMaxWidth)
+                    .fillMaxWidth()
+                    .fillMaxHeight()
                     .statusBarsPadding()
                     .verticalScroll(scrollState),
             ) {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
+                Column(modifier = Modifier.padding(horizontal = spec.horizontalPadding, vertical = 10.dp)) {
                     Text(
                         text = "全部工具",
                         style = MaterialTheme.typography.headlineMedium,
@@ -237,7 +245,7 @@ fun AllToolsScreen(
                             Box(
                                 modifier = Modifier
                                     .alpha(if (tool.id == effectiveDraggingId) 0.22f else 1f)
-                                    .pointerInput(tool.id) {
+                                    .pointerInput(tool.id, columns) {
                                         detectDragGesturesAfterLongPress(
                                             onDragStart = { local ->
                                                 if (draggingId != null) return@detectDragGesturesAfterLongPress
@@ -245,8 +253,8 @@ fun AllToolsScreen(
                                                 if (index < 0) return@detectDragGesturesAfterLongPress
                                                 draggingId = tool.id
                                                 dragStartOrder = order
-                                                val contentY = (index / 2) * (itemHeightPx + spacingPx) + local.y
-                                                val contentX = (index % 2) * (itemWidthPx + spacingPx) + local.x
+                                                val contentY = (index / columns) * (itemHeightPx + spacingPx) + local.y
+                                                val contentX = (index % columns) * (itemWidthPx + spacingPx) + local.x
                                                 dragPointer = Offset(
                                                     gridLeftPx + contentX,
                                                     gridTopPx + contentY - scrollState.value,
@@ -286,29 +294,30 @@ fun AllToolsScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = spec.horizontalPadding)
                         .onGloballyPositioned { coordinates ->
                             gridLeftPx = coordinates.positionInRoot().x - containerOrigin.x
                             gridTopPx = coordinates.positionInRoot().y - containerOrigin.y
                         },
                 ) { measurables, constraints ->
                     val width = constraints.maxWidth
-                    itemWidthPx = ((width - spacingPx) / 2f).coerceAtLeast(1f)
+                    val cols = columns.coerceAtLeast(1)
+                    itemWidthPx = ((width - spacingPx * (cols - 1)) / cols).coerceAtLeast(1f)
                     val placeables = measurables.map { measurable ->
                         measurable.measure(
                             Constraints.fixed(
-                                width = ((width - spacingPx) / 2f).roundToInt().coerceAtLeast(1),
+                                width = itemWidthPx.roundToInt().coerceAtLeast(1),
                                 height = itemHeightPx.roundToInt(),
                             ),
                         )
                     }
-                    val rows = (placeables.size + 1) / 2
+                    val rows = (placeables.size + cols - 1) / cols
                     val height = max(0, rows * itemHeightPx.roundToInt() + max(0, rows - 1) * spacingPx.roundToInt())
                     layout(width, height) {
                         placeables.forEachIndexed { index, placeable ->
                             placeable.place(
-                                x = ((index % 2) * (itemWidthPx + spacingPx)).roundToInt(),
-                                y = ((index / 2) * (itemHeightPx + spacingPx)).roundToInt(),
+                                x = ((index % cols) * (itemWidthPx + spacingPx)).roundToInt(),
+                                y = ((index / cols) * (itemHeightPx + spacingPx)).roundToInt(),
                             )
                         }
                     }
@@ -320,7 +329,7 @@ fun AllToolsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 28.dp),
+                        .padding(start = spec.horizontalPadding, end = spec.horizontalPadding, top = 18.dp, bottom = 28.dp),
                 )
             }
 
@@ -351,6 +360,7 @@ fun AllToolsScreen(
         }
     }
 }
+
 
 
 

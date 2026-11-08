@@ -343,13 +343,13 @@ fun HomeScreen(
             if (spec.twoPane) {
                 Row(
                     modifier = contentModifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(spec.horizontalPadding),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
                     Column(
                         modifier = Modifier
                             .weight(spec.mainPaneWeight)
                             .verticalScroll(rememberScrollState())
-                            .padding(top = 10.dp, bottom = 28.dp),
+                            .padding(top = 6.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                     ) {
                         GreetingHeader(session, ttPlan, today, nowMillis)
@@ -368,7 +368,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .weight(1f - spec.mainPaneWeight)
                             .verticalScroll(rememberScrollState())
-                            .padding(top = 10.dp, bottom = 28.dp),
+                            .padding(top = 6.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                     ) {
                         HomeworkCard(
@@ -1045,6 +1045,7 @@ private fun HomeMutedLine(text: String) {
         overflow = TextOverflow.Ellipsis,
     )
 }
+
 
 
 
