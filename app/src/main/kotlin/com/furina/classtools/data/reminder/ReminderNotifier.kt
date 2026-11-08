@@ -9,12 +9,11 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.furina.classtools.data.permission.PermissionTexts
 
 /**
  * 本机提醒通知发送（接口化：Worker 用 Android 实现，单测用假实现，绝不在单测真发通知）。
  *
- * 渠道：作业 [PermissionTexts.CHANNEL_HOMEWORK_ID] / 课表 [PermissionTexts.CHANNEL_CLASS_ID]；
+ * 渠道（按 [ReminderKind] 自动创建）：作业 homework_due / 课表 class_soon / 通知 notice_due；
  * 无通知权限时静默返回 false（不崩、不请求权限——请求由 UI 负责）。
  */
 interface ReminderNotifier {
@@ -34,24 +33,23 @@ class AndroidReminderNotifier(
     override fun ensureChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = appContext.getSystemService(NotificationManager::class.java) ?: return
-        if (manager.getNotificationChannel(PermissionTexts.CHANNEL_HOMEWORK_ID) == null) {
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    PermissionTexts.CHANNEL_HOMEWORK_ID,
-                    PermissionTexts.CHANNEL_HOMEWORK_NAME,
-                    NotificationManager.IMPORTANCE_DEFAULT,
-                ).apply { description = PermissionTexts.CHANNEL_HOMEWORK_DESC },
-            )
-        }
-        if (manager.getNotificationChannel(PermissionTexts.CHANNEL_CLASS_ID) == null) {
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    PermissionTexts.CHANNEL_CLASS_ID,
-                    PermissionTexts.CHANNEL_CLASS_NAME,
-                    NotificationManager.IMPORTANCE_HIGH,
-                ).apply { description = PermissionTexts.CHANNEL_CLASS_DESC },
-            )
-        }
+        ReminderKind.entries
+            .distinctBy { it.channelId }
+            .forEach { kind ->
+                if (manager.getNotificationChannel(kind.channelId) == null) {
+                    manager.createNotificationChannel(
+                        NotificationChannel(
+                            kind.channelId,
+                            kind.channelName,
+                            if (kind.highPriority) {
+                                NotificationManager.IMPORTANCE_HIGH
+                            } else {
+                                NotificationManager.IMPORTANCE_DEFAULT
+                            },
+                        ).apply { description = kind.channelDesc },
+                    )
+                }
+            }
     }
 
     override fun notify(event: ReminderEvent): Boolean {
@@ -64,7 +62,7 @@ class AndroidReminderNotifier(
             .setContentText(event.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(event.body))
             .setPriority(
-                if (event.kind == ReminderKind.COURSE_SOON) {
+                if (event.kind.highPriority) {
                     NotificationCompat.PRIORITY_HIGH
                 } else {
                     NotificationCompat.PRIORITY_DEFAULT

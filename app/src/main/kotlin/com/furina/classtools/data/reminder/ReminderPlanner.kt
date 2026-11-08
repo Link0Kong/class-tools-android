@@ -2,6 +2,8 @@ package com.furina.classtools.data.reminder
 
 import com.furina.classtools.data.homework.HomeworkDueCalculator
 import com.furina.classtools.data.homework.HomeworkRow
+import com.furina.classtools.data.notices.NoticeStatusMachine
+import com.furina.classtools.data.notices.NoticesData
 import com.furina.classtools.data.timetable.TtPlan
 import java.time.Instant
 import java.time.LocalDate
@@ -35,6 +37,9 @@ object ReminderPlanner {
 
     /** 规划器内部最大规划窗口：7 天（未来更远的截止由后续轮次再规划）。 */
     const val PLANNING_HORIZON_MS: Long = 7L * 24 * 60 * 60 * 1000
+
+    /** 通知临近提醒提前量：目标时间前 24 小时；已进入窗口则立即提醒。 */
+    const val NOTICE_LEAD_MS: Long = 24L * 60 * 60 * 1000
 
     private const val DAY_MS: Long = 24L * 60 * 60 * 1000
 
@@ -153,6 +158,137 @@ object ReminderPlanner {
         )
     }
 
+    // ------------------------------------------------------------ 通知提醒（ntremind）
+
+    /** 通知目标类型（活动开始 / 截止；决定去重键后缀与文案）。 */
+    enum class NoticeTargetType(val keySuffix: String, val label: String) {
+        EVENT("event", "开始"),
+        DEADLINE("deadline", "截止"),
+    }
+
+    /** 一条可提醒的通知目标（活动时间优先于截止时间）。 */
+    data class NoticeTarget(
+        val id: String,
+        val title: String,
+        val targetAtMillis: Long,
+        val type: NoticeTargetType,
+        val action: String,
+        val source: String,
+    ) {
+        val displayName: String get() = title.ifBlank { "班级通知" }
+        val dedupeKey: String get() = "notice:$id:${type.keySuffix}"
+    }
+
+    /**
+     * 从通知快照解析可提醒目标（纯函数）：
+     * - 只取 `auto` 组（人工通知无结构化时间）；`hidden` 不提醒；
+     * - 长期安排（`recurrence != null`）不提醒；
+     * - 已处理（marks `ntdone` 命中组 id）不提醒；
+     * - 目标时间 = 未来 7 天内且 `eventAt` 未来优先，否则真实截止 `deadline`（含延期 extensions）；
+     * - 已过期/无时间 → 不提醒。
+     */
+    fun noticeTargets(
+        notices: NoticesData?,
+        handledIds: Set<String> = emptySet(),
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<NoticeTarget> {
+        val entries = notices?.auto ?: return emptyList()
+        return entries.mapNotNull { entry ->
+            if (entry.hidden) return@mapNotNull null
+            val id = entry.id.trim()
+            if (id.isEmpty() || id in handledIds) return@mapNotNull null
+            val group = entry.group
+            if (group.recurrence != null) return@mapNotNull null
+            val eventAt = NoticeStatusMachine.eventAtOf(group, zone)?.takeIf { it > nowMillis }
+            val deadline = NoticeStatusMachine.deadlineOf(group, zone)?.takeIf { it > nowMillis }
+            val (targetAt, type) = when {
+                eventAt != null -> eventAt to NoticeTargetType.EVENT
+                deadline != null -> deadline to NoticeTargetType.DEADLINE
+                else -> return@mapNotNull null
+            }
+            if (targetAt > nowMillis + PLANNING_HORIZON_MS) return@mapNotNull null
+            val action = NoticeStatusMachine.conciseAction(
+                if (type == NoticeTargetType.EVENT) group.eventAction else group.deadlineAction,
+            )
+            NoticeTarget(
+                id = id,
+                title = group.title.ifBlank { entry.title },
+                targetAtMillis = targetAt,
+                type = type,
+                action = action,
+                source = group.source,
+            )
+        }
+    }
+
+    /** 通知提醒（每日汇总 + 24 小时内临近提醒）。 */
+    fun planNotices(
+        notices: NoticesData?,
+        handledIds: Set<String> = emptySet(),
+        nowMillis: Long = System.currentTimeMillis(),
+        settings: ReminderSettings = ReminderSettings.DEFAULT,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<ReminderEvent> {
+        if (!settings.enabled || !settings.noticeEnabled) return emptyList()
+        val targets = noticeTargets(notices, handledIds, nowMillis, zone)
+        if (targets.isEmpty()) return emptyList()
+
+        val events = mutableListOf<ReminderEvent>()
+        val digestAt = nextDigestAt(nowMillis, settings, zone)
+        val digestWindowEnd = digestWindowEnd(digestAt, zone)
+        val digestItems = targets.filter { it.targetAtMillis in (digestAt + 1)..digestWindowEnd }
+        if (digestItems.isNotEmpty() && !settings.isQuiet(digestAt, zone)) {
+            events += ReminderEvent(
+                kind = ReminderKind.NOTICE_DIGEST,
+                key = "nt-digest:" + formatDate(digestAt, zone),
+                triggerAtMillis = digestAt,
+                title = "通知截止汇总",
+                body = noticeDigestBody(digestItems, zone),
+                toolId = ReminderKind.NOTICE_DIGEST.toolId,
+            )
+        }
+
+        targets.forEach { target ->
+            // 已进入当日汇总窗口的通知由汇总覆盖，避免当晚两条提醒
+            if (target in digestItems) return@forEach
+            val rawTrigger = target.targetAtMillis - NOTICE_LEAD_MS
+            val trigger = if (rawTrigger <= nowMillis) nowMillis + IMMEDIATE_DELAY_MS else rawTrigger
+            if (settings.isQuiet(trigger, zone)) return@forEach
+            events += ReminderEvent(
+                kind = ReminderKind.NOTICE_DUE,
+                key = target.dedupeKey,
+                triggerAtMillis = trigger,
+                title = "通知即将${target.type.label}：${target.displayName}",
+                body = buildString {
+                    if (target.action.isNotBlank()) {
+                        append(target.action)
+                        append(" · ")
+                    }
+                    append(formatAt(target.targetAtMillis, zone))
+                    append(" ")
+                    append(target.type.label)
+                    if (target.source.isNotBlank()) {
+                        append(" · ")
+                        append(target.source)
+                    }
+                },
+                toolId = ReminderKind.NOTICE_DUE.toolId,
+            )
+        }
+        return events
+    }
+
+    /** 通知汇总正文：`2 条通知即将截止/开始：主题 11-09 18:00；...`（最多 5 条 + 省略）。 */
+    fun noticeDigestBody(items: List<NoticeTarget>, zone: ZoneId = ZoneId.systemDefault()): String {
+        val sorted = items.sortedBy { it.targetAtMillis }
+        val lines = sorted.take(MAX_DIGEST_ITEMS).map { target ->
+            "${target.displayName} ${formatAt(target.targetAtMillis, zone)} ${target.type.label}"
+        }
+        val more = if (sorted.size > MAX_DIGEST_ITEMS) " 等 ${sorted.size} 条" else ""
+        return "${sorted.size} 条通知即将截止/开始：" + lines.joinToString("；") + more
+    }
+
     /** 合并规划（按触发时间升序、同 key 去重）。 */
     fun plan(
         rows: List<HomeworkRow>,
@@ -161,11 +297,14 @@ object ReminderPlanner {
         nowMillis: Long = System.currentTimeMillis(),
         settings: ReminderSettings = ReminderSettings.DEFAULT,
         zone: ZoneId = ZoneId.systemDefault(),
+        notices: NoticesData? = null,
+        handledNoticeIds: Set<String> = emptySet(),
     ): ReminderPlan {
         if (!settings.enabled) return ReminderPlan(emptyList())
         val events = buildList {
             addAll(planHomework(rows, doneIds, nowMillis, settings, zone))
             addAll(planCourse(plan, nowMillis, settings, zone))
+            addAll(planNotices(notices, handledNoticeIds, nowMillis, settings, zone))
         }
             .filter { it.triggerAtMillis <= nowMillis + PLANNING_HORIZON_MS }
             .sortedWith(compareBy({ it.triggerAtMillis }, { it.key }))

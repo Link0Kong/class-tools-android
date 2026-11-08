@@ -37,6 +37,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -77,6 +78,8 @@ fun IdentityScreen(
     var showPrivacy by rememberSaveable { mutableStateOf(false) }
     var showAgreement by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    // 360×640dp 等矮屏：压缩顶部品牌区与卡片间距，保证「进入工具站」首屏可见（P2 适配）。
+    val compactHeight = LocalConfiguration.current.screenHeightDp < 720
 
     val verifying = uiState is IdentityUiState.Verifying
     val canSubmit = studentId.length == 10 && name.isNotBlank() && consentAccepted && !verifying
@@ -104,14 +107,14 @@ fun IdentityScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = if (compactHeight) 16.dp else 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(modifier = Modifier.height(56.dp))
+            Spacer(modifier = Modifier.height(if (compactHeight) 18.dp else 56.dp))
 
-            BrandMark(size = 68.dp)
+            BrandMark(size = if (compactHeight) 46.dp else 68.dp)
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(if (compactHeight) 10.dp else 20.dp))
 
             Text(
                 text = "班级工具站",
@@ -125,16 +128,18 @@ fun IdentityScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CtPill(text = "原生 Android 客户端")
-                CtPill(text = "数据与网页 / 小程序互通")
+            if (!compactHeight) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CtPill(text = "原生 Android 客户端")
+                    CtPill(text = "数据与网页 / 小程序互通")
+                }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(if (compactHeight) 12.dp else 28.dp))
 
             Surface(
                 modifier = Modifier.widthIn(max = 520.dp),
@@ -145,8 +150,8 @@ fun IdentityScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                        .padding(if (compactHeight) 14.dp else 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (compactHeight) 10.dp else 14.dp),
                 ) {
                     Text(
                         text = "身份核验",

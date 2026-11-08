@@ -31,6 +31,7 @@ class DataStoreReminderSettingsStore(
             enabled = prefs[KEY_ENABLED] ?: true,
             homeworkEnabled = prefs[KEY_HOMEWORK] ?: true,
             courseEnabled = prefs[KEY_COURSE] ?: true,
+            noticeEnabled = prefs[KEY_NOTICE] ?: true,
             homeworkDigestHour = prefs[KEY_DIGEST_HOUR] ?: 20,
             homeworkDigestMinute = prefs[KEY_DIGEST_MINUTE] ?: 0,
             homeworkLeadDays = prefs[KEY_HOMEWORK_LEAD_DAYS] ?: 1,
@@ -49,6 +50,7 @@ class DataStoreReminderSettingsStore(
             prefs[KEY_ENABLED] = next.enabled
             prefs[KEY_HOMEWORK] = next.homeworkEnabled
             prefs[KEY_COURSE] = next.courseEnabled
+            prefs[KEY_NOTICE] = next.noticeEnabled
             prefs[KEY_DIGEST_HOUR] = next.homeworkDigestHour
             prefs[KEY_DIGEST_MINUTE] = next.homeworkDigestMinute
             prefs[KEY_HOMEWORK_LEAD_DAYS] = next.homeworkLeadDays
@@ -64,6 +66,7 @@ class DataStoreReminderSettingsStore(
         val KEY_ENABLED = booleanPreferencesKey("reminder_enabled")
         val KEY_HOMEWORK = booleanPreferencesKey("homework_enabled")
         val KEY_COURSE = booleanPreferencesKey("course_enabled")
+        val KEY_NOTICE = booleanPreferencesKey("notice_enabled")
         val KEY_DIGEST_HOUR = intPreferencesKey("homework_digest_hour")
         val KEY_DIGEST_MINUTE = intPreferencesKey("homework_digest_minute")
         val KEY_HOMEWORK_LEAD_DAYS = intPreferencesKey("homework_lead_days")

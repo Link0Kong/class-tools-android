@@ -9,7 +9,7 @@ import android.content.Intent
  *
  * 约定（Lead 在 `MainActivity` / `MainNavHost` 接线）：
  * - 通知 PendingIntent 以 `ACTION_MAIN` 启动 Launcher Activity（singleTop），并携带 extras：
- *   [EXTRA_TOOL_ID]（`"hw"` / `"tt"`）、[EXTRA_REMINDER_KEY]、[EXTRA_REMINDER_KIND]；
+ *   [EXTRA_TOOL_ID]（`"hw"` / `"tt"` / `"nt"`）、[EXTRA_REMINDER_KEY]、[EXTRA_REMINDER_KIND]；
  * - Activity 取到 [EXTRA_TOOL_ID] 后 `navController.navigate(Routes.tool(toolId))`（或首页 quick card 打开），
  *   然后清除 intent（避免旋转/返回重复跳转）；
  * - 若 App 尚未登录，先进入身份页，登录后再按 extras 跳转（Lead 处理会话恢复后的 pending route）。
@@ -25,7 +25,7 @@ object ReminderIntentFactory {
 
     /** 读取 Intent 中的工具 id（仅接受已知提醒工具，防脏数据）。 */
     fun toolIdFromExtras(toolId: String?): String? =
-        toolId?.trim()?.takeIf { it == "hw" || it == "tt" }
+        toolId?.trim()?.takeIf { it == "hw" || it == "tt" || it == "nt" }
 
     /** 构造打开 App 的 Intent（无 Launcher Activity 时返回 null）。 */
     fun openIntent(context: Context, event: ReminderEvent): Intent? {

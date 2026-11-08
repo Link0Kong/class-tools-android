@@ -175,6 +175,14 @@ $L = @{
     MyData         = U8 '5oiR55qE5pWw5o2u'                           # profile v2.1: my-data stats card
     GuideEntry     = U8 '5L2/55So6K+05piO'                           # profile: user guide entry
     FeedbackEntry  = U8 '5Y+N6aaI5bu66K6u'                           # profile: feedback entry
+    FeedbackAction = U8 '5Y+N6aaI'                                   # profile row action: feedback
+    GuideAction    = U8 '5p+l55yL'                                   # profile row action: view guide
+    FeedbackForm   = U8 '5Y+N6aaI5YaF5a65'                           # feedback page: content field label
+    FeedbackSubmit = U8 '5o+Q5Lqk5Y+N6aaI'                           # feedback page: submit button
+    FeedbackFailed = U8 '6K+75Y+W5Y+N6aaI5aSx6LSl'                   # feedback page: load failed state
+    FeedbackEmpty  = U8 '6L+Y5rKh5pyJ5Y+N6aaI'                       # feedback page: empty state
+    FeedbackLoad   = U8 '5Yqg6L295Y+N6aaI'                           # feedback page: loading state
+    GuideTitle     = U8 '5L2/55So6K+05piO'                           # guide page title
     PermManage     = U8 '5p2D6ZmQ566h55CG'                           # profile row: permission management
     NotifyWord     = U8 '6YCa55+l'                                   # permission card: notifications
     CalendarWord   = U8 '5pel5Y6G'                                   # permission card: calendar
@@ -190,6 +198,7 @@ $L = @{
     ReminderMain   = U8 '5o+Q6YaS5oC75byA5YWz'                      # reminder: master switch
     HomeworkRem    = U8 '5L2c5Lia5o+Q6YaS'                           # reminder: homework reminder
     ClassRem       = U8 '5LiK6K++5o+Q6YaS'                           # reminder: class reminder
+    NoticeRemind   = U8 '6YCa55+l5o+Q6YaS'                           # reminder: notice reminder (v2.1.1)
     QuietHours     = U8 '5a6J6Z2Z5pe25q61'                           # reminder: quiet hours
     DenyPerm       = U8 '5LiN5YWB6K64'                               # system permission dialog: deny
     DenyPermAlt    = U8 '5ouS57ud'                                   # system permission dialog: reject (alt)
@@ -304,7 +313,7 @@ function Get-ScreenKind {
     if ($joined.Contains($L.EditTitle)) { return 'HOME_EDIT' }
     if ($joined.Contains($L.IdentityTitle)) { return 'IDENTITY' }
     if ($joined.Contains($L.QuickTools)) { return 'HOME' }
-    if ($joined.Contains($L.ProfileMark) -or $joined.Contains($L.PermTitle) -or $joined.Contains($L.MyData)) { return 'PROFILE' }
+    if ($joined.Contains($L.ProfileMark) -or $joined.Contains($L.PermTitle) -or $joined.Contains($L.MyData) -or $joined.Contains($L.FeedbackEntry) -or $joined.Contains($L.GuideEntry)) { return 'PROFILE' }
     # All-tools grid may be scrolled, so the "all tools" title is not always on screen.
     # Fall back to the triple bottom-nav labels (only top-level pages have them).
     if ($joined.Contains($L.Workbench) -and $joined.Contains($L.AllTab) -and $joined.Contains($L.MyTab)) { return 'ALL' }
@@ -1037,6 +1046,7 @@ function Invoke-Scenario {
     if (-not (Wait-UiText -Label $L.ReminderMain -TimeoutSec 15)) { throw 'reminder page not visible' }
     if (-not (Wait-UiText -Label $L.HomeworkRem -TimeoutSec 8)) { throw 'reminder: homework reminder row missing' }
     if (-not (Wait-UiText -Label $L.ClassRem -TimeoutSec 8)) { throw 'reminder: class reminder row missing' }
+    if (-not (Wait-UiText -Label $L.NoticeRemind -TimeoutSec 8)) { throw 'reminder: notice reminder row missing (v2.1.1)' }
     $remBefore = Toggle-SwitchNear -Label $L.HomeworkRem
     $null = Toggle-SwitchNear -Label $L.HomeworkRem
     $remAfter = Get-SwitchStateNear -Label $L.HomeworkRem
@@ -1048,6 +1058,38 @@ function Invoke-Scenario {
     Start-Sleep -Milliseconds 1200
     $null = Wait-ScreenKind 'PROFILE' 10
     Add-Step 'reminder_settings' 'PASS' 'homework reminder toggled on/off' $swStep.ElapsedMilliseconds
+# STEP 9g (v2.1.1): profile -> about -> user guide (static content: title + >=3 sections)
+    Write-Line '--- step: user guide page'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    if (-not (Wait-UiTextScroll -Label $L.GuideEntry -ScrollTries 5 -TimeoutSec 15)) { throw 'profile: guide entry not visible' }
+    Tap-ActionNearLabel -Label $L.GuideEntry -ActionText $L.GuideAction
+    if (-not (Wait-UiText -Label $L.GuideTitle -TimeoutSec 15)) { throw 'guide page not visible' }
+    $guideSections = 0
+    if (Wait-UiText -Label $L.Identity -TimeoutSec 6) { $guideSections++ }
+    if (Wait-UiTextScroll -Label $L.Workbench -ScrollTries 4 -TimeoutSec 10) { $guideSections++ }
+    if (Wait-UiTextScroll -Label $L.Draw -ScrollTries 4 -TimeoutSec 10) { $guideSections++ }
+    if ($guideSections -lt 3) { throw "guide: only $guideSections section titles visible (need >= 3)" }
+    $null = Invoke-Adb @('shell', 'input', 'swipe', '540', '1500', '540', '700', '300')
+    Start-Sleep -Milliseconds 800
+    Save-Shot '31_guide.png'
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    $null = Wait-ScreenKind 'PROFILE' 10
+    Add-Step 'user_guide' 'PASS' ("title + $guideSections sections") $swStep.ElapsedMilliseconds
+
+# STEP 9h (v2.1.1): profile -> feedback (open only, never submit - avoid cloud writes)
+    Write-Line '--- step: feedback page (read-only open)'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    if (-not (Wait-UiTextScroll -Label $L.FeedbackEntry -ScrollTries 5 -TimeoutSec 15)) { throw 'profile: feedback entry not visible' }
+    Tap-ActionNearLabel -Label $L.FeedbackEntry -ActionText $L.FeedbackAction
+    # the page title equals the profile row label, so assert page-specific content/state instead
+    $fbStateNode = Wait-UiAny -Labels @($L.FeedbackForm, $L.FeedbackSubmit, $L.FeedbackFailed, $L.FeedbackEmpty, $L.FeedbackLoad) -TimeoutSec 15
+    if (-not $fbStateNode) { throw 'feedback page state text missing' }
+    Save-Shot '30_feedback.png'
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    $null = Wait-ScreenKind 'PROFILE' 10
+    Add-Step 'feedback_page' 'PASS' 'opened; not submitted' $swStep.ElapsedMilliseconds
 
     # STEP 9d: all tools -> "settings" card must land on the profile page (not a placeholder)
     Write-Line '--- step: settings card redirects to profile'
@@ -1259,6 +1301,10 @@ Write-Line "summary: $summaryPath"
 $script:Log | Out-File -FilePath $LogFile -Encoding utf8
 Remove-Item $TmpUi -Force -ErrorAction SilentlyContinue
 if ($failed) { exit 1 } else { exit 0 }
+
+
+
+
 
 
 

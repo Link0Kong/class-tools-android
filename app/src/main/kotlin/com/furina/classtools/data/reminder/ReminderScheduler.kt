@@ -12,6 +12,7 @@ import androidx.work.WorkerParameters
 import com.furina.classtools.AppContainer
 import com.furina.classtools.ClassToolsApp
 import com.furina.classtools.data.homework.HomeworkRow
+import com.furina.classtools.data.notices.NoticesData
 import com.furina.classtools.data.permission.AndroidPermissionController
 import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.permission.PermissionType
@@ -91,6 +92,12 @@ interface ReminderDataProvider {
     suspend fun homeworkDoneIds(): Set<String>
 
     suspend fun timetablePlan(nowMillis: Long, zone: ZoneId): TtPlan?
+
+    /** 通知快照（本机缓存；没有则 null）。 */
+    suspend fun noticesData(): NoticesData?
+
+    /** 已处理通知组 id（marks `ntdone` 命中）。 */
+    suspend fun handledNoticeIds(): Set<String>
 }
 
 class ContainerReminderDataProvider(context: Context) : ReminderDataProvider {
@@ -115,6 +122,17 @@ class ContainerReminderDataProvider(context: Context) : ReminderDataProvider {
             TtCalendar.plan(snapshot, nowMillis, zone)
         }
     }.getOrNull()
+
+    override suspend fun noticesData(): NoticesData? = runCatching {
+        container()?.noticesRepository?.cached()
+    }.getOrNull()
+
+    override suspend fun handledNoticeIds(): Set<String> = runCatching {
+        container()?.marksRepository?.marks?.value?.ntDone
+            ?.filterValues { it }
+            ?.keys
+            .orEmpty()
+    }.getOrDefault(emptySet())
 }
 
 /**
@@ -135,7 +153,7 @@ class ReminderEngine(
     suspend fun runOnce(): ReminderRunResult {
         val settings = runCatching { settingsStore.current() }.getOrDefault(ReminderSettings.DEFAULT)
         if (!settings.enabled) return ReminderRunResult(disabledReason = "提醒总开关已关闭")
-        if (!settings.anySectionEnabled) return ReminderRunResult(disabledReason = "作业/课表提醒均已关闭")
+        if (!settings.anySectionEnabled) return ReminderRunResult(disabledReason = "作业/课表/通知提醒均已关闭")
         if (!permissionController.state(PermissionType.NOTIFICATIONS).isGranted) {
             return ReminderRunResult(disabledReason = "通知权限未开启")
         }
@@ -144,7 +162,18 @@ class ReminderEngine(
         val rows = dataProvider.homeworkRows()
         val doneIds = dataProvider.homeworkDoneIds()
         val ttPlan = runCatching { dataProvider.timetablePlan(now, zone) }.getOrNull()
-        val plan = ReminderPlanner.plan(rows, doneIds, ttPlan, now, settings, zone)
+        val notices = runCatching { dataProvider.noticesData() }.getOrNull()
+        val handledNoticeIds = runCatching { dataProvider.handledNoticeIds() }.getOrDefault(emptySet())
+        val plan = ReminderPlanner.plan(
+            rows = rows,
+            doneIds = doneIds,
+            plan = ttPlan,
+            nowMillis = now,
+            settings = settings,
+            zone = zone,
+            notices = notices,
+            handledNoticeIds = handledNoticeIds,
+        )
         if (plan.isEmpty) return ReminderRunResult(candidates = 0)
 
         val due = ReminderPlanner.filterDue(plan.events, now)

@@ -59,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.furina.classtools.data.privacy.LocalDataSnapshot
 import com.furina.classtools.data.privacy.PrivacyClearReport
 import com.furina.classtools.data.privacy.PrivacyExport
 import com.furina.classtools.data.privacy.PrivacyExportResult
@@ -121,6 +122,8 @@ fun DataPrivacyScreen(
     initialFeedback: String? = null,
     initialDialog: DataPrivacyDialog = DataPrivacyDialog.NONE,
     forcedErrorMessage: String? = null,
+    /** v2.1.1：本机数据快照（同步范围清单 + 8 计数；由 MainNavHost 从本机缓存聚合，不联网）。 */
+    localSnapshot: LocalDataSnapshot = LocalDataSnapshot(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -294,6 +297,7 @@ fun DataPrivacyScreen(
 
                         PrivacyPhase.READY -> PrivacyContent(
                             summary = summary,
+                            localSnapshot = localSnapshot,
                             working = working,
                             feedback = feedback,
                             feedbackIsError = feedbackIsError,
@@ -370,6 +374,7 @@ fun DataPrivacyScreen(
 @Composable
 private fun PrivacyContent(
     summary: PrivacySummary?,
+    localSnapshot: LocalDataSnapshot,
     working: Working?,
     feedback: String?,
     feedbackIsError: Boolean,
@@ -462,6 +467,10 @@ private fun PrivacyContent(
                 )
             }
         }
+
+        // v2.1.1：同步范围清单 + 本机数据 8 计数（与 mp pages/data 同口径；本机读取，不联网）。
+        SyncScopeSectionCard()
+        LocalDataStatsCard(snapshot = localSnapshot)
 
         Surface(
             modifier = Modifier.fillMaxWidth(),

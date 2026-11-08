@@ -183,6 +183,15 @@ fun ReminderSettingsScreen(
                 }
 
                 ReminderCard(
+                    title = "通知提醒",
+                    description = "每日汇总「明天/后天」截止或开始的通知，并在临近 24 小时内提醒",
+                    checked = settings.noticeEnabled && settings.enabled,
+                    enabled = settings.enabled,
+                    onCheckedChange = { value -> update { it.copy(noticeEnabled = value) } },
+                    icon = { Icon(Icons.Rounded.NotificationsActive, contentDescription = null) },
+                )
+
+                ReminderCard(
                     title = "安静时段",
                     description = "${settings.quietStartHour}:00 – ${settings.quietEndHour}:00 不弹提醒（避免夜间打扰）",
                     checked = settings.quietHoursEnabled,

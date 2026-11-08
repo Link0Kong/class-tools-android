@@ -18,6 +18,8 @@ data class ReminderSettings(
     val homeworkEnabled: Boolean = true,
     /** 课表提醒（下一节课开始前 N 分钟）。 */
     val courseEnabled: Boolean = true,
+    /** 通知提醒（有活动/截止时间的班级通知：每日汇总 + 临近提醒；对齐 mp ntremind）。 */
+    val noticeEnabled: Boolean = true,
     /** 每日作业汇总时间（本地时区，默认 20:00）。 */
     val homeworkDigestHour: Int = 20,
     val homeworkDigestMinute: Int = 0,
@@ -55,7 +57,7 @@ data class ReminderSettings(
 
     /** 任何一类提醒是否实际开启。 */
     val anySectionEnabled: Boolean
-        get() = enabled && (homeworkEnabled || courseEnabled)
+        get() = enabled && (homeworkEnabled || courseEnabled || noticeEnabled)
 
     companion object {
         val DEFAULT: ReminderSettings = ReminderSettings()
@@ -71,15 +73,28 @@ data class ReminderSettings(
 }
 
 /** 提醒种类（决定通知渠道与点击跳转工具）。 */
-enum class ReminderKind(val toolId: String, val channelId: String) {
+enum class ReminderKind(
+    val toolId: String,
+    val channelId: String,
+    val channelName: String,
+    val channelDesc: String,
+    /** true = 渠道高重要性（课程/临近类，尽量即时弹出）。 */
+    val highPriority: Boolean = false,
+) {
     /** 每日作业截止汇总（“明天/后天截止”）。 */
-    HOMEWORK_DIGEST("hw", "homework_due"),
+    HOMEWORK_DIGEST("hw", "homework_due", "作业提醒", "作业截止前与每日截止汇总"),
 
     /** 单条作业截止前 N 天提醒。 */
-    HOMEWORK_DUE("hw", "homework_due"),
+    HOMEWORK_DUE("hw", "homework_due", "作业提醒", "作业截止前与每日截止汇总"),
 
     /** 下一节课开始前提醒。 */
-    COURSE_SOON("tt", "class_soon"),
+    COURSE_SOON("tt", "class_soon", "上课提醒", "下一节课开始前的提醒", highPriority = true),
+
+    /** 每日通知汇总（“明天/后天截止/开始”的未处理通知）。 */
+    NOTICE_DIGEST("nt", "notice_due", "通知提醒", "通知截止/活动汇总与临近提醒"),
+
+    /** 单条通知临近（24 小时内到截止/活动时间）提醒。 */
+    NOTICE_DUE("nt", "notice_due", "通知提醒", "通知截止/活动汇总与临近提醒", highPriority = true),
 }
 
 /** 一条待发的本机提醒。 */

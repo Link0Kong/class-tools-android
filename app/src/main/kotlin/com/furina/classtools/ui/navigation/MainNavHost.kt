@@ -37,6 +37,7 @@ import com.furina.classtools.data.calendar.NoticeCalendarMapper
 import com.furina.classtools.data.fitrecs.FitRecsLoadResult
 import com.furina.classtools.data.fitrecs.FitRecsWriteResult
 import com.furina.classtools.data.permission.PermissionType
+import com.furina.classtools.data.privacy.LocalDataStats
 import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
@@ -414,10 +415,34 @@ fun MainNavHost(
             popEnterTransition = { CtPageTransitions.popEnter() },
             popExitTransition = { CtPageTransitions.popExit() },
         ) {
+            // v2.1.1：本机数据快照（同步范围清单 + 8 计数），只读本机缓存，不联网。
+            val sections by container.userDataRepository.currentSections.collectAsStateWithLifecycle()
+            val marks by container.marksRepository.marks.collectAsStateWithLifecycle()
+            var memberCount by remember { mutableStateOf(0) }
+            var fitCount by remember { mutableStateOf(0) }
+            LaunchedEffect(Unit) {
+                memberCount = runCatching {
+                    container.classMembersRepository.cached().size
+                }.getOrDefault(0)
+                fitCount = runCatching {
+                    (container.fitRecsRepository.load(force = false) as? FitRecsLoadResult.Success)
+                        ?.records?.size ?: 0
+                }.getOrDefault(0)
+            }
+            val localSnapshot = remember(sections, marks, memberCount, fitCount) {
+                LocalDataStats.from(
+                    userdata = sections,
+                    marks = marks,
+                    fitRecords = fitCount,
+                    classMembers = memberCount,
+                    pending = 0,
+                )
+            }
             DataPrivacyScreen(
                 onBack = { navController.popBackStack() },
                 session = session,
                 repository = container.privacyRepository,
+                localSnapshot = localSnapshot,
             )
         }
 
