@@ -32,8 +32,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -96,6 +102,8 @@ fun CtFloatingDock(
     val safeIndex = selectedIndex.coerceIn(0, destinations.lastIndex)
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
+    val specularColor = MaterialTheme.colorScheme.surfaceBright
+    var specularX by remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
 
     // 松手吸附：仅当不在拖动中时用 spring 动画；拖动中直接跟手。
     val dragging = abs(pagerOffsetFraction) > 0.01f
@@ -148,7 +156,16 @@ fun CtFloatingDock(
             androidx.compose.foundation.layout.BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(CtDockLogic.DOCK_HEIGHT_DP.dp),
+                    .height(CtDockLogic.DOCK_HEIGHT_DP.dp)
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val change = event.changes.firstOrNull()
+                                specularX = if (change != null && change.pressed) change.position.x else -1f
+                            }
+                        }
+                    },
             ) {
                 val itemWidth = maxWidth / destinations.size
                 val pillWidth = itemWidth - 10.dp
@@ -173,6 +190,29 @@ fun CtFloatingDock(
                                 ),
                             ),
                         ),
+                )
+
+                // 光场：高光跟随触摸（ColorOS 光场设计；不消费事件，不影响点击）
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(CtDockLogic.DOCK_HEIGHT_DP.dp)
+                        .drawBehind {
+                            val x = if (specularX >= 0f) specularX else size.width * 0.5f
+                            val alpha = if (specularX >= 0f) 0.22f else 0f
+                            if (alpha > 0f) {
+                                drawRect(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            specularColor.copy(alpha = alpha),
+                                            Color.Transparent,
+                                        ),
+                                        center = Offset(x, size.height * 0.18f),
+                                        radius = size.width * 0.42f,
+                                    ),
+                                )
+                            }
+                        },
                 )
 
                 // 弹性药丸底（选中项背后）

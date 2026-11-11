@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -163,6 +164,13 @@ fun HomeScreen(
     val today = remember(nowMillis) { Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate() }
 
     var refreshToken by remember { mutableIntStateOf(0) }
+    var refreshing by remember { mutableStateOf(false) }
+    LaunchedEffect(refreshToken) {
+        if (refreshToken > 0) {
+            delay(1000)
+            refreshing = false
+        }
+    }
 
     // ---- 数据状态 -----------------------------------------------------------
     var ttPlan by remember { mutableStateOf(initialTtPlan) }
@@ -339,6 +347,14 @@ fun HomeScreen(
     }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                refreshing = true
+                retry()
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             val contentModifier = Modifier
                 .widthIn(max = spec.contentMaxWidth)
@@ -466,6 +482,7 @@ fun HomeScreen(
 
                 }
             }
+        }
         }
     }
 }
