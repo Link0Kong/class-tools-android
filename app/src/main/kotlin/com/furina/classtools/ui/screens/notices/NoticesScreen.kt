@@ -22,10 +22,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -34,6 +36,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -196,6 +199,7 @@ fun NoticesScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     var reloadToken by remember { mutableIntStateOf(0) }
     var filter by remember { mutableStateOf(NoticeFilter.ALL) }
+    var query by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<NoticeUiItem?>(null) }
 
     fun notify(message: String) {
@@ -282,11 +286,19 @@ fun NoticesScreen(
     val allItems = remember(data, marks, nowMillis) {
         buildUiItems(data, marks, nowMillis)
     }
-    val visibleItems = remember(allItems, filter) {
-        when (filter) {
+    val visibleItems = remember(allItems, filter, query) {
+        val base = when (filter) {
             NoticeFilter.ALL -> allItems
             NoticeFilter.PENDING -> allItems.filterIsInstance<NoticeUiItem.Auto>().filter { !it.done }
             NoticeFilter.PINNED -> allItems.filter { it.pinned }
+        }
+        val q = query.trim()
+        if (q.isBlank()) {
+            base
+        } else {
+            base.filter {
+                it.title.contains(q, ignoreCase = true) || it.summary.contains(q, ignoreCase = true)
+            }
         }
     }
 
@@ -333,6 +345,26 @@ fun NoticesScreen(
                     modifier = Modifier.padding(top = 2.dp),
                 )
 
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    trailingIcon = if (query.isNotBlank()) {
+                        {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Rounded.Close, contentDescription = "清除搜索")
+                            }
+                        }
+                    } else {
+                        null
+                    },
+                    placeholder = { Text("搜索通知标题 / 内容") },
+                )
+
                 Box(modifier = Modifier.weight(1f)) {
                     when {
                         phase == Phase.LOADING -> CtLoading(
@@ -352,15 +384,32 @@ fun NoticesScreen(
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             if (visibleItems.isEmpty()) {
-                                EmptyState(
-                                    icon = Icons.Rounded.CheckCircle,
-                                    title = when (filter) {
-                                        NoticeFilter.PENDING -> "没有未处理通知"
-                                        NoticeFilter.PINNED -> "没有置顶通知"
-                                        NoticeFilter.ALL -> "暂无通知"
-                                    },
-                                    message = if (allItems.isEmpty()) "班级通知会显示在这里" else "切换筛选看看",
-                                )
+                                Column(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                ) {
+                                    EmptyState(
+                                        icon = Icons.Rounded.CheckCircle,
+                                        title = when {
+                                            query.isNotBlank() -> "没有匹配的通知"
+                                            filter == NoticeFilter.PENDING -> "没有未处理通知"
+                                            filter == NoticeFilter.PINNED -> "没有置顶通知"
+                                            else -> "暂无通知"
+                                        },
+                                        message = when {
+                                            query.isNotBlank() -> "换个关键词试试"
+                                            allItems.isEmpty() -> "班级通知会显示在这里"
+                                            else -> "切换筛选看看"
+                                        },
+                                    )
+                                    if (query.isNotBlank() || filter != NoticeFilter.ALL) {
+                                        TextButton(onClick = {
+                                            query = ""
+                                            filter = NoticeFilter.ALL
+                                        }) { Text("清除搜索与筛选") }
+                                    }
+                                }
                             } else {
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize(),

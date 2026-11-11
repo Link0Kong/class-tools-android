@@ -25,8 +25,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -152,6 +155,7 @@ fun DiagScreen(
     var expandedIds by remember { mutableStateOf(initialExpandedIds) }
     var othersExpanded by remember { mutableStateOf(initialOthersExpanded) }
     var screenVisible by remember { mutableStateOf(true) }
+    var autoRefresh by remember { mutableStateOf(true) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { screenVisible = true }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { screenVisible = false }
@@ -304,13 +308,13 @@ fun DiagScreen(
         loading = false
     }
 
-    /** 进入/恢复前台：立即拉一次；仅可见时每 10s 轮询；隐藏/离开即停。 */
-    LaunchedEffect(skipLoad, screenVisible, pollConfig.intervalMs) {
+    /** 进入/恢复前台：立即拉一次；仅可见时每 10s 轮询；隐藏/离开/暂停即停。 */
+    LaunchedEffect(skipLoad, screenVisible, autoRefresh, pollConfig.intervalMs) {
         if (skipLoad) {
             loading = false
             return@LaunchedEffect
         }
-        if (!screenVisible) return@LaunchedEffect
+        if (!screenVisible || !autoRefresh) return@LaunchedEffect
         runCatching { reporter?.drainPending() }
         refreshRemote()
         runCatching { runDeviceChecks() }
@@ -377,6 +381,13 @@ fun DiagScreen(
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer,
                             )
                         }
+                        IconButton(onClick = { autoRefresh = !autoRefresh }) {
+                            Icon(
+                                imageVector = if (autoRefresh) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                contentDescription = if (autoRefresh) "暂停自动刷新" else "恢复自动刷新",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         IconButton(onClick = {
                             if (skipLoad) return@IconButton
                             scope.launch {
@@ -392,6 +403,14 @@ fun DiagScreen(
                         }
                     },
                 )
+
+                if (checking) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                    )
+                }
 
                 SummaryStrip(
                     anomalyCount = anomalyCount,
