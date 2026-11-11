@@ -33,8 +33,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -133,6 +135,21 @@ fun HomeworkScreen(
         scope.launch { snackbar.showSnackbar(message) }
     }
 
+    /** v4.1 撤销：完成/取消完成后 5s 内可一键撤销。 */
+    fun notifyUndo(message: String, undo: () -> Unit) {
+        scope.launch {
+            val result = snackbar.showSnackbar(
+                message = message,
+                actionLabel = "撤销",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                undo()
+                snackbar.showSnackbar("已撤销")
+            }
+        }
+    }
+
     suspend fun applyResult(result: HomeworkLoadResult) {
         when (result) {
             is HomeworkLoadResult.Success -> {
@@ -191,7 +208,9 @@ fun HomeworkScreen(
         scope.launch {
             when (repository.setMark(MarkKind.HW, item.id, target)) {
                 is com.furina.classtools.data.marks.MarksUpdateResult.Success ->
-                    notify(if (target) "已完成，正在同步" else "已取消完成")
+                    notifyUndo(if (target) "已完成，正在同步" else "已取消完成") {
+                        scope.launch { repository.setMark(MarkKind.HW, item.id, item.done) }
+                    }
                 is com.furina.classtools.data.marks.MarksUpdateResult.Failure ->
                     notify("同步失败，稍后自动重试")
             }

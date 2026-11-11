@@ -38,8 +38,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -182,6 +184,21 @@ fun WaterScreen(
 
     fun notify(message: String) {
         scope.launch { snackbar.showSnackbar(message) }
+    }
+
+    /** v4.1 撤销：删除抄表记录后 5s 内可恢复（重新 persist 旧 state）。 */
+    fun notifyUndo(message: String, undo: () -> Unit) {
+        scope.launch {
+            val result = snackbar.showSnackbar(
+                message = message,
+                actionLabel = "撤销",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                undo()
+                snackbar.showSnackbar("已撤销")
+            }
+        }
     }
 
     fun persist(next: WaterState) {
@@ -485,8 +502,9 @@ fun WaterScreen(
             confirmButton = {
                 TextButton(onClick = {
                     if (target != null) {
+                        val before = waterState
                         persist(WaterMutator.delete(waterState, selectedRv, target))
-                        notify("已删除 ${WaterMonth.label(target)} 记录")
+                        notifyUndo("已删除 ${WaterMonth.label(target)} 记录") { persist(before) }
                     }
                     deletingMonth = null
                 }) { Text("删除") }

@@ -41,8 +41,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -174,6 +176,21 @@ fun RosterScreen(
 
     fun notify(message: String) {
         scope.launch { snackbar.showSnackbar(message) }
+    }
+
+    /** v4.1 撤销：5s 内可撤销的本地危险操作（名单重置/清空）。 */
+    fun notifyUndo(message: String, undo: () -> Unit) {
+        scope.launch {
+            val result = snackbar.showSnackbar(
+                message = message,
+                actionLabel = "撤销",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                undo()
+                snackbar.showSnackbar("已撤销")
+            }
+        }
     }
 
     LaunchedEffect(reloadToken) {
@@ -488,9 +505,10 @@ fun RosterScreen(
             text = { Text("清空全部「到/假」状态，保留点名名单。") },
             confirmButton = {
                 TextButton(onClick = {
+                    val before = rosterState
                     writeRoster(RosterLogic.resetRoll(rosterState))
                     showResetConfirm = false
-                    notify("已重置本轮")
+                    notifyUndo("已重置本轮") { writeRoster(before) }
                 }) { Text("重置") }
             },
             dismissButton = {
@@ -506,9 +524,10 @@ fun RosterScreen(
             text = { Text("清空点名名单与本轮到/假状态（不影响抽签名单）。") },
             confirmButton = {
                 TextButton(onClick = {
+                    val before = rosterState
                     writeRoster(RosterLogic.clearRoll(rosterState))
                     showClearConfirm = false
-                    notify("已清空点名名单")
+                    notifyUndo("已清空点名名单") { writeRoster(before) }
                 }) { Text("清空") }
             },
             dismissButton = {
