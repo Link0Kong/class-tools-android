@@ -885,6 +885,15 @@ private fun WeekGrid(
         shape = CtShapeTokens.toolCard,
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
+        Column {
+        if (weekendEmpty) {
+            Text(
+                text = "周末无课，已隐藏周末列",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp),
+            )
+        }
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val metrics = remember(maxWidth, twoPane) {
                 TimetableLayout.metricsFor(maxWidth.value.toInt(), twoPane)
@@ -996,6 +1005,7 @@ private fun WeekGrid(
                     }
                 }
             }
+        }
         }
     }
 }
