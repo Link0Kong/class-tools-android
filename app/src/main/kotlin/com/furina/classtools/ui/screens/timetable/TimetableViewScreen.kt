@@ -305,6 +305,7 @@ fun TimetableViewScreen(
                         displayWeek?.let { append(" · 第 $it 周") }
                         if (source == TtSource.PERSONAL) append(" · 个人课表")
                         else if (fromCache) append(" · 本机缓存")
+                        else if (source == TtSource.PUBLIC) append(" · 公共课表")
                     },
                     onBack = onBack,
                     actions = {

@@ -156,6 +156,8 @@ fun DiagScreen(
     var othersExpanded by remember { mutableStateOf(initialOthersExpanded) }
     var screenVisible by remember { mutableStateOf(true) }
     var autoRefresh by remember { mutableStateOf(true) }
+    // DG-01：默认「简洁」——只保留状态摘要/设备摘要/服务异常行，隐藏代理、其它诊断与我的上报。
+    var simpleMode by remember { mutableStateOf(true) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { screenVisible = true }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { screenVisible = false }
@@ -381,6 +383,9 @@ fun DiagScreen(
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer,
                             )
                         }
+                        TextButton(onClick = { simpleMode = !simpleMode }) {
+                            Text(if (simpleMode) "详细" else "简洁")
+                        }
                         IconButton(onClick = { autoRefresh = !autoRefresh }) {
                             Icon(
                                 imageVector = if (autoRefresh) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
@@ -445,7 +450,9 @@ fun DiagScreen(
                         }
                     }
 
-                    AgentCard(agent = agent, nowMillis = nowMillis())
+                    if (!simpleMode) {
+                        AgentCard(agent = agent, nowMillis = nowMillis())
+                    }
                     DeviceDiagCard(
                         summary = summary,
                         checking = checking,
@@ -470,17 +477,20 @@ fun DiagScreen(
                         expandedIds = expandedIds,
                         onToggle = ::toggleExpanded,
                         nowMillis = nowMillis(),
+                        onlyProblems = simpleMode,
                     )
-                    OthersSection(
-                        index = index,
-                        expanded = othersExpanded,
-                        onToggleExpanded = { othersExpanded = !othersExpanded },
-                        expandedIds = expandedIds,
-                        onToggleAnalysis = ::toggleExpanded,
-                        agentOnline = agentOnline,
-                        nowMillis = nowMillis(),
-                    )
-                    MyReportsCard(reports = myReports, nowMillis = nowMillis())
+                    if (!simpleMode) {
+                        OthersSection(
+                            index = index,
+                            expanded = othersExpanded,
+                            onToggleExpanded = { othersExpanded = !othersExpanded },
+                            expandedIds = expandedIds,
+                            onToggleAnalysis = ::toggleExpanded,
+                            agentOnline = agentOnline,
+                            nowMillis = nowMillis(),
+                        )
+                        MyReportsCard(reports = myReports, nowMillis = nowMillis())
+                    }
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
@@ -1055,24 +1065,33 @@ private fun ServiceHealthCard(
     expandedIds: Set<String>,
     onToggle: (String) -> Unit,
     nowMillis: Long,
+    onlyProblems: Boolean = false,
 ) {
+    val visibleGroups = if (onlyProblems) {
+        groups.mapNotNull { group ->
+            val rows = group.rows.filter { it.displayStatus != DiagStatus.PASS }
+            if (rows.isEmpty()) null else group.copy(rows = rows)
+        }
+    } else {
+        groups
+    }
     DiagCard(
         title = "服务健康",
         status = when {
-            groups.any { it.worstStatus == DiagStatus.FAIL } -> DiagStatus.FAIL
-            groups.any { it.worstStatus == DiagStatus.WARN } -> DiagStatus.WARN
-            groups.isNotEmpty() -> DiagStatus.PASS
+            visibleGroups.any { it.worstStatus == DiagStatus.FAIL } -> DiagStatus.FAIL
+            visibleGroups.any { it.worstStatus == DiagStatus.WARN } -> DiagStatus.WARN
+            visibleGroups.isNotEmpty() -> DiagStatus.PASS
             else -> DiagStatus.INFO
         },
     ) {
-        if (groups.isEmpty()) {
+        if (visibleGroups.isEmpty()) {
             Text(
                 text = "暂无服务健康数据",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            groups.forEach { group ->
+            visibleGroups.forEach { group ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = group.title,

@@ -194,6 +194,8 @@ $L = @{
     DiagTool       = U8 '6K+K5pat'                                   # all tools: diagnosis card (v3)
     DiagSub        = U8 '5pyN5Yqh5YGl5bq3'                           # diag page: service health subtitle
     DiagLocal      = U8 '5pys5py65Luj55CG'                           # diag section: local agent
+    DiagDetail     = U8 '6K+m57uG'                                    # diag simple mode: 详细 toggle
+    DiagSimple     = U8 '566A5rSB'                                    # diag detailed mode: 简洁 toggle
     DiagDevice     = U8 '6K6+5aSH6K+K5pat'                           # diag section: device diagnostics
     DiagAI         = U8 'QUkg5YiG5p6Q'                               # diag section: AI analysis
     DiagFix        = U8 '5L+u5aSN5Lu75Yqh'                           # diag section: repair tasks
@@ -1075,6 +1077,13 @@ function Invoke-Scenario {
     if (-not (Wait-UiTextScroll -Label $L.DiagTool -ScrollTries 4 -TimeoutSec 12)) { throw 'diag tool card not visible' }
     Tap-UiTextScroll -Label $L.DiagTool -ScrollTries 2 -TimeoutSec 8
     if (-not (Wait-UiText -Label $L.DiagSub -TimeoutSec 25)) { throw 'diag page not visible (service-health subtitle missing)' }
+    # v4.12 DG-01: 默认简洁模式只显示状态摘要/设备摘要/服务异常；点「详细」后再断言完整分组。
+    if (Wait-UiText -Label $L.DiagDetail -TimeoutSec 5) {
+        Write-Line '  diag simple mode -> tap 详细 for full sections'
+        Tap-UiText -Label $L.DiagDetail -Exact -TimeoutSec 6
+        Start-Sleep -Milliseconds 1200
+        if (-not (Wait-UiText -Label $L.DiagSimple -TimeoutSec 8)) { throw 'diag detailed mode toggle did not appear' }
+    }
     $diagSections = 0
     if (Wait-UiText -Label $L.DiagLocal -TimeoutSec 5) { $diagSections++ }
     if (Wait-UiTextScroll -Label $L.DiagDevice -ScrollTries 3 -TimeoutSec 8) { $diagSections++ }
