@@ -10,6 +10,7 @@ import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HealthAndSafety
+import androidx.compose.material.icons.rounded.HowToVote
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Slideshow
@@ -98,6 +99,15 @@ object ToolCatalog {
             accent = clay,
             category = ToolCategory.STUDY,
             features = listOf("通知列表与已处理标记", "置顶与筛选", "附件/图片查看"),
+        ),
+        AppTool(
+            id = "vote",
+            name = "投票",
+            subtitle = "限时/长时 · 实时结果",
+            icon = Icons.Rounded.HowToVote,
+            accent = plum,
+            category = ToolCategory.CLASS,
+            features = listOf("限时/截止/不限时", "单选/多选/匿名/可见范围", "实时结果与管理"),
         ),
         AppTool(
             id = "tt",

@@ -21,7 +21,9 @@ import com.furina.classtools.data.homework.DefaultHomeworkRepository
 import com.furina.classtools.data.homework.HomeworkRepository
 import com.furina.classtools.data.marks.DefaultMarksRepository
 import com.furina.classtools.data.marks.MarksRepository
+import com.furina.classtools.data.member.ClassLeagueRepository
 import com.furina.classtools.data.member.ClassMembersRepository
+import com.furina.classtools.data.member.DefaultClassLeagueRepository
 import com.furina.classtools.data.member.DefaultClassMembersRepository
 import com.furina.classtools.data.member.FileClassMemberCache
 import com.furina.classtools.data.network.ApiClient
@@ -38,6 +40,8 @@ import com.furina.classtools.data.ppt.PptFileDownloader
 import com.furina.classtools.data.ppt.PptLocalStore
 import com.furina.classtools.data.ppt.PptNetworkQualityProvider
 import com.furina.classtools.data.ppt.PptRepository
+import com.furina.classtools.data.vote.DefaultVoteRepository
+import com.furina.classtools.data.vote.VoteRepository
 import com.furina.classtools.data.permission.AndroidPermissionController
 import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.privacy.CallbackLocalCleaner
@@ -206,6 +210,18 @@ class AppContainer(context: Context) {
     }
 
     val powerRepository: PowerRepository = DefaultPowerRepository(api = apiClient)
+
+    /** 投票仓库（契约 web/vote/CONTRACT.md；模型不含 sid）。 */
+    val voteRepository: VoteRepository = DefaultVoteRepository(
+        api = apiClient,
+        currentSid = { activeSession?.sid },
+    )
+
+    /** 团员名单仓库（RPC class_league；仅姓名/座号，无 sid）。 */
+    val classLeagueRepository: ClassLeagueRepository = DefaultClassLeagueRepository(
+        api = apiClient,
+        currentSid = { activeSession?.sid },
+    )
 
     /** 演示（PPT）仓库：列表/播放清单/分片上传/软删/重试 + 转换机心跳（web/ppt/CONTRACT.md §4）。 */
     val pptRepository: PptRepository = DefaultPptRepository(

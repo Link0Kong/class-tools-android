@@ -3,6 +3,8 @@ package com.furina.classtools.ui.navigation
 import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.statusBarsPadding
+import com.furina.classtools.ui.components.CtTopBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +48,13 @@ import com.furina.classtools.data.calendar.CourseCalendarMapper
 import com.furina.classtools.data.calendar.NoticeCalendarMapper
 import com.furina.classtools.data.fitrecs.FitRecsLoadResult
 import com.furina.classtools.data.fitrecs.FitRecsWriteResult
+import com.furina.classtools.data.member.ClassLeagueRepository
+import com.furina.classtools.data.member.ClassLeagueResult
+import com.furina.classtools.data.member.ClassMembersRepository
+import com.furina.classtools.data.member.ClassMembersResult
+import com.furina.classtools.data.member.MemberCategory
+import com.furina.classtools.data.member.MemberCategoryBuilder
+import com.furina.classtools.data.member.MemberEntry
 import com.furina.classtools.data.permission.PermissionType
 import com.furina.classtools.data.privacy.LocalDataStats
 import com.furina.classtools.data.reminder.OneShotPlannedTime
@@ -93,6 +103,10 @@ import com.furina.classtools.ui.screens.roster.RosterScreen
 import com.furina.classtools.ui.screens.settings.PermissionSettingsScreen
 import com.furina.classtools.ui.screens.settings.ReminderSettingsScreen
 import com.furina.classtools.ui.screens.timetable.TimetableViewScreen
+import com.furina.classtools.ui.screens.vote.VoteCreateScreen
+import com.furina.classtools.ui.screens.vote.VoteDetailScreen
+import com.furina.classtools.ui.screens.vote.VoteListScreen
+import com.furina.classtools.ui.screens.vote.VoteMemberSource
 import com.furina.classtools.ui.screens.tools.ToolPlaceholderScreen
 import com.furina.classtools.ui.screens.water.WaterScreen
 import kotlinx.coroutines.launch
@@ -172,10 +186,10 @@ fun MainNavHost(
 
     /** 打开工具；「设置」落到「我的」Tab（与小程序一致，不设独立占位页）。 */
     fun openTool(tool: AppTool) {
-        if (tool.id == "settings") {
-            selectTab(2)
-        } else {
-            navController.navigate(Routes.tool(tool.id))
+        when (tool.id) {
+            "settings" -> selectTab(2)
+            "vote" -> navController.navigate(Routes.VOTE)
+            else -> navController.navigate(Routes.tool(tool.id))
         }
     }
 
@@ -694,6 +708,65 @@ fun MainNavHost(
         ) {
             UserGuideScreen(onBack = { navController.popBackStack() })
         }
+
+        composable(
+            route = Routes.VOTE,
+            enterTransition = { CtPageTransitions.pushEnter() },
+            exitTransition = { CtPageTransitions.pushExit() },
+            popEnterTransition = { CtPageTransitions.popEnter() },
+            popExitTransition = { CtPageTransitions.popExit() },
+        ) {
+            VoteListScreen(
+                repository = container.voteRepository,
+                onBack = { navController.popBackStack() },
+                onOpenDetail = { id -> navController.navigate(Routes.voteDetail(id)) },
+                onCreate = { navController.navigate(Routes.voteCreate()) },
+            )
+        }
+
+        composable(
+            route = Routes.VOTE_CREATE,
+            arguments = listOf(
+                navArgument(Routes.VOTE_CREATE_ARG) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+            enterTransition = { CtPageTransitions.pushEnter() },
+            exitTransition = { CtPageTransitions.pushExit() },
+            popEnterTransition = { CtPageTransitions.popEnter() },
+            popExitTransition = { CtPageTransitions.popExit() },
+        ) { entry ->
+            VoteCreateScreen(
+                repository = container.voteRepository,
+                editingPollId = entry.arguments?.getString(Routes.VOTE_CREATE_ARG),
+                memberSource = remember {
+                    ContainerVoteMemberSource(
+                        classMembersRepository = container.classMembersRepository,
+                        classLeagueRepository = container.classLeagueRepository,
+                    )
+                },
+                onBack = { navController.popBackStack() },
+                onFinished = { _, _ -> navController.popBackStack() },
+            )
+        }
+
+        composable(
+            route = Routes.VOTE_DETAIL,
+            arguments = listOf(navArgument(Routes.VOTE_DETAIL_ARG) { type = NavType.StringType }),
+            enterTransition = { CtPageTransitions.pushEnter() },
+            exitTransition = { CtPageTransitions.pushExit() },
+            popEnterTransition = { CtPageTransitions.popEnter() },
+            popExitTransition = { CtPageTransitions.popExit() },
+        ) { entry ->
+            VoteDetailScreen(
+                pollId = entry.arguments?.getString(Routes.VOTE_DETAIL_ARG).orEmpty(),
+                repository = container.voteRepository,
+                onBack = { navController.popBackStack() },
+                onEdit = { id -> navController.navigate(Routes.voteCreate(id)) },
+            )
+        }
     }
 }
 
@@ -899,3 +972,20 @@ private fun HomeworkReminderDialog(
 private fun formatReminderTime(millis: Long): String =
     java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
         .format(java.util.Date(millis))
+
+/** 投票「指定成员」数据源：班委/全班来自 class_members，团员来自 class_league；仅 seat/name/badge。 */
+private class ContainerVoteMemberSource(
+    private val classMembersRepository: ClassMembersRepository,
+    private val classLeagueRepository: ClassLeagueRepository,
+) : VoteMemberSource {
+    override suspend fun load(category: MemberCategory): List<MemberEntry> = when (category) {
+        MemberCategory.COMMITTEE -> (classMembersRepository.load() as? ClassMembersResult.Success)
+            ?.members?.let(MemberCategoryBuilder::committee).orEmpty()
+
+        MemberCategory.LEAGUE -> (classLeagueRepository.load() as? ClassLeagueResult.Success)
+            ?.members?.let(MemberCategoryBuilder::league).orEmpty()
+
+        MemberCategory.ALL -> (classMembersRepository.load() as? ClassMembersResult.Success)
+            ?.members?.let(MemberCategoryBuilder::all).orEmpty()
+    }
+}

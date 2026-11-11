@@ -10,6 +10,19 @@ object Routes {
     const val DATA_PRIVACY = "dataPrivacy"
     const val PERMISSIONS = "permissions"
     const val REMINDER_SETTINGS = "reminderSettings"
+    const val VOTE = "vote"
+    const val VOTE_CREATE_ARG = "pollId"
+    const val VOTE_CREATE = "voteCreate?pollId={$VOTE_CREATE_ARG}"
+
+    /** 发起投票（pollId 为空）或编辑（pollId 非空）。 */
+    fun voteCreate(pollId: String? = null): String =
+        if (pollId.isNullOrBlank()) "voteCreate" else "voteCreate?pollId=$pollId"
+
+    const val VOTE_DETAIL_ARG = "pollId"
+    const val VOTE_DETAIL = "voteDetail/{$VOTE_DETAIL_ARG}"
+
+    fun voteDetail(pollId: String): String = "voteDetail/$pollId"
+
     const val FEEDBACK = "feedback"
     const val GUIDE = "guide"
 
