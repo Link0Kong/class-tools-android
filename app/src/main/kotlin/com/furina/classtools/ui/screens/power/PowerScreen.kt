@@ -657,7 +657,11 @@ private fun HeroCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                RingGauge(progress = ringArc, accent = stateColor) {
+                RingGauge(
+                    progress = ringArc,
+                    accent = stateColor,
+                    description = "剩余电量 ${PowerStats.fmtMain(row?.q)} ${row?.unit ?: "度"}，${PowerStats.stateText(state)}",
+                ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = PowerStats.fmtMain(row?.q),
@@ -707,10 +711,19 @@ private fun HeroCard(
 private fun RingGauge(
     progress: Float,
     accent: Color,
+    description: String? = null,
     content: @Composable () -> Unit,
 ) {
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
-    Box(modifier = Modifier.size(104.dp), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .size(104.dp)
+            .semantics {
+                // 自定义 Canvas 环形图读屏播报（无障碍：图形信息不缺失）。
+                if (!description.isNullOrBlank()) contentDescription = description
+            },
+        contentAlignment = Alignment.Center,
+    ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val stroke = 9.dp.toPx()
             val inset = stroke / 2

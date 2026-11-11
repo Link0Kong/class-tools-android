@@ -24,6 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -102,6 +104,10 @@ fun PowerTrendChart(
                 modifier = Modifier
                     .weight(1f)
                     .height(plotHeight)
+                    .semantics {
+                        // 自定义 Canvas 趋势图读屏描述（无障碍：图形信息不缺失）。
+                        contentDescription = "${range.title}，共 ${trend.points.size} 个采样点"
+                    }
                     .onSizeChanged { plotSize = it }
                     .pointerInput(trend.points, range) {
                         detectTapGestures { offset ->
