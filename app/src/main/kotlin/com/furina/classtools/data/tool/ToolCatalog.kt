@@ -151,8 +151,8 @@ object ToolCatalog {
         ),
         AppTool(
             id = "roster",
-            name = "名册",
-            subtitle = "班级名单 · 点名",
+            name = "名单",
+            subtitle = "班委/团员/全班 · 点名",
             icon = Icons.Rounded.Badge,
             accent = plum,
             category = ToolCategory.CLASS,

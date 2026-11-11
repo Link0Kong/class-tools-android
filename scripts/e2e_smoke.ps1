@@ -50,6 +50,7 @@ param(
     [switch]$Install,
     [string]$Screens = '',
     [switch]$KeepData,
+    [switch]$SkipWater,
     [int]$BootTimeoutSec = 180
 )
 
@@ -1017,6 +1018,7 @@ function Invoke-Scenario {
            tabLabel = $L.RosterTabRoll; tabStates = @($L.RollEmpty, $L.RollDone, $L.RosterEmpty, $L.RosterError); tabShot = '20_roster_roll.png' }
     )
     foreach ($pg in $pages) {
+        if ($SkipWater -and $pg.step -eq 'tool_water') { Write-Line '  tool_water skipped (-SkipWater)'; continue }
         Write-Line ("--- step: tool page {0}" -f $pg.step)
         $swPage = [Diagnostics.Stopwatch]::StartNew()
         $stateNode = $null
@@ -1123,20 +1125,20 @@ function Invoke-Scenario {
     }
     $segmentsRendered = [bool]($catC -and $catL -and $catA)
     if (-not $segmentsRendered) {
-        Write-Line '  roster categories not rendered (roster load failed in debug preview); page/error state asserted instead'
-    } else {
-        $null = Invoke-Adb @('shell', 'input', 'swipe', '540', '900', '540', '1500', '300')
-        Start-Sleep -Milliseconds 600
-        if (Wait-UiText -Label $L.RosterCatL -TimeoutSec 4) {
-            Tap-UiText -Label $L.RosterCatL -TimeoutSec 6
-            Start-Sleep -Milliseconds 1500
-        }
+        # v4.0.1 fix: roster tab must render category segments even when the member list is empty.
+        throw 'roster categories missing (v4.0.1 expects committee/league/all even with empty member list)'
+    }
+    $null = Invoke-Adb @('shell', 'input', 'swipe', '540', '900', '540', '1500', '300')
+    Start-Sleep -Milliseconds 600
+    if (Wait-UiText -Label $L.RosterCatL -TimeoutSec 4) {
+        Tap-UiText -Label $L.RosterCatL -TimeoutSec 6
+        Start-Sleep -Milliseconds 1500
     }
     Save-Shot '7x_roster_categories.png'
     $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
     Start-Sleep -Milliseconds 1200
     if (-not (Wait-ScreenKind 'ALL' 15)) { Go-AllTools }
-    Add-Step 'roster_categories' 'PASS' ("segments=" + [bool]$segmentsRendered + "; page/error state ok") $swStep.ElapsedMilliseconds
+    Add-Step 'roster_categories' 'PASS' ("segments=" + [bool]$segmentsRendered) $swStep.ElapsedMilliseconds
 
     # STEP 5f (v4): power page opens (13/16 hidden-24h needs real data; page/empty state only)
     Write-Line '--- step: power page v4'
@@ -1570,6 +1572,9 @@ Write-Line "summary: $summaryPath"
 $script:Log | Out-File -FilePath $LogFile -Encoding utf8
 Remove-Item $TmpUi -Force -ErrorAction SilentlyContinue
 if ($failed) { exit 1 } else { exit 0 }
+
+
+
 
 
 
