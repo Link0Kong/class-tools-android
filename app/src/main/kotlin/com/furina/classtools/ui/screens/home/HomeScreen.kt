@@ -374,10 +374,6 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                     ) {
                         GreetingHeader(session, ttPlan, today, nowMillis)
-                    HomePermissionBanner(
-                        show = showNotificationPermissionBanner,
-                        onOpenPermissions = onOpenPermissions,
-                    )
                         HomePermissionBanner(
                             show = showNotificationPermissionBanner,
                             onOpenPermissions = onOpenPermissions,

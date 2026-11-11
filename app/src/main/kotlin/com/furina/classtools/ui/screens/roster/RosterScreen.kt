@@ -344,7 +344,9 @@ fun RosterScreen(
                         onSelect = { key ->
                             RosterTab.entries.firstOrNull { it.name == key }?.let { tab = it }
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .widthIn(max = 880.dp)
+                            .fillMaxWidth(),
                     )
                 }
 
@@ -561,7 +563,13 @@ private fun RosterListContent(
     onSelectAll: () -> Unit,
     onClear: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .widthIn(max = 880.dp)
+            .fillMaxWidth(),
+    ) {
         // 名册内三分类（班委 / 团员 / 全班；学员无学号）。
         CtSegmentedButtons(
             options = MemberCategory.entries.map { option ->
@@ -687,6 +695,7 @@ private fun RosterListContent(
                 }
             }
         }
+    }
     }
 }
 
