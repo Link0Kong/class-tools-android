@@ -70,3 +70,11 @@ toolchain 首次 v4.0.0 E2E 发现「roster category segments missing」：`Rost
 - 工具「名册」更名「名单」（与网页/小程序一致，副标题「班委/团员/全班 · 点名」）。
 - Release **4.0.2 / vc15**：2,839,746 B / SHA-256 `17239BFF20A16CE54394C460E5C5987C97421049E6FCF4D84609B021179A210E`；Lead 冷启动 0.42s、logcat 0 FATAL/ANR；单测 1065/0。
 - 完整 E2E：toolchain 运行时卡在「宿舍水量」步骤（脚本/环境问题，failure.png 为空），已中断并改为 Lead 目标抽查（工作台通知权限横幅、投票页、名单页、电费页均可进入；Release 冷启动/版本/logcat 已验）。完整 E2E/矩阵回归留待下一轮重跑。
+
+## 9. v4.0.3：完整 E2E 通过 + 名单状态收尾（2026-11-12 00:15）
+
+- 名单页标题/错误文案统一为「名单」；名册 tab 在**空名单与加载失败**两种情况下都保留三分类/搜索/刷新（失败时三分类仍可用，团员可单独重试、顶部刷新整体重试）；点名 tab 失败显示「名单加载失败 + 重试」。
+- **完整 E2E 44 PASS / 0 FAIL（929.4s）**：新增 `tool_roster`（名单+点名 tab）、`roster_categories`（班委/团员/全班 segments=True）、`tool_vote`（投票页打开、无提交）、`power_v4`、`notify_banner`、`clear_cache_confirm`；深色组 6 张 + 浅色恢复；导航 10/10；logcat 0 FATAL/ANR；导出相册 +1。
+  - 证据：`artifacts/e2e/e2e_v403_full_44pass.log`、`7x_roster_categories.png`、`7x_vote.png`、`7x_power.png`、`7x_notify_banner.png`、`7x_clear_cache_dialog.png`、`4x_dark_*`。
+- Release **4.0.3 / vc16**：2,839,746 B / SHA-256 `F53EC747D33A5F1BEA8411D6453841D32BDD70D5855214407F316773E3C668DF`；两次冷启动 0.77s / 0.41s；logcat 0 FATAL/ANR。
+- E2E 脚本已同步更新（名单/名单 · 点名/名单加载失败/名单为空 labels、roster states 含空态；`-SkipWater` 用于测试身份无宿舍的稳定回归）。

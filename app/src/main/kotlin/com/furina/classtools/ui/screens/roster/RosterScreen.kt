@@ -287,7 +287,7 @@ fun RosterScreen(
                     .statusBarsPadding(),
             ) {
                 CtTopBar(
-                    title = "名册 · 点名",
+                    title = "名单 · 点名",
                     subtitle = buildString {
                         if (members.isNotEmpty()) {
                             append("${members.size} 人")
@@ -338,11 +338,35 @@ fun RosterScreen(
                             text = "加载班级名单…",
                         )
 
-                        RosterPhase.ERROR -> ErrorContent(
-                            message = errorMessage ?: "名册加载失败",
-                            onRetry = { reloadToken += 1 },
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        RosterPhase.ERROR -> if (tab == RosterTab.ROSTER) {
+                            // 加载失败时名册 tab 仍展示三分类/搜索（团员可单独重试；顶部刷新可整体重试），
+                            // 不让一次网络失败吞掉全部名单工具。
+                            RosterListContent(
+                                rows = emptyList(),
+                                category = category,
+                                committeeCount = 0,
+                                leagueCount = leagueMembers.size,
+                                allCount = 0,
+                                onCategory = { category = it },
+                                query = query,
+                                onQuery = { query = it },
+                                showOnlyInRoll = showOnlyInRoll,
+                                onToggleOnlyInRoll = { showOnlyInRoll = it },
+                                leagueLoading = leagueLoading,
+                                leagueError = errorMessage ?: leagueError,
+                                onRetryLeague = { reloadToken += 1 },
+                                rosterState = rosterState,
+                                onToggleRoll = {},
+                                onSelectAll = {},
+                                onClear = { showClearConfirm = true },
+                            )
+                        } else {
+                            ErrorContent(
+                                message = errorMessage ?: "名单加载失败",
+                                onRetry = { reloadToken += 1 },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
 
                         RosterPhase.READY -> {
                             // 名册 tab 即使班级名单为空也保留三分类/搜索等工具（空态由 RosterListContent 处理）；
@@ -908,7 +932,7 @@ private fun ErrorContent(message: String, onRetry: () -> Unit, modifier: Modifie
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        EmptyState(icon = Icons.Rounded.ErrorOutline, title = "名册加载失败", message = message)
+        EmptyState(icon = Icons.Rounded.ErrorOutline, title = "名单加载失败", message = message)
         FilledTonalButton(onClick = onRetry) { Text("重试") }
     }
 }
