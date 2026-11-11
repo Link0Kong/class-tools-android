@@ -5,6 +5,8 @@ package com.furina.classtools.ui.screens.vote
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -569,7 +571,12 @@ private fun VoteOptionRow(
                     Modifier
                 },
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .selectable(
+                selected = checked,
+                enabled = enabled,
+                role = if (singleChoice) Role.RadioButton else Role.Checkbox,
+                onClick = onClick,
+            )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
