@@ -60,3 +60,7 @@ PPT 演示（兼容下载/视频/单独音视频）、诊断 v2.1、通知附件
 
 - 本报告 + `docs/design/V4_*` + `docs/api/VOTE_LEAGUE_POWER_IMPL.md`
 - toolchain 追加：`docs/E2E_SMOKE.md §14`、`docs/RELEASE_BUILD.md §13`
+
+## 7. v4.0.1 修复（2026-11-11 22:50）
+
+toolchain 首次 v4.0.0 E2E 发现「roster category segments missing」：`RosterScreen` 在 `members.isEmpty()`（测试身份/同步失败）时把整块内容替换为空态，导致名册 tab 三分类与搜索不可见。修复：名册 tab 即使名单为空也保留三分类/搜索（空态在列表区展示），点名 tab 空名单仍提示同步；版本 **4.0.1 / vc14**（APK 2,839,746 B / SHA-256 `9DCED3F5…E92F`），待 toolchain 复验。

@@ -345,7 +345,9 @@ fun RosterScreen(
                         )
 
                         RosterPhase.READY -> {
-                            if (members.isEmpty()) {
+                            // 名册 tab 即使班级名单为空也保留三分类/搜索等工具（空态由 RosterListContent 处理）；
+                            // 点名 tab 依赖名单行，空名单时直接给同步提示。
+                            if (members.isEmpty() && tab == RosterTab.ROLL) {
                                 EmptyState(
                                     icon = Icons.Rounded.Groups,
                                     title = "名单尚未同步",

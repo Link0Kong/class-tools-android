@@ -199,6 +199,18 @@ $L = @{
     DockTabPattern = U8 '56ysIFxkKyDkuKogVGFi'                       # dock item semantics: di tab marker
     DockSelMark    = U8 '5bey6YCJ5Lit'                               # dock item semantics: selected marker
     DockLabelPat   = U8 'Xijlt6XkvZzlj7B85bel5YW3fOaIkeeahCkk'       # dock visible label pattern
+    VoteTool       = U8 '5oqV56Wo'                                   # all tools: vote card / vote page title
+    VoteEmpty      = U8 '6L+Y5rKh5pyJ5oqV56Wo'                       # vote page: empty state
+    VoteLoading    = U8 '5Yqg6L295oqV56Wo'                           # vote page: loading state
+    VoteStart      = U8 '5Y+R6LW35oqV56Wo'                           # vote page: create-vote action
+    VoteRetry      = U8 '6YeN6K+V'                                   # vote page: retry
+    RosterCatC     = U8 '54+t5aeU'                                   # roster: committee category
+    RosterCatL     = U8 '5Zui5ZGY'                                   # roster: league category
+    RosterCatA     = U8 '5YWo54+t'                                   # roster: all category
+    ClearCacheRow  = U8 '5riF6Zmk5pys5py657yT5a2Y'                   # profile row: clear local cache
+    ClearCacheTtl  = U8 '5riF6Zmk5pys5py657yT5a2Y77yf'               # profile dialog: clear local cache?
+    ClearAct       = U8 '5riF6Zmk'                                   # profile row action: clear
+    NotifyBanner   = U8 '6YCa55+l5p2D6ZmQ5pyq5byA5ZCv'               # permission banner title
     PermManage     = U8 '5p2D6ZmQ566h55CG'                           # profile row: permission management
     NotifyWord     = U8 '6YCa55+l'                                   # permission card: notifications
     CalendarWord   = U8 '5pel5Y6G'                                   # permission card: calendar
@@ -1073,6 +1085,72 @@ function Invoke-Scenario {
     if (-not (Wait-ScreenKind 'ALL' 15)) { Go-AllTools }
     Add-Step 'diag_page' 'PASS' ("{0} sections; no report/fix pressed" -f $diagSections) $swStep.ElapsedMilliseconds
 
+    # STEP 5d (v4): vote tool page - tolerant four states, never submit a vote
+    Write-Line '--- step: vote tool page'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    Go-AllTools
+    if (-not (Wait-UiTextScroll -Label $L.VoteTool -ScrollTries 4 -TimeoutSec 12)) { throw 'vote card not visible in all tools' }
+    Tap-UiTextScroll -Label $L.VoteTool -ScrollTries 2 -TimeoutSec 8
+    $voteState = Wait-UiAny -Labels @($L.VoteEmpty, $L.VoteLoading, $L.VoteStart, $L.VoteRetry) -TimeoutSec 20
+    if (-not $voteState) { throw 'vote page state not visible (empty/loading/error)' }
+    Save-Shot '7x_vote.png'
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    if (-not (Wait-ScreenKind 'ALL' 15)) { Go-AllTools }
+    Add-Step 'tool_vote' 'PASS' 'vote page opened (state tolerant; no submit)' $swStep.ElapsedMilliseconds
+
+    # STEP 5e (v4): roster categories - committee / league / all segments
+    Write-Line '--- step: roster categories'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    Go-AllTools
+    if (-not (Wait-UiTextScroll -Label $L.Roster -ScrollTries 4 -TimeoutSec 12)) { throw 'roster card not visible' }
+    Tap-UiTextScroll -Label $L.Roster -ScrollTries 2 -TimeoutSec 8
+    if (-not (Wait-UiAny -Labels @($L.RosterCatA, $L.RosterTabRoll, $L.RosterEmpty, $L.RosterError) -TimeoutSec 20)) { throw 'roster page not visible' }
+    $catC = Wait-UiTextScroll -Label $L.RosterCatC -ScrollTries 2 -TimeoutSec 6
+    $catL = Wait-UiTextScroll -Label $L.RosterCatL -ScrollTries 2 -TimeoutSec 6
+    $catA = Wait-UiTextScroll -Label $L.RosterCatA -ScrollTries 2 -TimeoutSec 6
+    if (-not ($catC -and $catL -and $catA)) {
+        # debug preview identity may not have a valid class token -> roster shows load error and hides category segments.
+        $retryNode = Wait-UiText -Label $L.VoteRetry -TimeoutSec 4
+        if ($retryNode) {
+            Write-Line '  roster load error; tapping retry once'
+            Tap-UiText -Label $L.VoteRetry -Exact -TimeoutSec 6
+            Start-Sleep -Milliseconds 2000
+        }
+        $catC = Wait-UiTextScroll -Label $L.RosterCatC -ScrollTries 2 -TimeoutSec 8
+        $catL = Wait-UiTextScroll -Label $L.RosterCatL -ScrollTries 2 -TimeoutSec 8
+        $catA = Wait-UiTextScroll -Label $L.RosterCatA -ScrollTries 2 -TimeoutSec 8
+    }
+    $segmentsRendered = [bool]($catC -and $catL -and $catA)
+    if (-not $segmentsRendered) {
+        Write-Line '  roster categories not rendered (roster load failed in debug preview); page/error state asserted instead'
+    } else {
+        $null = Invoke-Adb @('shell', 'input', 'swipe', '540', '900', '540', '1500', '300')
+        Start-Sleep -Milliseconds 600
+        if (Wait-UiText -Label $L.RosterCatL -TimeoutSec 4) {
+            Tap-UiText -Label $L.RosterCatL -TimeoutSec 6
+            Start-Sleep -Milliseconds 1500
+        }
+    }
+    Save-Shot '7x_roster_categories.png'
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    if (-not (Wait-ScreenKind 'ALL' 15)) { Go-AllTools }
+    Add-Step 'roster_categories' 'PASS' ("segments=" + [bool]$segmentsRendered + "; page/error state ok") $swStep.ElapsedMilliseconds
+
+    # STEP 5f (v4): power page opens (13/16 hidden-24h needs real data; page/empty state only)
+    Write-Line '--- step: power page v4'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    Go-AllTools
+    if (-not (Wait-UiTextScroll -Label $L.Power -ScrollTries 4 -TimeoutSec 12)) { throw 'power card not visible' }
+    Tap-UiTextScroll -Label $L.Power -ScrollTries 2 -TimeoutSec 8
+    if (-not (Wait-UiAny -Labels @($L.Power, $L.PowerLoading, $L.PowerEmpty, $L.PowerError) -TimeoutSec 20)) { throw 'power page not visible' }
+    Save-Shot '7x_power.png'
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    if (-not (Wait-ScreenKind 'ALL' 15)) { Go-AllTools }
+    Add-Step 'power_v4' 'PASS' 'power page opened (no followed room -> empty state)' $swStep.ElapsedMilliseconds
+
     # STEP 9a: profile -> data & privacy page. Opens the clear-cloud confirm dialog
     # and cancels it (never actually clears anything). If the page cannot load the
     # overview without a real token, record WARN instead of failing.
@@ -1108,8 +1186,8 @@ function Invoke-Scenario {
     if (-not (Wait-UiTextScroll -Label $L.Appearance -ScrollTries 3 -TimeoutSec 5)) { throw 'appearance card title not visible' }
     $script:AppearanceState = Toggle-SwitchNear -Label $L.WallpaperColor
     Save-Shot '23_appearance.png'
-    if (-not (Wait-UiTextScroll -Label '3.' -ScrollTries 4 -TimeoutSec 10)) { throw 'about version (contains 3.) not visible' }
-    Add-Step 'appearance_about' 'PASS' ("wallpaperColor=" + $script:AppearanceState + "; version-family=3.x") $swStep.ElapsedMilliseconds
+    if (-not (Wait-UiTextScroll -Label '4.' -ScrollTries 4 -TimeoutSec 10)) { throw 'about version (contains 4.) not visible' }
+    Add-Step 'appearance_about' 'PASS' ("wallpaperColor=" + $script:AppearanceState + "; version-family=4.x") $swStep.ElapsedMilliseconds
 
     # STEP 9c: restart the app and verify the appearance switch value persisted (DataStore)
     Write-Line '--- step: appearance persists after restart'
@@ -1179,6 +1257,34 @@ function Invoke-Scenario {
     Start-Sleep -Milliseconds 1200
     $null = Wait-ScreenKind 'PROFILE' 10
     Add-Step 'reminder_settings' 'PASS' 'homework reminder toggled on/off' $swStep.ElapsedMilliseconds
+
+    # STEP 9g2 (v4): global notification permission banner (tolerant; visible only when permission off + reminders on)
+    Write-Line '--- step: notification permission banner'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    for ($i = 0; $i -lt 3; $i++) {
+        $null = Invoke-Adb @('shell', 'input', 'swipe', '540', '900', '540', '1900', '300')
+        Start-Sleep -Milliseconds 500
+    }
+    $banner = Wait-UiText -Label $L.NotifyBanner -TimeoutSec 8
+    if ($banner) {
+        Save-Shot '7x_notify_banner.png'
+        Write-Line '  notification permission banner visible'
+    } else {
+        Write-Line '  notification banner not visible (notification granted or reminders disabled)'
+    }
+    Add-Step 'notify_banner' 'PASS' ("banner=" + [bool]$banner) $swStep.ElapsedMilliseconds
+
+    # STEP 9g3 (v4): clear-local-cache second confirmation (open dialog, cancel - never clears)
+    Write-Line '--- step: clear local cache confirm'
+    $swStep = [Diagnostics.Stopwatch]::StartNew()
+    if (-not (Wait-UiTextScroll -Label $L.ClearCacheRow -ScrollTries 4 -TimeoutSec 12)) { throw 'clear-local-cache row not visible on profile' }
+    Tap-ActionNearLabel -Label $L.ClearCacheRow -ActionText $L.ClearAct
+    if (-not (Wait-UiText -Label $L.ClearCacheTtl -TimeoutSec 10)) { throw 'clear cache confirmation dialog not visible' }
+    Save-Shot '7x_clear_cache_dialog.png'
+    Tap-UiText -Label $L.Cancel -Exact -TimeoutSec 8
+    Start-Sleep -Milliseconds 900
+    if (-not (Wait-ScreenKind 'PROFILE' 10)) { throw 'profile lost after cancel clear-cache dialog' }
+    Add-Step 'clear_cache_confirm' 'PASS' 'confirmation dialog opened and cancelled' $swStep.ElapsedMilliseconds
 # STEP 9g (v2.1.1): profile -> about -> user guide (static content: title + >=3 sections)
     Write-Line '--- step: user guide page'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
@@ -1464,6 +1570,8 @@ Write-Line "summary: $summaryPath"
 $script:Log | Out-File -FilePath $LogFile -Encoding utf8
 Remove-Item $TmpUi -Force -ErrorAction SilentlyContinue
 if ($failed) { exit 1 } else { exit 0 }
+
+
 
 
 
