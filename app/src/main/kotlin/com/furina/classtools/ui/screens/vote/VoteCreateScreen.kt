@@ -556,8 +556,8 @@ private fun VoteDeadlineSection(
         CtSegmentedButtons(
             options = listOf(
                 CtSegmentOption("quick", "限时"),
-                CtSegmentOption("at", "指定截止"),
-                CtSegmentOption("none", "不限时"),
+                CtSegmentOption("at", "指定"),
+                CtSegmentOption("none", "不限"),
             ),
             selectedKey = when (form.deadlineType) {
                 DeadlineType.QUICK -> "quick"

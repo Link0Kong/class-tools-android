@@ -50,6 +50,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -375,6 +376,13 @@ fun PptListContent(
     val visibleDecks = remember(decks, mySid) { PptDeckListLogic.visible(decks, mySid) }
     val showAgentOffline = PptStatusTexts.shouldShowAgentOfflineBanner(visibleDecks, agentOnline)
     val nowMs = remember { System.currentTimeMillis() }
+    var refreshing by remember { mutableStateOf(false) }
+    LaunchedEffect(refreshing) {
+        if (refreshing) {
+            kotlinx.coroutines.delay(1200)
+            refreshing = false
+        }
+    }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Column(
@@ -465,7 +473,17 @@ fun PptListContent(
                 }
             }
 
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = {
+                    refreshing = true
+                    onRefresh()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 when {
                     loading && visibleDecks.isEmpty() && uploadBar == null -> PptListSkeleton()
                     errorMessage != null && visibleDecks.isEmpty() && uploadBar == null -> PptListError(
@@ -530,6 +548,7 @@ fun PptListContent(
                         }
                     }
                 }
+            }
             }
         }
     }
