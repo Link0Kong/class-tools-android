@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,6 +21,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -31,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,9 +53,11 @@ import com.furina.classtools.ui.screens.me.ReminderStatus
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
 import com.furina.classtools.ui.theme.CtShapeTokens
+import kotlinx.coroutines.launch
 
 /**
  * 「我的」：账号信息、同步、权限与提醒、数据与隐私、外观、关于、退出。
@@ -75,6 +81,7 @@ fun ProfileScreen(
     onClearLocalCache: () -> Unit = {},
     onOpenDataPrivacy: () -> Unit = {},
     onOpenPermissions: () -> Unit = {},
+    showNotificationPermissionBanner: Boolean = false,
     onOpenReminderSettings: () -> Unit = {},
     dynamicColorEnabled: Boolean = false,
     onDynamicColorChange: (Boolean) -> Unit = {},
@@ -87,6 +94,9 @@ fun ProfileScreen(
     var showPrivacy by remember { mutableStateOf(false) }
     var showAgreement by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
+    var showClearCacheConfirm by remember { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val spec = adaptiveSpec ?: rememberCtAdaptiveSpec()
     val layout = remember(spec) { ProfileLayoutLogic.layoutFor(spec) }
 
@@ -116,13 +126,17 @@ fun ProfileScreen(
                             reminder = reminderStatus,
                             onOpenReminder = onOpenReminderSettings,
                         )
+                        NotificationPermissionBanner(
+                            visible = showNotificationPermissionBanner,
+                            onOpenPermissions = onOpenPermissions,
+                        )
                         layout.left.forEach { card ->
                             ProfileCardContent(
                                 card = card,
                                 session = session,
                                 syncEnabled = syncEnabled,
                                 onSyncEnabledChange = onSyncEnabledChange,
-                                onClearLocalCache = onClearLocalCache,
+                                onClearLocalCache = { showClearCacheConfirm = true },
                                 onOpenDataPrivacy = onOpenDataPrivacy,
                                 onOpenPermissions = onOpenPermissions,
                                 onOpenReminderSettings = onOpenReminderSettings,
@@ -149,7 +163,7 @@ fun ProfileScreen(
                                 session = session,
                                 syncEnabled = syncEnabled,
                                 onSyncEnabledChange = onSyncEnabledChange,
-                                onClearLocalCache = onClearLocalCache,
+                                onClearLocalCache = { showClearCacheConfirm = true },
                                 onOpenDataPrivacy = onOpenDataPrivacy,
                                 onOpenPermissions = onOpenPermissions,
                                 onOpenReminderSettings = onOpenReminderSettings,
@@ -177,13 +191,17 @@ fun ProfileScreen(
                         reminder = reminderStatus,
                         onOpenReminder = onOpenReminderSettings,
                     )
+                    NotificationPermissionBanner(
+                        visible = showNotificationPermissionBanner,
+                        onOpenPermissions = onOpenPermissions,
+                    )
                     layout.single.forEach { card ->
                         ProfileCardContent(
                             card = card,
                             session = session,
                             syncEnabled = syncEnabled,
                             onSyncEnabledChange = onSyncEnabledChange,
-                            onClearLocalCache = onClearLocalCache,
+                            onClearLocalCache = { showClearCacheConfirm = true },
                             onOpenDataPrivacy = onOpenDataPrivacy,
                             onOpenPermissions = onOpenPermissions,
                             onOpenReminderSettings = onOpenReminderSettings,
@@ -199,10 +217,44 @@ fun ProfileScreen(
                 }
             }
         }
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp),
+        )
     }
 
     if (showPrivacy) PrivacyPolicyDialog(onDismiss = { showPrivacy = false })
     if (showAgreement) UserAgreementDialog(onDismiss = { showAgreement = false })
+    if (showClearCacheConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheConfirm = false },
+            title = { Text("清除本机缓存？") },
+            text = {
+                Text(
+                    "将清除本机缓存的名单/课表/演示等数据，不影响云端数据与登录状态；下次打开会重新同步。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearCacheConfirm = false
+                        onClearLocalCache()
+                        scope.launch { snackbar.showSnackbar("已清除本机缓存") }
+                    },
+                ) {
+                    Text("清除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCacheConfirm = false }) { Text("取消") }
+            },
+        )
+    }
+
     if (showSignOutConfirm) {
         AlertDialog(
             onDismissRequest = { showSignOutConfirm = false },

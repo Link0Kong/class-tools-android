@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apartment
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -64,6 +66,8 @@ import com.furina.classtools.data.power.PowerRooms
 import com.furina.classtools.data.power.PowerStats
 import com.furina.classtools.data.power.PowerState
 import com.furina.classtools.data.power.PowerTile
+import com.furina.classtools.features.power.PowerCompareLogic
+import com.furina.classtools.features.power.PowerCompareResult
 import com.furina.classtools.data.power.RoomInfo
 import com.furina.classtools.data.power.PowerPoint
 import com.furina.classtools.data.session.Session
@@ -159,7 +163,10 @@ fun PowerScreen(
     }
     var row by remember(initialRow) { mutableStateOf(initialRow) }
     var histories by remember { mutableStateOf(initialHistories.toMap()) }
-    var range by remember { mutableStateOf(initialRange) }
+    val initialBuilding = remember { PowerRooms.buildingOf(PowerRooms.normalizeSel(initialSelectedRv)) }
+    var range by remember { mutableStateOf(PowerCompareLogic.normRange(initialRange, initialBuilding)) }
+    var rangeBeforeHidden by remember { mutableStateOf<PowerRange?>(null) }
+    var showCompareDetail by remember { mutableStateOf(false) }
     var refreshToken by remember { mutableIntStateOf(0) }
     var errorMessage by remember(initialError) { mutableStateOf(initialError.orEmpty()) }
     var historyError by remember { mutableStateOf<String?>(null) }
@@ -233,6 +240,30 @@ fun PowerScreen(
         }
 
         phase = PowerPhase.READY
+    }
+
+    // 13/16 号楼主楼：隐藏 24h；切换宿舍时归位到 7d，切回实时房恢复进入前档位（不覆盖用户显式选择）。
+    val building = remember(sel) { PowerRooms.buildingOf(sel) }
+    LaunchedEffect(building) {
+        if (!PowerCompareLogic.showRange(range, building)) {
+            rangeBeforeHidden = range
+            range = PowerCompareLogic.normRange(range, building)
+        } else {
+            rangeBeforeHidden?.let { previous ->
+                if (PowerCompareLogic.showRange(previous, building)) range = previous
+                rangeBeforeHidden = null
+            }
+        }
+    }
+    val visibleRanges = remember(building) {
+        PowerCompareLogic.showRange(PowerRange.entries, building)
+    }
+    // 同期比较：合并已加载窗口（当前仓储无 14d/70d 隐藏窗口能力，数据不足时自动隐藏徽标）。
+    val compareHistory = remember(histories) {
+        histories.values.flatten().distinctBy { it.t }.sortedBy { it.t }
+    }
+    val compareResult = remember(range, compareHistory, refreshToken) {
+        PowerCompareLogic.compare(range, compareHistory, clock())
     }
 
     val rowValue = row
@@ -342,6 +373,9 @@ fun PowerScreen(
                     tiles = tiles,
                     noUpdateText = noUpdate,
                     historyError = historyError,
+                    visibleRanges = visibleRanges,
+                    compare = compareResult,
+                    onCompareDetail = { showCompareDetail = true },
                     onRangeChange = { range = it },
                     onCursor = { cursorIndex = it },
                     onPickHouse = { showHousePicker = true },
@@ -363,6 +397,40 @@ fun PowerScreen(
                 current = low,
                 onPick = { chooseLow(it) },
                 onDismiss = { showLowPicker = false },
+            )
+        }
+        if (showCompareDetail && compareResult.available) {
+            AlertDialog(
+                onDismissRequest = { showCompareDetail = false },
+                title = { Text(compareResult.label) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = compareResult.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = buildString {
+                                append("当前周期用电 ")
+                                append(PowerStats.fmtQ(compareResult.currentUse ?: 0.0))
+                                append(" 度 · 上一周期 ")
+                                append(PowerStats.fmtQ(compareResult.previousUse ?: 0.0))
+                                append(" 度")
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "仅统计工具记录的下降用电，不插值；历史数据不足时不显示比较。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showCompareDetail = false }) { Text("知道了") }
+                },
             )
         }
     }
@@ -470,6 +538,9 @@ private fun ReadyContent(
     tiles: List<PowerTile>,
     noUpdateText: String,
     historyError: String?,
+    visibleRanges: List<PowerRange>,
+    compare: PowerCompareResult?,
+    onCompareDetail: () -> Unit,
     onRangeChange: (PowerRange) -> Unit,
     onCursor: (Int?) -> Unit,
     onPickHouse: () -> Unit,
@@ -502,13 +573,20 @@ private fun ReadyContent(
             slowUpdateText = slowUpdateText,
             noUpdateText = noUpdateText,
             historyError = historyError,
+            ranges = visibleRanges,
             onRangeChange = onRangeChange,
             onCursor = onCursor,
             onRetry = onRetryHistory,
         )
-        TilesSection(tiles = tiles, bill = rangeStatsForBill, onTileClick = { tile ->
-            if (tile.clickable) onLowClick()
-        })
+        TilesSection(
+            tiles = tiles,
+            bill = rangeStatsForBill,
+            compare = compare,
+            onCompareClick = onCompareDetail,
+            onTileClick = { tile ->
+                if (tile.clickable) onLowClick()
+            },
+        )
         PrivacyFooter()
         Spacer(modifier = Modifier.navigationBarsPadding().height(8.dp))
     }
@@ -677,6 +755,7 @@ private fun TrendSection(
     slowUpdateText: String,
     noUpdateText: String,
     historyError: String?,
+    ranges: List<PowerRange>,
     onRangeChange: (PowerRange) -> Unit,
     onCursor: (Int?) -> Unit,
     onRetry: () -> Unit,
@@ -716,7 +795,7 @@ private fun TrendSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 CtSegmentedButtons(
-                    options = PowerRange.entries.map { CtSegmentOption(key = it.key, label = it.label) },
+                    options = ranges.map { CtSegmentOption(key = it.key, label = it.label) },
                     selectedKey = range.key,
                     onSelect = { onRangeChange(PowerRange.fromKey(it)) },
                     showCheckIcon = false,
@@ -731,6 +810,13 @@ private fun TrendSection(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.width(150.dp),
+                )
+            }
+            if (ranges.size < PowerRange.entries.size) {
+                Text(
+                    text = "13/16 号楼为日更数据，不提供 24h 趋势",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -780,12 +866,24 @@ private fun TrendSection(
 }
 
 @Composable
-private fun TilesSection(tiles: List<PowerTile>, bill: com.furina.classtools.data.power.BillInfo, onTileClick: (PowerTile) -> Unit) {
+private fun TilesSection(
+    tiles: List<PowerTile>,
+    bill: com.furina.classtools.data.power.BillInfo,
+    compare: PowerCompareResult?,
+    onCompareClick: () -> Unit,
+    onTileClick: (PowerTile) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        tiles.chunked(2).forEach { rowTiles ->
+        tiles.chunked(2).forEachIndexed { rowIndex, rowTiles ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                rowTiles.forEach { tile ->
-                    Tile(tile = tile, modifier = Modifier.weight(1f), onClick = { onTileClick(tile) })
+                rowTiles.forEachIndexed { colIndex, tile ->
+                    Tile(
+                        tile = tile,
+                        modifier = Modifier.weight(1f),
+                        compare = if (rowIndex == 0 && colIndex == 0) compare else null,
+                        onCompareClick = onCompareClick,
+                        onClick = { onTileClick(tile) },
+                    )
                 }
                 if (rowTiles.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
@@ -795,7 +893,13 @@ private fun TilesSection(tiles: List<PowerTile>, bill: com.furina.classtools.dat
 }
 
 @Composable
-private fun Tile(tile: PowerTile, modifier: Modifier, onClick: () -> Unit) {
+private fun Tile(
+    tile: PowerTile,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    compare: PowerCompareResult? = null,
+    onCompareClick: () -> Unit = {},
+) {
     val container = if (tile.highlight) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
     else MaterialTheme.colorScheme.surfaceContainerLow
     Surface(
@@ -850,6 +954,32 @@ private fun Tile(tile: PowerTile, modifier: Modifier, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            val availableCompare = compare?.takeIf { it.available }
+            if (availableCompare != null) {
+                val delta = availableCompare.percent ?: 0.0
+                val increase = delta > 0.05
+                val tone = if (increase) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+                Row(
+                    modifier = Modifier
+                        .heightIn(min = 24.dp)
+                        .clickable(onClick = onCompareClick),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = buildString {
+                            append(if (delta > 0.05) "↑" else if (delta < -0.05) "↓" else "→")
+                            append(' ')
+                            append(availableCompare.label)
+                            append(' ')
+                            append(PowerCompareLogic.formatPercent(delta))
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tone,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

@@ -535,6 +535,7 @@ fun MainNavHost(
                     session = session,
                     classMembersRepository = container.classMembersRepository,
                     userDataRepository = container.userDataRepository,
+                    classLeagueRepository = container.classLeagueRepository,
                 )
 
                 "diag" -> DiagScreen(
@@ -848,6 +849,7 @@ private fun RootTabs(
     )
 
 
+    val showNotificationPermissionBanner = !notificationGranted && reminderSettings.enabled
     Box(modifier = Modifier.fillMaxSize()) {
         CtTabPager(
             pagerState = pagerState,
@@ -865,6 +867,8 @@ private fun RootTabs(
                     noticesRepository = container.noticesRepository,
                     userDataRepository = container.userDataRepository,
                     onOpenAll = { onSelectTab(1) },
+                    showNotificationPermissionBanner = showNotificationPermissionBanner,
+                    onOpenPermissions = onOpenPermissions,
                     isPageActive = pagerState.currentPage == 0,
                     onHomeToolsChange = onHomeToolsChange,
                 )
@@ -885,6 +889,7 @@ private fun RootTabs(
                         onClearLocalCache = onClearLocalCache,
                         onOpenDataPrivacy = onOpenDataPrivacy,
                         onOpenPermissions = onOpenPermissions,
+                        showNotificationPermissionBanner = showNotificationPermissionBanner,
                         onOpenReminderSettings = onOpenReminderSettings,
                         meStats = meStats,
                         reminderStatus = reminderStatus,

@@ -523,15 +523,13 @@ private fun ScoreCard(calc: FitCalc) {
                     modifier = Modifier.padding(bottom = 6.dp),
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                // 等级胶囊始终是浅色 pastel 底：文字固定深色，避免深色主题下 onSurface（浅色）不可读。
+                // v4：等级胶囊改主题 semantic（浅/深两套，见 GradeColors）。
+                val gradePalette = com.furina.classtools.ui.theme.GradeColors.tokens()
+                val gradeTone = if (calc.wtDone > 0) gradePalette.toneOf(calc.grade) else null
                 CtPill(
                     text = if (calc.wtDone > 0) calc.grade else "未填写",
-                    containerColor = gradeContainer(calc.grade, calc.wtDone > 0),
-                    contentColor = if (calc.wtDone > 0) {
-                        androidx.compose.ui.graphics.Color(0xFF17342D)
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
+                    containerColor = gradeTone?.container ?: androidx.compose.ui.graphics.Color.Transparent,
+                    contentColor = gradeTone?.content ?: MaterialTheme.colorScheme.onSurface,
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -594,15 +592,6 @@ private fun ScoreCard(calc: FitCalc) {
     }
 }
 
-private fun gradeContainer(grade: String, filled: Boolean): androidx.compose.ui.graphics.Color {
-    if (!filled) return androidx.compose.ui.graphics.Color.Transparent
-    return when (grade) {
-        "优秀" -> androidx.compose.ui.graphics.Color(0xFFD8EEE3)
-        "良好" -> androidx.compose.ui.graphics.Color(0xFFE7F0DC)
-        "及格" -> androidx.compose.ui.graphics.Color(0xFFF6ECD8)
-        else -> androidx.compose.ui.graphics.Color(0xFFF7E0DE)
-    }
-}
 
 @Composable
 private fun StatChip(label: String, value: String) {

@@ -410,7 +410,7 @@ private fun DetailHeader(detail: PptDeckDetail, imageLoader: PptImageLoader) {
             Box(
                 modifier = Modifier
                     .width(128.dp)
-                    .height(72.dp)
+                    .heightIn(min = 72.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             ) {

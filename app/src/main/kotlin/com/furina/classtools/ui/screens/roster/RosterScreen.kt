@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -59,7 +60,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.data.member.ClassLeagueRepository
+import com.furina.classtools.data.member.ClassLeagueResult
 import com.furina.classtools.data.member.ClassMembersRepository
+import com.furina.classtools.data.member.MemberCategory
 import com.furina.classtools.data.member.ClassMembersResult
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
@@ -121,6 +125,10 @@ fun RosterScreen(
     initialMembers: List<RosterMember> = emptyList(),
     initialRoster: RosterState? = null,
     initialTab: RosterTab = RosterTab.ROSTER,
+    initialCategory: MemberCategory = MemberCategory.ALL,
+    initialLeagueMembers: List<RosterMember> = emptyList(),
+    classLeagueRepository: ClassLeagueRepository? = null,
+    skipLeagueLoad: Boolean = false,
     skipLoad: Boolean = false,
     forcedErrorMessage: String? = null,
 ) {
@@ -142,7 +150,13 @@ fun RosterScreen(
     var members by remember(initialMembers) { mutableStateOf(initialMembers) }
     var fromCache by remember { mutableStateOf(false) }
     var tab by remember { mutableStateOf(initialTab) }
-    var filter by remember { mutableStateOf(RosterFilter.ALL) }
+    var category by remember { mutableStateOf(initialCategory) }
+    var leagueMembers by remember(initialLeagueMembers) { mutableStateOf(initialLeagueMembers) }
+    var leagueLoading by remember { mutableStateOf(false) }
+    var leagueError by remember { mutableStateOf<String?>(null) }
+    var leagueReloadToken by remember { mutableIntStateOf(0) }
+    var showOnlyInRoll by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var showResetConfirm by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
@@ -192,6 +206,40 @@ fun RosterScreen(
             }
         }
         runCatching { userDataRepository?.pull(force = false) }
+        isRefreshing = false
+    }
+
+    // 团员名单：切到「团员」分类时懒加载（失败降级缓存并提示；无 sid）。
+    LaunchedEffect(category, leagueReloadToken, skipLeagueLoad) {
+        if (skipLeagueLoad || category != MemberCategory.LEAGUE) return@LaunchedEffect
+        val repository = classLeagueRepository
+        if (repository == null) {
+            leagueError = "团员名单未配置"
+            return@LaunchedEffect
+        }
+        leagueLoading = true
+        leagueError = null
+        when (val result = repository.load(force = leagueReloadToken > 0)) {
+            is ClassLeagueResult.Success -> {
+                leagueMembers = result.members.map { member ->
+                    RosterMember(seat = member.seat, name = member.name)
+                }
+                leagueError = result.warning
+            }
+
+            is ClassLeagueResult.Failure -> {
+                val cached = runCatching { repository.cached() }.getOrNull().orEmpty()
+                if (cached.isNotEmpty()) {
+                    leagueMembers = cached.map { member ->
+                        RosterMember(seat = member.seat, name = member.name)
+                    }
+                    leagueError = "显示缓存的团员名单：${result.message}"
+                } else {
+                    leagueError = result.message
+                }
+            }
+        }
+        leagueLoading = false
     }
 
     fun writeRoster(next: RosterState) {
@@ -217,8 +265,15 @@ fun RosterScreen(
     }
 
     val stats = remember(rosterState) { RosterLogic.stats(rosterState) }
-    val rows = remember(members, query, filter, rosterState) {
-        RosterLogic.filterRows(members, query, filter, rosterState)
+    val committeeCount = remember(members) { members.count { it.isCommittee } }
+    val rows = remember(members, leagueMembers, category, query, showOnlyInRoll, rosterState) {
+        val base = when (category) {
+            MemberCategory.COMMITTEE -> members.filter { it.isCommittee }
+            MemberCategory.LEAGUE -> leagueMembers
+            MemberCategory.ALL -> members
+        }
+        val filtered = RosterLogic.filterRows(base, query, RosterFilter.ALL, rosterState)
+        if (showOnlyInRoll) filtered.filter { it.inRoll } else filtered
     }
     val rollItems = remember(rosterState, members) {
         RosterLogic.rollItems(rosterState, members, handledLast = true)
@@ -234,7 +289,11 @@ fun RosterScreen(
                 CtTopBar(
                     title = "名册 · 点名",
                     subtitle = buildString {
-                        if (members.isNotEmpty()) append("${members.size} 人")
+                        if (members.isNotEmpty()) {
+                            append("${members.size} 人")
+                            if (committeeCount > 0) append(" · 班委 $committeeCount")
+                            if (leagueMembers.isNotEmpty()) append(" · 团员 ${leagueMembers.size}")
+                        }
                         if (fromCache) {
                             if (isNotEmpty()) append(" · ")
                             append("本机缓存")
@@ -294,22 +353,40 @@ fun RosterScreen(
                                 )
                             } else {
                                 when (tab) {
-                                    RosterTab.ROSTER -> RosterListContent(
-                                        rows = rows,
-                                        query = query,
-                                        filter = filter,
-                                        onQuery = { query = it },
-                                        onFilter = { filter = it },
-                                        rosterState = rosterState,
-                                        onToggleRoll = { seat ->
-                                            writeRoster(RosterLogic.toggleMemberInRoll(rosterState, seat, members))
+                                    RosterTab.ROSTER -> PullToRefreshBox(
+                                        isRefreshing = isRefreshing,
+                                        onRefresh = {
+                                            isRefreshing = true
+                                            reloadToken += 1
+                                            leagueReloadToken += 1
                                         },
-                                        onSelectAll = {
-                                            writeRoster(RosterLogic.selectAll(rosterState, members))
-                                            notify("已全选加入点名名单")
-                                        },
-                                        onClear = { showClearConfirm = true },
-                                    )
+                                        modifier = Modifier.fillMaxSize(),
+                                    ) {
+                                        RosterListContent(
+                                            rows = rows,
+                                            category = category,
+                                            committeeCount = committeeCount,
+                                            leagueCount = leagueMembers.size,
+                                            allCount = members.size,
+                                            onCategory = { category = it },
+                                            query = query,
+                                            onQuery = { query = it },
+                                            showOnlyInRoll = showOnlyInRoll,
+                                            onToggleOnlyInRoll = { showOnlyInRoll = it },
+                                            leagueLoading = leagueLoading,
+                                            leagueError = leagueError,
+                                            onRetryLeague = { leagueReloadToken += 1 },
+                                            rosterState = rosterState,
+                                            onToggleRoll = { seat ->
+                                                writeRoster(RosterLogic.toggleMemberInRoll(rosterState, seat, members))
+                                            },
+                                            onSelectAll = {
+                                                writeRoster(RosterLogic.selectAll(rosterState, members))
+                                                notify("已全选加入点名名单")
+                                            },
+                                            onClear = { showClearConfirm = true },
+                                        )
+                                    }
 
                                     RosterTab.ROLL -> RollContent(
                                         stats = stats,
@@ -422,16 +499,41 @@ fun RosterScreen(
 @Composable
 private fun RosterListContent(
     rows: List<com.furina.classtools.features.roster.RosterRow>,
+    category: MemberCategory,
+    committeeCount: Int,
+    leagueCount: Int,
+    allCount: Int,
+    onCategory: (MemberCategory) -> Unit,
     query: String,
-    filter: RosterFilter,
     onQuery: (String) -> Unit,
-    onFilter: (RosterFilter) -> Unit,
+    showOnlyInRoll: Boolean,
+    onToggleOnlyInRoll: (Boolean) -> Unit,
+    leagueLoading: Boolean,
+    leagueError: String?,
+    onRetryLeague: () -> Unit,
     rosterState: RosterState,
     onToggleRoll: (Int) -> Unit,
     onSelectAll: () -> Unit,
     onClear: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        // 名册内三分类（班委 / 团员 / 全班；学员无学号）。
+        CtSegmentedButtons(
+            options = MemberCategory.entries.map { option ->
+                val count = when (option) {
+                    MemberCategory.COMMITTEE -> committeeCount
+                    MemberCategory.LEAGUE -> leagueCount
+                    MemberCategory.ALL -> allCount
+                }
+                CtSegmentOption(option.name, "${option.label} $count")
+            },
+            selectedKey = category.name,
+            onSelect = { key -> MemberCategory.entries.firstOrNull { it.name == key }?.let(onCategory) },
+            showCheckIcon = false,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+        )
         OutlinedTextField(
             value = query,
             onValueChange = onQuery,
@@ -440,40 +542,104 @@ private fun RosterListContent(
                 .padding(horizontal = 16.dp, vertical = 4.dp),
             singleLine = true,
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-            placeholder = { Text("搜索姓名 / 座号 / 职务") },
+            placeholder = { Text("搜索姓名 / 座号") },
         )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            RosterFilter.entries.forEach { option ->
-                val count = when (option) {
-                    RosterFilter.ALL -> rows.size
-                    RosterFilter.COMMITTEE -> rows.count { it.member.isCommittee }
-                    RosterFilter.ROLL -> rows.count { it.inRoll }
-                }
-                FilterChipSmall(
-                    label = "${option.label} $count",
-                    selected = filter == option,
-                    onClick = { onFilter(option) },
-                )
-            }
+            FilterChipSmall(
+                label = "已加入点名 ${rows.count { it.inRoll }}",
+                selected = showOnlyInRoll,
+                onClick = { onToggleOnlyInRoll(!showOnlyInRoll) },
+            )
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onSelectAll) { Text("全选点名") }
             TextButton(onClick = onClear) { Text("清空") }
         }
         HorizontalDivider()
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .widthIn(max = 720.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            items(rows, key = { it.member.seat }) { row ->
-                MemberRow(row = row, onToggleRoll = { onToggleRoll(row.member.seat) })
+        when {
+            category == MemberCategory.LEAGUE && leagueLoading -> Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                CtLoading(text = "加载团员名单…")
+            }
+
+            category == MemberCategory.LEAGUE && leagueError != null && rows.isEmpty() -> Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ErrorOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(32.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "团员名单加载失败",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = leagueError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                TextButton(onClick = onRetryLeague) { Text("重试") }
+            }
+
+            rows.isEmpty() -> Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                EmptyState(
+                    icon = Icons.Rounded.Groups,
+                    title = when {
+                        query.isNotBlank() -> "未找到匹配成员"
+                        category == MemberCategory.LEAGUE -> "团员名单为空"
+                        category == MemberCategory.COMMITTEE -> "暂无班委"
+                        showOnlyInRoll -> "暂无点名成员"
+                        else -> "名单为空"
+                    },
+                    message = when {
+                        query.isNotBlank() -> "换个姓名/座号试试"
+                        category == MemberCategory.LEAGUE -> "团员名单同步后自动出现"
+                        category == MemberCategory.COMMITTEE -> "班委角色来自班级名单"
+                        showOnlyInRoll -> "取消筛选查看全部成员"
+                        else -> "请检查身份验证或稍后重试"
+                    },
+                )
+            }
+
+            else -> LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .widthIn(max = 720.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (category == MemberCategory.LEAGUE && leagueError != null) {
+                    item(key = "league-warning") {
+                        Text(
+                            text = leagueError,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    }
+                }
+                items(rows, key = { it.member.seat }) { row ->
+                    MemberRow(row = row, onToggleRoll = { onToggleRoll(row.member.seat) })
+                }
             }
         }
     }

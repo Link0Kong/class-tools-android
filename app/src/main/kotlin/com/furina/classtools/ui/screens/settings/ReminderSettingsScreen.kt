@@ -50,6 +50,7 @@ import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.reminder.ReminderSettingsStore
 import com.furina.classtools.data.reminder.ReminderTestNotificationResult
 import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -104,38 +105,10 @@ fun ReminderSettingsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
             ) {
-                if (!notificationsGranted) {
-                    Surface(
-                        shape = CtShapeTokens.hero,
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Rounded.NotificationsActive,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "通知权限未开启",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                                Text(
-                                    "开启后才能收到作业与上课提醒",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                            }
-                            TextButton(onClick = onOpenPermissions) { Text("去开启") }
-                        }
-                    }
-                }
+                NotificationPermissionBanner(
+                    visible = !notificationsGranted,
+                    onOpenPermissions = onOpenPermissions,
+                )
 
                 ReminderCard(
                     title = "提醒总开关",

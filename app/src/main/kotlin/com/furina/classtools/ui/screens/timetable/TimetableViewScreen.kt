@@ -737,7 +737,7 @@ private fun WeekHeaderCard(
                         text = weekTitle,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
                     )
@@ -813,7 +813,7 @@ private fun OngoingOrNextCard(plan: TtPlan?, nowMillis: Long) {
                     text = ongoing?.name ?: next?.name ?: "近期暂无课程",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 val detail = buildString {
@@ -838,7 +838,7 @@ private fun OngoingOrNextCard(plan: TtPlan?, nowMillis: Long) {
                         text = detail,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -1205,7 +1205,7 @@ private fun DaySessionRow(
                 Text(
                     text = session.name,
                     style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
@@ -1215,7 +1215,7 @@ private fun DaySessionRow(
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -1289,7 +1289,7 @@ private fun AllCoursesCard(
                             text = name,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )

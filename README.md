@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v3.6.0**——「演示」下载中心（v2.0 兼容性处理 + 多端下载）基础上新增 **v2.3 视频/音频单独下载**：详情页「视频单独下载」分组（`视频N · 第X页` + 时长/分辨率/大小），DownloadManager 下载后系统播放器/WPS 打开或分享；无 `media_files` 旧 deck 不显示。实现见 [docs/PPT_DOWNLOAD_20261110.md](docs/PPT_DOWNLOAD_20261110.md)；单测 **994/0**（v2.3 新增 12 项）
+- 状态：**v4.0.0**——深度调研/审计 + 近期功能同步（投票含可见范围、名单三分类、电费同期/13·16 隐藏 24h）+ 全局 P0（权限横幅/清缓存确认/体感语义色/大字体）；PTT/诊断/教务等沿用 3.6.0。单测 **1065/0**、Release 冷启动 0.66s、签名 APK 已交付桌面。详见 [docs/REPORT_ROUND11_20261111.md](docs/REPORT_ROUND11_20261111.md)
 
 ## 目录
 

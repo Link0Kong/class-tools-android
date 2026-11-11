@@ -881,7 +881,7 @@ private fun PptStepsPlayer(
                                     Box(
                                         modifier = Modifier
                                             .width(128.dp)
-                                            .height(72.dp)
+                                            .heightIn(min = 72.dp)
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(Color.White.copy(alpha = 0.08f)),
                                     ) {

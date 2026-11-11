@@ -82,6 +82,7 @@ import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtBrandDots
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.ToolCard
 import com.furina.classtools.ui.theme.CtMotion
@@ -142,6 +143,8 @@ fun HomeScreen(
     noticesRepository: NoticesRepository? = null,
     userDataRepository: UserDataRepository? = null,
     onOpenAll: () -> Unit = {},
+    showNotificationPermissionBanner: Boolean = false,
+    onOpenPermissions: (() -> Unit)? = null,
     isPageActive: Boolean = true,
     rotationEnabled: Boolean = true,
     nowMillis: Long = System.currentTimeMillis(),
@@ -355,6 +358,14 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                     ) {
                         GreetingHeader(session, ttPlan, today, nowMillis)
+                    HomePermissionBanner(
+                        show = showNotificationPermissionBanner,
+                        onOpenPermissions = onOpenPermissions,
+                    )
+                        HomePermissionBanner(
+                            show = showNotificationPermissionBanner,
+                            onOpenPermissions = onOpenPermissions,
+                        )
                         TodayCoursesCard(
                             plan = ttPlan,
                             loading = ttLoading,
@@ -413,6 +424,10 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                 ) {
                     GreetingHeader(session, ttPlan, today, nowMillis)
+                    HomePermissionBanner(
+                        show = showNotificationPermissionBanner,
+                        onOpenPermissions = onOpenPermissions,
+                    )
                     TodayCoursesCard(
                         plan = ttPlan,
                         loading = ttLoading,
@@ -1037,8 +1052,9 @@ private fun HomeMutedLine(text: String) {
     )
 }
 
-
-
-
-
-
+@Composable
+private fun HomePermissionBanner(show: Boolean, onOpenPermissions: (() -> Unit)?) {
+    if (show && onOpenPermissions != null) {
+        NotificationPermissionBanner(visible = true, onOpenPermissions = onOpenPermissions)
+    }
+}
