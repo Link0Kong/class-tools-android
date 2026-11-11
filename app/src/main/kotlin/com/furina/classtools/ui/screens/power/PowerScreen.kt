@@ -963,7 +963,18 @@ private fun Tile(
                 Row(
                     modifier = Modifier
                         .heightIn(min = 24.dp)
-                        .clickable(onClick = onCompareClick),
+                        .clickable(onClick = onCompareClick)
+                        .semantics {
+                            // 颜色只区分增减，读屏需明确方向（无障碍：不依赖颜色传达信息）。
+                            val direction = when {
+                                delta > 0.05 -> "上升"
+                                delta < -0.05 -> "下降"
+                                else -> "持平"
+                            }
+                            contentDescription = "${availableCompare.label} $direction ${
+                                PowerCompareLogic.formatPercent(kotlin.math.abs(delta))
+                            }，点击查看说明"
+                        },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(

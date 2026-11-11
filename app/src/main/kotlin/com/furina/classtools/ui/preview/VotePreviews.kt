@@ -578,3 +578,48 @@ private fun VoteManageContentPreview() {
 
 @Suppress("unused")
 private val votePreviewSpacing = 12.dp
+
+// =============================================================================
+// 大字体 1.3 适配（无障碍/系统字号；对应 P1 批次 C 复查）
+// =============================================================================
+
+
+@Preview(
+    name = "157 投票详情 · 大字体 1.3",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 1000,
+    fontScale = 1.3f,
+)
+@Composable
+private fun VoteDetailLargeFontPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        VoteDetailScreen(
+            pollId = "p2",
+            repository = PreviewVoteRepository,
+            initialDetail = previewResultDetail,
+            skipLoad = true,
+            nowMillis = VOTE_PREVIEW_NOW,
+        )
+    }
+}
+
+@Preview(
+    name = "158 发起投票 · 大字体 1.3",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 1000,
+    fontScale = 1.3f,
+)
+@Composable
+private fun VoteCreateLargeFontPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        VoteCreateScreen(
+            repository = PreviewVoteRepository,
+            initialDraft = previewCreateDraft,
+            memberSource = PreviewVoteMemberSource,
+            skipLoad = true,
+            nowMillis = VOTE_PREVIEW_NOW,
+        )
+    }
+}
