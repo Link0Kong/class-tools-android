@@ -783,7 +783,7 @@ private fun TrendSection(
             if (slowUpdateText.isNotBlank() && !slowRoom) {
                 Text(
                     text = slowUpdateText,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
             }
@@ -919,7 +919,7 @@ private fun Tile(
                 if (tile.ref) {
                     Text(
                         text = "参考",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.tertiary,
                     )
                 }

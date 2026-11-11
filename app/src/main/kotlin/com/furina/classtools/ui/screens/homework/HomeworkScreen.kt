@@ -599,11 +599,6 @@ private fun HomeworkDetailDialog(
                         AttachmentRow(attachment)
                     }
                 }
-                Text(
-                    text = "附件预览与发布/删除为后续增量（本轮只读）。",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         },
         confirmButton = {

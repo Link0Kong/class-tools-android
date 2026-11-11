@@ -942,8 +942,8 @@ private fun NoticeItemMetaRow(
         }
 
         is NoticeItemMeta.Unknown -> MetaRow(
-            title = "未知类型：${meta.kind}",
-            detail = "暂不支持预览（字段：${meta.keys.joinToString("/")}）",
+            title = "附件",
+            detail = "暂不支持预览",
         )
     }
 }

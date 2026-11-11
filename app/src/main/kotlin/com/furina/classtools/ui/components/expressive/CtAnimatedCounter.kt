@@ -5,7 +5,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -40,13 +43,19 @@ fun CtAnimatedCounter(
     animationSpec: AnimationSpec<Float> = CtMotion.effects,
     label: String = "ctCounter",
 ) {
-    val animated by animateFloatAsState(
+    val animated = animateFloatAsState(
         targetValue = value.toFloat(),
         animationSpec = animationSpec,
         label = label,
     )
+    // 只把「格式化后的可见值」作为组合阶段依赖：动画每帧变化时只有显示字符串
+    // 真正变化才重组 Text（整数计数器通常只重组 N 次而不是 60×N 次）。
+    val currentFormatter by rememberUpdatedState(formatter)
+    val display by remember {
+        derivedStateOf { currentFormatter(animated.value.roundToInt()) }
+    }
     Text(
-        text = formatter(animated.roundToInt()),
+        text = display,
         modifier = modifier,
         style = style,
         color = color,
@@ -70,14 +79,19 @@ fun CtAnimatedDecimalCounter(
     animationSpec: AnimationSpec<Float> = CtMotion.effects,
     label: String = "ctDecimalCounter",
 ) {
-    val animated by animateFloatAsState(
+    val animated = animateFloatAsState(
         targetValue = value.toFloat(),
         animationSpec = animationSpec,
         label = label,
     )
     val digits = decimals.coerceIn(0, 2)
+    val display by remember(digits) {
+        derivedStateOf {
+            String.format(Locale.CHINA, "%.${digits}f", animated.value)
+        }
+    }
     Text(
-        text = String.format(Locale.CHINA, "%.${digits}f", animated),
+        text = display,
         modifier = modifier,
         style = style,
         color = color,
