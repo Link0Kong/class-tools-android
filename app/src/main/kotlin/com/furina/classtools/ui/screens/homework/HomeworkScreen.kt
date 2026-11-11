@@ -52,6 +52,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -116,6 +118,7 @@ fun HomeworkScreen(
 ) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
+    val haptics = LocalHapticFeedback.current
     val fallbackMarks = remember { MutableStateFlow(initialMarks ?: MarksSnapshot()) }
     val marksFlow = remember(marksRepository, initialMarks) { marksRepository?.marks ?: fallbackMarks }
     val marks: MarksSnapshot by marksFlow.collectAsState()
@@ -199,6 +202,7 @@ fun HomeworkScreen(
     }
 
     fun toggleDone(item: HomeworkItem) {
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         val repository = marksRepository
         if (repository == null) {
             notify("未登录，无法同步完成状态")

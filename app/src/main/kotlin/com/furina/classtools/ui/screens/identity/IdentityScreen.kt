@@ -135,7 +135,6 @@ fun IdentityScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     CtPill(text = "原生 Android 客户端")
-                    CtPill(text = "数据与网页 / 小程序互通")
                 }
             }
 

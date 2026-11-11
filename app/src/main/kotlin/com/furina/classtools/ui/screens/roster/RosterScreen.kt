@@ -59,6 +59,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -137,6 +140,7 @@ fun RosterScreen(
 ) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
+    val haptics = LocalHapticFeedback.current
     val fallbackSections = remember { MutableStateFlow(JsonObject(emptyMap())) }
     val sectionsFlow = userDataRepository?.currentSections ?: fallbackSections
     val sections by sectionsFlow.collectAsState()
@@ -439,7 +443,10 @@ fun RosterScreen(
                                         items = rollItems,
                                         hasRollList = rosterState.rollSel.isNotEmpty(),
                                         onToggle = { index -> toggleStatus(index) },
-                                        onSetStatus = { index, status -> writeRoster(RosterLogic.setStatus(rosterState, index, status)) },
+                                        onSetStatus = { index, status ->
+                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            writeRoster(RosterLogic.setStatus(rosterState, index, status))
+                                        },
                                         onUseRosterSel = {
                                             if (rosterState.rosterSel.isEmpty()) {
                                                 notify("抽签名单为空，请先在抽签页选择名单")

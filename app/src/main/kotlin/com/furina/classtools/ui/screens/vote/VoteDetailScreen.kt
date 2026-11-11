@@ -51,6 +51,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -115,6 +117,7 @@ fun VoteDetailScreen(
 ) {
     val spec = rememberCtAdaptiveSpec()
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     val snackbar = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -328,6 +331,7 @@ fun VoteDetailScreen(
                                     total = current.total,
                                     onClick = {
                                         if (!canSelect) return@VoteOptionRow
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         selected = when {
                                             checked -> selected - option.id
                                             poll.settings.multi -> {
