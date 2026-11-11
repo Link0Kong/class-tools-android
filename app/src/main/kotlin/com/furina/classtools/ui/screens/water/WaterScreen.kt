@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Opacity
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -176,6 +177,7 @@ fun WaterScreen(
     var readingInput by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
     var overwriteReview by remember { mutableStateOf<WaterRecordReview.Valid?>(null) }
+    var largeDiffReview by remember { mutableStateOf<WaterRecordReview.Valid?>(null) }
     var deletingMonth by remember { mutableStateOf<String?>(null) }
     var showMonthPicker by remember { mutableStateOf(false) }
     var showRoomPicker by remember { mutableStateOf(false) }
@@ -237,6 +239,7 @@ fun WaterScreen(
         readingInput = ""
         inputError = null
         overwriteReview = null
+        largeDiffReview = null
         notify(if (valid.replaceExisting) "已更新 ${WaterMonth.label(valid.record.month)} 记录" else "已保存 ${WaterMonth.label(valid.record.month)} 记录")
     }
 
@@ -249,7 +252,17 @@ fun WaterScreen(
             is WaterRecordReview.Invalid -> inputError = review.message
             is WaterRecordReview.Valid -> {
                 inputError = null
-                if (review.replaceExisting) overwriteReview = review else saveValid(review)
+                val prev = waterState.roomOrDefault(selectedRv).records.lastOrNull { it.month < review.record.month }
+                val jumpTooLarge = prev != null && prev.reading > 0.01 &&
+                    kotlin.math.abs(review.record.reading - prev.reading) / prev.reading > 0.30
+                if (review.replaceExisting) {
+                    overwriteReview = review
+                } else if (jumpTooLarge) {
+                    // W-03：与上一记录差异 >30% 时二次确认，避免录错小数位。
+                    largeDiffReview = review
+                } else {
+                    saveValid(review)
+                }
             }
         }
     }
@@ -489,6 +502,33 @@ fun WaterScreen(
             },
             dismissButton = {
                 TextButton(onClick = { overwriteReview = null }) { Text("取消") }
+            },
+        )
+    }
+
+    val diffReview = largeDiffReview
+    if (diffReview != null) {
+        val prev = waterState.roomOrDefault(selectedRv).records.lastOrNull { it.month < diffReview.record.month }
+        val pct = if (prev != null && prev.reading > 0.01) {
+            kotlin.math.abs(diffReview.record.reading - prev.reading) / prev.reading * 100
+        } else {
+            0.0
+        }
+        AlertDialog(
+            onDismissRequest = { largeDiffReview = null },
+            title = { Text("读数差异较大") },
+            text = {
+                Text(
+                    "上次读数 ${prev?.let { WaterMutator.formatReading(it.reading) } ?: "—"} 吨，" +
+                        "本次 ${WaterMutator.formatReading(diffReview.record.reading)} 吨" +
+                        "（相差 ${String.format(java.util.Locale.CHINA, "%.1f", pct)}%）。确认无误再保存。",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { saveValid(diffReview) }) { Text("仍要保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { largeDiffReview = null }) { Text("取消") }
             },
         )
     }
@@ -951,6 +991,9 @@ private fun RoomPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择关注宿舍") },
         text = {
+            var query by remember { mutableStateOf("") }
+            val keyword = query.trim()
+            var matched = false
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -962,13 +1005,28 @@ private fun RoomPickerDialog(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    placeholder = { Text("搜索房间号 / 楼栋") },
+                )
                 PowerRooms.BUILDINGS.forEach { building ->
                     Text(
                         text = building,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    PowerRooms.roomsOfBuilding(building).chunked(3).forEach { rowRooms ->
+                    val rooms = PowerRooms.roomsOfBuilding(building).filter { roomInfo ->
+                        keyword.isBlank() ||
+                            roomInfo.room.contains(keyword, ignoreCase = true) ||
+                            building.contains(keyword, ignoreCase = true)
+                    }
+                    if (rooms.isEmpty()) return@forEach
+                    matched = true
+                    rooms.chunked(3).forEach { rowRooms ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             rowRooms.forEach { roomInfo ->
                                 val selected = roomInfo.rv == selectedRv
@@ -996,6 +1054,13 @@ private fun RoomPickerDialog(
                             repeat(3 - rowRooms.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
+                }
+                if (!matched) {
+                    Text(
+                        text = "未找到房间",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         },
