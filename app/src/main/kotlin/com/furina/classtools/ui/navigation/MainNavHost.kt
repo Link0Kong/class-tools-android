@@ -85,6 +85,9 @@ import com.furina.classtools.ui.screens.homework.HomeworkScreen
 import com.furina.classtools.ui.screens.notices.ApiNoticeRawAttachmentLoader
 import com.furina.classtools.ui.screens.notices.NoticesScreen
 import com.furina.classtools.ui.screens.power.PowerScreen
+import com.furina.classtools.ui.screens.ppt.PptDownloadDetailScreen
+import com.furina.classtools.ui.screens.ppt.PptListScreen
+import com.furina.classtools.ui.screens.ppt.PptPlayerScreen
 import com.furina.classtools.ui.screens.profile.ProfileScreen
 import com.furina.classtools.ui.screens.roster.RosterScreen
 import com.furina.classtools.ui.screens.settings.PermissionSettingsScreen
@@ -437,6 +440,8 @@ fun MainNavHost(
                         marksRepository = container.marksRepository,
                         noticesRepository = container.noticesRepository,
                         rawAttachmentLoader = ApiNoticeRawAttachmentLoader(container.apiClient),
+                        // v3 附件外置：图片 https 签名 URL 复用 data/ppt 的 OkHttp+BitmapFactory+LRU 加载器
+                        imageLoader = container.pptImageLoader,
                         onAddToCalendar = { group ->
                             if (NoticeCalendarMapper.eligible(group)) {
                                 writeCalendarEvent(NoticeCalendarMapper.eventFor(group))
@@ -527,6 +532,15 @@ fun MainNavHost(
                     appVersion = com.furina.classtools.BuildConfig.VERSION_NAME,
                 )
 
+                "ppt" -> PptListScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenDetail = { deck -> navController.navigate(Routes.pptDetail(deck.id)) },
+                    repository = container.pptRepository,
+                    imageLoader = container.pptImageLoader,
+                    session = session,
+                    localStore = container.pptLocalStore,
+                )
+
                 else -> {
                     val tool = ToolCatalog.byId(toolId) ?: ToolCatalog.allEntry
                     ToolPlaceholderScreen(
@@ -535,6 +549,42 @@ fun MainNavHost(
                     )
                 }
             }
+        }
+
+        composable(
+            route = Routes.PPT_DETAIL,
+            arguments = listOf(navArgument(Routes.PPT_DECK_ARG) { type = NavType.StringType }),
+            enterTransition = { CtPageTransitions.pushEnter() },
+            exitTransition = { CtPageTransitions.pushExit() },
+            popEnterTransition = { CtPageTransitions.popEnter() },
+            popExitTransition = { CtPageTransitions.popExit() },
+        ) { entry ->
+            PptDownloadDetailScreen(
+                deckId = entry.arguments?.getString(Routes.PPT_DECK_ARG).orEmpty(),
+                onBack = { navController.popBackStack() },
+                onOpenPreview = { deckId -> navController.navigate(Routes.pptPlayer(deckId)) },
+                repository = container.pptRepository,
+                imageLoader = container.pptImageLoader,
+                downloader = container.pptFileDownloader,
+            )
+        }
+
+        composable(
+            route = Routes.PPT_PLAYER,
+            arguments = listOf(navArgument(Routes.PPT_DECK_ARG) { type = NavType.StringType }),
+            enterTransition = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) },
+            exitTransition = { androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) },
+            popEnterTransition = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200)) },
+            popExitTransition = { androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(220)) },
+        ) { entry ->
+            PptPlayerScreen(
+                deckId = entry.arguments?.getString(Routes.PPT_DECK_ARG).orEmpty(),
+                onClose = { navController.popBackStack() },
+                repository = container.pptRepository,
+                imageLoader = container.pptImageLoader,
+                localStore = container.pptLocalStore,
+                networkQuality = container.pptNetworkQuality,
+            )
         }
 
         composable(

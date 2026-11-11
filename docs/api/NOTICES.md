@@ -179,10 +179,23 @@ mostUrgent(all, done):
 
 `[已核实 MP/pages/nt/nt.js:157-333]`
 
-**附件处理**：
-- `items[].src`/`url` 多为 `data:<mime>;base64,...`；图片/PDF 可解码到 `cacheDir` 后用图片库/`ACTION_VIEW` 打开；`file` 无 url 且无 archive 识别 → 显示「待获取」。
-- `items[].archive = {status,count,summary,files:[{name,kind,size,textLen,url?}]}` 是压缩包内容识别结果（只展示元数据 + 摘要 ≤120 字）`[已核实 MP/utils/notice.js:549-572]`。
-- data URI 体积上限 10 MB base64，超限拒绝 `[已核实 MP/pages/nt/nt.js:335-344]`。
+**附件处理**（2026-11-10 起为「data URI ↔ 签名 URL」双形态，契约唯一真源 `web/attachments/CONTRACT.md`）：
+- `items[].src`/`url` 旧数据是 `data:<mime>;base64,...`；外置迁移后是签名 URL
+  `https://<host>/att/<id>?exp=<unix秒>&sig=<hex64>`（备案期调试可能 `http://<ip>/att/...`）。
+  **只判断 `^https?://`，不写死域名**；GET 直出字节、无鉴权头、内容不可变（`Cache-Control: immutable`）。
+- 图片（`kind=img`）：data URI 走 `ApiNoticeRawAttachmentLoader` 按需拉原始行 + `BitmapFactory` 采样解码；
+  URL 走 `container.pptImageLoader`（`data/ppt` 的 OkHttp + BitmapFactory + 内存 LRU），失败占位不崩。
+- 文件（`kind=file`）：URL 用 OkHttp 下载到 `cacheDir/notice_attachments/<sha256前16>/<展示名>`
+  （上限 20MB；同 key 命中磁盘缓存不重下）→ FileProvider content Uri + `ACTION_VIEW`（无处理器退回 `ACTION_SEND`）；
+  data URI 旧数据仍只展示元信息（行为不变）；`file` 无 url 且无 archive 识别 → 显示「待获取」。
+- 大小：URL 形态下不能从 base64 估算体积 → 优先 `items[].size`（人类可读，如 `82 KB`），否则显示「附件」，
+  **禁止显示 0 B**。
+- `items[].archive = {status,count,summary,files:[{name,kind,size,textLen,url?}]}` 是压缩包内容识别结果
+  （只展示元数据 + 摘要 ≤120 字）；`files[].url` 外置后是签名 URL，可逐项「下载 → 系统打开」，无 URL 只展示元信息。
+- 内联 data URI 体积上限 10 MB base64（`NoticeAttachmentParser.decodeBase64Payload`），超限拒绝；外置 URL 下载上限 20MB。
+- 实现：`data/notices/NoticeAttachmentSource`（形态判定/文件名/MIME）、`data/notices/NoticeAttachmentFiles`
+  （下载/解码编排，纯 JVM 可测）、`data/notices/NoticeAttachmentOpen`（cacheDir sink + FileProvider）、
+  `ui/screens/notices/NoticeAttachmentPreview`（缩略图/大图/文件打开行）。旧数据 data URI 全程向后兼容。
 
 **`absRelDates` 相对日期替换（建议移植，纯显示层）** `[已核实 MP/utils/notice.js:350-547]`：
 - 锚点 = 同一卡片**第一条带 time 的 item** 的发送时间（`anchorOf`）；无锚点则原样返回。

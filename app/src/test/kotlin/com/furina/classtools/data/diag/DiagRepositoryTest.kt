@@ -111,7 +111,7 @@ class DiagRepositoryTest {
     @Test
     fun reportClientDiag_postsSingleRowArray() = runTest {
         val transport = FakeTransport { ApiResponse(201, "") }
-        val row = DiagPayload.manualRow(sid, "3.0.0", "手动上报", emptyMap(), emptyMap(), 1L)
+        val row = DiagPayload.manualRow(sid, "3.0.0", "手动上报", emptyMap(), JsonObject(emptyMap()), 1L)
         val result = repository(transport).reportClientDiag(row)
         assertTrue(result is com.furina.classtools.data.network.ApiResult.Success)
         val request = transport.lastRequest()

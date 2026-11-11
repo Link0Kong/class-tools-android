@@ -182,4 +182,49 @@ class DiagParserTest {
         assertNull(DiagParser.parseRows("oops"))
         assertNull(DiagParser.parseRows(""))
     }
+
+    // ------------------------------------------------------------ v2.1 related 下挂字段
+
+    @Test
+    fun parseAnalyses_readsRelatedRefs() {
+        val raw = """
+            [{"id":"an-1","ts":1,"severity":"warn","title":"网关延迟","status":"running",
+              "related":{"health_ids":["cloud_xgj_sync"],"checks":["gateway","memory"],"repair_id":"rt-1"}}]
+        """.trimIndent()
+        val analysis = DiagParser.parseAnalyses(raw).single()
+        assertEquals(listOf("cloud_xgj_sync"), analysis.relatedHealthIds)
+        assertEquals(listOf("gateway", "memory"), analysis.relatedChecks)
+        assertEquals("rt-1", analysis.relatedRepairId)
+    }
+
+    @Test
+    fun parseAnalyses_relatedAsJsonString_andDedup() {
+        val raw = """
+            [{"id":"an-2","ts":1,"severity":"error","title":"t",
+              "related":"{\"health_ids\":[\"a\",\"a\"],\"checks\":[\"memory\"],\"repair_id\":\"rt-2\"}"}]
+        """.trimIndent()
+        val analysis = DiagParser.parseAnalyses(raw).single()
+        assertEquals(listOf("a"), analysis.relatedHealthIds)
+        assertEquals(listOf("memory"), analysis.relatedChecks)
+        assertEquals("rt-2", analysis.relatedRepairId)
+    }
+
+    @Test
+    fun parseAnalyses_oldDataWithoutRelated_getsEmptyRefs() {
+        val raw = """[{"id":"an-old","ts":1,"severity":"warn","title":"旧数据"}]"""
+        val analysis = DiagParser.parseAnalyses(raw).single()
+        assertTrue(analysis.relatedHealthIds.isEmpty())
+        assertTrue(analysis.relatedChecks.isEmpty())
+        assertEquals("", analysis.relatedRepairId)
+    }
+
+    @Test
+    fun parseRelated_toleratesMalformedValues() {
+        assertEquals(DiagParser.RelatedRefs(), DiagParser.parseRelated(null))
+        assertEquals(DiagParser.RelatedRefs(), DiagParser.parseRelated(kotlinx.serialization.json.JsonPrimitive("not-json")))
+        val bad = kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"health_ids":"oops","checks":{"x":1},"repair_id":123}""",
+        )
+        assertEquals(DiagParser.RelatedRefs(), DiagParser.parseRelated(bad))
+    }
 }

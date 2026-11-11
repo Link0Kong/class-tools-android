@@ -29,6 +29,15 @@ import com.furina.classtools.data.notices.DefaultNoticesRepository
 import com.furina.classtools.data.notices.NoticesRepository
 import com.furina.classtools.data.power.DefaultPowerRepository
 import com.furina.classtools.data.power.PowerRepository
+import com.furina.classtools.data.ppt.AndroidNetworkQualityProvider
+import com.furina.classtools.data.ppt.AndroidPptFileDownloader
+import com.furina.classtools.data.ppt.DefaultPptRepository
+import com.furina.classtools.data.ppt.OkHttpPptImageLoader
+import com.furina.classtools.data.ppt.PptImageLoader
+import com.furina.classtools.data.ppt.PptFileDownloader
+import com.furina.classtools.data.ppt.PptLocalStore
+import com.furina.classtools.data.ppt.PptNetworkQualityProvider
+import com.furina.classtools.data.ppt.PptRepository
 import com.furina.classtools.data.permission.AndroidPermissionController
 import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.privacy.CallbackLocalCleaner
@@ -149,13 +158,12 @@ class AppContainer(context: Context) {
     /** 课表登录（rpc/tt_login_enqueue + rpc/tt_login_status；密码只在请求体内存中出现一次）。 */
     val timetableLoginRepository: TimetableLoginRepository = DefaultTimetableLoginRepository(api = apiClient)
 
-    // ---------------------------------------------------------------- 诊断 v2
+    // ---------------------------------------------------------------- 诊断 v2.1
 
-    /** 本机设备检查采集（Build/屏幕/语言/内存/存储/网络/本地目录）。 */
+    /** 本机设备检查采集（系统版本/屏幕/内存/存储/网络/WebView；v2.1 不再采集品牌/型号/语言）。 */
     val deviceProbe: AndroidDeviceProbe = AndroidDeviceProbe(
         context = appContext,
         appVersion = BuildConfig.VERSION_NAME,
-        appVersionCode = BuildConfig.VERSION_CODE,
     )
 
     /** 诊断数据仓库：service_health / diag_analysis / repair_tasks / rpc/diag_agent_info / client_diag。 */
@@ -173,9 +181,10 @@ class AppContainer(context: Context) {
         pending = diagPendingStore,
     )
 
-    /** 崩溃设备信息快照（启动时算一次；崩溃线程不做系统查询）。 */
-    private val crashDeviceSnapshot: Map<String, String> by lazy {
-        runCatching { deviceProbe.collectBase().deviceMap() }.getOrDefault(emptyMap())
+    /** 崩溃设备信息快照（启动时算一次；崩溃线程不做系统查询；v2.1 最小化白名单 JSON）。 */
+    private val crashDeviceSnapshot: kotlinx.serialization.json.JsonObject by lazy {
+        runCatching { deviceProbe.collectBase().deviceJson() }
+            .getOrDefault(kotlinx.serialization.json.JsonObject(emptyMap()))
     }
 
     /** 未捕获异常记录器（只落脱敏行到本机队列，不打印堆栈/不发网络）。 */
@@ -197,6 +206,24 @@ class AppContainer(context: Context) {
     }
 
     val powerRepository: PowerRepository = DefaultPowerRepository(api = apiClient)
+
+    /** 演示（PPT）仓库：列表/播放清单/分片上传/软删/重试 + 转换机心跳（web/ppt/CONTRACT.md §4）。 */
+    val pptRepository: PptRepository = DefaultPptRepository(
+        api = apiClient,
+        currentSession = { activeSession },
+    )
+
+    /** 演示图片加载器：自建 OkHttp + BitmapFactory + LRU（项目无 Coil，不新增依赖）。 */
+    val pptImageLoader: PptImageLoader = OkHttpPptImageLoader()
+
+    /** 演示本机偏好：续播位置（按 deckId，7 天）+ 「原样/分步」模式偏好（契约 §11.3.1/§11.3.4）。 */
+    val pptLocalStore: PptLocalStore = PptLocalStore(appContext)
+
+    /** 演示默认模式判定用的网络质量（ConnectivityManager：WiFi/以太网/计量/慢网/Data Saver）。 */
+    val pptNetworkQuality: PptNetworkQualityProvider = AndroidNetworkQualityProvider(appContext)
+
+    /** v2.0 演示文件下载：DownloadManager → 应用外部下载目录；FileProvider 打开/分享。 */
+    val pptFileDownloader: PptFileDownloader = AndroidPptFileDownloader(appContext)
 
     /** 体测历史云端读写（E14/E15/E16：最多 2 条、软删 arch、pending 补发、2min TTL）。 */
     val fitRecsRepository: FitRecsRepository = DefaultFitRecsRepository(

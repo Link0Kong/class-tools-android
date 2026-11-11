@@ -1,5 +1,89 @@
 # 版本记录（Android 客户端）
 
+## v3.6.0 · 2026-11-11（「演示」v2.3：视频/音频单独下载）
+
+- **下载详情页新增分组「视频单独下载」**（契约 §12.8）：读取 `manifest.media_files`，在兼容版/PDF/原始文件三行之后展示
+  每个内嵌音视频：`视频1 · 第 7 页` / `音频1 · 第 3 页` + 时长 `mm:ss` + 分辨率 `1024×576` + 大小；
+  分组标题旁显示计数（`2 个视频 · 1 个音频`）；无 `media_files` 的旧 deck 不显示（向后兼容）。
+- **下载/打开/分享**：复用 `PptFileDownloader`（DownloadManager，系统下载通知 + 进度百分比）；
+  完成后 `ACTION_VIEW` 用 `video/mp4`、`audio/mp4` 等 MIME 交给系统播放器/WPS 打开，可分享（`ACTION_SEND`）；
+  失败 toast、按钮点按 ≥48dp、图标带无障碍 `contentDescription`。
+- **数据层**：`PptMediaFile`（src/name/size/sha256/kind/dur/w/h/slides/sourceName）+ `PptManifest.mediaFiles/mediaUrl/hasMediaFiles`；
+  `PptParsers.parseMediaFiles` 容错：缺失/非数组 → 空、坏项跳过、kind 未知按扩展名推断（m4a/mp3 → 音频）、
+  slides 只保留合法数字去重升序、条数上限 50/单媒体页数上限 20。
+- **纯逻辑**：`PptMediaDownloadLogic`（行模型：序号/页号/时长/分辨率/大小/MIME/文件名清洗兜底/URL/分组计数，全部 JVM 单测）。
+- 版本 **v3.6.0 / versionCode 12**；单测 **994/0**（v2.3 新增 12 项：媒体行逻辑 9 + 解析 3；原 982 基线无回退）；无新增依赖。
+- 详见 `docs/PPT_DOWNLOAD_20261110.md` §6（v2.3 增量）。
+
+## v3.5.0 · 2026-11-10（「演示」v2.0 功能重定义：下载中心 = 兼容性处理 + 多端下载）
+
+- **定位变更**：不再以在线播放为主 → 上传 PPT 后由转换机自动做**不降质**兼容性处理（`.ppt→.pptx`、包修复、字体嵌入、
+  PDF 副本、外链媒体如实告警），三端**下载处理后的文件**，用 PowerPoint/WPS/PDF 查看器打开；旧在线播放器降级为旧 deck 的「在线预览」入口（代码完整保留）。
+- **列表**：卡片点击 = 打开**下载详情**（不再直接进播放器）；有产物的卡片显示小标签「兼容版」「PDF」；
+  标签数据用 PostgREST jsonb 子路径 `manifest->files` 轻量获取（不拉完整 manifest）；上传/轮询/删除/重试保留；就绪卡片去掉封面「▶」。
+- **下载详情页**（新路由 `pptDetail/{deckId}`）：三行下载 `兼容版 PPTX (size)` / `PDF (pages 页, size)` / `原始文件 (size)`；
+  点下载 → `DownloadManager`（系统下载通知）→ 轮询进度 → 完成自动 `ACTION_VIEW`（FileProvider 打开 PowerPoint/WPS/PDF），
+  可分享（`ACTION_SEND`）；兼容提示 `manifest.compat.warnings` 橙色逐条；「在线预览」仅旧版内容可见；
+  旧 deck：「兼容版未生成」+「在线预览」+「重新处理」+ 原始文件下载；非 ready 只显示状态/进度/失败重试。
+- **数据层**：`PptManifest` 增 `files`（compat/pdf/source，含 size/sha256/ext/name/pages）与 `compat`（warnings/fonts_embedded/converted_from）容错解析；
+  `PptRepository.loadDownloadDetail`；列表行解析 files 标签；`AndroidPptFileDownloader`（DownloadManager + FileProvider + 分享）。
+- **纯逻辑**（JVM 单测）：`PptDownloadLogic`（三行下载/大小/文件名清洗补扩展名去重/MIME/旧 deck 判定/兼容提示/列表标签/状态文案）。
+- 版本 **v3.5.0 / versionCode 11**；单测 **982/0**（v2.0 新增 28 项，原有 954 基线无回退）；
+  无新增依赖；旧 v1.1/v1.2 播放器代码全部保留（在线预览入口）。
+- 已知限制：下载保存到**应用外部下载目录**（不申请存储权限红线；系统下载通知可见，FileProvider 打开/分享，不写公共 Downloads）；
+  需设备装有对应查看器。详见 `docs/PPT_DOWNLOAD_20261110.md`。
+
+## v3.4.0 · 2026-11-10（「演示」v1.2：原样播放高保真视频模式 + 便捷操作）
+
+- **原样播放模式**（契约 `web/ppt/CONTRACT.md` §11）：`manifest.video`（转换机用 PowerPoint 导出的高保真视频）存在且网络良好时
+  **默认播放视频**（含入场/强调/路径动画、页切换、内嵌视频声音）；网络差/无视频/加载失败自动回退分步浏览（不白屏）。
+- **默认模式**：`ConnectivityManager`（WiFi/以太网 GOOD；Data Saver/计量移动网 <1500kbps SLOW；无网 OFFLINE）+ 用户设备偏好
+  （播放器内「原样/分步」胶囊切换，手动切换后 SharedPreferences 记住）。
+- **原样播放控制条**：播放/暂停、`mm:ss / mm:ss`、章节上一页/下一页（按 chapters seek，非 ±10s）、章节刻度进度条（点击/拖动 seek）、
+  倍速 1×/1.25×/1.5×/2×（`PlaybackParams`）、全屏（横竖屏切换）、下载原样视频（DownloadManager）、关闭、模式切换；
+  点击舞台显隐控制条、左右滑切章节、键盘 Space/←/→/F/Esc/M；3s 自动隐藏（暂停时常驻）。
+- **降级状态机**：视频 error/卡顿 4s×2 → 重试 1 次 → 自动切分步 + Toast；章节跳页 `seek(t+0.05)` 保持播放/暂停状态。
+- **续播**：SharedPreferences 按 deckId 存 `{mode,page,step,t,at}`（7 天），打开自动续播 + Toast「续播 12:34」，
+  控制条/更多菜单「从头播放」；列表卡片「继续」小徽标（7 天内 + 未看完）。
+- **列表**：整卡点击 = 默认模式直接播放（封面大「▶」）；删除/重试/上传/原件下载保持 v1.1 行为。
+- **分步增强**：热点 64dp（音频 48dp）+ 轻微脉冲 + 「视频 m:ss」角标；热点状态驱动渲染（无图片 onload 竞态）。
+- 新增纯 Kotlin 层 `PptVideoLogic/PptPlayMode/PptResume/PptVideoFallback` + `PptLocalStore/PptNetworkQuality`；
+  `PptVideoPlayer.kt`（MediaPlayer+SurfaceView，自建控制条，**无新增依赖**）。
+- 版本 **v3.4.0 / versionCode 10**；单测 **954/0**（v1.2 新增 20 项，原有 934 项基线无回退；
+  其中 934 = v1.1 的 904 + 下条「通知附件外置」新增 30 项，一并在本版本发布）。
+- 详见 `docs/PPT_VIDEO_20261110.md`（实现/契约对应/OSS 域名与下载限制/已知风险/构建证据）。
+
+## 未发布 · 2026-11-10（通知附件外置：data URI / 签名 URL 双形态，迁移第 2 步 task-5）
+
+- **背景**：云端通知 `body` 的附件将从 base64 `data:` URI 改为签名 URL（`web/attachments/CONTRACT.md` v1）；
+  安卓必须同时兼容两种形态，旧数据继续可读。**versionName 仍 3.3.0 / versionCode 9（未 bump、未构建分发 APK）**。
+- **数据层**：`NoticeItemMeta.Image/File`、`NoticeManualAttachment` 增加 `url`（只保留 http(s)，不写死域名）；
+  新增 `NoticeArchiveFile`（`archive.files[]` 的 name/kind/size/url）；`NoticeBodyParser` 统一用
+  `NoticeAttachmentSource` 判定 `data:` / `http(s)` / 无内容，data URI 行为不变。
+- **大小显示**：URL 形态下不显示 0 B —— 优先 `items[].size`，否则「附件」（人工附件同理）。
+- **图片**：URL 图片走 `container.pptImageLoader`（复用 `data/ppt` 的 OkHttp+BitmapFactory+LRU，无新依赖）；
+  缩略图/大图加载失败降级占位，不崩；data URI 图片仍走原有按需加载 + 采样解码。
+- **文件**：URL 文件 OkHttp 下载到 `cacheDir/notice_attachments/<sha256前16>/<展示名>`（上限 20MB、命中磁盘缓存不重下、
+  7 天自动清理）→ FileProvider + `ACTION_VIEW`（无处理器退回 `ACTION_SEND`）；`archive.files[].url` 逐项可打开。
+- **测试**：新增 30 个单测（URL/data URI 双形态解析、archive、大小显示、下载编排假 fetcher/sink、文件名/MIME/cacheKey）；
+  相关 `*Notice*` 单测 105/0，全量 `testDebugUnitTest` 全绿（数字见交付报告）。
+
+## v3.3.0 · 2026-11-09（新增「演示」工具：PPT 上传自动转换 + 沉浸式分步播放）
+
+- **新工具「演示」**（工具目录 CLASS 类，不新增底栏项）：班级成员上传 `.ppt/.pptx` → 本机转换机渲染成分步图片 + 抽离视频 →
+  任意设备流畅播放（契约唯一真源 `web/ppt/CONTRACT.md` v1）。
+- **数据层 `data/ppt/`**：PostgREST 列表/播放清单/建行/分片上传（512KiB→base64、≤4 并行、失败重试 2 次 400/1200ms）/提交转换/软删/重试 +
+  转换机心跳（`site_assets id=ppt_agent`，180s 判离线）；列表失败回退本机缓存；SAF Uri 分片读取不整文件进内存；64MiB 上限、标题≤80 字。
+- **纯 Kotlin 领域层 `features/ppt/`**：manifest URL 解析、页/步/全篇 step 导航（后退粒度=step）、状态短文案、分片计划、列表过滤排序、播放器手势/转场降级。
+- **列表页**：卡片流（封面/标题/页数·上传者/状态胶囊，ready 不显示胶囊）、上传按钮（OpenDocument 过滤 ppt/pptx、可选改标题、就地进度、取消软删）、
+  本人删除二次确认、失败重试（上传中断=重选文件 / 转换失败=重新排队）、空态、可见 10s 轮询（LIFECYCLE 感知 + onResume 强拉）、转换机离线横幅。
+- **播放器**：沉浸式全屏黑舞台（隐藏系统栏 + KEEP_SCREEN_ON）、letterbox contain、顶部 2px step 进度条、控制条 3s 自动隐藏、
+  单击左右 1/3、左右滑动、键盘 →/←/Space/PageUp/Down/Esc/B/T/S、音量键±翻页、页内步点（step≥2）、缩略图横向抽屉跳页、备注抽屉、
+  黑屏、视频/音频热点（点击才播、媒体层不随 step 卸载）、tr 转场（低端机降级 fade 200ms）、下载原件（Downloads/浏览器兜底）、退出二次确认。
+  项目无 Coil/ExoPlayer → 自建 OkHttp+BitmapFactory LRU 图片加载器 + VideoView，**未新增任何依赖**。
+- 版本 **v3.3.0 / versionCode 9**（按既有发布规则递增）；单测 **904/0**（新增 PPT 8 类 87 项，无回退）。
+- 详见 `docs/PPT_20261109.md`（实现/契约/已知限制/构建与测试证据）。
+
 ## v3.2.0 · 2026-11-09（Round 10：P2 顶栏/权限/提醒页玻璃 + 作业单条提醒）
 
 - **全局顶栏玻璃化**：`CtTopBar` 半透明玻璃条，覆盖所有工具页/设置页，深浅色自动适配。

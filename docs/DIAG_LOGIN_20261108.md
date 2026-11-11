@@ -22,3 +22,12 @@
 3. 时钟偏差依赖网关 Date 头；缺失时显示「不可校准」INFO 不误报。
 4. 诊断页 AI/修复/服务健康需真实班级 token；Debug 预览会话仅设备检查与本机 agent 信息（公开）。
 5. 15s 轮询仅页面可见（ON_RESUME）；未做完整 E2E（按任务要求）。
+
+## 诊断 v2.1 增量（2026-11-09，用户要求：AI 下挂异常项/折叠展开/10s 进展/设备信息最小化）
+
+- **AI 下挂**：`DiagScreen` 服务健康异常行/设备检查行下方直接渲染 AI 折叠行（按 `diag_analysis.related.health_ids` / `related.checks`，后者由 `client_diag.detail.check` 推导）；删除独立 AI/修复卡；无关联进「其它诊断」（默认收起只显示条数）；修复记录在展开态按 `related.repair_id` 显示 action/status/result/时间。
+- **折叠/展开**：折叠一行（severity 点+标题≤22 字+「可自动修复/建议」徽标+状态胶囊 待处理/修复中/已修复/修复失败+`›`）；点击展开 cause/建议/flow 时间线/关联修复；异常行无 AI：代理在线→「AI 分析排队中…」，离线→「本机离线，已留存待开机修复」；顶部摘要 `可自动修复 N · 已修复 M`。
+- **进展 10s**：诊断轮询 15s→10s（仅 ON_RESUME 可见时），进入/恢复立即拉；running/fixed 与 flow `run` 实时渲染。
+- **设备信息最小化（§B）**：`DiagPayload`/`DeviceDiagnostics` 的 `client_diag.device` 只留 platform/osVersion/appVer/webview/screen{w,h,dpr}/memoryMB/storagePct/network/clockSkewMs；`detail` 只留 check/latency_ms/storage_pct/clock_skew_ms/err_count/code；设备检查展示去掉品牌/型号/语言。
+- **测试与构建（本机实跑）**：`gradlew test --no-build-cache` **66 suites / 817 tests / 0 failures**（新增 38 用例：分组映射/折叠文案/胶囊/白名单 payload/related.checks 解析/10s 轮询/旧数据过滤等）；`assembleDebug` 24,188,528 B、`assembleRelease` **2,593,869 B**（新构建）；preview 截图 `artifacts/previews_diag_v21/.../DiagV21FoldedLightPreview_0.png`、`DiagV21ExpandedLightPreview_0.png`、`DiagV21FoldedDarkPreview_0.png`。
+- **已知限制**：未做完整 E2E（模拟器真机联调按任务要求仅 preview）；诊断页依赖真实班级 token；其它字段/历史数据展示端过滤。

@@ -71,21 +71,21 @@ object NoticeBodyParser {
                             kind = kind,
                             caption = item.str("caption"),
                             ocr = item.bool("ocr") || item.bool("isOcr"),
-                            hasData = src.startsWith("data:", ignoreCase = true),
+                            hasData = NoticeAttachmentSource.inlineOf(src) != null,
                             approxBytes = estimateDataUriBytes(src),
+                            url = NoticeAttachmentSource.urlOf(src),
                         ),
                     )
                 }
 
                 "file" -> {
                     val name = item.str("name").ifBlank { item.str("text").ifBlank { "附件" } }
-                    val url = item.str("url").ifBlank { item.str("src") }
-                    val hasContent = url.isNotBlank()
-                    val archive = item.obj("archive")
-                    val archiveFiles = archive?.arr("files") ?: JsonArray(emptyList())
+                    val raw = item.str("url").ifBlank { item.str("src") }
+                    val hasContent = raw.isNotBlank()
+                    val archive = parseArchive(item.obj("archive"))
                     val explicitSize = item.str("size")
                     val sizeText = explicitSize.ifBlank {
-                        val approx = estimateDataUriBytes(url)
+                        val approx = estimateDataUriBytes(raw)
                         if (approx > 0) formatSize(approx) else ""
                     }
                     out.add(
@@ -93,13 +93,17 @@ object NoticeBodyParser {
                             kind = kind,
                             name = name,
                             ext = extOf(name),
+                            // URL 形态下无法从 base64 估算体积：item.size 或「附件」，绝不显示 0 B
                             sizeText = sizeText.ifBlank { "附件" },
                             note = item.str("note"),
                             hasContent = hasContent,
-                            pending = !hasContent && archiveFiles.isEmpty(),
-                            archiveOk = archive != null && archiveFiles.isNotEmpty(),
-                            archiveCount = archiveFiles.size,
-                            archiveSummary = archive?.str("summary").orEmpty(),
+                            // 「待获取」= 无内容且压缩包无文件清单（archive 只有摘要不算有内容）
+                            pending = !hasContent && archive.files.isEmpty(),
+                            archiveOk = archive.files.isNotEmpty(),
+                            archiveCount = archive.count,
+                            archiveSummary = archive.summary,
+                            url = NoticeAttachmentSource.urlOf(raw),
+                            archiveFiles = archive.files,
                         ),
                     )
                 }
@@ -172,7 +176,11 @@ object NoticeBodyParser {
         return out
     }
 
-    /** 人工通知 `attachments` 解析（只保留元信息）。 */
+    /**
+     * 人工通知 `attachments` 解析（只保留元信息）。
+     *
+     * 旧数据内容在 `d`（data URI）；外置迁移后 `d`/`url`/`u` 可能是签名 URL。
+     */
     fun parseManualAttachments(raw: String?, json: Json = NetJson): List<NoticeManualAttachment> {
         if (raw.isNullOrBlank()) return emptyList()
         val element = try {
@@ -186,16 +194,18 @@ object NoticeBodyParser {
             val obj = item as? JsonObject ?: return@forEachIndexed
             val name = obj.str("n").ifBlank { "附件 ${index + 1}" }
             val mime = obj.str("t")
-            val data = obj.str("d")
+            val source = obj.str("d").ifBlank { obj.str("url") }.ifBlank { obj.str("u") }
             val explicit = obj.str("s").toLongOrNull() ?: 0L
-            val size = if (explicit > 0) explicit else estimateDataUriBytes(data)
+            val size = if (explicit > 0) explicit else estimateDataUriBytes(source)
             out.add(
                 NoticeManualAttachment(
                     index = index,
                     name = name,
                     mime = mime,
+                    // URL 形态无 base64 可估体积：显示「附件」，绝不显示 0 B
                     sizeText = if (size > 0) formatSize(size) else "附件",
-                    hasData = data.isNotBlank(),
+                    hasData = NoticeAttachmentSource.inlineOf(source) != null,
+                    url = NoticeAttachmentSource.urlOf(source),
                 ),
             )
         }
@@ -217,6 +227,46 @@ object NoticeBodyParser {
 
     private const val MAX_ITEMS = 40
     private const val MAX_MERGED_MESSAGES = 8
+
+    /** 压缩包内文件清单上限（只展示元信息；防异常大清单撑爆 UI 模型）。 */
+    private const val MAX_ARCHIVE_FILES = 60
+
+    /** `archive` 元信息（`{status,count,summary,files:[{name,kind,size,url?}]}`）。 */
+    private data class ParsedArchive(
+        val files: List<NoticeArchiveFile>,
+        val count: Int,
+        val summary: String,
+    )
+
+    /**
+     * 解析压缩包内容清单（`NOTICES.md` §6 `archive`，三端共用）。
+     *
+     * `files[].url` 外置迁移后是签名 URL；旧数据可能是内联 data URI（只标记 [NoticeArchiveFile.hasData]，
+     * 不把 base64 放进 UI 模型）。`count` 以服务端字段为准（可能大于本端截断后的清单长度）。
+     */
+    private fun parseArchive(archive: JsonObject?): ParsedArchive {
+        if (archive == null) return ParsedArchive(emptyList(), 0, "")
+        val summary = archive.str("summary")
+        val array = archive.arr("files") ?: JsonArray(emptyList())
+        val files = ArrayList<NoticeArchiveFile>(minOf(array.size, MAX_ARCHIVE_FILES))
+        for (element in array) {
+            if (files.size >= MAX_ARCHIVE_FILES) break
+            val obj = element as? JsonObject ?: continue
+            val rawName = obj.str("name").ifBlank { obj.str("path").substringAfterLast('/') }
+            val source = obj.str("url")
+            files.add(
+                NoticeArchiveFile(
+                    name = rawName.ifBlank { "文件 ${files.size + 1}" },
+                    kind = obj.str("kind"),
+                    sizeText = obj.str("size"),
+                    url = NoticeAttachmentSource.urlOf(source),
+                    hasData = NoticeAttachmentSource.inlineOf(source) != null,
+                ),
+            )
+        }
+        val count = archive.int("count").takeIf { it > 0 } ?: files.size
+        return ParsedArchive(files, count, summary)
+    }
 
     private fun JsonObject.str(key: String): String =
         (this[key] as? JsonPrimitive)?.contentOrNull.orEmpty()

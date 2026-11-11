@@ -232,13 +232,13 @@ class ClientDiagReporter(
  * 未捕获异常记录器（Application 层 handler 调用）。
  *
  * 只做三件事：脱敏异常信息 → 构造 client_diag 行（kind=crash）→ 同步追加本机待发队列。
- * **不打印**堆栈/token/密码，也不在崩溃线程里发网络请求。
+ * **不打印**堆栈/token/密码，也不在崩溃线程里发网络请求；detail 按 v2.1 白名单只带 `check=crash` + `code`。
  */
 class CrashDiagRecorder(
     private val pending: ClientDiagPendingStore,
     private val appVersion: String,
     private val sidProvider: () -> String?,
-    private val deviceProvider: () -> Map<String, String> = { emptyMap() },
+    private val deviceProvider: () -> JsonObject = { JsonObject(emptyMap()) },
     private val now: () -> Long = System::currentTimeMillis,
     private val suffixProvider: () -> String = { DiagSanitizer.randomSuffix(12) },
 ) {
@@ -250,11 +250,6 @@ class CrashDiagRecorder(
                 if (rawMessage.isBlank()) exception else "$exception: $rawMessage",
                 300,
             )
-            val detail = LinkedHashMap<String, String>()
-            detail["check_id"] = "crash"
-            detail["exception"] = exception
-            detail["thread"] = thread?.name.orEmpty()
-            detail["source"] = "uncaught"
             val row = DiagPayload.buildRow(
                 id = DiagPayload.newId(suffixProvider()),
                 sid = sidProvider()?.trim().orEmpty(),
@@ -262,7 +257,7 @@ class CrashDiagRecorder(
                 kind = "crash",
                 level = "error",
                 message = message,
-                detail = detail,
+                detail = DiagPayload.crashDetail(exception),
                 device = deviceProvider(),
                 fingerprint = DiagPayload.fingerprint("crash", "error", exception, message),
                 now = now(),

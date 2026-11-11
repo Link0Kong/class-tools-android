@@ -3,23 +3,23 @@
 > 目标：用 Android 17（API 37）的设计语言与 Compose-first 技术栈，把班级工具站重做成**真原生** Android App；数据与网页/小程序共用同一套 CloudBase 契约。
 
 - 包名：`com.furina.classtools`（早期草稿的 `fun.furina.classtools` 因 `fun` 是 Kotlin 硬关键字无法编译，已全量改名）
-- 版本：1.0.0（versionCode 1），Debug 后缀 `.debug`
+- 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v3.2.0**——v3 视觉 P2 起步（全局顶栏玻璃、权限/提醒页玻璃卡）+ 作业单条提醒；功能与 v3.1.0 相同（深色全链路/悬浮玻璃底栏/通知 v3/课表重构/诊断/教务登录）。单测 **779/0**、Release 冷启动 0 FATAL/ANR、签名 APK 已交付桌面（2.58MB）。详见 [docs/REPORT_ROUND10_20261109.md](docs/REPORT_ROUND10_20261109.md)
+- 状态：**v3.6.0**——「演示」下载中心（v2.0 兼容性处理 + 多端下载）基础上新增 **v2.3 视频/音频单独下载**：详情页「视频单独下载」分组（`视频N · 第X页` + 时长/分辨率/大小），DownloadManager 下载后系统播放器/WPS 打开或分享；无 `media_files` 旧 deck 不显示。实现见 [docs/PPT_DOWNLOAD_20261110.md](docs/PPT_DOWNLOAD_20261110.md)；单测 **994/0**（v2.3 新增 12 项）
 
 ## 目录
 
 ```
 app/                     Android 应用模块
   src/main/kotlin/com/furina/classtools/
-    data/                数据层：network(OkHttp/PostgREST)、auth(class_verify)、member(名单)、
+    data/                数据层：network(OkHttp/PostgREST)、auth(class_verify)、member(名单)、ppt(演示/分片上传)、
                          sync(userdata v6 合并/防抖/离线补发)、marks、session、tool 目录
-    features/            业务领域层（draw 抽签…纯 Kotlin，可单测）
+    features/            业务领域层（draw 抽签、group、fit、ppt 演示…纯 Kotlin，可单测）
     ui/                  Compose UI
       theme/             设计令牌（颜色/字体/形状/动效/主题/Tokens）
       components/        通用组件 + expressive 自建组件
-      screens/           页面（identity/home/all/profile/tools/draw…）
+      screens/           页面（identity/home/all/profile/tools/draw…ppt 列表/播放器）
       navigation/        自适应导航（底部 NavigationBar / NavigationRail）
       preview/           全部 @Preview（android preview render 无设备截图验收）
 design/                  Android 17 设计规格（事实核验 + token + 45 组件对照 + 16 页面方案）
@@ -64,6 +64,9 @@ cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
 - `docs/ROADMAP.md` — 里程碑与当前进度
 - `docs/BACKEND_CONTRACT.md` + `docs/api/` — 后端契约（ENDPOINTS / USERDATA_V6 / KOTLIN_MODELS / NOTICES / EXPORT_CARD_V2 / DATA_LAYER_IMPL）
 - `docs/TOOLCHAIN.md` — 工具链与版本矩阵（进行中）
+- `docs/PPT_20261109.md` — 「演示」v1.1 分步播放器实现/契约对应/已知限制/构建与测试证据
+- `docs/PPT_VIDEO_20261110.md` — 「演示」v1.2 原样播放视频模式/章节/倍速/续播/降级链/OSS 域名与下载限制/构建证据
+- `docs/PPT_DOWNLOAD_20261110.md` — 「演示」v2.0 下载中心 + v2.3 视频/音频单独下载：兼容性处理/详情页下载/FileProvider 打开分享/旧 deck/构建证据
 - `design/ANDROID17_DESIGN.md`、`design/tokens.json`、`design/COMPONENTS.md`、`design/SCREENS.md`
 
 ## 红线（继承自 `web/AGENTS.md`）

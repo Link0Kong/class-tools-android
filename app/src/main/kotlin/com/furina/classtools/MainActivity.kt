@@ -2,6 +2,7 @@ package com.furina.classtools
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -10,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.data.reminder.ReminderIntentFactory
 import com.furina.classtools.ui.ClassToolsRoot
+import com.furina.classtools.ui.platform.VolumeKeyBridge
 import com.furina.classtools.ui.theme.ClassToolsTheme
 
 class MainActivity : ComponentActivity() {
@@ -44,6 +46,20 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         toolIdFrom(intent)?.let { pendingToolId.value = it }
+    }
+
+    /**
+     * 音量键翻页（DESIGN §4.9）：播放器通过 [VolumeKeyBridge] 注册处理者；
+     * 未注册或未消费时照常走系统音量。音量+ = 前进、音量− = 后退。
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val forward = when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> true
+            KeyEvent.KEYCODE_VOLUME_DOWN -> false
+            else -> return super.onKeyDown(keyCode, event)
+        }
+        val handled = VolumeKeyBridge.handler?.invoke(forward) == true
+        return handled || super.onKeyDown(keyCode, event)
     }
 
     private fun toolIdFrom(intent: Intent?): String? = ReminderIntentFactory.toolIdFromExtras(

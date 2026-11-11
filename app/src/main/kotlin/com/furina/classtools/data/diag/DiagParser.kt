@@ -179,6 +179,7 @@ object DiagParser {
                     state = obj["st"].asStringOrNull().orEmpty(),
                 )
             }
+            val related = parseRelated(row["related"], json)
             DiagAnalysis(
                 id = id,
                 ts = row["ts"].asLongOrNull() ?: 0L,
@@ -195,8 +196,38 @@ object DiagParser {
                     ?: (row["confidence"] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()
                     ?: 0.0,
                 flow = flow,
+                relatedHealthIds = related.healthIds,
+                relatedChecks = related.checks,
+                relatedRepairId = related.repairId,
             )
         }
+    }
+
+    /** `diag_analysis.related` 解析：`{health_ids:[], checks:[], repair_id}`（兼容 JSON 字符串 / 旧数据缺失）。 */
+    data class RelatedRefs(
+        val healthIds: List<String> = emptyList(),
+        val checks: List<String> = emptyList(),
+        val repairId: String = "",
+    )
+
+    fun parseRelated(element: JsonElement?, json: Json = NetJson): RelatedRefs {
+        val obj = jsonObjectField(element, json) ?: return RelatedRefs()
+        fun stringList(key: String): List<String> =
+            jsonArrayField(obj[key], json)
+                .mapNotNull { it.asStringOrNull()?.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+        val repairElement = obj["repair_id"] as? JsonPrimitive
+        val repairId = if (repairElement?.isString == true) {
+            repairElement.content.trim()
+        } else {
+            ""
+        }
+        return RelatedRefs(
+            healthIds = stringList("health_ids"),
+            checks = stringList("checks"),
+            repairId = repairId,
+        )
     }
 
     // ------------------------------------------------------------ repair_tasks

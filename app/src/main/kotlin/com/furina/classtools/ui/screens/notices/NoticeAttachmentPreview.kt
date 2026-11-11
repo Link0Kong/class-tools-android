@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -46,9 +48,18 @@ import com.furina.classtools.data.network.ApiClient
 import com.furina.classtools.data.network.ApiResult
 import com.furina.classtools.data.network.NetJson
 import com.furina.classtools.data.network.parseJsonOrNull
+import com.furina.classtools.data.notices.NoticeArchiveFile
+import com.furina.classtools.data.notices.NoticeAttachmentFileResult
+import com.furina.classtools.data.notices.NoticeAttachmentOpen
+import com.furina.classtools.data.notices.NoticeAttachmentSource
+import com.furina.classtools.data.notices.NoticeItemMeta
+import com.furina.classtools.data.ppt.OkHttpPptImageLoader
+import com.furina.classtools.data.ppt.PptImageLoader
+import java.io.File
 import java.net.URLEncoder
 import java.util.Base64
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -228,16 +239,28 @@ object NoticeImageDecoder {
     }
 }
 
+/**
+ * 网络图片加载器兜底单例（调用方未注入 `container.pptImageLoader` 时使用，如 IDE 预览）。
+ * 复用 `data/ppt` 的 OkHttp + BitmapFactory + LRU 实现，不引入 Coil 等新依赖。
+ */
+private object NoticeNetworkImageLoader {
+    val shared: PptImageLoader by lazy { OkHttpPptImageLoader() }
+}
+
 private sealed interface ThumbState {
     data object Loading : ThumbState
     data object Failed : ThumbState
-    data class Ready(val image: ImageBitmap, val dataUri: String) : ThumbState
+
+    /** @param source 原始内容（data URI 或签名 URL；点击大图时按原形态再加载） */
+    data class Ready(val image: ImageBitmap, val source: String) : ThumbState
 }
 
 /**
  * 附件缩略图（详情内嵌）：
+ * - [url] 为外置签名 URL（新数据）时走 [imageLoader] 网络加载（内存 LRU 复用，失败占位不崩）；
+ * - 否则按需通过 [loader] 拉原始 data URI（旧数据，行为不变）；
  * - [loader] 为 null / 无数据 / 解码失败 → 元信息行 +「暂不支持预览」（不崩、不联网图库）；
- * - 成功 → 缩略图 + 说明；点击打开全屏大图（按需解码，最大边 1800px）。
+ * - 成功 → 缩略图 + 说明；点击打开全屏大图（URL 走同一加载器，data URI 最大边 1800px）。
  */
 @Composable
 fun NoticeAttachmentThumb(
@@ -248,15 +271,27 @@ fun NoticeAttachmentThumb(
     title: String,
     caption: String = "",
     modifier: Modifier = Modifier,
+    /** 外置签名 URL（空 = 旧数据 data URI 分支）。 */
+    url: String = "",
+    /** 网络图片加载器（生产传 `container.pptImageLoader`；null 用内置单例兜底）。 */
+    imageLoader: PptImageLoader? = null,
 ) {
-    var state by remember(rowId, ordinal, manual, loader) {
-        mutableStateOf<ThumbState>(if (loader == null) ThumbState.Failed else ThumbState.Loading)
+    var state by remember(rowId, ordinal, manual, loader, url, imageLoader) {
+        mutableStateOf<ThumbState>(if (loader == null && url.isBlank()) ThumbState.Failed else ThumbState.Loading)
     }
     var showFull by remember { mutableStateOf(false) }
-    if (loader != null) {
-        LaunchedEffect(loader, rowId, ordinal, manual) {
+    if (loader != null || url.isNotBlank()) {
+        LaunchedEffect(loader, rowId, ordinal, manual, url, imageLoader) {
             state = ThumbState.Loading
-            val value = runCatching { loader.load(rowId, ordinal, manual) }.getOrNull()
+            if (url.isNotBlank()) {
+                val network = imageLoader ?: NoticeNetworkImageLoader.shared
+                val remote = runCatching {
+                    network.load(url, PptImageLoader.THUMB_TARGET_WIDTH)
+                }.getOrNull()
+                state = if (remote == null) ThumbState.Failed else ThumbState.Ready(remote, url)
+                return@LaunchedEffect
+            }
+            val value = runCatching { loader?.load(rowId, ordinal, manual) }.getOrNull()
             if (!NoticeAttachmentParser.isImageDataUri(value)) {
                 state = ThumbState.Failed
                 return@LaunchedEffect
@@ -290,7 +325,7 @@ fun NoticeAttachmentThumb(
 
         ThumbState.Failed -> AttachmentFallback(
             title = title,
-            detail = listOf(caption, "无法预览 · 暂不支持预览").filter { it.isNotBlank() }.joinToString(" · "),
+            detail = listOf(caption, "图片加载失败").filter { it.isNotBlank() }.joinToString(" · "),
             modifier = modifier,
         )
 
@@ -313,8 +348,9 @@ fun NoticeAttachmentThumb(
             )
             if (showFull) {
                 NoticeImageFullDialog(
-                    dataUri = current.dataUri,
+                    source = current.source,
                     title = title,
+                    imageLoader = imageLoader,
                     onDismiss = { showFull = false },
                 )
             }
@@ -358,14 +394,17 @@ fun AttachmentFallback(
 }
 
 /**
- * 全屏图片预览（按需解码；失败降级文案，不阻塞页面）。
- * 使用黑色背景 + 自适应 Fit，点击右上角关闭/点背景关闭。
+ * 全屏图片预览（按需加载；失败降级文案，不阻塞页面）。
+ *
+ * @param source data URI（旧数据）或 http(s) 签名 URL（新数据）
+ * @param imageLoader 网络图片加载器（URL 形态用；null 用内置单例兜底）
  */
 @Composable
 fun NoticeImageFullDialog(
-    dataUri: String?,
+    source: String?,
     title: String,
     onDismiss: () -> Unit,
+    imageLoader: PptImageLoader? = null,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -383,19 +422,26 @@ fun NoticeImageFullDialog(
                 contentColor = Color.White,
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    var image by remember(dataUri) { mutableStateOf<ImageBitmap?>(null) }
-                    var failed by remember(dataUri) { mutableStateOf(false) }
-                    LaunchedEffect(dataUri) {
-                        val value = dataUri
-                        if (value == null) {
+                    var image by remember(source, imageLoader) { mutableStateOf<ImageBitmap?>(null) }
+                    var failed by remember(source, imageLoader) { mutableStateOf(false) }
+                    LaunchedEffect(source, imageLoader) {
+                        val value = source
+                        if (value.isNullOrBlank()) {
                             failed = true
                             return@LaunchedEffect
                         }
-                        val decoded = withContext(Dispatchers.IO) {
-                            NoticeImageDecoder.decodeSampled(value, NoticeImageDecoder.FULL_MAX_DIMENSION)
+                        val loaded = if (NoticeAttachmentSource.isHttpUrl(value)) {
+                            runCatching {
+                                (imageLoader ?: NoticeNetworkImageLoader.shared)
+                                    .load(value, NoticeImageDecoder.FULL_MAX_DIMENSION)
+                            }.getOrNull()
+                        } else {
+                            withContext(Dispatchers.IO) {
+                                NoticeImageDecoder.decodeSampled(value, NoticeImageDecoder.FULL_MAX_DIMENSION)
+                            }
                         }
-                        image = decoded
-                        failed = decoded == null
+                        image = loaded
+                        failed = loaded == null
                     }
                     when {
                         image != null -> Image(
@@ -425,6 +471,213 @@ fun NoticeImageFullDialog(
     }
 }
 
+// ---------------------------------------------------------------------------
+// 文件附件：外置签名 URL（新数据）/ data URI（旧数据）→ 缓存文件 → 系统打开
+// ---------------------------------------------------------------------------
 
+/** 单个附件的打开进度（每个文件行独立状态，互不影响）。 */
+private sealed interface AttachmentOpenState {
+    data object Idle : AttachmentOpenState
+    data object Preparing : AttachmentOpenState
+    data class Opened(val file: File) : AttachmentOpenState
+    data class Error(val message: String) : AttachmentOpenState
+}
 
+/**
+ * 对外通用「可打开附件行」（人工通知附件 `attachments[].url` 等非 items 场景复用）。
+ *
+ * @param source http(s) 签名 URL（外置）或 data URI（旧数据）
+ */
+@Composable
+fun NoticeUrlAttachmentRow(
+    title: String,
+    detail: String,
+    source: String,
+    fileName: String,
+    modifier: Modifier = Modifier,
+) {
+    AttachmentOpenRow(
+        title = title,
+        detail = detail,
+        source = source,
+        fileName = fileName,
+        modifier = modifier,
+    )
+}
+
+/**
+ * 文件附件行（`NoticeItemMeta.File`）：
+ * - `url` 为 http(s) 签名 URL → 点击下载到 `cacheDir/notice_attachments/` 再用系统应用打开（失败可重试）；
+ * - 旧数据内联 data URI / 「待获取」→ 保持元信息展示（行为不变）；
+ * - `archive.files[]` 有各自 URL 时逐项可打开，无 URL 时只展示名称/类型/大小。
+ */
+@Composable
+fun NoticeFileAttachmentRow(
+    meta: NoticeItemMeta.File,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (meta.url.isNotBlank()) {
+            AttachmentOpenRow(
+                title = meta.name,
+                detail = fileDetailText(meta),
+                source = meta.url,
+                fileName = meta.name,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            AttachmentFallback(
+                title = meta.name,
+                detail = fileDetailText(meta),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (meta.archiveFiles.isNotEmpty()) {
+            Text(
+                text = listOf(
+                    "压缩包内容 · ${meta.archiveCount.ifZero(meta.archiveFiles.size)} 个文件",
+                    meta.archiveSummary.take(60),
+                ).filter { it.isNotBlank() }.joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            meta.archiveFiles.forEach { file ->
+                if (file.url.isNotBlank()) {
+                    AttachmentOpenRow(
+                        title = file.name,
+                        detail = archiveFileDetailText(file),
+                        source = file.url,
+                        fileName = file.name,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp),
+                    )
+                } else {
+                    AttachmentFallback(
+                        title = file.name,
+                        detail = archiveFileDetailText(file),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 「点击 → 准备（下载/解码到缓存）→ 系统打开」的附件行。
+ *
+ * @param source http(s) 签名 URL（外置）或 data URI（旧数据）
+ */
+@Composable
+private fun AttachmentOpenRow(
+    title: String,
+    detail: String,
+    source: String,
+    fileName: String,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var state by remember(source) { mutableStateOf<AttachmentOpenState>(AttachmentOpenState.Idle) }
+    val preparing = state is AttachmentOpenState.Preparing
+
+    fun startOpen() {
+        if (preparing) return
+        state = AttachmentOpenState.Preparing
+        scope.launch {
+            val result = NoticeAttachmentOpen.prepare(context, source, fileName)
+            state = when (result) {
+                is NoticeAttachmentFileResult.Ok -> {
+                    if (NoticeAttachmentOpen.open(context, result.file, result.mime)) {
+                        AttachmentOpenState.Opened(result.file)
+                    } else {
+                        AttachmentOpenState.Error("没有可打开该附件的应用")
+                    }
+                }
+
+                is NoticeAttachmentFileResult.TooLarge -> AttachmentOpenState.Error(
+                    "附件超过 ${NoticeAttachmentSource.formatSize(result.limitBytes)}，暂不支持打开",
+                )
+
+                is NoticeAttachmentFileResult.Failed -> AttachmentOpenState.Error(result.message)
+                is NoticeAttachmentFileResult.Unsupported -> AttachmentOpenState.Error(result.message)
+            }
+        }
+    }
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = !preparing) { startOpen() }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Rounded.AttachFile,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(15.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val stateText = when (val current = state) {
+                AttachmentOpenState.Idle -> ""
+                AttachmentOpenState.Preparing -> "下载中…"
+                is AttachmentOpenState.Opened -> "已打开"
+                is AttachmentOpenState.Error -> current.message
+            }
+            val line = listOf(detail, stateText).filter { it.isNotBlank() }.joinToString(" · ")
+            if (line.isNotBlank()) {
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (state is AttachmentOpenState.Error) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = when (state) {
+                AttachmentOpenState.Preparing -> "下载中…"
+                is AttachmentOpenState.Opened -> "重新打开"
+                else -> "打开"
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+        )
+    }
+}
+
+private fun fileDetailText(meta: NoticeItemMeta.File): String = buildList {
+    if (meta.ext.isNotBlank()) add(meta.ext.uppercase())
+    add(meta.sizeText)
+    if (meta.pending) add("待获取")
+    if (meta.note.isNotBlank()) add(meta.note)
+    if (meta.url.isBlank() && meta.archiveFiles.isEmpty()) add("暂不支持预览")
+}.filter { it.isNotBlank() }.joinToString(" · ")
+
+private fun archiveFileDetailText(file: NoticeArchiveFile): String = listOf(
+    file.kind,
+    file.sizeText,
+    if (file.hasData) "内联附件" else "",
+).filter { it.isNotBlank() }.joinToString(" · ")
+
+private fun Int.ifZero(fallback: Int): Int = if (this > 0) this else fallback
 

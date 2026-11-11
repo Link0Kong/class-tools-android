@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 品牌标记：与网页 favicon / 微信小程序 app-icon-1024 一致的三圆点
+         （64 视口内的三个圆按 72/64 缩放居中映射到 108 自适应画布的安全区） -->
+    <path
+        android:fillColor="#FF4E9082"
+        android:pathData="M54,43.9 a10.125,10.125 0 1,1 0,20.25 a10.125,10.125 0 1,1 0,-20.25 Z" />
+    <path
+        android:fillColor="#FF6E8CA8"
+        android:pathData="M34.875,29.25 a5.625,5.625 0 1,1 0,11.25 a5.625,5.625 0 1,1 0,-11.25 Z" />
+    <path
+        android:fillColor="#FFB98F63"
+        android:pathData="M73.125,67.5 a5.625,5.625 0 1,1 0,11.25 a5.625,5.625 0 1,1 0,-11.25 Z" />
+</vector>

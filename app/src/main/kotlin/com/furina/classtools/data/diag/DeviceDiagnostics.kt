@@ -7,34 +7,32 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.StatFs
 import java.io.File
-import java.time.Instant
-import java.time.ZoneId
-import java.util.Locale
 
 /**
- * 设备诊断：本机检查采集（Android）+ 判定（纯函数，可单测）。
+ * 设备诊断 v2.1：本机检查采集（Android）+ 判定（纯函数，可单测）。
  *
- * 检查项（契约「设备诊断」）：机型（MANUFACTURER/MODEL）、Android 版本、App 版本、屏幕、语言、
- * 内存/可用存储、网络类型/连通性、CloudBase 网关延迟、时区/时钟偏差、本地数据可用性。
+ * 契约 v2.1 §B「设备信息最小化」：
+ * - 只采集/展示「可能导致功能不可用/出错」的信息：系统版本、App 版本、WebView 内核、屏幕、
+ *   可用内存、可用存储百分比、网络、网关延迟、时钟偏差、本地数据可读写；
+ * - **不采集品牌、型号、语言、API level、时区**（也不进上报 payload）；
+ * - 上报 device 白名单 = `platform/osVersion/appVer/webview/screen{w,h,dpr}/memoryMB/storagePct/network/clockSkewMs`。
  *
  * 分两层：
  * - [AndroidDeviceProbe]：读系统 API → [DiagProbeInput]（仅本文件依赖 Android framework）；
  * - [DiagEvaluator]：把 [DiagProbeInput] 判定为 [DiagCheck] 列表（纯 Kotlin，JVM 单测直接覆盖）。
  */
 data class DiagProbeInput(
-    val manufacturer: String = "",
-    val model: String = "",
     val androidVersion: String = "",
-    val sdkInt: Int = 0,
     val appVersion: String = "",
-    val appVersionCode: Int = 0,
-    val screenWidthDp: Int = 0,
-    val screenHeightDp: Int = 0,
-    val densityDpi: Int = 0,
-    val language: String = "",
-    val timezoneId: String = "",
-    val timezoneOffsetMinutes: Int = 0,
+    val webviewVersion: String = "",
+    /** 屏幕物理像素宽（契约 screen.w）。 */
+    val screenWidthPx: Int = 0,
+    /** 屏幕物理像素高（契约 screen.h）。 */
+    val screenHeightPx: Int = 0,
+    /** density（契约 screen.dpr，如 2.75）。 */
+    val screenDensity: Float = 0f,
     val memoryTotalMb: Long = 0,
+    /** 可用内存 MB（只上报这个量；总量仅用于阈值判定）。 */
     val memoryAvailMb: Long = 0,
     val lowMemory: Boolean = false,
     val storageTotalMb: Long = 0,
@@ -52,36 +50,35 @@ data class DiagProbeInput(
     val clockSkewMs: Long?
         get() = serverEpochMs?.let { it - nowMillis }
 
-    /** 上报 payload 的 device 字段（白名单键；值在 DiagPayload.filterMap 再脱敏）。 */
-    fun deviceMap(): Map<String, String> {
-        val out = LinkedHashMap<String, String>()
-        out["platform"] = "android"
-        if (androidVersion.isNotBlank()) out["os_version"] = androidVersion
-        if (sdkInt > 0) out["sdk"] = sdkInt.toString()
-        if (manufacturer.isNotBlank()) out["manufacturer"] = manufacturer
-        if (model.isNotBlank()) out["model"] = model
-        if (screenWidthDp > 0 && screenHeightDp > 0) {
-            out["screen"] = "${screenWidthDp}x${screenHeightDp}dp"
-            out["screen_dp"] = "${screenWidthDp}x${screenHeightDp}"
+    /** 可用内存占比（仅用于阈值判定，不上报总量）。 */
+    val memoryRatio: Double
+        get() = if (memoryTotalMb > 0) memoryAvailMb.toDouble() / memoryTotalMb.toDouble() else 1.0
+
+    /** 可用存储百分比 0–100（契约 storagePct）。 */
+    val storagePct: Int
+        get() = if (storageTotalMb > 0) {
+            ((storageFreeMb * 100) / storageTotalMb).toInt().coerceIn(0, 100)
+        } else {
+            0
         }
-        if (densityDpi > 0) out["density"] = densityDpi.toString()
-        if (language.isNotBlank()) out["language"] = language
-        if (timezoneId.isNotBlank()) {
-            out["timezone"] = "$timezoneId (${DiagEvaluator.formatUtcOffset(timezoneOffsetMinutes)})"
-        }
-        if (networkType.isNotBlank()) out["network"] = networkType
-        if (memoryTotalMb > 0) out["memory_total_mb"] = memoryTotalMb.toString()
-        if (memoryTotalMb > 0) out["memory_avail_mb"] = memoryAvailMb.toString()
-        if (storageTotalMb > 0) {
-            out["storage_total_mb"] = storageTotalMb.toString()
-            out["storage_free_mb"] = storageFreeMb.toString()
-        }
-        if (appVersion.isNotBlank()) out["app_version"] = appVersion
-        gatewayLatencyMs?.let { out["gateway_latency_ms"] = it.toString() }
-        clockSkewMs?.let { out["clock_skew_ms"] = it.toString() }
-        out["local_data_ok"] = localDataOk.toString()
-        return out
-    }
+
+    /** 上报 payload 的 device（契约 v2.1 §B android 白名单，唯一来源）。 */
+    fun deviceInfo(): DiagDeviceInfo = DiagDeviceInfo(
+        platform = DiagPayload.PLATFORM,
+        osVersion = androidVersion,
+        appVer = appVersion,
+        webview = webviewVersion,
+        screenWidth = screenWidthPx,
+        screenHeight = screenHeightPx,
+        screenDpr = screenDensity.toDouble(),
+        memoryMB = memoryAvailMb,
+        storagePct = storagePct,
+        network = networkType,
+        clockSkewMs = clockSkewMs,
+    )
+
+    /** 上报 device JSON（[DiagDeviceInfo.toJson]）。 */
+    fun deviceJson(): kotlinx.serialization.json.JsonObject = deviceInfo().toJson()
 }
 
 /** 判定阈值（集中常量，测试与 UI 文案共用）。 */
@@ -98,79 +95,62 @@ object DiagThresholds {
     const val CLOCK_FAIL_MS: Long = 10L * 60 * 1000
 }
 
-/** 纯函数判定：输入本机采集值 → 诊断项列表（顺序固定，UI/上报都用）。 */
+/** 纯函数判定：输入本机采集值 → 诊断项列表（顺序固定，8–10 项，UI/上报同源）。 */
 object DiagEvaluator {
 
     fun evaluate(input: DiagProbeInput): List<DiagCheck> {
-        val checks = ArrayList<DiagCheck>(14)
-        checks += make(
-            id = "device",
-            label = "设备型号",
-            status = DiagStatus.PASS,
-            value = listOf(input.manufacturer, input.model).filter { it.isNotBlank() }
-                .joinToString(" ").ifBlank { "未知" },
-        )
+        val checks = ArrayList<DiagCheck>(10)
+
         checks += make(
             id = "os_version",
-            label = "Android 版本",
+            label = "系统版本",
             status = DiagStatus.PASS,
-            value = listOf(input.androidVersion, if (input.sdkInt > 0) "API ${input.sdkInt}" else "")
-                .filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "未知" },
+            value = input.androidVersion.ifBlank { "未知" },
         )
         checks += make(
             id = "app_version",
             label = "App 版本",
             status = DiagStatus.PASS,
-            value = input.appVersion.ifBlank { "未知" } +
-                if (input.appVersionCode > 0) " (${input.appVersionCode})" else "",
+            value = input.appVersion.ifBlank { "未知" },
+        )
+        checks += make(
+            id = "webview",
+            label = "WebView 内核",
+            status = DiagStatus.PASS,
+            value = input.webviewVersion.ifBlank { "未知" },
         )
         checks += make(
             id = "screen",
             label = "屏幕",
             status = DiagStatus.PASS,
-            value = if (input.screenWidthDp > 0) {
-                "${input.screenWidthDp}×${input.screenHeightDp}dp · ${input.densityDpi}dpi"
+            value = if (input.screenWidthPx > 0 && input.screenDensity > 0f) {
+                "${input.screenWidthPx}×${input.screenHeightPx} @${formatDpr(input.screenDensity)}x"
             } else {
                 "未知"
             },
         )
-        checks += make(
-            id = "language",
-            label = "语言",
-            status = DiagStatus.PASS,
-            value = input.language.ifBlank { "未知" },
-        )
 
-        // 内存
-        val memoryRatio = if (input.memoryTotalMb > 0) {
-            input.memoryAvailMb.toDouble() / input.memoryTotalMb.toDouble()
-        } else {
-            1.0
-        }
+        // 内存（只展示可用量；占比仅用于判定）
         val memoryStatus = when {
             input.memoryTotalMb <= 0 -> DiagStatus.INFO
-            input.lowMemory || memoryRatio < DiagThresholds.MEMORY_FAIL_RATIO -> DiagStatus.FAIL
-            memoryRatio < DiagThresholds.MEMORY_WARN_RATIO -> DiagStatus.WARN
+            input.lowMemory || input.memoryRatio < DiagThresholds.MEMORY_FAIL_RATIO -> DiagStatus.FAIL
+            input.memoryRatio < DiagThresholds.MEMORY_WARN_RATIO -> DiagStatus.WARN
             else -> DiagStatus.PASS
         }
         checks += make(
             id = "memory",
             label = "可用内存",
             status = memoryStatus,
-            value = if (input.memoryTotalMb > 0) {
-                "${input.memoryAvailMb} / ${input.memoryTotalMb} MB"
-            } else {
-                "无法读取"
-            },
+            value = if (input.memoryTotalMb > 0) "可用 ${formatMb(input.memoryAvailMb)}" else "无法读取",
             hint = when (memoryStatus) {
-                DiagStatus.FAIL -> if (input.lowMemory) "系统处于低内存状态" else "可用内存过低，可能被杀进程"
-                DiagStatus.WARN -> "可用内存偏低"
+                DiagStatus.FAIL -> if (input.lowMemory) "系统处于低内存状态" else "内存偏低，可能被杀进程"
+                DiagStatus.WARN -> "内存偏低"
                 else -> ""
             },
             reportKind = "perf",
         )
 
-        // 存储
+        // 存储（只展示百分比）
         val storageRatio = if (input.storageTotalMb > 0) {
             input.storageFreeMb.toDouble() / input.storageTotalMb.toDouble()
         } else {
@@ -188,11 +168,7 @@ object DiagEvaluator {
             id = "storage",
             label = "可用存储",
             status = storageStatus,
-            value = if (input.storageTotalMb > 0) {
-                "${input.storageFreeMb} / ${input.storageTotalMb} MB"
-            } else {
-                "无法读取"
-            },
+            value = if (input.storageTotalMb > 0) "剩余 ${input.storagePct}%" else "无法读取",
             hint = when (storageStatus) {
                 DiagStatus.FAIL -> "存储空间严重不足"
                 DiagStatus.WARN -> "存储空间偏少"
@@ -213,7 +189,8 @@ object DiagEvaluator {
             id = "network",
             label = "网络",
             status = networkStatus,
-            value = networkLabel(networkType) + if (offline) "" else if (input.networkValidated) " · 已连通" else " · 未验证连通",
+            value = networkLabel(networkType) +
+                if (offline) "" else if (input.networkValidated) " · 已连通" else " · 未验证连通",
             hint = when (networkStatus) {
                 DiagStatus.FAIL -> "设备当前无可用网络"
                 DiagStatus.WARN -> "网络未验证连通性，数据同步可能失败"
@@ -268,14 +245,6 @@ object DiagEvaluator {
             reportKind = "perf",
         )
 
-        // 时区（只做信息展示；偏移见 formatUtcOffset）
-        checks += make(
-            id = "timezone",
-            label = "时区",
-            status = DiagStatus.PASS,
-            value = (input.timezoneId.ifBlank { "未知" }) + " " + formatUtcOffset(input.timezoneOffsetMinutes),
-        )
-
         // 本地数据可用性（应用私有目录可写 + 可读）
         checks += make(
             id = "local_data",
@@ -301,11 +270,25 @@ object DiagEvaluator {
         else -> "未知"
     }
 
-    /** 固定宽度 UTC 偏移文案，如 `UTC+08:00`。 */
-    fun formatUtcOffset(minutes: Int): String {
-        val sign = if (minutes >= 0) "+" else "-"
-        val abs = kotlin.math.abs(minutes)
-        return "UTC$sign${"%02d".format(abs / 60)}:${"%02d".format(abs % 60)}"
+    /** dpr 文案：2.75 → `2.75`，2.0 → `2`。 */
+    fun formatDpr(density: Float): String {
+        if (density <= 0f) return "0"
+        val rounded = kotlin.math.round(density * 100.0) / 100.0
+        return if (rounded == rounded.toLong().toDouble()) rounded.toLong().toString() else rounded.toString()
+    }
+
+    fun formatMb(mb: Long): String = when {
+        mb <= 0 -> "0 MB"
+        mb >= 1024 -> {
+            val rounded = kotlin.math.round(mb / 1024.0 * 10.0) / 10.0
+            val text = if (rounded == rounded.toLong().toDouble()) {
+                rounded.toLong().toString()
+            } else {
+                rounded.toString()
+            }
+            "$text GB"
+        }
+        else -> "$mb MB"
     }
 
     fun formatDuration(millis: Long): String {
@@ -335,39 +318,30 @@ object DiagEvaluator {
 }
 
 /**
- * Android 实现：读取 Build / 屏幕 / Locale / 内存 / 存储 / 网络 / 本地目录可用性。
+ * Android 实现：读取系统版本 / 屏幕 / 内存 / 存储 / 网络 / WebView 内核 / 本地目录可用性。
  *
  * CloudBase 网关延迟与服务器时钟由数据层（[DiagRepository.measureGateway]）测量后回填。
+ * 品牌、型号、语言、时区、API level 一律不读取（契约 v2.1 §B）。
  */
 class AndroidDeviceProbe(
     private val context: Context,
     private val appVersion: String = "",
-    private val appVersionCode: Int = 0,
 ) {
     fun collectBase(nowMillis: Long = System.currentTimeMillis()): DiagProbeInput {
         val metrics = context.resources.displayMetrics
-        val density = metrics.density.takeIf { it > 0f } ?: 1f
-        val zone = ZoneId.systemDefault()
-        val offsetMinutes = zone.rules.getOffset(Instant.ofEpochMilli(nowMillis)).totalSeconds / 60
-
+        val density = metrics.density.takeIf { it > 0f } ?: 0f
         val memory = readMemory()
         val storage = readStorage()
         val network = readNetwork()
         val local = readLocalData()
 
         return DiagProbeInput(
-            manufacturer = Build.MANUFACTURER.orEmpty(),
-            model = Build.MODEL.orEmpty(),
             androidVersion = Build.VERSION.RELEASE.orEmpty(),
-            sdkInt = Build.VERSION.SDK_INT,
             appVersion = appVersion,
-            appVersionCode = appVersionCode,
-            screenWidthDp = (metrics.widthPixels / density).toInt(),
-            screenHeightDp = (metrics.heightPixels / density).toInt(),
-            densityDpi = metrics.densityDpi,
-            language = Locale.getDefault().toLanguageTag(),
-            timezoneId = zone.id,
-            timezoneOffsetMinutes = offsetMinutes,
+            webviewVersion = readWebViewVersion(),
+            screenWidthPx = metrics.widthPixels,
+            screenHeightPx = metrics.heightPixels,
+            screenDensity = density,
             memoryTotalMb = memory.first,
             memoryAvailMb = memory.second,
             lowMemory = memory.third,
@@ -423,6 +397,24 @@ class AndroidDeviceProbe(
         }
     }
 
+    /** WebView 内核（包版本主版本号，如 `WebView/137`）；读不到返回空串（允许可空）。 */
+    private fun readWebViewVersion(): String {
+        return try {
+            val manager = context.packageManager
+            val candidates = listOf("com.google.android.webview", "com.android.webview")
+            for (pkg in candidates) {
+                val info = manager.getPackageInfo(pkg, 0)
+                val version = info.versionName?.trim().orEmpty()
+                if (version.isNotEmpty()) {
+                    return "WebView/" + version.substringBefore('.')
+                }
+            }
+            ""
+        } catch (_: Throwable) {
+            ""
+        }
+    }
+
     private fun readLocalData(): Pair<Boolean, String> {
         return try {
             val dir = context.filesDir ?: return false to "filesDir 不可用"
@@ -431,13 +423,9 @@ class AndroidDeviceProbe(
             probe.writeText("ok")
             val ok = probe.isFile && probe.length() == 2L
             probe.delete()
-            if (ok) {
-                true to "应用私有目录可读写"
-            } else {
-                false to "应用私有目录不可写"
-            }
+            if (ok) true to "可读写" else false to "不可写"
         } catch (_: Throwable) {
-            false to "应用私有目录不可写"
+            false to "不可写"
         }
     }
 

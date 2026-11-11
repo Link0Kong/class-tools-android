@@ -391,3 +391,134 @@ Release 包**真实账号业务全链路**（真实身份登录 → 云端数据
 - 本轮只做快速 E2E 回归（38 项）+ Release 启动/签名复验，未重跑 v3.0.0 的完整 40 项/矩阵。
 - 作业「提醒我」的排程行为需真实作业数据 + 通知权限后另测；未触发云端写。
 - 真实账号业务链路、提醒实际到达、教务登录完整流程仍需测试账号另测。
+
+---
+
+## 13. v3.3.0 Release 构建（新增「演示」工具）
+
+> 版本：**versionName `3.3.0` / versionCode `9`**（新增功能 = minor，符合 §4「每次发布递增 versionCode」）
+> 日期：2026-11-09 22:54；本轮为「演示」功能实现的构建/测试证据，安装与冷启动复验由 Lead 交付时执行。
+
+### 13.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| 构建命令 | `$env:JAVA_HOME='C:\AndroidToolchain\jdk17'; $env:ANDROID_HOME='C:\AndroidToolchain\sdk'; .\gradlew.bat assembleRelease --console=plain` |
+| 结果 | **BUILD SUCCESSFUL in 1m 38s**（R8 + 资源压缩 + lintVitalRelease 通过） |
+| 交付 APK | `android-class-tools\artifacts\classtools-3.3.0-release-signed.apk` |
+| APK 字节数 | **2,692,174 B**（2.57 MiB；较 v3.2.0 +114,689 B = 演示模块/预览无额外依赖，仅代码与资源） |
+| APK SHA-256 | **`B4E88732028AA32B21133EA296AC3FD6A5C4176083E32186434CC5FE9459BF2B`** |
+| `apksigner verify --verbose --print-certs` | **Verifies**；v2 scheme = true；Number of signers = 1 |
+| 签名证书 | 同一 keystore：`CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`；证书 SHA-256 `974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a` |
+| 新增依赖 | **无**（图片加载自建 OkHttp+BitmapFactory，视频用系统 VideoView/MediaController） |
+
+### 13.2 测试与预览
+
+| 项 | 结果 |
+|---|---|
+| `:app:testDebugUnitTest` | **BUILD SUCCESSFUL，904 tests / 0 failures / 0 errors / 0 skipped**（74 suites；新增 PPT 8 类 87 项，无原有用例回退） |
+| Compose @Preview 渲图 | `android preview render` **exit 0**，5 张 PNG：`artifacts/ppt-list-states.png`、`ppt-list-empty.png`、`ppt-player-169.png`、`ppt-player-43.png`、`ppt-player-dark.png`（原始输出 `artifacts/previews_ppt/`） |
+| 详细实现/契约/已知限制 | `docs/PPT_20261109.md` |
+
+### 13.3 边界
+
+- 本轮未做模拟器安装/冷启动复验（Lead 交付时统一执行）；签名与构建产物已验证。
+- 「演示」真实端到端链路（测试身份上传 → 本机转换机转换 → manifest 可达 → 播放器加载真实图片/视频）按契约 §9.3 由 Lead 执行。
+- 播放器转场为保守淡入实现（契约允许降级）；续播/重命名列为 P2，详见 `docs/PPT_20261109.md` §5。
+
+---
+
+## 14. v3.4.0 Release 构建（「演示」v1.2：原样播放视频模式）
+
+> 版本：**versionName `3.4.0` / versionCode `10`**；日期：2026-11-10 21:12。安装/冷启动复验由 Lead 统一执行。
+
+### 14.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| 构建命令 | `$env:JAVA_HOME='C:\AndroidToolchain\jdk17'; $env:ANDROID_HOME='C:\AndroidToolchain\sdk'; .\gradlew.bat assembleRelease --console=plain` |
+| 结果 | **BUILD SUCCESSFUL in 3m 34s**（R8 + 资源压缩 + lintVitalRelease 通过） |
+| 构建产物 | `app\build\outputs\apk\release\app-release.apk` = **2,724,998 B** |
+| 交付副本 | `android-class-tools\artifacts\classtools-3.4.0-release-signed.apk`（SHA-256 与构建产物一致） |
+| APK SHA-256 | **`542943B43EE1857EABFE275B6D1C37AF1DFD3FE9DBFF3F06AA7C7947737DCC0D`** |
+| `apksigner verify --verbose --print-certs` | **Verifies**；APK Signature Scheme v2 = true；1 signer；证书 `CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`（同一 keystore，SHA-256 `974854df…bec4a1a`） |
+| 新增依赖 | **无**（视频用系统 MediaPlayer + SurfaceView；图片沿用自建 OkHttp+BitmapFactory） |
+
+### 14.2 测试与预览
+
+| 项 | 结果 |
+|---|---|
+| `:app:testDebugUnitTest` | **BUILD SUCCESSFUL，954 tests / 0 failures / 0 errors / 0 skipped（78 suites）**；v1.2 新增 20 项（video 解析 4 + 视频模式 16），原有 934 基线无回退 |
+| Compose @Preview 渲图 | `android preview render`：新增「65 原样播放控制条」「66 分步热点（64dp 脉冲）」+ 列表「继续」徽标；PNG 见 `artifacts/ppt-*.png` |
+| 详细实现/契约对应/OSS 域名与下载限制 | `docs/PPT_VIDEO_20261110.md` |
+
+### 14.3 边界
+
+- 本轮未做模拟器安装/冷启动复验（Lead 交付时统一执行）；签名与构建产物已验证。
+- 「原样播放」真实端到端依赖转换机导出 `manifest.video`（Lead 对样例 deck `dmwalrdlgevz90l` 执行 `agent.py --deck <id> --video-only`）；
+  用户 deck 当前 manifest 尚无 `video`，安卓端按 §11.1 自动回退分步，不报错。
+- OSS 默认域名的 force-download 头对个别机型在线播放的影响、视频下载限制详见 `docs/PPT_VIDEO_20261110.md` §5。
+
+---
+
+## 15. v3.5.0 Release 构建（「演示」v2.0：下载中心 = 兼容性处理 + 多端下载）
+
+> 版本：**versionName `3.5.0` / versionCode `11`**；日期：2026-11-10 22:20。安装/冷启动复验由 Lead 统一执行。
+
+### 15.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| 构建命令 | `$env:JAVA_HOME='C:\AndroidToolchain\jdk17'; $env:ANDROID_HOME='C:\AndroidToolchain\sdk'; .\gradlew.bat assembleRelease --console=plain` |
+| 结果 | **BUILD SUCCESSFUL in 1m 45s**（R8 + 资源压缩 + lintVitalRelease 通过） |
+| 构建产物 | `app\build\outputs\apk\release\app-release.apk` = **2,741,438 B** |
+| 交付副本 | `android-class-tools\artifacts\classtools-3.5.0-release-signed.apk`（SHA-256 与构建产物一致） |
+| APK SHA-256 | **`C45070ACB6C91745F27DD28D5C28075B64688999A50B1F4DFB5D92406B947647`** |
+| `apksigner verify --verbose --print-certs` | **Verifies**；APK Signature Scheme v2 = true；1 signer；证书与 v3.4.0 同一 keystore |
+| 新增依赖 | **无**（DownloadManager / FileProvider；旧播放器 MediaPlayer+SurfaceView 保留） |
+
+### 15.2 测试与预览
+
+| 项 | 结果 |
+|---|---|
+| `:app:testDebugUnitTest` | **BUILD SUCCESSFUL，982 tests / 0 failures / 0 errors / 0 skipped（79 suites）**；v2.0 新增 28 项（下载逻辑 16 + 解析 5 + 仓库 7），原有 954 基线无回退 |
+| Compose @Preview 渲图 | 新增「67 下载详情 · 三行+大小」「68 兼容提示」「69 旧 deck」；列表预览加「兼容版/PDF」标签；PNG 见 `artifacts/ppt-*.png` |
+| 详细实现/契约对应/已知限制 | `docs/PPT_DOWNLOAD_20261110.md` |
+
+### 15.3 边界
+
+- 本轮未做模拟器安装/冷启动复验（Lead 交付时统一执行）；签名与构建产物已验证。
+- **下载位置**：受「不申请存储读取权限」红线 + scoped storage 限制，下载保存到应用外部下载目录（系统下载通知可见，FileProvider 打开/分享），不写公共 Downloads。
+- 真实端到端（`dmwalrdlgevz90l` 跑 `--compat-only` 后三端下载/打开/质量 sha256 断言）由 Lead 执行；安卓侧为单测 + 预览 + 构建验证。
+
+---
+
+## 16. v3.6.0 Release 构建（「演示」v2.3：视频/音频单独下载）
+
+> 版本：**versionName `3.6.0` / versionCode `12`**；日期：2026-11-11 19:52。安装/冷启动复验由 Lead 统一执行。
+
+### 16.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| 构建命令 | `$env:JAVA_HOME='C:\AndroidToolchain\jdk17'; $env:ANDROID_HOME='C:\AndroidToolchain\sdk'; .\gradlew.bat assembleRelease --console=plain` |
+| 结果 | **BUILD SUCCESSFUL in 2m 20s**（R8 + 资源压缩 + lintVitalRelease 通过） |
+| 构建产物 | `app\build\outputs\apk\release\app-release.apk` = **2,757,826 B** |
+| 交付副本 | `android-class-tools\artifacts\classtools-3.6.0-release-signed.apk` |
+| APK SHA-256 | **`514527F08641889EF83FCC9CCEED55E2979FF147D50D146C828885A5BF615E1E`** |
+| `apksigner verify --verbose --print-certs` | **Verifies**；APK Signature Scheme v2 = true；1 signer；证书与 v3.5.0 同一 keystore |
+| 新增依赖 | **无** |
+
+### 16.2 测试与预览
+
+| 项 | 结果 |
+|---|---|
+| `:app:testDebugUnitTest` | **BUILD SUCCESSFUL，994 tests / 0 failures / 0 errors / 0 skipped（80 suites）**；v2.3 新增 12 项（媒体行逻辑 9 + media_files 解析 3），原有 982 基线无回退 |
+| Compose @Preview 渲图 | 下载详情预览加入 2 视频 + 1 音频（「视频单独下载」分组）；10 张 Ppt 预览全部渲出，PNG 见 `artifacts/ppt-*.png` |
+| 详细实现/契约对应 | `docs/PPT_DOWNLOAD_20261110.md` §6 |
+
+### 16.3 边界
+
+- 本轮未做模拟器安装/冷启动复验（Lead 统一执行）；签名与构建产物已验证。
+- 真实 `media_files` 需转换机 v2.3 完成抽取后才会出现在 manifest；无该字段的旧 deck 不显示分组（已兼容）。
+- 下载落应用外部下载目录（不申请存储权限红线），完成后 `ACTION_VIEW`（video/*|audio/*）交给系统播放器/WPS 或分享；详见 §5 已知限制。

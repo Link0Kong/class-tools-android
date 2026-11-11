@@ -8,6 +8,8 @@ import com.furina.classtools.testApiClient
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import org.junit.Assert.assertEquals
@@ -126,13 +128,19 @@ class ClientDiagReporterTest {
     // ------------------------------------------------------------ 崩溃记录
 
     @Test
-    fun crashRecorder_sanitizesAndQueues() {
+    fun crashRecorder_sanitizesAndQueuesMinimalDetail() {
         val pending = InMemoryClientDiagPendingStore()
         val recorder = CrashDiagRecorder(
             pending = pending,
             appVersion = appVersion,
             sidProvider = { sid },
-            deviceProvider = { mapOf("platform" to "android", "model" to "x") },
+            deviceProvider = {
+                buildJsonObject {
+                    put("platform", "android")
+                    put("model", "x") // 旧字段：必须被 v2.1 白名单过滤
+                    put("language", "zh-CN")
+                }
+            },
             now = { 1_700_000_000_000L },
             suffixProvider = { "crashtestsuffix" },
         )
@@ -155,8 +163,14 @@ class ClientDiagReporterTest {
         assertFalse(text.contains("C:\\Users\\Ko_Li"))
         assertTrue(text.contains("[redacted]") || text.contains("[url]"))
         val detail = saved["detail"] as JsonObject
-        assertEquals("java.lang.IllegalStateException", (detail["exception"] as JsonPrimitive).content)
+        assertEquals(setOf("check", "code"), detail.keys)
+        assertEquals("crash", (detail["check"] as JsonPrimitive).content)
+        assertEquals("java.lang.IllegalStateException", (detail["code"] as JsonPrimitive).content)
         assertFalse(detail.toString().contains(sid))
+        // device 白名单过滤：品牌/型号/语言不得出现
+        val device = saved["device"] as JsonObject
+        assertEquals(setOf("platform"), device.keys)
+        assertFalse(device.toString().contains("model"))
     }
 
     @Test

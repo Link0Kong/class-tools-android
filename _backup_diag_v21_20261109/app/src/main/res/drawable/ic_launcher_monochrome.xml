@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 单色层：三圆点（系统取色/主题图标用） -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,43.9 a10.125,10.125 0 1,1 0,20.25 a10.125,10.125 0 1,1 0,-20.25 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M34.875,29.25 a5.625,5.625 0 1,1 0,11.25 a5.625,5.625 0 1,1 0,-11.25 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M73.125,67.5 a5.625,5.625 0 1,1 0,11.25 a5.625,5.625 0 1,1 0,-11.25 Z" />
+</vector>

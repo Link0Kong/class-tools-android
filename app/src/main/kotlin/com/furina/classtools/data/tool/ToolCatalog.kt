@@ -12,6 +12,7 @@ import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Slideshow
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -115,6 +116,19 @@ object ToolCatalog {
             accent = Color(0xFFC29A3B),
             category = ToolCategory.CLASS,
             features = listOf("关注宿舍剩余电量", "24h / 7d / 30d 趋势（点击查看采样点）", "低电量提醒"),
+        ),
+        AppTool(
+            id = "ppt",
+            name = "演示",
+            subtitle = "PPT 自动转换 · 分步播放",
+            icon = Icons.Rounded.Slideshow,
+            accent = blue,
+            category = ToolCategory.CLASS,
+            features = listOf(
+                "上传 .ppt/.pptx 自动转换（分步图片 + 视频）",
+                "沉浸式全屏播放（点击/滑动/音量键翻步）",
+                "缩略图跳页 / 备注 / 下载原件",
+            ),
         ),
         AppTool(
             id = "water",

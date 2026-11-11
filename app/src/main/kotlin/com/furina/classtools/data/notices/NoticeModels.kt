@@ -145,16 +145,27 @@ sealed interface NoticeItemMeta {
         val isFollow: Boolean,
     ) : NoticeItemMeta
 
-    /** 图片：只描述元信息（caption/OCR/近似体积），不把 base64 放 UI 模型。 */
+    /**
+     * 图片：只描述元信息（caption/OCR/近似体积），不把 base64 放 UI 模型。
+     *
+     * @param hasData 内联 `data:image/...;base64,`（旧数据）
+     * @param url 外置签名 URL（新数据：`https://<host>/att/<id>?exp=&sig=`；空 = 内联）
+     */
     data class Image(
         override val kind: String,
         val caption: String,
         val ocr: Boolean,
         val hasData: Boolean,
         val approxBytes: Long,
+        val url: String = "",
     ) : NoticeItemMeta
 
-    /** 文件附件：name/扩展名/大小/是否有 URL 或内联数据；「待获取」无内容。 */
+    /**
+     * 文件附件：name/扩展名/大小/是否有 URL 或内联数据；「待获取」无内容。
+     *
+     * @param url 外置签名 URL（空 = 内容仍是内联 data URI 或无内容）
+     * @param archiveFiles 压缩包内文件清单（`archive.files[]`，仅保留元信息 + 各自 url）
+     */
     data class File(
         override val kind: String,
         val name: String,
@@ -166,6 +177,8 @@ sealed interface NoticeItemMeta {
         val archiveOk: Boolean,
         val archiveCount: Int,
         val archiveSummary: String,
+        val url: String = "",
+        val archiveFiles: List<NoticeArchiveFile> = emptyList(),
     ) : NoticeItemMeta
 
     /** 收集表（腾讯文档类）。 */
@@ -203,6 +216,17 @@ sealed interface NoticeItemMeta {
     ) : NoticeItemMeta
 }
 
+/** 压缩包内单个文件（`archive.files[]`；`url` 为外置签名 URL，空 = 无独立内容）。 */
+data class NoticeArchiveFile(
+    val name: String,
+    val kind: String,
+    val sizeText: String,
+    /** 外置签名 URL；空串 = 不可单独打开（旧数据 / 未外置）。 */
+    val url: String = "",
+    /** 旧数据内联 `data:` 内容（不保留原文，只标记存在）。 */
+    val hasData: Boolean = false,
+)
+
 data class MergedMessage(
     val fromName: String,
     val fromBadge: String,
@@ -235,13 +259,15 @@ data class ManualNotice(
     val ts: Long get() = row.ts
 }
 
-/** 人工通知附件元信息（`attachments` JSON 字符串里的 `[{n,t,s,d}]`）。 */
+/** 人工通知附件元信息（`attachments` JSON 字符串里的 `[{n,t,s,d}]`；新数据可能带 `url`）。 */
 data class NoticeManualAttachment(
     val index: Int,
     val name: String,
     val mime: String,
     val sizeText: String,
     val hasData: Boolean,
+    /** 外置签名 URL（新数据）；空串 = 旧数据（`d` 内联 data URI）。 */
+    val url: String = "",
 )
 
 /** 一次通知加载的完整快照。 */

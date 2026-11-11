@@ -2,7 +2,9 @@
 
 package com.furina.classtools.ui.screens.diag
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,10 +25,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -56,15 +59,21 @@ import com.furina.classtools.data.diag.ClientDiagReporter
 import com.furina.classtools.data.diag.ClientDiagRow
 import com.furina.classtools.data.diag.DiagAgentInfo
 import com.furina.classtools.data.diag.DiagAnalysis
+import com.furina.classtools.data.diag.DiagAnalysisIndex
 import com.furina.classtools.data.diag.DiagCheck
 import com.furina.classtools.data.diag.DiagEvaluator
 import com.furina.classtools.data.diag.DiagPayload
+import com.furina.classtools.data.diag.DiagPollConfig
+import com.furina.classtools.data.diag.DiagPollTick
+import com.furina.classtools.data.diag.DiagPolling
 import com.furina.classtools.data.diag.DiagProbeInput
 import com.furina.classtools.data.diag.DiagRepository
 import com.furina.classtools.data.diag.DiagResult
 import com.furina.classtools.data.diag.DiagSanitizer
 import com.furina.classtools.data.diag.DiagStatus
 import com.furina.classtools.data.diag.DiagSummary
+import com.furina.classtools.data.diag.DiagUiText
+import com.furina.classtools.data.diag.FlowStep
 import com.furina.classtools.data.diag.GatewayProbe
 import com.furina.classtools.data.diag.RepairTask
 import com.furina.classtools.data.diag.ServiceHealthGroup
@@ -76,7 +85,6 @@ import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
-import com.furina.classtools.ui.components.SectionHeader
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.CtShapeTokens
 import java.text.SimpleDateFormat
@@ -84,19 +92,22 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 
 /**
- * 诊断 v2 页面（所有已登录成员可见；契约 `_diag_task/CONTRACT.md` §1/§2）。
+ * 诊断 v2.1 页面（契约 `_diag_task/CONTRACT_V2_1.md` §A/§B；所有已登录成员可见）。
  *
- * 展示四块：
- * 1. **本机 agent 状态**：`rpc/diag_agent_info`（在线/离线 + 最后心跳 + host/version）；
- * 2. **设备诊断**：本机检查（机型/系统/App/屏幕/语言/内存/存储/网络/CloudBase 延迟/时钟/本地数据）+
- *    「重新检测」；注意/异常项自动上报 `client_diag`（fingerprint 10 分钟去重、每批 ≤3 条），也可手动上报；
- * 3. **AI 分析**：`diag_analysis` 的 severity/title/cause/suggestion/fixable/action/status + flow 时间线；
- * 4. **修复任务 + 服务健康**：`repair_tasks` 记录 + `service_health` 18 行/5 组（detail 显示脱敏）。
+ * 与 v2 的差异：
+ * - **AI 结论下挂**：`diag_analysis.related.health_ids` → 服务健康行下；`related.checks` → 设备检查行下；
+ *   无关联的进「其它诊断」极简折叠区（默认收起，只显示条数）；删除独立「AI 分析」大卡与「修复任务」大卡；
+ * - **折叠/展开**：折叠一行 = severity 点 + 标题≤22 字 + 状态胶囊 + `›`；点整行展开 cause/建议/flow/
+ *   关联修复（`related.repair_id` 或 repair.analysis_id 匹配 repair_tasks）；
+ * - **进展 10s**：页面可见（ON_RESUME）时 10s 轮询，进入/恢复前台立即拉；`running`/`fixed` 与 flow `run`
+ *   步骤随刷新实时渲染；
+ * - **设备信息最小化**：设备检查只展示系统/App/WebView/屏幕/内存/存储/网络/网关/时钟/本地数据，
+ *   上报 device 仅白名单字段（见 [DiagPayload]/[DiagProbeInput.deviceJson]）。
  *
- * 轮询：页面可见（ON_RESUME）时每 [pollIntervalMs]（默认 15s）刷新，ON_PAUSE 停止；返回上一页随组合销毁。
- * 数据加载全部走注入的 [DiagRepository]（预览/单测用 Fake）。
+ * 分组/折叠/胶囊文案等纯逻辑在 [DiagAnalysisIndex]/[DiagUiText]/[DiagPolling]（可单测）。
  */
 @Composable
 fun DiagScreen(
@@ -114,8 +125,10 @@ fun DiagScreen(
     initialAgent: DiagAgentInfo? = null,
     initialChecks: List<DiagCheck>? = null,
     initialMyReports: List<ClientDiagRow> = emptyList(),
+    initialExpandedIds: Set<String> = emptySet(),
+    initialOthersExpanded: Boolean = false,
     nowMillis: () -> Long = { System.currentTimeMillis() },
-    pollIntervalMs: Long = 15_000L,
+    pollConfig: DiagPollConfig = DiagPollConfig(),
 ) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -134,11 +147,66 @@ fun DiagScreen(
     var checking by remember { mutableStateOf(false) }
     var lastCheckAt by remember { mutableLongStateOf(summary?.ranAt ?: 0L) }
     var lastCheckNote by remember { mutableStateOf("") }
+    var lastUpdatedAt by remember { mutableLongStateOf(0L) }
     var reportingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedIds by remember { mutableStateOf(initialExpandedIds) }
+    var othersExpanded by remember { mutableStateOf(initialOthersExpanded) }
     var screenVisible by remember { mutableStateOf(true) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { screenVisible = true }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { screenVisible = false }
+
+    val agentOnline = agent?.online == true
+
+    /** 服务健康行/设备检查行都只挂「注意/异常」行（正常行不显示 AI 行，契约 §A-4）。 */
+    val index = remember(analyses, repairs, groups, summary) {
+        val anomalyHealthIds = groups.flatMap { it.rows }
+            .filter { it.displayStatus == DiagStatus.WARN || it.displayStatus == DiagStatus.FAIL }
+            .map { it.id }
+            .toSet()
+        val anomalyCheckIds = summary?.checks.orEmpty()
+            .filter { it.shouldReport }
+            .map { it.id }
+            .toSet()
+        DiagAnalysisIndex.build(
+            analyses = analyses,
+            repairs = repairs,
+            anomalyHealthIds = anomalyHealthIds,
+            anomalyCheckIds = anomalyCheckIds,
+        )
+    }
+
+    val autoFixable = remember(analyses) { DiagUiText.autoFixableCount(analyses) }
+    val fixedCount = remember(analyses) { DiagUiText.fixedCount(analyses) }
+    val anomalyCount = summary?.anomalies?.size ?: 0
+    val lastUpdatedLabel = remember(lastUpdatedAt) { DiagUiText.lastUpdatedText(lastUpdatedAt) }
+
+    fun reportCodeFor(check: DiagCheck, input: DiagProbeInput): String {
+        if (check.status != DiagStatus.FAIL) return ""
+        return when (check.id) {
+            "gateway" -> if (input.gatewayLatencyMs == null) "gateway_unreachable" else "gateway_slow"
+            "network" -> "network_offline"
+            "memory" -> "memory_low"
+            "storage" -> "storage_low"
+            "clock" -> "clock_skew"
+            "local_data" -> "local_data_unwritable"
+            "webview" -> "webview_missing"
+            else -> ""
+        }
+    }
+
+    /** 异常检查上报行（detail.check=检查 id，agent 据此生成 related.checks）。 */
+    fun reportRowFor(check: DiagCheck, input: DiagProbeInput): JsonObject = DiagPayload.fromCheck(
+        check = check,
+        sid = session.sid,
+        appVersion = appVersion,
+        device = input.deviceJson(),
+        now = nowMillis(),
+        latencyMs = input.gatewayLatencyMs.takeIf { check.id == "gateway" },
+        storagePct = input.storagePct.takeIf { check.id == "storage" },
+        clockSkewMs = input.clockSkewMs.takeIf { check.id == "clock" },
+        code = reportCodeFor(check, input),
+    )
 
     /** 跑一遍本机设备检查（含网关计时），并自动上报注意/异常项。 */
     suspend fun runDeviceChecks() {
@@ -168,13 +236,7 @@ fun DiagScreen(
             if (reporter != null && session.sid.isNotBlank() && session.token.isNotBlank()) {
                 reporter.beginBatch()
                 anomalies.take(3).forEach { check ->
-                    val row = DiagPayload.fromCheck(
-                        check = check,
-                        sid = session.sid,
-                        appVersion = appVersion,
-                        device = input.deviceMap(),
-                        now = nowMillis(),
-                    )
+                    val row = reportRowFor(check, input)
                     when (reporter.report(row)) {
                         com.furina.classtools.data.diag.DiagReportOutcome.Sent -> sent += 1
                         com.furina.classtools.data.diag.DiagReportOutcome.Queued -> queued += 1
@@ -198,26 +260,42 @@ fun DiagScreen(
     suspend fun refreshRemote() {
         if (groups.isEmpty()) loading = true
         val errors = ArrayList<String>()
+        var anySuccess = false
         repository.loadServiceHealth().let { result ->
             when (result) {
-                is DiagResult.Success -> groups = DiagParserGrouping.group(result.value, nowMillis())
+                is DiagResult.Success -> {
+                    anySuccess = true
+                    groups = com.furina.classtools.data.diag.DiagParser.groupServiceHealth(result.value, nowMillis())
+                }
                 is DiagResult.Failure -> errors.add(result.error.displayMessage)
             }
         }
         repository.loadAnalyses().let { result ->
-            if (result is DiagResult.Success) analyses = result.value
-            else errors.add((result as DiagResult.Failure).error.displayMessage)
+            if (result is DiagResult.Success) {
+                anySuccess = true
+                analyses = result.value
+            } else {
+                errors.add((result as DiagResult.Failure).error.displayMessage)
+            }
         }
         repository.loadRepairs().let { result ->
-            if (result is DiagResult.Success) repairs = result.value
-            else errors.add((result as DiagResult.Failure).error.displayMessage)
+            if (result is DiagResult.Success) {
+                anySuccess = true
+                repairs = result.value
+            } else {
+                errors.add((result as DiagResult.Failure).error.displayMessage)
+            }
         }
         repository.agentInfo().let { result ->
-            if (result is DiagResult.Success) agent = result.value
+            if (result is DiagResult.Success) {
+                anySuccess = true
+                agent = result.value
+            }
         }
         repository.loadMyReports().let { result ->
             if (result is DiagResult.Success) myReports = result.value
         }
+        if (anySuccess) lastUpdatedAt = nowMillis()
         if (errors.isNotEmpty() && groups.isEmpty()) {
             loadError = errors.first()
         } else if (errors.isEmpty()) {
@@ -226,23 +304,20 @@ fun DiagScreen(
         loading = false
     }
 
-    // 首次进入：补报本机队列 + 远程数据 + 设备检查（只在真实网络模式跑）。
-    LaunchedEffect(skipLoad) {
+    /** 进入/恢复前台：立即拉一次；仅可见时每 10s 轮询；隐藏/离开即停。 */
+    LaunchedEffect(skipLoad, screenVisible, pollConfig.intervalMs) {
         if (skipLoad) {
             loading = false
             return@LaunchedEffect
         }
+        if (!screenVisible) return@LaunchedEffect
         runCatching { reporter?.drainPending() }
         refreshRemote()
         runCatching { runDeviceChecks() }
-    }
-
-    // 15s 轮询只在页面可见时运行；页面离开组合即取消。
-    LaunchedEffect(skipLoad, screenVisible, pollIntervalMs) {
-        if (skipLoad || !screenVisible) return@LaunchedEffect
-        // 首次数据由上面的 LaunchedEffect 负责，这里只做后续轮询。
         while (true) {
-            delay(pollIntervalMs)
+            val tick = DiagPolling.afterTick(visible = true, config = pollConfig)
+            val delayMs = (tick as? DiagPollTick.Wait)?.delayMs ?: break
+            delay(delayMs)
             if (!screenVisible) break
             runCatching {
                 refreshRemote()
@@ -261,14 +336,7 @@ fun DiagScreen(
         scope.launch {
             val base = deviceProbe?.collectBase(nowMillis())
                 ?: DiagProbeInput(appVersion = appVersion, nowMillis = nowMillis())
-            val row = DiagPayload.fromCheck(
-                check = check,
-                sid = session.sid,
-                appVersion = appVersion,
-                device = base.deviceMap(),
-                now = nowMillis(),
-            )
-            val message = when (reporterOrNull.report(row)) {
+            val message = when (reporterOrNull.report(reportRowFor(check, base))) {
                 com.furina.classtools.data.diag.DiagReportOutcome.Sent -> "已上报"
                 com.furina.classtools.data.diag.DiagReportOutcome.Queued -> "网络不可用，已排队补报"
                 com.furina.classtools.data.diag.DiagReportOutcome.Skipped -> "10 分钟内已上报过，已去重"
@@ -276,6 +344,10 @@ fun DiagScreen(
             reportingIds = reportingIds - check.id
             snackbar.showSnackbar(message)
         }
+    }
+
+    fun toggleExpanded(id: String) {
+        expandedIds = if (id in expandedIds) expandedIds - id else expandedIds + id
     }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
@@ -289,7 +361,7 @@ fun DiagScreen(
             ) {
                 CtTopBar(
                     title = "诊断",
-                    subtitle = "服务健康 · 设备 · AI 修复",
+                    subtitle = "服务健康 · 设备 · 进展",
                     onBack = onBack,
                     actions = {
                         if (agent?.online == true) {
@@ -319,6 +391,14 @@ fun DiagScreen(
                             )
                         }
                     },
+                )
+
+                SummaryStrip(
+                    anomalyCount = anomalyCount,
+                    autoFixable = autoFixable,
+                    fixedCount = fixedCount,
+                    lastUpdated = lastUpdatedLabel,
+                    horizontalPadding = spec.horizontalPadding,
                 )
 
                 Column(
@@ -352,16 +432,35 @@ fun DiagScreen(
                         checking = checking,
                         lastCheckAt = lastCheckAt,
                         lastCheckNote = lastCheckNote,
+                        index = index,
+                        agentOnline = agentOnline,
+                        expandedIds = expandedIds,
+                        onToggle = ::toggleExpanded,
                         onRecheck = {
                             if (!skipLoad) scope.launch { runDeviceChecks() }
                         },
                         onReport = ::reportManually,
                         reportable = reporter != null && session.sid.isNotBlank(),
                         reportingIds = reportingIds,
+                        nowMillis = nowMillis(),
                     )
-                    AnalysisCard(analyses = analyses, nowMillis = nowMillis())
-                    RepairCard(repairs = repairs, nowMillis = nowMillis())
-                    ServiceHealthCard(groups = groups, nowMillis = nowMillis())
+                    ServiceHealthCard(
+                        groups = groups,
+                        index = index,
+                        agentOnline = agentOnline,
+                        expandedIds = expandedIds,
+                        onToggle = ::toggleExpanded,
+                        nowMillis = nowMillis(),
+                    )
+                    OthersSection(
+                        index = index,
+                        expanded = othersExpanded,
+                        onToggleExpanded = { othersExpanded = !othersExpanded },
+                        expandedIds = expandedIds,
+                        onToggleAnalysis = ::toggleExpanded,
+                        agentOnline = agentOnline,
+                        nowMillis = nowMillis(),
+                    )
                     MyReportsCard(reports = myReports, nowMillis = nowMillis())
                     Spacer(modifier = Modifier.height(24.dp))
                 }
@@ -378,15 +477,55 @@ fun DiagScreen(
     }
 }
 
-/** 服务健康分组的小封装（page 内调用，便于预览/测试替换）。 */
-private object DiagParserGrouping {
-    fun group(rows: List<ServiceHealthRow>, now: Long): List<ServiceHealthGroup> =
-        com.furina.classtools.data.diag.DiagParser.groupServiceHealth(rows, now)
-}
+// =============================================================================
+// 顶部摘要 / 卡片 / 折叠行
+// =============================================================================
 
-// =============================================================================
-// 卡片
-// =============================================================================
+/** 顶部极简摘要：N 项异常 · 可自动修复 N · 已修复 M ｜ 最后更新 HH:mm:ss。 */
+@Composable
+private fun SummaryStrip(
+    anomalyCount: Int,
+    autoFixable: Int,
+    fixedCount: Int,
+    lastUpdated: String,
+    horizontalPadding: androidx.compose.ui.unit.Dp,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "$anomalyCount 项异常",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (anomalyCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium,
+        )
+        val stats = buildList {
+            if (autoFixable > 0) add("可自动修复 $autoFixable")
+            if (fixedCount > 0) add("已修复 $fixedCount")
+        }
+        if (stats.isNotEmpty()) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stats.joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        if (lastUpdated.isNotBlank()) {
+            Text(
+                text = "最后更新 $lastUpdated",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                maxLines = 1,
+            )
+        }
+    }
+}
 
 @Composable
 private fun LoadingRow() {
@@ -442,8 +581,8 @@ private fun StatusPill(status: DiagStatus, label: String = status.label) {
 }
 
 @Composable
-private fun statusColors(status: DiagStatus): Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> {
-    val scheme = androidx.compose.material3.MaterialTheme.colorScheme
+private fun statusColors(status: DiagStatus): Pair<Color, Color> {
+    val scheme = MaterialTheme.colorScheme
     return when (status) {
         DiagStatus.PASS -> scheme.primaryContainer to scheme.onPrimaryContainer
         DiagStatus.WARN -> scheme.tertiaryContainer to scheme.onTertiaryContainer
@@ -451,6 +590,264 @@ private fun statusColors(status: DiagStatus): Pair<androidx.compose.ui.graphics.
         DiagStatus.INFO -> scheme.surfaceContainerHigh to scheme.onSurfaceVariant
     }
 }
+
+private fun statusLabelOf(status: DiagStatus): String = when (status) {
+    DiagStatus.PASS -> "通过"
+    DiagStatus.WARN -> "注意"
+    DiagStatus.FAIL -> "异常"
+    DiagStatus.INFO -> "信息"
+}
+
+@Composable
+private fun severityDotColor(analysis: DiagAnalysis): Color = when (analysis.severityLevel) {
+    com.furina.classtools.data.diag.DiagLevel.ERROR -> MaterialTheme.colorScheme.error
+    com.furina.classtools.data.diag.DiagLevel.WARN -> MaterialTheme.colorScheme.tertiary
+    com.furina.classtools.data.diag.DiagLevel.INFO -> MaterialTheme.colorScheme.secondary
+}
+
+/** 一行 AI 折叠行：severity 点 + 标题≤22 字 + 可自动修复徽标 + 状态胶囊 + `›`；点整行展开。 */
+@Composable
+private fun AiAnalysisRow(
+    analysis: DiagAnalysis,
+    repair: RepairTask?,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    nowMillis: Long,
+) {
+    val chevronAngle by animateFloatAsState(
+        targetValue = if (expanded) 90f else 0f,
+        label = "diag-chevron",
+    )
+    val pill = DiagUiText.pillLabel(analysis)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 34.dp)
+                .clickable(onClick = onToggle)
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(severityDotColor(analysis), CircleShape),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = DiagUiText.collapseTitle(analysis.title),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (DiagUiText.autoFixable(analysis)) {
+                Text(
+                    text = "⚙ 可自动修复",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+            AiStatusPill(label = pill)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "›",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.rotate(chevronAngle),
+            )
+        }
+        if (expanded) {
+            AnalysisDetail(analysis = analysis, repair = repair, nowMillis = nowMillis)
+        }
+    }
+}
+
+@Composable
+private fun AiStatusPill(label: String) {
+    val scheme = MaterialTheme.colorScheme
+    val (container, content) = when (label) {
+        "已修复" -> scheme.primaryContainer to scheme.onPrimaryContainer
+        "修复中" -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+        "修复失败" -> scheme.errorContainer to scheme.onErrorContainer
+        else -> scheme.surfaceContainerHigh to scheme.onSurfaceVariant
+    }
+    CtPill(text = label, containerColor = container, contentColor = content)
+}
+
+/** 展开态：原因 / 建议（≤4）/ flow 时间线（≤8）/ 关联修复。 */
+@Composable
+private fun AnalysisDetail(analysis: DiagAnalysis, repair: RepairTask?, nowMillis: Long) {
+    Column(
+        modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        if (analysis.cause.isNotBlank()) {
+            Text(
+                text = DiagSanitizer.sanitizeDisplay(analysis.cause, 400),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        analysis.suggestions.take(4).forEach { suggestion ->
+            Text(
+                text = "· " + DiagSanitizer.sanitizeDisplay(suggestion, 200),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (analysis.flow.isNotEmpty()) {
+            FlowTimeline(steps = analysis.flow, nowMillis = nowMillis)
+        }
+        if (repair != null) {
+            RelatedRepairBlock(repair = repair, nowMillis = nowMillis)
+        }
+    }
+}
+
+@Composable
+private fun FlowTimeline(steps: List<FlowStep>, nowMillis: Long) {
+    Column(
+        modifier = Modifier.padding(start = 2.dp, top = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        steps.take(8).forEach { step ->
+            val running = step.running
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    text = if (running) "◉" else "·",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (running) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = DiagSanitizer.sanitizeDisplay(step.text, 200),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (running) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface,
+                    )
+                    val meta = buildList {
+                        val stateText = DiagUiText.flowStateText(step.state)
+                        if (stateText.isNotBlank()) add(stateText)
+                        if (step.ts > 0) add(relativeTime(step.ts, nowMillis))
+                    }
+                    if (meta.isNotEmpty()) {
+                        Text(
+                            text = meta.joinToString(" · "),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 关联修复：action / 状态 / 结果摘要 / 时间（contract §A-3）。 */
+@Composable
+private fun RelatedRepairBlock(repair: RepairTask, nowMillis: Long) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "修复 ",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = repair.action.ifBlank { "未知动作" },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            CtPill(text = DiagUiText.repairStatusLabel(repair.status))
+        }
+        if (repair.result.isNotBlank()) {
+            Text(
+                text = "结果：" + DiagSanitizer.sanitizeDisplay(repair.result, 200),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val timeText = buildList {
+            if (repair.createdAt > 0) add("开始 " + relativeTime(repair.createdAt, nowMillis))
+            if (repair.finishedAt > 0) add("完成 " + relativeTime(repair.finishedAt, nowMillis))
+        }.joinToString(" · ")
+        if (timeText.isNotBlank()) {
+            Text(
+                text = timeText,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+            )
+        }
+    }
+}
+
+/** 异常项还没有 AI 结论时的灰字提示（在线=排队，离线=留存待开机）。 */
+@Composable
+private fun PendingAiLine(agentOnline: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "·",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = DiagUiText.pendingText(agentOnline),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+        )
+    }
+}
+
+/** 异常行下的 AI 结论（折叠行列表）或排队提示。 */
+@Composable
+private fun AiRowsUnderAnomaly(
+    analyses: List<DiagAnalysis>,
+    index: DiagAnalysisIndex,
+    agentOnline: Boolean,
+    expandedIds: Set<String>,
+    onToggle: (String) -> Unit,
+    nowMillis: Long,
+) {
+    if (analyses.isEmpty()) {
+        PendingAiLine(agentOnline)
+    } else {
+        analyses.forEach { analysis ->
+            AiAnalysisRow(
+                analysis = analysis,
+                repair = index.repairFor(analysis),
+                expanded = analysis.id in expandedIds,
+                onToggle = { onToggle(analysis.id) },
+                nowMillis = nowMillis,
+            )
+        }
+    }
+}
+
+// =============================================================================
+// 卡片：代理 / 设备诊断 / 服务健康 / 其它诊断 / 我的上报
+// =============================================================================
 
 @Composable
 private fun AgentCard(agent: DiagAgentInfo?, nowMillis: Long) {
@@ -468,28 +865,22 @@ private fun AgentCard(agent: DiagAgentInfo?, nowMillis: Long) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            agent.online -> {
-                Text(
-                    text = buildString {
-                        append("在线")
-                        if (agent.seenAt > 0) append(" · 心跳 ").append(relativeTime(agent.seenAt, nowMillis))
-                        if (agent.host.isNotBlank()) append(" · ").append(agent.host)
-                        if (agent.version.isNotBlank()) append(" · v").append(agent.version)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = "AI 分析与自动修复由本机代理执行",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            agent.online -> Text(
+                text = buildString {
+                    append("在线")
+                    if (agent.seenAt > 0) append(" · 心跳 ").append(relativeTime(agent.seenAt, nowMillis))
+                    if (agent.host.isNotBlank()) append(" · ").append(agent.host)
+                    if (agent.version.isNotBlank()) append(" · v").append(agent.version)
+                    append(" · 自动分析/修复中")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             else -> Text(
                 text = buildString {
                     append("离线")
                     if (agent.seenAt > 0) append(" · 最后心跳 ").append(relativeTime(agent.seenAt, nowMillis))
-                    append(" · AI 分析/自动修复可能延迟")
+                    append(" · 已留存异常，开机后自动分析/修复")
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -504,10 +895,15 @@ private fun DeviceDiagCard(
     checking: Boolean,
     lastCheckAt: Long,
     lastCheckNote: String,
+    index: DiagAnalysisIndex,
+    agentOnline: Boolean,
+    expandedIds: Set<String>,
+    onToggle: (String) -> Unit,
     onRecheck: () -> Unit,
     onReport: (DiagCheck) -> Unit,
     reportable: Boolean,
     reportingIds: Set<String>,
+    nowMillis: Long,
 ) {
     DiagCard(
         title = "设备诊断",
@@ -543,11 +939,17 @@ private fun DeviceDiagCard(
                 )
             }
             summary.checks.forEach { check ->
-                DeviceCheckRow(
+                DeviceCheckBlock(
                     check = check,
+                    linkedAnalyses = index.analysesForCheck(check.id),
+                    index = index,
+                    agentOnline = agentOnline,
+                    expandedIds = expandedIds,
+                    onToggle = onToggle,
                     onReport = onReport,
                     reportable = reportable && check.shouldReport,
                     reporting = check.id in reportingIds,
+                    nowMillis = nowMillis,
                 )
             }
             if (lastCheckAt > 0) {
@@ -566,269 +968,75 @@ private fun DeviceDiagCard(
 }
 
 @Composable
-private fun DeviceCheckRow(
+private fun DeviceCheckBlock(
     check: DiagCheck,
+    linkedAnalyses: List<DiagAnalysis>,
+    index: DiagAnalysisIndex,
+    agentOnline: Boolean,
+    expandedIds: Set<String>,
+    onToggle: (String) -> Unit,
     onReport: (DiagCheck) -> Unit,
     reportable: Boolean,
     reporting: Boolean,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(statusColors(check.status).first, CircleShape),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = check.label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = buildString {
-                    append(check.value)
-                    if (check.hint.isNotBlank()) {
-                        if (isNotEmpty()) append(" · ")
-                        append(check.hint)
-                    }
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (check.shouldReport && reportable) {
-            TextButton(onClick = { onReport(check) }, enabled = !reporting) {
-                Text(if (reporting) "…" else "上报", style = MaterialTheme.typography.labelSmall)
-            }
-        } else {
-            StatusPill(check.status, statusLabelOf(check.status))
-        }
-    }
-}
-
-private fun statusLabelOf(status: DiagStatus): String = when (status) {
-    DiagStatus.PASS -> "通过"
-    DiagStatus.WARN -> "注意"
-    DiagStatus.FAIL -> "异常"
-    DiagStatus.INFO -> "信息"
-}
-
-@Composable
-private fun AnalysisCard(analyses: List<DiagAnalysis>, nowMillis: Long) {
-    DiagCard(
-        title = "AI 分析",
-        status = when {
-            analyses.any { it.severityLevel == com.furina.classtools.data.diag.DiagLevel.ERROR } -> DiagStatus.FAIL
-            analyses.any { it.severityLevel == com.furina.classtools.data.diag.DiagLevel.WARN } -> DiagStatus.WARN
-            analyses.isNotEmpty() -> DiagStatus.PASS
-            else -> DiagStatus.INFO
-        },
-    ) {
-        if (analyses.isEmpty()) {
-            Text(
-                text = "暂无分析结果",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            analyses.forEachIndexed { index, analysis ->
-                if (index > 0) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    )
-                }
-                AnalysisItem(analysis = analysis, nowMillis = nowMillis)
-            }
-        }
-    }
-}
-
-@Composable
-private fun AnalysisItem(analysis: DiagAnalysis, nowMillis: Long) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val levelStatus = when (analysis.severityLevel) {
-                com.furina.classtools.data.diag.DiagLevel.ERROR -> DiagStatus.FAIL
-                com.furina.classtools.data.diag.DiagLevel.WARN -> DiagStatus.WARN
-                com.furina.classtools.data.diag.DiagLevel.INFO -> DiagStatus.INFO
-            }
-            StatusPill(levelStatus, when (analysis.severityLevel) {
-                com.furina.classtools.data.diag.DiagLevel.ERROR -> "错误"
-                com.furina.classtools.data.diag.DiagLevel.WARN -> "警告"
-                com.furina.classtools.data.diag.DiagLevel.INFO -> "提示"
-            })
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = DiagSanitizer.sanitizeDisplay(analysis.title).ifBlank { "未命名分析" },
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = analysis.statusLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (analysis.cause.isNotBlank()) {
-            Text(
-                text = "原因：" + DiagSanitizer.sanitizeDisplay(analysis.cause),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        analysis.suggestions.take(4).forEach { suggestion ->
-            Text(
-                text = "· " + DiagSanitizer.sanitizeDisplay(suggestion, 200),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (analysis.fixable) {
-            Text(
-                text = "可自动修复" + if (analysis.action.isNotBlank()) " · ${analysis.action}" else "",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        if (analysis.flow.isNotEmpty()) {
-            FlowTimeline(steps = analysis.flow, nowMillis = nowMillis)
-        }
-        Text(
-            text = buildString {
-                if (analysis.platform.isNotBlank()) append(analysis.platform)
-                if (analysis.scope.isNotBlank()) {
-                    if (isNotEmpty()) append(" · ")
-                    append(analysis.scope)
-                }
-                if (analysis.ts > 0) {
-                    if (isNotEmpty()) append(" · ")
-                    append(relativeTime(analysis.ts, nowMillis))
-                }
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun FlowTimeline(
-    steps: List<com.furina.classtools.data.diag.FlowStep>,
     nowMillis: Long,
 ) {
-    Column(
-        modifier = Modifier.padding(start = 4.dp, top = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        steps.take(8).forEach { step ->
-            Row(verticalAlignment = Alignment.Top) {
-                Text(
-                    text = "›",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = DiagSanitizer.sanitizeDisplay(step.text, 200),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    val meta = buildString {
-                        if (step.state.isNotBlank()) append(step.state)
-                        if (step.ts > 0) {
-                            if (isNotEmpty()) append(" · ")
-                            append(relativeTime(step.ts, nowMillis))
-                        }
-                    }
-                    if (meta.isNotBlank()) {
-                        Text(
-                            text = meta,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RepairCard(repairs: List<RepairTask>, nowMillis: Long) {
-    DiagCard(
-        title = "修复任务",
-        status = when {
-            repairs.isEmpty() -> DiagStatus.INFO
-            repairs.any { it.status == "failed" } -> DiagStatus.FAIL
-            repairs.any { !it.finished } -> DiagStatus.WARN
-            else -> DiagStatus.PASS
-        },
-    ) {
-        if (repairs.isEmpty()) {
-            Text(
-                text = "暂无修复任务",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(statusColors(check.status).first, CircleShape),
             )
-        } else {
-            repairs.take(8).forEach { task ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = task.action.ifBlank { "未知动作" },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f),
-                        )
-                        CtPill(text = task.statusLabel)
-                    }
-                    if (task.reason.isNotBlank()) {
-                        Text(
-                            text = DiagSanitizer.sanitizeDisplay(task.reason, 200),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (task.result.isNotBlank()) {
-                        Text(
-                            text = "结果：" + DiagSanitizer.sanitizeDisplay(task.result, 240),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        text = buildString {
-                            if (task.createdAt > 0) append(relativeTime(task.createdAt, nowMillis))
-                            if (task.finishedAt > 0) {
-                                if (isNotEmpty()) append(" · ")
-                                append("完成 ").append(relativeTime(task.finishedAt, nowMillis))
-                            }
-                            if (task.node.isNotBlank()) {
-                                if (isNotEmpty()) append(" · ")
-                                append(task.node)
-                            }
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = check.label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = buildString {
+                        append(check.value)
+                        if (check.hint.isNotBlank()) {
+                            if (isNotEmpty()) append(" · ")
+                            append(check.hint)
+                        }
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (reportable) {
+                TextButton(onClick = { onReport(check) }, enabled = !reporting) {
+                    Text(if (reporting) "…" else "上报", style = MaterialTheme.typography.labelSmall)
                 }
             }
+            StatusPill(check.status, statusLabelOf(check.status))
+        }
+        if (check.shouldReport) {
+            AiRowsUnderAnomaly(
+                analyses = linkedAnalyses,
+                index = index,
+                agentOnline = agentOnline,
+                expandedIds = expandedIds,
+                onToggle = onToggle,
+                nowMillis = nowMillis,
+            )
         }
     }
 }
 
 @Composable
-private fun ServiceHealthCard(groups: List<ServiceHealthGroup>, nowMillis: Long) {
+private fun ServiceHealthCard(
+    groups: List<ServiceHealthGroup>,
+    index: DiagAnalysisIndex,
+    agentOnline: Boolean,
+    expandedIds: Set<String>,
+    onToggle: (String) -> Unit,
+    nowMillis: Long,
+) {
     DiagCard(
         title = "服务健康",
         status = when {
@@ -856,7 +1064,15 @@ private fun ServiceHealthCard(groups: List<ServiceHealthGroup>, nowMillis: Long)
                     StatusPill(group.worstStatus, statusLabelOf(group.worstStatus))
                 }
                 group.rows.forEach { row ->
-                    ServiceHealthRowItem(row = row, nowMillis = nowMillis)
+                    ServiceHealthRowBlock(
+                        row = row,
+                        linkedAnalyses = index.analysesForHealth(row.id),
+                        index = index,
+                        agentOnline = agentOnline,
+                        expandedIds = expandedIds,
+                        onToggle = onToggle,
+                        nowMillis = nowMillis,
+                    )
                 }
             }
         }
@@ -864,7 +1080,15 @@ private fun ServiceHealthCard(groups: List<ServiceHealthGroup>, nowMillis: Long)
 }
 
 @Composable
-private fun ServiceHealthRowItem(row: ServiceHealthRow, nowMillis: Long) {
+private fun ServiceHealthRowBlock(
+    row: ServiceHealthRow,
+    linkedAnalyses: List<DiagAnalysis>,
+    index: DiagAnalysisIndex,
+    agentOnline: Boolean,
+    expandedIds: Set<String>,
+    onToggle: (String) -> Unit,
+    nowMillis: Long,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -900,6 +1124,86 @@ private fun ServiceHealthRowItem(row: ServiceHealthRow, nowMillis: Long) {
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             )
+        }
+        val anomaly = row.displayStatus == DiagStatus.WARN || row.displayStatus == DiagStatus.FAIL
+        if (anomaly) {
+            AiRowsUnderAnomaly(
+                analyses = linkedAnalyses,
+                index = index,
+                agentOnline = agentOnline,
+                expandedIds = expandedIds,
+                onToggle = onToggle,
+                nowMillis = nowMillis,
+            )
+        }
+    }
+}
+
+/** 「其它诊断」极简折叠区：无关联 AI 结论 + 历史无主修复；默认收起只显示条数。 */
+@Composable
+private fun OthersSection(
+    index: DiagAnalysisIndex,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    expandedIds: Set<String>,
+    onToggleAnalysis: (String) -> Unit,
+    agentOnline: Boolean,
+    nowMillis: Long,
+) {
+    if (index.othersCount == 0) return
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 34.dp)
+                .clickable(onClick = onToggleExpanded)
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "其它诊断",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            CtPill(
+                text = "${index.othersCount}",
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "›",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.rotate(if (expanded) 90f else 0f),
+            )
+        }
+        if (expanded) {
+            Column(
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                index.others.forEach { analysis ->
+                    AiAnalysisRow(
+                        analysis = analysis,
+                        repair = index.repairFor(analysis),
+                        expanded = analysis.id in expandedIds,
+                        onToggle = { onToggleAnalysis(analysis.id) },
+                        nowMillis = nowMillis,
+                    )
+                }
+                index.orphanRepairs.forEach { repair ->
+                    RelatedRepairBlock(repair = repair, nowMillis = nowMillis)
+                }
+                if (index.others.isEmpty() && index.orphanRepairs.isNotEmpty() && !agentOnline) {
+                    Text(
+                        text = DiagUiText.pendingText(false),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    )
+                }
+            }
         }
     }
 }
@@ -976,8 +1280,10 @@ private fun parseTimeMillisSafe(text: String): Long? =
     com.furina.classtools.data.diag.DiagParser.parseTimeMillis(text)
 
 // =============================================================================
-// 预览（供 android preview render 出诊断页截图）
+// 预览（android preview render：折叠态 + 展开态）
 // =============================================================================
+
+private const val PREVIEW_NOW: Long = 1_793_930_400_000L // 2026-11-06 10:00 +08
 
 private val previewSession = Session(
     sid = "3260707024",
@@ -996,12 +1302,12 @@ private object PreviewDiagRepository : DiagRepository {
         DiagResult.Success(previewRepairs())
 
     override suspend fun agentInfo(): DiagResult<DiagAgentInfo> =
-        DiagResult.Success(DiagAgentInfo(online = true, seenAt = 1_793_929_800_000L, host = "local-windows", version = "1.0"))
+        DiagResult.Success(DiagAgentInfo(online = true, seenAt = PREVIEW_NOW - 60_000, host = "local-windows", version = "1.0"))
 
     override suspend fun measureGateway(): DiagResult<GatewayProbe> =
-        DiagResult.Success(GatewayProbe(latencyMs = 128L, serverEpochMs = 1_793_930_400_500L))
+        DiagResult.Success(GatewayProbe(latencyMs = 4126L, serverEpochMs = PREVIEW_NOW + 500))
 
-    override suspend fun reportClientDiag(row: kotlinx.serialization.json.JsonObject): com.furina.classtools.data.network.ApiResult<Unit> =
+    override suspend fun reportClientDiag(row: JsonObject): com.furina.classtools.data.network.ApiResult<Unit> =
         com.furina.classtools.data.network.ApiResult.Success(Unit)
 
     override suspend fun loadMyReports(): DiagResult<List<ClientDiagRow>> =
@@ -1024,64 +1330,151 @@ internal fun previewHealthRows(): List<ServiceHealthRow> = listOf(
 
 internal fun previewChecks(): List<DiagCheck> = DiagEvaluator.evaluate(
     DiagProbeInput(
-        manufacturer = "Xiaomi",
-        model = "24129PN74C",
         androidVersion = "17",
-        sdkInt = 37,
         appVersion = "3.0.0",
-        appVersionCode = 6,
-        screenWidthDp = 412,
-        screenHeightDp = 915,
-        densityDpi = 420,
-        language = "zh-CN",
-        timezoneId = "Asia/Shanghai",
-        timezoneOffsetMinutes = 480,
+        webviewVersion = "WebView/137",
+        screenWidthPx = 1080,
+        screenHeightPx = 2400,
+        screenDensity = 2.75f,
         memoryTotalMb = 12_288,
-        memoryAvailMb = 4_096,
+        memoryAvailMb = 1_000,
         storageTotalMb = 222_000,
         storageFreeMb = 86_000,
         networkType = "wifi",
         networkValidated = true,
-        gatewayLatencyMs = 128,
-        serverEpochMs = 1_793_930_400_500L,
-        nowMillis = 1_793_930_400_000L,
+        gatewayLatencyMs = 4_126,
+        serverEpochMs = PREVIEW_NOW + 500,
+        nowMillis = PREVIEW_NOW,
         localDataOk = true,
     ),
 )
 
 internal fun previewAnalyses(): List<DiagAnalysis> = listOf(
     DiagAnalysis(
-        id = "an-demo-1",
-        ts = 1_793_930_300_000L,
+        id = "an-sync",
+        ts = PREVIEW_NOW - 5 * 60_000,
         platform = "android",
         scope = "cloud",
         severity = "warn",
-        title = "云同步偶尔延迟",
-        cause = "本机网络拥塞导致 userdata 拉取超时，已自动重试。",
-        suggestions = listOf("切换 Wi-Fi 后重试", "等待 1 分钟后本机代理重测"),
+        title = "学工记云同步延迟，最近一轮作业拉取失败",
+        cause = "本机网络拥塞导致云端作业拉取超时；已自动重试并等待本机代理修复。",
+        suggestions = listOf("等待本机代理自动重跑同步", "切换 Wi-Fi 后重试"),
+        fixable = true,
+        action = "sync_xgj",
+        status = "running",
+        confidence = 0.86,
+        flow = listOf(
+            FlowStep(PREVIEW_NOW - 6 * 60_000, "检测到作业拉取失败", "done"),
+            FlowStep(PREVIEW_NOW - 3 * 60_000, "本机开始执行 sync_xgj", "run"),
+        ),
+        relatedHealthIds = listOf("cloud_xgj_sync"),
+        relatedRepairId = "rt-sync",
+    ),
+    DiagAnalysis(
+        id = "an-gateway",
+        ts = PREVIEW_NOW - 20 * 60_000,
+        platform = "android",
+        scope = "device",
+        severity = "warn",
+        title = "CloudBase 网关延迟偏高",
+        cause = "当前网络到云端网关约 4.1 秒，可能导致同步变慢。",
+        suggestions = listOf("切到 Wi-Fi 再观察"),
         fixable = true,
         action = "recheck_health",
         status = "fixed",
-        confidence = 0.82,
+        confidence = 0.74,
         flow = listOf(
-            com.furina.classtools.data.diag.FlowStep(1_793_930_000_000L, "检测到诊断上报", "done"),
-            com.furina.classtools.data.diag.FlowStep(1_793_930_100_000L, "本机代理重测依赖服务", "done"),
-            com.furina.classtools.data.diag.FlowStep(1_793_930_300_000L, "延迟恢复，标记已修复", "fixed"),
+            FlowStep(PREVIEW_NOW - 21 * 60_000, "检测到网关延迟偏高", "done"),
+            FlowStep(PREVIEW_NOW - 19 * 60_000, "本机重测网关", "done"),
+            FlowStep(PREVIEW_NOW - 18 * 60_000, "延迟恢复，标记已修复", "fixed"),
         ),
+        relatedChecks = listOf("gateway"),
+        relatedRepairId = "rt-gateway",
+    ),
+    DiagAnalysis(
+        id = "an-memory",
+        ts = PREVIEW_NOW - 9 * 60_000,
+        platform = "android",
+        scope = "device",
+        severity = "warn",
+        title = "可用内存偏低",
+        cause = "后台进程较多，可用内存占比较低。",
+        suggestions = listOf("清理后台应用"),
+        fixable = false,
+        action = "",
+        status = "new",
+        confidence = 0.6,
+        flow = emptyList(),
+        relatedChecks = listOf("memory"),
+    ),
+    DiagAnalysis(
+        id = "an-collector",
+        ts = PREVIEW_NOW - 2 * 60_000,
+        platform = "android",
+        scope = "cloud",
+        severity = "warn",
+        title = "采集主机已暂停",
+        cause = "本机采集脚本处于暂停状态，通知可能延迟。",
+        suggestions = listOf("等待本机代理恢复采集"),
+        fixable = false,
+        action = "",
+        status = "new",
+        confidence = 0.55,
+        flow = emptyList(),
+        relatedHealthIds = listOf("collector_host"),
+    ),
+    DiagAnalysis(
+        id = "an-orphan",
+        ts = PREVIEW_NOW - 40 * 60_000,
+        platform = "android",
+        scope = "mixed",
+        severity = "error",
+        title = "历史诊断：通知附件解析失败",
+        cause = "旧版本解析器对压缩包格式不兼容。",
+        suggestions = listOf("升级到最新版本"),
+        fixable = false,
+        action = "",
+        status = "failed",
+        confidence = 0.4,
+        flow = listOf(FlowStep(PREVIEW_NOW - 39 * 60_000, "解析失败", "fail")),
     ),
 )
 
 internal fun previewRepairs(): List<RepairTask> = listOf(
     RepairTask(
-        id = "rt-demo-1",
-        createdAt = 1_793_930_050_000L,
+        id = "rt-sync",
+        createdAt = PREVIEW_NOW - 3 * 60_000,
+        action = "sync_xgj",
+        reason = "学工记云同步延迟",
+        status = "running",
+        claimedAt = PREVIEW_NOW - 2 * 60_000,
+        finishedAt = 0L,
+        result = "",
+        analysisId = "an-sync",
+        node = "local",
+    ),
+    RepairTask(
+        id = "rt-gateway",
+        createdAt = PREVIEW_NOW - 19 * 60_000,
         action = "recheck_health",
-        reason = "云同步延迟（诊断 an-demo-1）",
+        reason = "网关延迟偏高",
         status = "done",
-        claimedAt = 1_793_930_060_000L,
-        finishedAt = 1_793_930_300_000L,
-        result = "重测完成：cloudbase 186ms / tt_cloud ok",
-        analysisId = "an-demo-1",
+        claimedAt = PREVIEW_NOW - 19 * 60_000,
+        finishedAt = PREVIEW_NOW - 18 * 60_000,
+        result = "重测完成：cloudbase 186ms / gateway ok",
+        analysisId = "an-gateway",
+        node = "local",
+    ),
+    RepairTask(
+        id = "rt-orphan",
+        createdAt = PREVIEW_NOW - 45 * 60_000,
+        action = "restart_gateway",
+        reason = "历史修复（无关联分析）",
+        status = "done",
+        claimedAt = PREVIEW_NOW - 44 * 60_000,
+        finishedAt = PREVIEW_NOW - 43 * 60_000,
+        result = "网关已重启",
+        analysisId = "",
         node = "local",
     ),
 )
@@ -1095,17 +1488,21 @@ internal fun previewReports(): List<ClientDiagRow> = listOf(
         level = "warn",
         message = "CloudBase 网关延迟：4126 ms",
         fingerprint = "4f2c8a9e1b3d5f70",
-        ts = 1_793_930_200_000L,
+        ts = PREVIEW_NOW - 20 * 60_000,
         status = "analyzed",
-        detail = kotlinx.serialization.json.JsonObject(emptyMap()),
-        device = kotlinx.serialization.json.JsonObject(emptyMap()),
+        detail = JsonObject(emptyMap()),
+        device = JsonObject(emptyMap()),
     ),
 )
 
-@Preview(name = "200 诊断页 · 浅色", showBackground = true, widthDp = 412, heightDp = 2200)
 @Composable
-private fun DiagLightPreview() {
-    ClassToolsTheme(darkTheme = false) {
+private fun DiagV21PreviewFrame(
+    dark: Boolean,
+    expandedIds: Set<String>,
+    othersExpanded: Boolean = false,
+) {
+    ClassToolsTheme(darkTheme = dark) {
+        // 预览直接渲染页面（skipLoad，不联网）；展开态通过 initialExpandedIds 注入。
         DiagScreen(
             onBack = {},
             session = previewSession,
@@ -1113,37 +1510,39 @@ private fun DiagLightPreview() {
             skipLoad = true,
             initialGroups = com.furina.classtools.data.diag.DiagParser.groupServiceHealth(
                 previewHealthRows(),
-                1_793_930_400_000L,
+                PREVIEW_NOW,
             ),
             initialAnalyses = previewAnalyses(),
             initialRepairs = previewRepairs(),
-            initialAgent = DiagAgentInfo(online = true, seenAt = 1_793_929_800_000L, host = "local-windows"),
+            initialAgent = DiagAgentInfo(online = true, seenAt = PREVIEW_NOW - 60_000, host = "local-windows", version = "1.0"),
             initialChecks = previewChecks(),
             initialMyReports = previewReports(),
-            nowMillis = { 1_793_930_400_000L },
+            initialExpandedIds = expandedIds,
+            initialOthersExpanded = othersExpanded,
+            nowMillis = { PREVIEW_NOW },
+            pollConfig = DiagPollConfig(),
         )
     }
 }
 
-@Preview(name = "201 诊断页 · 深色", showBackground = true, widthDp = 412, heightDp = 2200)
+@Preview(name = "220 诊断 v2.1 · 折叠态（AI 下挂异常行）", showBackground = true, widthDp = 412, heightDp = 2400)
 @Composable
-private fun DiagDarkPreview() {
-    ClassToolsTheme(darkTheme = true) {
-        DiagScreen(
-            onBack = {},
-            session = previewSession,
-            repository = PreviewDiagRepository,
-            skipLoad = true,
-            initialGroups = com.furina.classtools.data.diag.DiagParser.groupServiceHealth(
-                previewHealthRows(),
-                1_793_930_400_000L,
-            ),
-            initialAnalyses = previewAnalyses(),
-            initialRepairs = previewRepairs(),
-            initialAgent = DiagAgentInfo(online = false, seenAt = 1_793_920_000_000L),
-            initialChecks = previewChecks(),
-            initialMyReports = previewReports(),
-            nowMillis = { 1_793_930_400_000L },
-        )
-    }
+private fun DiagV21FoldedLightPreview() {
+    DiagV21PreviewFrame(dark = false, expandedIds = emptySet())
+}
+
+@Preview(name = "221 诊断 v2.1 · 展开态（原因/建议/flow/关联修复）", showBackground = true, widthDp = 412, heightDp = 2800)
+@Composable
+private fun DiagV21ExpandedLightPreview() {
+    DiagV21PreviewFrame(
+        dark = false,
+        expandedIds = setOf("an-sync", "an-gateway", "an-orphan"),
+        othersExpanded = true,
+    )
+}
+
+@Preview(name = "222 诊断 v2.1 · 折叠态 · 深色", showBackground = true, widthDp = 412, heightDp = 2400)
+@Composable
+private fun DiagV21FoldedDarkPreview() {
+    DiagV21PreviewFrame(dark = true, expandedIds = emptySet())
 }

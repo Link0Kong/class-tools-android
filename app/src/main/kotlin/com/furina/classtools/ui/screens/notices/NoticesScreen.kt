@@ -70,6 +70,7 @@ import com.furina.classtools.data.notices.NoticeStatusMachine
 import com.furina.classtools.data.notices.NoticesData
 import com.furina.classtools.data.notices.NoticesLoadResult
 import com.furina.classtools.data.notices.NoticesRepository
+import com.furina.classtools.data.ppt.PptImageLoader
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
@@ -152,6 +153,8 @@ private sealed interface NoticeUiItem {
  *
  * @param rawAttachmentLoader 图片附件按需加载器（Lead 接线传
  *   `ApiNoticeRawAttachmentLoader(container.apiClient)`；为 null 时降级为元信息占位）
+ * @param imageLoader 图片附件网络加载器（外置签名 URL 形态；传入 `container.pptImageLoader` 复用
+ *   `data/ppt` 的 OkHttp + BitmapFactory + LRU 实现；为 null 时用内置单例兜底）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -161,6 +164,8 @@ fun NoticesScreen(
     marksRepository: MarksRepository?,
     noticesRepository: NoticesRepository?,
     rawAttachmentLoader: NoticeRawAttachmentLoader? = null,
+    /** v3 附件外置：图片 https 签名 URL 加载器（复用 data/ppt 实现，不引入新依赖）。 */
+    imageLoader: PptImageLoader? = null,
     /** v2：把有明确时间的结构化通知写入系统日历（null = 不显示入口）。 */
     onAddToCalendar: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
     /** v3：单条通知提醒（Lead 弹出提醒时间选项并排程）。 */
@@ -425,6 +430,7 @@ fun NoticesScreen(
         NoticeDetailDialog(
             item = item,
             rawAttachmentLoader = rawAttachmentLoader,
+            imageLoader = imageLoader,
             onAddToCalendar = onAddToCalendar,
             onRemindNotice = onRemindNotice,
             onDismiss = { selected = null },
@@ -680,6 +686,7 @@ private fun ErrorContent(message: String, onRetry: () -> Unit, modifier: Modifie
 private fun NoticeDetailDialog(
     item: NoticeUiItem,
     rawAttachmentLoader: NoticeRawAttachmentLoader?,
+    imageLoader: PptImageLoader?,
     onDismiss: () -> Unit,
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
@@ -700,8 +707,8 @@ private fun NoticeDetailDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 when (item) {
-                    is NoticeUiItem.Auto -> AutoDetailContent(item, rawAttachmentLoader)
-                    is NoticeUiItem.Manual -> ManualDetailContent(item, rawAttachmentLoader)
+                    is NoticeUiItem.Auto -> AutoDetailContent(item, rawAttachmentLoader, imageLoader)
+                    is NoticeUiItem.Manual -> ManualDetailContent(item, rawAttachmentLoader, imageLoader)
                 }
             }
         },
@@ -735,7 +742,11 @@ private fun NoticeDetailDialog(
 }
 
 @Composable
-private fun AutoDetailContent(item: NoticeUiItem.Auto, rawAttachmentLoader: NoticeRawAttachmentLoader?) {
+private fun AutoDetailContent(
+    item: NoticeUiItem.Auto,
+    rawAttachmentLoader: NoticeRawAttachmentLoader?,
+    imageLoader: PptImageLoader?,
+) {
     val group = item.entry.group
     Row(verticalAlignment = Alignment.CenterVertically) {
         CtPill(text = item.entry.cat)
@@ -797,18 +808,23 @@ private fun AutoDetailContent(item: NoticeUiItem.Auto, rawAttachmentLoader: Noti
                 rowId = item.entry.rowId,
                 imageOrdinal = currentImageOrdinal,
                 rawAttachmentLoader = rawAttachmentLoader,
+                imageLoader = imageLoader,
             )
         }
     }
     Text(
-        text = "图片按需加载（仅内联 data URI 可预览）· 其它附件暂不支持预览",
+        text = "图片按需加载 · 文件附件点击可打开",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
 @Composable
-private fun ManualDetailContent(item: NoticeUiItem.Manual, rawAttachmentLoader: NoticeRawAttachmentLoader?) {
+private fun ManualDetailContent(
+    item: NoticeUiItem.Manual,
+    rawAttachmentLoader: NoticeRawAttachmentLoader?,
+    imageLoader: PptImageLoader?,
+) {
     val notice = item.notice
     Text(
         text = notice.row.body.ifBlank { "（无正文）" },
@@ -821,6 +837,7 @@ private fun ManualDetailContent(item: NoticeUiItem.Manual, rawAttachmentLoader: 
                 attachment = attachment,
                 rowId = notice.row.id,
                 rawAttachmentLoader = rawAttachmentLoader,
+                imageLoader = imageLoader,
             )
         }
     }
@@ -838,6 +855,7 @@ private fun NoticeItemMetaRow(
     rowId: String,
     imageOrdinal: Int,
     rawAttachmentLoader: NoticeRawAttachmentLoader?,
+    imageLoader: PptImageLoader?,
 ) {
     when (meta) {
         is NoticeItemMeta.Text -> {
@@ -866,14 +884,18 @@ private fun NoticeItemMetaRow(
         }
 
         is NoticeItemMeta.Image -> {
-            if (meta.hasData && rawAttachmentLoader != null && imageOrdinal >= 0) {
+            // 新数据：外置签名 URL（走 data/ppt 网络图片加载器+LRU）；旧数据：按需拉 data URI
+            val hasUrl = meta.url.isNotBlank()
+            if (hasUrl || (meta.hasData && rawAttachmentLoader != null && imageOrdinal >= 0)) {
                 NoticeAttachmentThumb(
                     loader = rawAttachmentLoader,
                     rowId = rowId,
-                    ordinal = imageOrdinal,
+                    ordinal = imageOrdinal.coerceAtLeast(0),
                     manual = false,
                     title = "图片",
                     caption = meta.caption,
+                    url = meta.url,
+                    imageLoader = imageLoader,
                 )
             } else {
                 MetaRow(
@@ -881,22 +903,13 @@ private fun NoticeItemMetaRow(
                     detail = buildString {
                         if (meta.caption.isNotBlank()) append(meta.caption)
                         if (meta.ocr) append(" · OCR")
-                        append(" · 无法预览 · 暂不支持预览")
+                        append(" · 图片加载失败")
                     },
                 )
             }
         }
 
-        is NoticeItemMeta.File -> MetaRow(
-            title = meta.name,
-            detail = listOf(
-                if (meta.ext.isNotBlank()) meta.ext.uppercase() else "",
-                meta.sizeText,
-                if (meta.pending) "待获取" else if (meta.archiveOk) "压缩包 ${meta.archiveCount} 项" else "",
-                if (meta.archiveSummary.isNotBlank()) meta.archiveSummary.take(80) else "",
-                "暂不支持预览",
-            ).filter { it.isNotBlank() }.joinToString(" · "),
-        )
+        is NoticeItemMeta.File -> NoticeFileAttachmentRow(meta = meta)
 
         is NoticeItemMeta.Form -> MetaRow(
             title = meta.name,
@@ -970,15 +983,27 @@ private fun ManualAttachmentRow(
     attachment: NoticeManualAttachment,
     rowId: String,
     rawAttachmentLoader: NoticeRawAttachmentLoader?,
+    imageLoader: PptImageLoader?,
 ) {
     val isImage = attachment.mime.startsWith("image/", ignoreCase = true)
-    if (isImage && attachment.hasData && rawAttachmentLoader != null) {
+    val url = attachment.url
+    if (isImage && (url.isNotBlank() || (attachment.hasData && rawAttachmentLoader != null))) {
         NoticeAttachmentThumb(
             loader = rawAttachmentLoader,
             rowId = rowId,
             ordinal = attachment.index,
             manual = true,
             title = attachment.name,
+            url = url,
+            imageLoader = imageLoader,
+        )
+    } else if (url.isNotBlank()) {
+        // 新数据：人工通知附件也可能是外置签名 URL（图片以外走「下载 → 系统打开」）
+        NoticeUrlAttachmentRow(
+            title = attachment.name,
+            detail = listOf(attachment.mime, attachment.sizeText).filter { it.isNotBlank() }.joinToString(" · "),
+            source = url,
+            fileName = attachment.name,
         )
     } else {
         MetaRow(
@@ -986,7 +1011,7 @@ private fun ManualAttachmentRow(
             detail = listOf(
                 attachment.mime,
                 attachment.sizeText,
-                if (isImage) "无法预览 · 暂不支持预览" else "暂不支持预览",
+                if (isImage) "图片加载失败" else "暂不支持预览",
             ).filter { it.isNotBlank() }.joinToString(" · "),
         )
     }

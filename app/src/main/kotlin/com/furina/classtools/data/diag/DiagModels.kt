@@ -1,6 +1,9 @@
 package com.furina.classtools.data.diag
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * 诊断 v2 领域模型（契约：`_diag_task/CONTRACT.md` §1/§2 + `web/deploy/cloudbase/2026-11-08_diag_login.sql`）。
@@ -143,7 +146,11 @@ data class FlowStep(
     val ts: Long = 0L,
     val text: String = "",
     val state: String = "",
-)
+) {
+    /** `run` = 本机正在执行（页面显示「进行中」）。 */
+    val running: Boolean
+        get() = state.trim().lowercase() == "run"
+}
 
 /** `public.diag_analysis` 一行（本机 agent 用 AI 产出的原因 + 建议 + 流程）。 */
 data class DiagAnalysis(
@@ -160,6 +167,12 @@ data class DiagAnalysis(
     val status: String,
     val confidence: Double,
     val flow: List<FlowStep>,
+    /** `related.health_ids`：AI 结论对应挂载的 service_health 行 id（v2.1 下挂）。 */
+    val relatedHealthIds: List<String> = emptyList(),
+    /** `related.checks`：AI 结论对应挂载的设备检查 id（agent 从 client_diag.detail.check 推导）。 */
+    val relatedChecks: List<String> = emptyList(),
+    /** `related.repair_id`：关联的 repair_tasks.id（展开态「关联修复」）。 */
+    val relatedRepairId: String = "",
 ) {
     val severityLevel: DiagLevel
         get() = DiagLevel.fromWire(severity)
@@ -169,14 +182,14 @@ data class DiagAnalysis(
 
     companion object {
         fun statusTextOf(raw: String?): String = when (raw?.trim()?.lowercase()) {
-            "new" -> "待分析"
-            "queued" -> "排队修复"
+            "new" -> "待处理"
+            "queued" -> "待处理"
             "running" -> "修复中"
             "fixed" -> "已修复"
             "failed" -> "修复失败"
-            "manual" -> "需人工处理"
+            "manual" -> "建议"
             "ignored" -> "已忽略"
-            else -> "未知"
+            else -> "待处理"
         }
     }
 }
@@ -236,3 +249,56 @@ data class ClientDiagRow(
     val detail: JsonObject,
     val device: JsonObject,
 )
+
+/**
+ * 设备信息最小化（契约 v2.1 §B android 白名单）：
+ * `platform / osVersion / appVer / webview / screen{w,h,dpr} / memoryMB / storagePct / network / clockSkewMs`。
+ *
+ * 品牌、型号、语言、API level、时区、存储总量等诊断价值低的字段一律不采集/不上报/不展示。
+ * `screen` 是嵌套对象（w/h 为物理像素，dpr 为 density）。
+ */
+data class DiagDeviceInfo(
+    val platform: String = "android",
+    val osVersion: String = "",
+    val appVer: String = "",
+    val webview: String = "",
+    val screenWidth: Int = 0,
+    val screenHeight: Int = 0,
+    val screenDpr: Double = 0.0,
+    /** 可用内存 MB（导致不可用的量；总量不上报）。 */
+    val memoryMB: Long = 0,
+    /** 可用存储百分比 0–100。 */
+    val storagePct: Int = 0,
+    val network: String = "",
+    val clockSkewMs: Long? = null,
+) {
+    /** 上报 device JSON（白名单字段；值本身已最小化，[DiagPayload] 落库前再过滤一遍）。 */
+    fun toJson(): JsonObject = buildJsonObject {
+        put("platform", JsonPrimitive(platform))
+        if (osVersion.isNotBlank()) put("osVersion", JsonPrimitive(DiagSanitizer.sanitizeText(osVersion, 40)))
+        if (appVer.isNotBlank()) put("appVer", JsonPrimitive(DiagSanitizer.sanitizeText(appVer, 40)))
+        if (webview.isNotBlank()) put("webview", JsonPrimitive(DiagSanitizer.sanitizeText(webview, 40)))
+        if (screenWidth > 0 && screenHeight > 0 && screenDpr > 0.0) {
+            put(
+                "screen",
+                buildJsonObject {
+                    put("w", JsonPrimitive(screenWidth))
+                    put("h", JsonPrimitive(screenHeight))
+                    put("dpr", JsonPrimitive(kotlin.math.round(screenDpr * 100.0) / 100.0))
+                },
+            )
+        }
+        if (memoryMB > 0) put("memoryMB", JsonPrimitive(memoryMB))
+        if (storagePct in 0..100) put("storagePct", JsonPrimitive(storagePct))
+        if (network.isNotBlank()) put("network", JsonPrimitive(DiagSanitizer.sanitizeText(network, 20)))
+        clockSkewMs?.let { put("clockSkewMs", JsonPrimitive(it)) }
+    }
+
+    companion object {
+        val KEYS: Set<String> = setOf(
+            "platform", "osVersion", "appVer", "webview", "screen",
+            "memoryMB", "storagePct", "network", "clockSkewMs",
+        )
+        val SCREEN_KEYS: Set<String> = setOf("w", "h", "dpr")
+    }
+}

@@ -18,5 +18,16 @@ object Routes {
 
     fun tool(toolId: String): String = "tool/$toolId"
 
+    /** 演示播放器（沉浸式全屏独立路由，不显示底栏）。 */
+    const val PPT_DECK_ARG = "deckId"
+    const val PPT_PLAYER = "pptPlay/{$PPT_DECK_ARG}"
+
+    fun pptPlayer(deckId: String): String = "pptPlay/$deckId"
+
+    /** v2.0 下载详情页（点击列表卡片进入；旧播放器仅作「在线预览」入口）。 */
+    const val PPT_DETAIL = "pptDetail/{$PPT_DECK_ARG}"
+
+    fun pptDetail(deckId: String): String = "pptDetail/$deckId"
+
     val topLevel: Set<String> = setOf(HOME, ALL, PROFILE)
 }

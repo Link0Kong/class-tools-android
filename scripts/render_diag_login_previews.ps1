@@ -1,4 +1,4 @@
-# Render the new diag-v2 + timetable-login Compose @Preview PNGs (no emulator needed).
+# Render the diag-v2.1 Compose @Preview PNGs (no emulator needed).
 # Why a clean copy: on Windows the Android CLI treats a Gradle "build" output dir as Bazel's
 # "BUILD" marker ("Multiple build systems detected: gradle, bazel"), so we render from C:\Temp\ct-preview.
 # Usage:
@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = (Resolve-Path (Join-Path $here '..')).Path
-if (-not $OutDir) { $OutDir = Join-Path $root 'artifacts\previews_diag_login' }
+if (-not $OutDir) { $OutDir = Join-Path $root 'artifacts\previews_diag_v21' }
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 $copy = 'C:\Temp\ct-preview'
@@ -47,7 +47,7 @@ try {
     if ($start -lt 0 -or $end -le $start) { throw "preview list produced no JSON:`n$raw" }
     $list = $raw.Substring($start, $end - $start + 1) | ConvertFrom-Json
     $fqns = @($list.previews | ForEach-Object { $_.methodFqn } | Where-Object {
-        $_ -match 'DiagScreenKt\.Diag(Light|Dark)Preview' -or
+        $_ -match 'DiagScreenKt\.DiagV21(Folded|Expanded)(Light|Dark)?Preview' -or
         $_ -match 'TimetableLoginDialogKt\.TimetableLogin'
     })
     Write-Output ("found {0} target previews" -f $fqns.Count)
