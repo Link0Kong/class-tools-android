@@ -5,9 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -24,14 +26,20 @@ import com.furina.classtools.data.timetable.TtCalendar
 import com.furina.classtools.data.timetable.TtPlan
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * 提醒调度（WorkManager）：一个 15 分钟周期任务（Android 允许的最小周期），
- * 每次只处理「当前窗口内到点」的提醒；设置变更/开机后调用 [ReminderRuntime.reschedule] 幂等重建。
+ * **v3.7 起加网络约束**，每次执行 [ReminderWorker]（= 后台通知轮询 + 既有提醒引擎），
+ * 因此 App 进程被杀/不在后台时仍能联网发现新通知与到点提醒；设置变更/开机后调用
+ * [ReminderRuntime.reschedule] / [ReminderBootReceiver] 幂等重建。
  *
  * 设计取舍：
- * - **不使用精确闹钟**（AlarmManager 精确闹钟在 Android 12+ 需 SCHEDULE_EXACT_ALARM 特殊权限）；
- *   周期任务在 Doze 下可能延迟，属于可接受的本机提醒精度；
+ * - **周期任务**：系统下限 15 分钟、Doze/厂商限制下可能进一步延迟（无 FCM 时无法实时秒达）；
+ * - **单条提醒**：另行优先 `AlarmManager.setExactAndAllowWhileIdle`（见 `ReminderAlarm.kt`），
+ *   未授权精确闹钟时回退 WorkManager；
  * - 通知权限/总开关任一关闭时不打扰用户（Worker 静默成功）；
  * - 去重由 [ReminderDedupe] + [ReminderDedupeStore] 保证「同 id 当日不重复」。
  */
@@ -50,8 +58,13 @@ class WorkManagerReminderScheduler(
     private val appContext: Context = context.applicationContext
 
     override fun ensureScheduled() {
+        // 网络约束：后台轮询必须能联网；无网时系统会等有网再执行（不会空跑）。
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
         val request = PeriodicWorkRequestBuilder<ReminderWorker>(INTERVAL_MINUTES, TimeUnit.MINUTES)
             .setInitialDelay(1, TimeUnit.MINUTES)
+            .setConstraints(constraints)
             .setBackoffCriteria(BackoffPolicy.LINEAR, 1, TimeUnit.MINUTES)
             .build()
         runCatching {
@@ -71,7 +84,7 @@ class WorkManagerReminderScheduler(
         const val UNIQUE_WORK_NAME: String = "ct_reminder_periodic"
 
         /** WorkManager 周期任务最小值 15 分钟（API 契约，不可调小）。 */
-        const val INTERVAL_MINUTES: Long = 15
+        const val INTERVAL_MINUTES: Long = ReminderBackgroundLogic.MIN_INTERVAL_MINUTES
     }
 }
 
@@ -378,37 +391,41 @@ class ReminderEngine(
     }
 }
 
-/** WorkManager 周期任务：执行一次提醒扫描；异常吞掉（避免重试风暴），调度由周期任务继续保证。 */
+/**
+ * WorkManager 周期任务（v3.7：后台通知轮询 + 提醒引擎）。
+ *
+ * 旧实现只读本机内存缓存（进程被杀即空）且不联网 → App 未在后台时永远收不到新通知。
+ * 现在每次执行：[ReminderBackgroundPipeline.run]（恢复 token → 拉通知签名/整表 → 刷作业缓存 →
+ * 跑既有提醒引擎发到点提醒）。异常吞掉（避免重试风暴），调度由周期任务继续保证。
+ */
 class ReminderWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val result = runCatching { ReminderEngine(applicationContext).runNow() }.getOrNull()
+        val result = runCatching {
+            ReminderBackgroundPipeline.run(applicationContext)
+        }.getOrNull()
         if (result != null) {
-            Log.i(ReminderLog.TAG, ReminderLog.summary(result))
+            Log.i(ReminderLog.TAG, result.logSummary())
         } else {
-            Log.i(ReminderLog.TAG, "[CT_REMINDER] run failed (exception swallowed)")
+            Log.i(ReminderLog.TAG, "[CT_REMINDER] background run failed (exception swallowed)")
         }
         return Result.success()
     }
 }
 
 /**
- * 开机/应用更新后重新调度（WorkManager 自身会持久化任务，但厂商清理/强制停止后需要重排）。
+ * 开机/应用更新后重新调度（WorkManager 自身会持久化周期任务，但厂商清理/强制停止后需要重排）。
  *
- * Manifest 声明（Lead 添加）：
- * ```xml
- * <receiver android:name=".data.reminder.ReminderBootReceiver" android:exported="false">
- *   <intent-filter>
- *     <action android:name="android.intent.action.BOOT_COMPLETED" />
- *     <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
- *     <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
- *   </intent-filter>
- * </receiver>
- * ```
- * 并需 Manifest 权限：`RECEIVE_BOOT_COMPLETED`（Lead 已加）。
+ * v3.7 追加：
+ * - 提前创建通知渠道（避免重启后首个通知因渠道缺失不显示）；
+ * - **重排单条提醒的 AlarmManager 精确闹钟**（闹钟不跨重启）：`ReminderAlarmRuntime.rearmPending`；
+ * - WorkManager 周期任务自身持久化，无需重排但 UPDATE 一次以应用新网络约束。
+ *
+ * Manifest 声明（`.data.reminder.ReminderBootReceiver`，已含 BOOT_COMPLETED /
+ * LOCKED_BOOT_COMPLETED / MY_PACKAGE_REPLACED），并需 `RECEIVE_BOOT_COMPLETED` 权限。
  */
 class ReminderBootReceiver : BroadcastReceiver() {
 
@@ -417,7 +434,21 @@ class ReminderBootReceiver : BroadcastReceiver() {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_LOCKED_BOOT_COMPLETED,
-            -> WorkManagerReminderScheduler(context).ensureScheduled()
+            -> {
+                val appContext = context.applicationContext
+                runCatching { ReminderChannelInstaller.ensureCreated(appContext) }
+                WorkManagerReminderScheduler(appContext).ensureScheduled()
+                // 广播接收器不能阻塞主线程；goAsync + IO 协程重排精确闹钟（失败静默）。
+                val pendingResult = goAsync()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        runCatching { ReminderAlarmRuntime.rearmPending(appContext) }
+                    } finally {
+                        runCatching { pendingResult.finish() }
+                    }
+                }
+            }
+
             else -> Unit
         }
     }

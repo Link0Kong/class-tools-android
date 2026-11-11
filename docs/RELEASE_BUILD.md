@@ -522,3 +522,52 @@ Release 包**真实账号业务全链路**（真实身份登录 → 云端数据
 - 本轮未做模拟器安装/冷启动复验（Lead 统一执行）；签名与构建产物已验证。
 - 真实 `media_files` 需转换机 v2.3 完成抽取后才会出现在 manifest；无该字段的旧 deck 不显示分组（已兼容）。
 - 下载落应用外部下载目录（不申请存储权限红线），完成后 `ACTION_VIEW`（video/*|audio/*）交给系统播放器/WPS 或分享；详见 §5 已知限制。
+
+---
+
+## 17. v3.7.0 Release 构建（通知可靠性：App 关闭/被杀后仍可收到提醒）
+
+> 版本：**versionName `3.7.0` / versionCode `13`**；日期：2026-11-11 22:00–22:05。
+> 本轮在**隔离副本** `C:\Users\Ko_Li\.openclaw\workspace\android-class-tools-notify`
+> （git worktree 分支 `feat/background-notify`，基于 HEAD `72805f9`）构建，避免与并行会话的
+> `data/vote`、`data/member`、`features/power`、`MainNavHost.kt` 等 WIP 冲突；
+> 合并与最终统一重编由 Lead 负责。
+
+### 17.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| 构建命令 | `$env:JAVA_HOME='C:\AndroidToolchain\jdk17'; $env:ANDROID_HOME='C:\AndroidToolchain\sdk'; .\gradlew.bat assembleRelease --console=plain` |
+| 结果 | **BUILD SUCCESSFUL in 2m 9s**（52 tasks；R8 + 资源压缩 + lintVitalRelease 通过） |
+| 构建产物 | `app\build\outputs\apk\release\app-release.apk` = **2,774,274 B** |
+| 交付副本 | `android-class-tools-notify\artifacts\classtools-3.7.0-release-signed.apk`（与构建产物实测 SHA-256 一致） |
+| 桌面交付 | `C:\Users\Ko_Li\Desktop\classtools-3.7.0-release-signed.apk`（同上，实测 SHA-256 一致） |
+| APK SHA-256 | **`FA3DEB4C9D84CD69822A9B99BE1CBF48FD1D0A60422EA5931CD4E3952D7FF353`**（交付副本/桌面副本实测一致；同一源码增量重建 SHA-256 会因打包时间戳变化而不同，属正常） |
+| `apksigner verify --verbose --print-certs` | **Verifies**；v2 scheme = true；Number of signers = 1；证书 `CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`；证书 SHA-256 `974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a`（同一 keystore，可覆盖升级） |
+| 新增依赖 | **无**（WorkManager 已在；AlarmManager / SharedPreferences / NotificationManager 均系统 API） |
+| 版本 | `aapt2 dump badging` 实测 `versionCode='13' versionName='3.7.0'`，包名 `com.furina.classtools`（release 无 .debug 后缀） |
+
+### 17.2 APK Manifest 关键项（aapt2 实测）
+
+- `uses-permission: android.permission.POST_NOTIFICATIONS`（既有）
+- `uses-permission: android.permission.SCHEDULE_EXACT_ALARM`（新增；Android 12+ 特殊权限，未授权自动回退 WorkManager）
+- `uses-permission: android.permission.RECEIVE_BOOT_COMPLETED`（既有）
+- `receiver com.furina.classtools.data.reminder.ReminderAlarmReceiver`，`exported=false`（新增，精确闹钟触发）
+- `receiver com.furina.classtools.data.reminder.ReminderBootReceiver`，`exported=true`（既有，开机/更新重排）
+
+### 17.3 测试
+
+| 项 | 结果 |
+|---|---|
+| `:app:testDebugUnitTest` | **BUILD SUCCESSFUL，1056 tests / 0 failures / 0 errors / 0 skipped（83 suites）**；基线 994/0 无回归 |
+| 新增用例（62） | `ReminderBackgroundTest` **25**（周期下限/基线不轰炸/签名比较/新增去重/安静时段/失败静默/状态编解码/诊断文案）<br>`ReminderAlarmTest` **22**（精确闹钟 vs WorkManager 决策/重排计划/载荷/混合调度器权限上限取消/`targetAt` 兼容）<br>`ReminderChannelsTest` **15**（渠道规格/映射/重要性/四态权限引导/电池优化/自启动/精确闹钟/硬限制） |
+| R8 兼容 | 新增 keep：`ReminderAlarmReceiver` / `ReminderBootReceiver` / `ReminderBackgroundPipeline`；release 构建与 lintVital 通过 |
+
+### 17.4 边界（如实）
+
+- 本轮构建环境**未连接模拟器/真机**（`adb devices` 为空）→ **未做安装/冷启动验证**；需 Lead 合并后按
+  §8.2/§8.3 门禁做「安装 → 两次冷启动 → logcat 0 FATAL/ANR」（v2.1.0 的 R8/Room 崩溃教训）。
+- 后台送达的**系统调度行为**（Doze/厂商清理/15 分钟窗口/精确闹钟授权）无法在 JVM 单测验证；需真机实测：
+  登录 → 申请通知权限 → 收到一条新通知后**从最近任务划掉 App** → 由采集管线写入新通知 → 等系统窗口观察是否收到；
+  单条提醒设「截止前 1 小时」后杀进程验证触发（Android 12+ 授权/未授权各验一次）。
+- 已知硬限制与用户侧设置建议见 `docs/REMINDER_BACKGROUND_20261111.md` §4/§5。

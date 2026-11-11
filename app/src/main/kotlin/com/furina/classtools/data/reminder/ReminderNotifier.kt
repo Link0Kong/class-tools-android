@@ -1,8 +1,6 @@
 package com.furina.classtools.data.reminder
 
 import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -68,44 +66,31 @@ class AndroidReminderNotifier(
     private val groupCounts: MutableMap<String, Int> = mutableMapOf()
 
     override fun ensureChannels() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = appContext.getSystemService(NotificationManager::class.java) ?: return
-        ReminderKind.entries
-            .distinctBy { it.channelId }
-            .forEach { kind ->
-                if (manager.getNotificationChannel(kind.channelId) == null) {
-                    manager.createNotificationChannel(
-                        NotificationChannel(
-                            kind.channelId,
-                            kind.channelName,
-                            if (kind.highPriority) {
-                                NotificationManager.IMPORTANCE_HIGH
-                            } else {
-                                NotificationManager.IMPORTANCE_DEFAULT
-                            },
-                        ).apply { description = kind.channelDesc },
-                    )
-                }
-            }
+        // v3.7：交给统一安装器（渠道提前创建/全部渠道一次补齐；纯逻辑规格见 ReminderChannels）。
+        ReminderChannelInstaller.ensureCreated(appContext)
     }
 
     override fun notify(event: ReminderEvent): Boolean {
         if (!canNotify()) return false
+        val channelId = ReminderChannels.channelIdFor(event)
+        val spec = ReminderChannels.specOf(channelId) ?: ReminderChannels.specFor(event.kind)
         val pendingIntent = ReminderIntentFactory.pendingIntent(appContext, event) ?: return false
         viewEvent(event)
         val groupKey = ReminderGrouping.groupKey(event.kind)
-        val builder = NotificationCompat.Builder(appContext, event.kind.channelId)
+        val builder = NotificationCompat.Builder(appContext, channelId)
             .setSmallIcon(smallIcon)
             .setContentTitle(event.title)
             .setContentText(event.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(event.body))
             .setPriority(
-                if (event.kind.highPriority) {
+                if (spec.highImportance) {
                     NotificationCompat.PRIORITY_HIGH
                 } else {
                     NotificationCompat.PRIORITY_DEFAULT
                 },
             )
+            // 锁屏可见（内容为班级通知/作业标题，不含学号等隐私字段）。
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
@@ -118,7 +103,7 @@ class AndroidReminderNotifier(
             true
         }.getOrDefault(false)
         if (childOk) {
-            postGroupSummary(event, groupKey, pendingIntent)
+            postGroupSummary(event, groupKey, pendingIntent, channelId, spec.highImportance)
         }
         return childOk
     }
@@ -127,13 +112,15 @@ class AndroidReminderNotifier(
         event: ReminderEvent,
         groupKey: String,
         pendingIntent: android.app.PendingIntent,
+        channelId: String,
+        highImportance: Boolean,
     ) {
         val count = synchronized(groupCounts) {
             val next = (groupCounts[groupKey] ?: 0) + 1
             groupCounts[groupKey] = next
             next
         }
-        val summary = NotificationCompat.Builder(appContext, event.kind.channelId)
+        val summary = NotificationCompat.Builder(appContext, channelId)
             .setSmallIcon(smallIcon)
             .setContentTitle(ReminderGrouping.summaryTitle(event.kind))
             .setContentText(ReminderGrouping.summaryText(count))
@@ -141,6 +128,14 @@ class AndroidReminderNotifier(
                 NotificationCompat.BigTextStyle()
                     .bigText(ReminderGrouping.summaryText(count)),
             )
+            .setPriority(
+                if (highImportance) {
+                    NotificationCompat.PRIORITY_HIGH
+                } else {
+                    NotificationCompat.PRIORITY_DEFAULT
+                },
+            )
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setGroup(groupKey)
             .setGroupSummary(true)
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)

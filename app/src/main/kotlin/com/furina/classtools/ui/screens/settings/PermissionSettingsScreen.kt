@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,9 +44,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.furina.classtools.data.permission.PermissionController
+import com.furina.classtools.data.permission.PermissionGuidance
 import com.furina.classtools.data.permission.PermissionState
 import com.furina.classtools.data.permission.PermissionTexts
 import com.furina.classtools.data.permission.PermissionType
+import com.furina.classtools.data.reminder.BackgroundReminderDiagnostics
+import com.furina.classtools.data.reminder.ReminderBackgroundActions
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.glass.CtGlassCard
@@ -72,9 +76,15 @@ fun PermissionSettingsScreen(
     var pendingType by remember { mutableStateOf<PermissionType?>(null) }
     var showRationale by remember { mutableStateOf(false) }
     var showSettingsGuide by remember { mutableStateOf(false) }
+    var backgroundDiagnostics by remember { mutableStateOf<BackgroundReminderDiagnostics?>(null) }
 
     // refreshTick 参与读取，授权返回后强制重新检查。
     val snapshot = remember(refreshTick) { controller.snapshot() }
+
+    // 后台提醒诊断（只读，不联网）：每次进入/刷新/授权返回后重新读取。
+    LaunchedEffect(refreshTick) {
+        backgroundDiagnostics = runCatching { ReminderBackgroundActions.diagnostics(context) }.getOrNull()
+    }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -131,6 +141,50 @@ fun PermissionSettingsScreen(
                     icon = { Icon(Icons.Rounded.NotificationsActive, contentDescription = null) },
                     onAction = { request(PermissionType.NOTIFICATIONS) },
                 )
+
+                BackgroundReminderCard(
+                    diagnostics = backgroundDiagnostics,
+                    onRefresh = { refreshTick++ },
+                )
+
+                CtGlassCard(
+                    shape = CtShapeTokens.hero,
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text(
+                            "后台提醒与省电（建议）",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        val bg = backgroundDiagnostics
+                        Text(
+                            PermissionGuidance.batteryOptimization(
+                                bg?.batteryOptimizationIgnored == true,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            PermissionGuidance.autoStartHint(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            PermissionGuidance.backgroundLimits(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            PermissionGuidance.exactAlarm(bg?.exactAlarmAllowed == true),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
 
                 PermissionCard(
                     type = PermissionType.CALENDAR,
@@ -335,4 +389,73 @@ private fun stateLabel(state: PermissionState): String = when (state) {
     PermissionState.REQUESTABLE -> "未开启"
     PermissionState.DENIED -> "未开启"
     PermissionState.PERMANENTLY_DENIED -> "需系统设置"
+}
+
+/**
+ * 后台提醒诊断卡（v3.7，用户反馈第 12 条）：
+ * 展示上次轮询时间、通知权限、新通知渠道重要性、电池优化/精确闹钟状态（只读，不联网）。
+ */
+@Composable
+private fun BackgroundReminderCard(
+    diagnostics: BackgroundReminderDiagnostics?,
+    onRefresh: () -> Unit,
+) {
+    val ready = diagnostics?.ready == true
+    CtGlassCard(
+        shape = CtShapeTokens.hero,
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "后台提醒（诊断）",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "App 关闭或在后台时，约每 15 分钟联网检查一次",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                CtPill(
+                    text = when {
+                        diagnostics == null -> "读取中"
+                        ready -> "可工作"
+                        else -> "需检查"
+                    },
+                    containerColor = when {
+                        diagnostics == null -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        ready -> MaterialTheme.colorScheme.secondaryContainer
+                        else -> MaterialTheme.colorScheme.errorContainer
+                    },
+                    contentColor = when {
+                        diagnostics == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                        ready -> MaterialTheme.colorScheme.onSecondaryContainer
+                        else -> MaterialTheme.colorScheme.onErrorContainer
+                    },
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(8.dp))
+            val lines = diagnostics?.formatLines().orEmpty()
+            if (lines.isEmpty()) {
+                Text(
+                    "正在读取诊断…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                lines.forEach { line ->
+                    Text(
+                        line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            TextButton(onClick = onRefresh) { Text("刷新诊断") }
+        }
+    }
 }

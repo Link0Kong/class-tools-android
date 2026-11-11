@@ -1,5 +1,35 @@
 # 版本记录（Android 客户端）
 
+## v3.7.0 · 2026-11-11（通知可靠性：App 关闭/被杀后仍可收到提醒，用户反馈第 12 条）
+
+- **根因（代码路径证据）**：① 15 分钟周期 `ReminderWorker` **不联网**，只读 `ReminderEngine` 的
+  `homeworkRepository.cached()` / `noticesRepository.cached()`——两者是**进程内内存缓存**，进程被杀即空；
+  ② `AppContainer.activeSession`（`X-Class-Token` 唯一来源）只在 UI 里赋值，后台 Worker 冷启动 token=null；
+  ③ 单条提醒仅 WorkManager OneTime（Doze 下延迟大、无 AlarmManager）；④ 渠道只在发通知时懒创建、
+  作业/汇总渠道 DEFAULT、无渠道/电池优化诊断；⑤ 开机/更新只重建周期任务、不重排单条闹钟。
+- **后台轮询**（`ReminderBackground.kt` + `ReminderBackgroundAndroid.kt`）：周期任务加
+  `Constraints(NetworkType.CONNECTED)`；每次执行恢复会话（SessionStore→ApiClient token）→
+  拉通知轻量签名（变化才拉整表）→ **首次只建基线不轰炸** → 新增通知用**全新 HIGH 渠道**
+  `notice_inbox_high`（声音/震动/锁屏可见）+ 本地 id 去重 + deep link 进通知页（单次 >3 条合并汇总）；
+  安静时段只更新基线不弹；随后刷新作业缓存并跑既有提醒引擎（作业/课表/通知到点提醒）；结果落本机诊断。
+- **单条提醒精确化**（`ReminderAlarm.kt` + `ReminderAlarmAndroid.kt`）：`HybridOneShotScheduler` 优先
+  `AlarmManager.setExactAndAllowWhileIdle`（Android 12+ 检查 `canScheduleExactAlarms()`，未授权**自动回退
+  WorkManager OneTime**）；`ReminderAlarmReceiver` 直接发通知；开机/更新/App 启动按
+  `ct_oneshot_pending`（新增 `targetAt`，旧 JSON 兼容）重排（5 分钟宽限内补发）。
+- **通知渠道**（`ReminderChannels.kt` + `ReminderChannelInstaller.kt`）：App 启动即提前创建全部渠道（幂等），
+  渠道规格纯数据可测；新通知渠道 `notice_inbox_high` = IMPORTANCE_HIGH + 震动 pattern + 锁屏 PUBLIC。
+- **权限与诊断**（`PermissionGuidance.kt` + 「我的 → 权限与提醒」/「提醒」页）：
+  - 通知权限四态引导（已授予/未请求/拒绝/永久拒绝）文案与动作；权限说明补充后台检查用途；
+  - 新增「后台提醒（诊断）」卡：是否已启用/基线、上次轮询与最近成功时间、上次结果、累计次数、
+    通知权限、**渠道系统真实重要性**、电池优化是否受限、**精确闹钟是否授权**；
+  - 新增电池优化/厂商自启动/硬限制说明（**不申请豁免、不弹系统弹窗**）。
+- **Manifest/构建**：新增 `SCHEDULE_EXACT_ALARM`（特殊权限，未授权自动回退）与
+  `.data.reminder.ReminderAlarmReceiver`（`exported=false`）；R8 keep 新接收器与后台管道。
+- 版本 **v3.7.0 / versionCode 13**；无新增第三方依赖（复用 WorkManager/AlarmManager/SharedPreferences）；
+  UD v6 / marks 契约不变；`testDebugUnitTest` **1056/0**（新增 62 项：`ReminderBackgroundTest` 25 +
+  `ReminderAlarmTest` 22 + `ReminderChannelsTest` 15；基线 994/0 无回归）；构建证据见 `docs/RELEASE_BUILD.md` §17。
+- 详见 `docs/REMINDER_BACKGROUND_20261111.md`（根因/实现/硬限制/用户设置建议/回滚）。
+
 ## v3.6.0 · 2026-11-11（「演示」v2.3：视频/音频单独下载）
 
 - **下载详情页新增分组「视频单独下载」**（契约 §12.8）：读取 `manifest.media_files`，在兼容版/PDF/原始文件三行之后展示

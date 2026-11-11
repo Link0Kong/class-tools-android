@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -102,11 +103,13 @@ sealed interface OneShotScheduleResult {
     data class Failed(val message: String) : OneShotScheduleResult
 }
 
-/** 已排程的单条提醒（UI 列表/取消用）。 */
+/** 已排程的单条提醒（UI 列表/取消/开机重排用）。 */
 data class OneShotPending(
     val key: OneShotKey,
     val label: String,
     val fireAtMillis: Long,
+    /** 目标时间（截止/活动时刻；仅用于通知文案与重排，默认与触发时刻相同以兼容旧记录）。 */
+    val targetAtMillis: Long = fireAtMillis,
 )
 
 /** 单条提醒纯逻辑（可单测）：时间计算、key、上限、校验、通知事件。 */
@@ -270,7 +273,7 @@ class InMemoryOneShotPendingStore(
     }
 }
 
-/** 编解码（纯函数，可单测）：JSON 数组，字段 kind/id/label/fireAt。 */
+/** 编解码（纯函数，可单测）：JSON 数组，字段 kind/id/label/fireAt/targetAt。 */
 object OneShotPendingCodec {
 
     fun encode(items: List<OneShotPending>): String = buildJsonArray {
@@ -281,6 +284,7 @@ object OneShotPendingCodec {
                     put("id", JsonPrimitive(item.key.targetId))
                     put("label", JsonPrimitive(item.label))
                     put("fireAt", JsonPrimitive(item.fireAtMillis))
+                    put("targetAt", JsonPrimitive(item.targetAtMillis))
                 },
             )
         }
@@ -299,10 +303,13 @@ object OneShotPendingCodec {
             if (id.isEmpty()) continue
             val fireAt = (obj["fireAt"] as? JsonPrimitive)?.longOrNull ?: 0L
             if (fireAt <= 0L) continue
+            val targetAt = (obj["targetAt"] as? JsonPrimitive)?.longOrNull
+                ?.takeIf { it > 0L } ?: fireAt
             out += OneShotPending(
                 key = OneShotKey(kind, id, fireAt),
                 label = obj["label"].asStringOrNull().orEmpty(),
                 fireAtMillis = fireAt,
+                targetAtMillis = targetAt,
             )
         }
         return out
@@ -414,26 +421,52 @@ class WorkManagerOneShotScheduler(
         )?.let { return it }
 
         val key = ReminderOneShot.key(kind, targetId, fireAtMillis)
-        val input = Data.Builder()
-            .putString(KEY_KIND, kind.name)
-            .putString(KEY_TARGET_ID, targetId)
-            .putString(KEY_LABEL, label.ifBlank { "班级提醒" }.take(120))
-            .putLong(KEY_TARGET_AT, targetAtMillis)
-            .putLong(KEY_FIRE_AT, fireAtMillis)
-            .build()
-        val request = OneTimeWorkRequestBuilder<ReminderOneShotWorker>()
-            .setInitialDelay((fireAtMillis - now).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
-            .setInputData(input)
-            .addTag(TAG)
-            .addTag(tagOf(kind))
-            .build()
+        val item = OneShotPending(
+            key = key,
+            label = label.ifBlank { "班级提醒" }.take(120),
+            fireAtMillis = fireAtMillis,
+            targetAtMillis = targetAtMillis,
+        )
         return runCatching {
-            workManager.enqueueUniqueWork(key.workName, ExistingWorkPolicy.REPLACE, request)
-            pendingStore.add(OneShotPending(key, label, fireAtMillis))
+            enqueue(item)
+            pendingStore.add(item)
             OneShotScheduleResult.Scheduled(key, fireAtMillis)
         }.getOrElse { error ->
             OneShotScheduleResult.Failed("排程失败：${error.message ?: "未知错误"}")
         }
+    }
+
+    /** 构造 WorkManager 请求（OneTime + 初始延迟 + 输入数据；排程/重排共用）。 */
+    private fun requestFor(item: OneShotPending): OneTimeWorkRequest =
+        OneTimeWorkRequestBuilder<ReminderOneShotWorker>()
+            .setInitialDelay(
+                (item.fireAtMillis - clock()).coerceAtLeast(0L),
+                TimeUnit.MILLISECONDS,
+            )
+            .setInputData(
+                Data.Builder()
+                    .putString(KEY_KIND, item.key.targetKind.name)
+                    .putString(KEY_TARGET_ID, item.key.targetId)
+                    .putString(KEY_LABEL, item.label.ifBlank { "班级提醒" }.take(120))
+                    .putLong(KEY_TARGET_AT, item.targetAtMillis)
+                    .putLong(KEY_FIRE_AT, item.fireAtMillis)
+                    .build(),
+            )
+            .addTag(TAG)
+            .addTag(tagOf(item.key.targetKind))
+            .build()
+
+    private fun enqueue(item: OneShotPending) {
+        workManager.enqueueUniqueWork(item.key.workName, ExistingWorkPolicy.REPLACE, requestFor(item))
+    }
+
+    /**
+     * 重排已持久化的单条提醒（开机/应用更新/App 启动后；WorkManager 任务自身跨重启持久化，
+     * 此方法用于「精确闹钟不可用」回退模式或系统清理后的重新入队）。
+     */
+    suspend fun rearm(item: OneShotPending) {
+        if (item.fireAtMillis <= 0L) return
+        runCatching { enqueue(item) }
     }
 
     override suspend fun cancel(key: OneShotKey) {
@@ -506,10 +539,28 @@ class ReminderOneShotWorker(
     }
 }
 
-/** UI 便捷工厂：`ReminderOneShotFactory.create(context, container.permissionController)`。 */
+/**
+ * UI 便捷工厂：`ReminderOneShotFactory.create(context, container.permissionController)`。
+ *
+ * v3.7：返回 [HybridOneShotScheduler] —— 精确闹钟可用时用 `AlarmManager.setExactAndAllowWhileIdle`，
+ * Android 12+ 未授权（`canScheduleExactAlarms=false`）时**自动回退**到旧 [WorkManagerOneShotScheduler]。
+ */
 object ReminderOneShotFactory {
     fun create(
         context: Context,
         permissionController: PermissionController,
-    ): ReminderOneShotScheduler = WorkManagerOneShotScheduler(context, permissionController)
+    ): ReminderOneShotScheduler {
+        val appContext = context.applicationContext
+        return HybridOneShotScheduler(
+            fallback = WorkManagerOneShotScheduler(appContext, permissionController),
+            alarmScheduler = AlarmManagerOneShotScheduler(appContext),
+            pendingStore = SharedPrefsOneShotPendingStore(appContext),
+            permissionProvider = {
+                permissionController.state(PermissionType.NOTIFICATIONS)
+            },
+            exactAlarmAvailability = {
+                ReminderExactAlarmSupport.canScheduleExactAlarms(appContext)
+            },
+        )
+    }
 }

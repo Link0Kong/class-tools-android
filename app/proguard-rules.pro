@@ -32,3 +32,9 @@
 
 # 提醒 Worker 由 WorkManager 按类名反射创建，保留其构造器与类名。
 -keep class com.furina.classtools.data.reminder.ReminderWorker { *; }
+
+# v3.7 通知可靠性：AlarmManager 触发广播由系统按类名实例化；Boot 广播同理。
+-keep class com.furina.classtools.data.reminder.ReminderAlarmReceiver { *; }
+-keep class com.furina.classtools.data.reminder.ReminderBootReceiver { *; }
+# 提醒渠道/状态编解码等使用反射风险低的纯逻辑不额外保留；保留提醒包公开 API 防 R8 误裁入口。
+-keep class com.furina.classtools.data.reminder.ReminderBackgroundPipeline { *; }

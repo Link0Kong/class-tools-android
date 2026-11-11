@@ -105,8 +105,13 @@ data class ReminderEvent(
     val triggerAtMillis: Long,
     val title: String,
     val body: String,
-    /** 点击跳转工具 id（与 `Routes.tool(id)` 一致：hw/tt）。 */
+    /** 点击跳转工具 id（与 `Routes.tool(id)` 一致：hw/tt/nt）。 */
     val toolId: String = kind.toolId,
+    /**
+     * 渠道覆盖（v3.7）：后台发现的新通知走全新高优先级渠道 [ReminderChannels.NEW_NOTICE_ID]；
+     * null/空 = 按 [kind] 的既有渠道（兼容旧行为）。
+     */
+    val channelIdOverride: String? = null,
 ) {
     /** 稳定的通知 id（同一 key 覆盖而非堆叠）。 */
     val notificationId: Int get() = key.hashCode()

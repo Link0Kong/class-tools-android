@@ -3,10 +3,16 @@
 > 目标：用 Android 17（API 37）的设计语言与 Compose-first 技术栈，把班级工具站重做成**真原生** Android App；数据与网页/小程序共用同一套 CloudBase 契约。
 
 - 包名：`com.furina.classtools`（早期草稿的 `fun.furina.classtools` 因 `fun` 是 Kotlin 硬关键字无法编译，已全量改名）
-- 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
+- 版本：3.7.0（versionCode 13），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v3.6.0**——「演示」下载中心（v2.0 兼容性处理 + 多端下载）基础上新增 **v2.3 视频/音频单独下载**：详情页「视频单独下载」分组（`视频N · 第X页` + 时长/分辨率/大小），DownloadManager 下载后系统播放器/WPS 打开或分享；无 `media_files` 旧 deck 不显示。实现见 [docs/PPT_DOWNLOAD_20261110.md](docs/PPT_DOWNLOAD_20261110.md)；单测 **994/0**（v2.3 新增 12 项）
+- 状态：**v3.7.0**——通知可靠性（用户反馈第 12 条）：App 关闭/被杀后仍能收到班级提醒——15 分钟网络约束周期任务
+  **后台恢复会话 → 拉通知签名 → 新通知高优先级通知（去重/基线防轰炸/deep link）→ 刷新作业缓存 → 既有提醒引擎**；
+  单条提醒优先 `AlarmManager.setExactAndAllowWhileIdle`（Android 12+ 未授权自动回退 WorkManager）+ 开机/更新重排；
+  渠道提前创建（新通知专用 HIGH 渠道 + 震动 + 锁屏可见）；「权限与提醒」页后台诊断（上次轮询/通知权限/渠道重要性/
+  电池优化/精确闹钟）+ 四态权限引导 + 电池优化/自启动说明。实现与硬限制见
+  [docs/REMINDER_BACKGROUND_20261111.md](docs/REMINDER_BACKGROUND_20261111.md)；单测 **1056/0**（新增 62 项：后台轮询 25 /
+  单条精确调度 22 / 渠道与权限引导 15；基线 994/0 无回归）
 
 ## 目录
 
@@ -14,7 +20,8 @@
 app/                     Android 应用模块
   src/main/kotlin/com/furina/classtools/
     data/                数据层：network(OkHttp/PostgREST)、auth(class_verify)、member(名单)、ppt(演示/分片上传)、
-                         sync(userdata v6 合并/防抖/离线补发)、marks、session、tool 目录
+                         sync(userdata v6 合并/防抖/离线补发)、marks、session、tool 目录、
+                         reminder（本机提醒/后台轮询/精确闹钟/渠道/去重/诊断）、permission（四态权限 + 引导文案）
     features/            业务领域层（draw 抽签、group、fit、ppt 演示…纯 Kotlin，可单测）
     ui/                  Compose UI
       theme/             设计令牌（颜色/字体/形状/动效/主题/Tokens）
@@ -62,6 +69,7 @@ cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
 
 - `docs/ARCHITECTURE.md` — 分层、同步、网络、验证策略
 - `docs/ROADMAP.md` — 里程碑与当前进度
+- `docs/REMINDER_BACKGROUND_20261111.md` — **通知可靠性 v3.7**：杀进程/未后台仍收到通知的根因、后台轮询、精确闹钟回退、渠道、诊断、硬限制
 - `docs/BACKEND_CONTRACT.md` + `docs/api/` — 后端契约（ENDPOINTS / USERDATA_V6 / KOTLIN_MODELS / NOTICES / EXPORT_CARD_V2 / DATA_LAYER_IMPL）
 - `docs/TOOLCHAIN.md` — 工具链与版本矩阵（进行中）
 - `docs/PPT_20261109.md` — 「演示」v1.1 分步播放器实现/契约对应/已知限制/构建与测试证据

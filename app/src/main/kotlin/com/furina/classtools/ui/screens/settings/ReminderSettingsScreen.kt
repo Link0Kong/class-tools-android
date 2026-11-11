@@ -41,9 +41,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.data.permission.PermissionController
+import com.furina.classtools.data.permission.PermissionGuidance
 import com.furina.classtools.data.permission.PermissionState
 import com.furina.classtools.data.permission.PermissionType
+import com.furina.classtools.data.reminder.BackgroundReminderDiagnostics
 import com.furina.classtools.data.reminder.ReminderActions
+import com.furina.classtools.data.reminder.ReminderBackgroundActions
 import com.furina.classtools.data.reminder.ReminderDiagnostics
 import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.data.reminder.ReminderSettings
@@ -79,6 +82,7 @@ fun ReminderSettingsScreen(
     val notificationsGranted =
         permissionController.state(PermissionType.NOTIFICATIONS).isGranted
     var diagnostics by remember { mutableStateOf<ReminderDiagnostics?>(null) }
+    var backgroundDiagnostics by remember { mutableStateOf<BackgroundReminderDiagnostics?>(null) }
     var testingNotification by remember { mutableStateOf(false) }
 
     fun update(transform: (ReminderSettings) -> ReminderSettings) {
@@ -260,6 +264,9 @@ fun ReminderSettingsScreen(
                                         diagnostics = runCatching {
                                             ReminderActions.diagnostics(context)
                                         }.getOrNull()
+                                        backgroundDiagnostics = runCatching {
+                                            ReminderBackgroundActions.diagnostics(context)
+                                        }.getOrNull()
                                     }
                                 },
                             ) { Text("立即检查 + 诊断") }
@@ -278,8 +285,9 @@ fun ReminderSettingsScreen(
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "提醒由本机调度（Android WorkManager，约 15 分钟检查一次）；手机省电/息屏时可能延迟。" +
-                                "提醒设置只保存在本机，不随账号同步；点击通知可直接打开作业/课表。",
+                            "提醒由本机调度：App 关闭或在后台时，约每 15 分钟联网检查一次班级新通知与作业截止" +
+                                "（需网络；系统省电/厂商清理时会延迟）。单条提醒优先精确闹钟，未授权时回退 WorkManager。" +
+                                "无厂商推送/FCM 时无法实时秒达；打开 App 会立即刷新。提醒设置只保存在本机，不随账号同步。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -317,6 +325,11 @@ fun ReminderSettingsScreen(
                         (diag.lastRunResult?.reason)?.takeIf { it.isNotBlank() }?.let {
                             appendLine("原因：$it")
                         }
+                        backgroundDiagnostics?.let { bg ->
+                            appendLine("—— 后台提醒 ——")
+                            bg.formatLines().forEach { appendLine(it) }
+                        }
+                        appendLine(PermissionGuidance.backgroundLimits())
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
