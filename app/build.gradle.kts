@@ -22,8 +22,8 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 32
-        versionName = "4.16.0"
+        versionCode = 33
+        versionName = "4.17.0"
 
         // CloudBase REST 根地址与公开 Publishable Key（role=anon，设计上公开）。
         // 值来自 gradle.properties（ct.restBaseUrl / ct.publishableKey），便于部署时替换。

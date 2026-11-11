@@ -212,49 +212,56 @@ class AppContainer(context: Context) {
     val powerRepository: PowerRepository = DefaultPowerRepository(api = apiClient)
 
     /** 投票仓库（契约 web/vote/CONTRACT.md；模型不含 sid）。 */
-    val voteRepository: VoteRepository = DefaultVoteRepository(
+    /** 懒加载：启动首帧不需要投票仓库。 */
+    val voteRepository: VoteRepository by lazy { DefaultVoteRepository(
         api = apiClient,
         currentSid = { activeSession?.sid },
-    )
+    ) }
 
     /** 团员名单仓库（RPC class_league；仅姓名/座号，无 sid）。 */
-    val classLeagueRepository: ClassLeagueRepository = DefaultClassLeagueRepository(
+    /** 懒加载：启动首帧不需要团员名单仓库。 */
+    val classLeagueRepository: ClassLeagueRepository by lazy { DefaultClassLeagueRepository(
         api = apiClient,
         currentSid = { activeSession?.sid },
-    )
+    ) }
 
     /** 演示（PPT）仓库：列表/播放清单/分片上传/软删/重试 + 转换机心跳（web/ppt/CONTRACT.md §4）。 */
-    val pptRepository: PptRepository = DefaultPptRepository(
+    /** 懒加载：启动首帧不需要 PPT 仓库。 */
+    val pptRepository: PptRepository by lazy { DefaultPptRepository(
         api = apiClient,
         currentSession = { activeSession },
-    )
+    ) }
 
     /** 演示图片加载器：自建 OkHttp + BitmapFactory + LRU（项目无 Coil，不新增依赖）。 */
-    val pptImageLoader: PptImageLoader = OkHttpPptImageLoader()
+    /** 懒加载：启动首帧不需要图片加载器（内部会创建 OkHttp 客户端）。 */
+    val pptImageLoader: PptImageLoader by lazy { OkHttpPptImageLoader() }
 
     /** 演示本机偏好：续播位置（按 deckId，7 天）+ 「原样/分步」模式偏好（契约 §11.3.1/§11.3.4）。 */
-    val pptLocalStore: PptLocalStore = PptLocalStore(appContext)
+    val pptLocalStore: PptLocalStore by lazy { PptLocalStore(appContext) }
 
     /** 演示默认模式判定用的网络质量（ConnectivityManager：WiFi/以太网/计量/慢网/Data Saver）。 */
-    val pptNetworkQuality: PptNetworkQualityProvider = AndroidNetworkQualityProvider(appContext)
+    val pptNetworkQuality: PptNetworkQualityProvider by lazy { AndroidNetworkQualityProvider(appContext) }
 
     /** v2.0 演示文件下载：DownloadManager → 应用外部下载目录；FileProvider 打开/分享。 */
-    val pptFileDownloader: PptFileDownloader = AndroidPptFileDownloader(appContext)
+    val pptFileDownloader: PptFileDownloader by lazy { AndroidPptFileDownloader(appContext) }
 
     /** 体测历史云端读写（E14/E15/E16：最多 2 条、软删 arch、pending 补发、2min TTL）。 */
-    val fitRecsRepository: FitRecsRepository = DefaultFitRecsRepository(
+    /** 懒加载：启动首帧不需要体测仓库。 */
+    val fitRecsRepository: FitRecsRepository by lazy { DefaultFitRecsRepository(
         api = apiClient,
         currentSid = { activeSession?.sid },
-    )
+    ) }
 
     /** 反馈建议（E19/E20/E21：GET 30s TTL、POST、管理员 PATCH done）。 */
-    val feedbackRepository: FeedbackRepository = DefaultFeedbackRepository(
+    /** 懒加载：启动首帧不需要反馈仓库。 */
+    val feedbackRepository: FeedbackRepository by lazy { DefaultFeedbackRepository(
         api = apiClient,
         currentSid = { activeSession?.sid },
-    )
+    ) }
 
     /** 数据与隐私：导出我的数据（脱敏/白名单）、清除云端与本机数据。 */
-    val privacyRepository: PrivacyRepository = DefaultPrivacyRepository(
+    /** 懒加载：启动首帧不需要隐私仓库。 */
+    val privacyRepository: PrivacyRepository by lazy { DefaultPrivacyRepository(
         api = apiClient,
         marksRepository = marksRepository,
         userDataAccess = RepositoryPrivacyUserDataAccess(userDataRepository),
@@ -268,7 +275,7 @@ class AppContainer(context: Context) {
                 },
             ),
         ),
-    )
+    ) }
 
     /** 本机外观偏好（壁纸取色等）：设备级设置，不进云端 userdata。 */
     val appSettings: AppSettingsStore = AppSettingsStore(appContext)
@@ -280,16 +287,18 @@ class AppContainer(context: Context) {
     val reminderSettingsStore: ReminderSettingsStore = DataStoreReminderSettingsStore(appContext)
 
     /** 写系统日历：有权限直接插入；无权限返回 NeedsPermission 由 UI 走 ACTION_INSERT 兜底。 */
-    val calendarWriter: CalendarWriter = AndroidCalendarWriter(
+    /** 懒加载：启动首帧不需要日历写入。 */
+    val calendarWriter: CalendarWriter by lazy { AndroidCalendarWriter(
         context = appContext,
         permissionController = permissionController,
-    )
+    ) }
 
     /** 本地通知提醒调度（WorkManager 15min 周期，幂等）。 */
-    val reminderScheduler: ReminderScheduler = WorkManagerReminderScheduler(appContext)
+    val reminderScheduler: ReminderScheduler by lazy { WorkManagerReminderScheduler(appContext) }
 
     init {
-        runCatching { reminderScheduler.ensureScheduled() }
+        // 启动不阻塞主线程：WorkManager 初始化与 ensureScheduled 放到后台作用域。
+        appScope.launch { runCatching { reminderScheduler.ensureScheduled() } }
     }
 
     /** 用户修改提醒设置后重建调度（或关闭时取消）。 */
