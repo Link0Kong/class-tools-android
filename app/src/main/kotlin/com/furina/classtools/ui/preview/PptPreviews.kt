@@ -287,6 +287,38 @@ private fun PptListStatesPreview() {
     }
 }
 
+@Preview(
+    name = "60b 演示列表 · 大字体 1.3",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 900,
+    fontScale = 1.3f,
+)
+@Composable
+private fun PptListLargeFontPreview() {
+    ClassToolsTheme {
+        PptListContent(
+            decks = previewDecks,
+            agentOnline = false,
+            mySid = "3260707024",
+            imageLoader = PptPreviewImageLoader,
+            loading = false,
+            errorMessage = null,
+            offlineHint = false,
+            uploadBar = null,
+            uploadFailedMessage = null,
+            onBack = {},
+            onUpload = {},
+            onOpenDetail = {},
+            onDelete = {},
+            onRetry = {},
+            onCancelUpload = {},
+            onDismissUploadError = {},
+            onRefresh = {},
+        )
+    }
+}
+
 @Preview(name = "61 演示列表 · 空态", showBackground = true, widthDp = 412, heightDp = 760)
 @Composable
 private fun PptListEmptyPreview() {

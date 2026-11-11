@@ -134,6 +134,26 @@ private fun TimetableWeekLightPreview() {
     }
 }
 
+@Preview(
+    name = "20b 课表 周视图 · 大字体 1.3",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 915,
+    fontScale = 1.3f,
+)
+@Composable
+private fun TimetableWeekLargeFontPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        TimetableViewScreen(
+            onBack = {},
+            repository = PreviewTimetableRepository,
+            initialSnapshot = previewTtSnapshot,
+            skipLoad = true,
+            nowMillis = PREVIEW_NOW,
+        )
+    }
+}
+
 @Preview(name = "21 课表 日视图 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
 private fun TimetableDayLightPreview() {
@@ -230,6 +250,31 @@ private fun TimetableNetworkErrorPreview() {
 @Preview(name = "24 电费 仪表盘 · 浅色", showBackground = true, widthDp = 412, heightDp = 1100)
 @Composable
 private fun PowerReadyLightPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        PowerScreen(
+            onBack = {},
+            repository = PreviewPowerRepository,
+            initialSelectedRv = "4-23A---321",
+            initialRow = powerRow(86.42),
+            initialHistories = mapOf(
+                PowerRange.H24 to previewHistories24h(),
+                PowerRange.D7 to previewHistories7d(),
+                PowerRange.D30 to previewHistories30d(),
+            ),
+            skipLoad = true,
+        )
+    }
+}
+
+@Preview(
+    name = "24b 电费 仪表盘 · 大字体 1.3",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 1100,
+    fontScale = 1.3f,
+)
+@Composable
+private fun PowerReadyLargeFontPreview() {
     ClassToolsTheme(darkTheme = false) {
         PowerScreen(
             onBack = {},

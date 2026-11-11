@@ -237,6 +237,28 @@ private fun HomeworkListLightPreview() {
     }
 }
 
+@Preview(
+    name = "20b 作业列表 · 大字体 1.3",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 915,
+    fontScale = 1.3f,
+)
+@Composable
+private fun HomeworkListLargeFontPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        HomeworkScreen(
+            onBack = {},
+            session = previewSession,
+            marksRepository = null,
+            homeworkRepository = null,
+            initialRows = previewHomeworkRows(),
+            initialMarks = previewMarks,
+            skipLoad = true,
+        )
+    }
+}
+
 @Preview(name = "21 作业空态 · 深色", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
 private fun HomeworkEmptyDarkPreview() {

@@ -713,6 +713,10 @@ private fun WeekHeaderCard(
     onThisWeek: () -> Unit,
     onViewMode: (TimetableViewMode) -> Unit,
 ) {
+    // 周标题已包含日期范围时不再重复显示副标（如「第 10 周 · 11/2-11/8」+「11/2 – 11/8」）。
+    val normalizedTitle = weekTitle.replace(" ", "").replace("–", "-").replace("—", "-")
+    val normalizedRange = rangeText.replace(" ", "").replace("–", "-").replace("—", "-")
+    val showRange = normalizedRange.isNotBlank() && !normalizedTitle.contains(normalizedRange)
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = CtShapeTokens.toolCard,
@@ -741,7 +745,7 @@ private fun WeekHeaderCard(
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
                     )
-                    if (rangeText.isNotBlank()) {
+                    if (showRange) {
                         Text(
                             text = rangeText,
                             style = MaterialTheme.typography.labelSmall,
