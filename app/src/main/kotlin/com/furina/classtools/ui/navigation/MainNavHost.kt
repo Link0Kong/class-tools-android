@@ -1,6 +1,9 @@
 package com.furina.classtools.ui.navigation
 
+import android.Manifest
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -216,7 +219,44 @@ fun MainNavHost(
         }
     }
 
-    /** 写系统日历：有权限直接插入；无权限/无账号退回系统 ACTION_INSERT 界面。 */
+    /** 写系统日历：有权限直接插入；无权限先请求权限，再退回系统 ACTION_INSERT 界面。 */
+    fun handleCalendarWriteResult(event: CalendarEvent, result: CalendarWriteResult) {
+        when (result) {
+            is CalendarWriteResult.Success -> toast(context, "已加入系统日历")
+            CalendarWriteResult.NeedsPermission,
+            CalendarWriteResult.NoCalendarAccount,
+            -> {
+                val intent = CalendarIntentFactory.insertIntent(event)
+                if (intent != null) {
+                    runCatching { context.startActivity(intent) }
+                    toast(context, CalendarIntentFactory.fallbackHint())
+                } else {
+                    toast(context, "没有可用的系统日历")
+                }
+            }
+            is CalendarWriteResult.Invalid -> toast(context, result.reason)
+            is CalendarWriteResult.Failed -> toast(context, "写入日历失败：" + result.message)
+        }
+    }
+
+    var pendingCalendarEvent by remember { mutableStateOf<CalendarEvent?>(null) }
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { granted ->
+        val event = pendingCalendarEvent
+        pendingCalendarEvent = null
+        if (event != null) {
+            scope.launch {
+                val result = container.calendarWriter.write(event)
+                if (result is CalendarWriteResult.Success || granted.values.any { it }) {
+                    handleCalendarWriteResult(event, result)
+                } else {
+                    handleCalendarWriteResult(event, CalendarWriteResult.NeedsPermission)
+                }
+            }
+        }
+    }
+
     fun writeCalendarEvent(event: CalendarEvent?) {
         if (event == null) {
             toast(context, "该内容没有可写入的时间信息")
@@ -224,20 +264,16 @@ fun MainNavHost(
         }
         scope.launch {
             when (val result = container.calendarWriter.write(event)) {
-                is CalendarWriteResult.Success -> toast(context, "已加入系统日历")
-                CalendarWriteResult.NeedsPermission,
-                CalendarWriteResult.NoCalendarAccount,
-                -> {
-                    val intent = CalendarIntentFactory.insertIntent(event)
-                    if (intent != null) {
-                        runCatching { context.startActivity(intent) }
-                        toast(context, CalendarIntentFactory.fallbackHint())
-                    } else {
-                        toast(context, "没有可用的系统日历")
-                    }
+                CalendarWriteResult.NeedsPermission -> {
+                    pendingCalendarEvent = event
+                    calendarPermissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.READ_CALENDAR,
+                            Manifest.permission.WRITE_CALENDAR,
+                        ),
+                    )
                 }
-                is CalendarWriteResult.Invalid -> toast(context, result.reason)
-                is CalendarWriteResult.Failed -> toast(context, "写入日历失败：" + result.message)
+                else -> handleCalendarWriteResult(event, result)
             }
         }
     }
