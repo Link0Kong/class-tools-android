@@ -35,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -554,7 +555,7 @@ private fun TodayCoursesCard(
             )
 
             else -> {
-                plan.today.forEach { sessionInfo ->
+                plan.today.forEachIndexed { index, sessionInfo ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -590,6 +591,34 @@ private fun TodayCoursesCard(
                                 text = "上课中",
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+                    // H-05：在「已结束」与「未开始」之间插入当前时间线。
+                    val nextSession = plan.today.getOrNull(index + 1)
+                    if (sessionInfo.state == SessionState.DONE &&
+                        nextSession != null &&
+                        nextSession.state != SessionState.DONE
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                            )
+                            Text(
+                                text = "现在",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 6.dp),
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
                             )
                         }
                     }

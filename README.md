@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.15.0**——v4 功能同步 + P0 + P1 收尾（撤销/光场下拉/自适应大字/读屏/触感/通知搜索/诊断简版/宿舍搜索/水量校验/日历权限/通知卡重试）；快速 E2E **43/0**、单测 **1065/0**、Release 冷启动 0.33s，签名 APK 已交付桌面。详见 [REPORT_ROUND26](docs/REPORT_ROUND26_20261112.md)。
+- 状态：**v4.16.0**——v4 功能同步 + P0 + P1 主体 + P2 连续优化（撤销/光场下拉/自适应大字/读屏/触感/通知搜索/诊断简版/宿舍搜索/水量校验/日历权限/时间线）；快速 E2E **43/0**、单测 **1065/0**，签名 APK 已交付桌面。详见 [REPORT_ROUND27](docs/REPORT_ROUND27_20261112.md)。
 
 ## 目录
 
