@@ -409,6 +409,7 @@ fun HomeScreen(
                             state = noticesState,
                             errorText = noticesFailedMessage,
                             onOpen = { openToolId("nt") },
+                            onRetry = ::retry,
                         )
                         QuickToolsSection(
                             quickTools = quickTools,
@@ -459,6 +460,7 @@ fun HomeScreen(
                         state = noticesState,
                         errorText = noticesFailedMessage,
                         onOpen = { openToolId("nt") },
+                        onRetry = ::retry,
                     )
                     QuickToolsSection(
                         quickTools = quickTools,
@@ -724,6 +726,7 @@ private fun NoticesCard(
     state: NoticeHomeState,
     errorText: String,
     onOpen: () -> Unit,
+    onRetry: () -> Unit = {},
 ) {
     TaskCard(
         emoji = "📢",
@@ -734,10 +737,17 @@ private fun NoticesCard(
     ) {
         when (state) {
             NoticeHomeState.LOADING -> HomeLoadingRow("通知同步中…")
-            NoticeHomeState.OFFLINE -> HomeMutedLine("通知需联网同步（显示本机缓存）")
-            NoticeHomeState.ERROR -> HomeMutedLine(
-                errorText.ifBlank { "通知同步失败，点开重试" },
-            )
+            NoticeHomeState.OFFLINE -> Row(verticalAlignment = Alignment.CenterVertically) {
+                HomeMutedLine("通知需联网同步（显示本机缓存）")
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onRetry) { Text("重试") }
+            }
+
+            NoticeHomeState.ERROR -> Row(verticalAlignment = Alignment.CenterVertically) {
+                HomeMutedLine(errorText.ifBlank { "通知同步失败" })
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onRetry) { Text("重试") }
+            }
 
             NoticeHomeState.READY -> when {
                 pendingCount == 0 -> HomeMutedLine("暂无待处理通知")
