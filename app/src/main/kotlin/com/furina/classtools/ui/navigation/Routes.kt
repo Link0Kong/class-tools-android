@@ -27,9 +27,11 @@ object Routes {
     const val GUIDE = "guide"
 
     const val TOOL_ARG = "toolId"
-    const val TOOL = "tool/{$TOOL_ARG}"
+    const val TOOL_PICK_ARG = "pick"
+    const val TOOL = "tool/{$TOOL_ARG}?$TOOL_PICK_ARG={$TOOL_PICK_ARG}"
 
-    fun tool(toolId: String): String = "tool/$toolId"
+    fun tool(toolId: String, pick: Boolean = false): String =
+        if (pick) "tool/$toolId?$TOOL_PICK_ARG=true" else "tool/$toolId"
 
     /** 演示播放器（沉浸式全屏独立路由，不显示底栏）。 */
     const val PPT_DECK_ARG = "deckId"

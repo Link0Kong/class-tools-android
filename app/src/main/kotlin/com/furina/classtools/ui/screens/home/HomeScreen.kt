@@ -147,6 +147,8 @@ fun HomeScreen(
     onOpenAll: () -> Unit = {},
     showNotificationPermissionBanner: Boolean = false,
     onOpenPermissions: (() -> Unit)? = null,
+    /** H-04：电量卡未关注宿舍时直接打开宿主的选择器（宿主通过路由参数让电费页首帧弹选择器）。 */
+    onOpenPowerPicker: (() -> Unit)? = null,
     isPageActive: Boolean = true,
     rotationEnabled: Boolean = true,
     nowMillis: Long = System.currentTimeMillis(),
@@ -387,7 +389,13 @@ fun HomeScreen(
                         PowerCard(
                             card = powerCard,
                             loading = powerLoading,
-                            onOpen = { openToolId("power") },
+                            onOpen = {
+                                if (powerCard == null && onOpenPowerPicker != null) {
+                                    onOpenPowerPicker()
+                                } else {
+                                    openToolId("power")
+                                }
+                            },
                         )
                     }
                     Column(
@@ -447,7 +455,17 @@ fun HomeScreen(
                         loading = ttLoading,
                         onOpen = { openToolId("tt") },
                     )
-                    PowerCard(card = powerCard, loading = powerLoading, onOpen = { openToolId("power") })
+                    PowerCard(
+                        card = powerCard,
+                        loading = powerLoading,
+                        onOpen = {
+                            if (powerCard == null && onOpenPowerPicker != null) {
+                                onOpenPowerPicker()
+                            } else {
+                                openToolId("power")
+                            }
+                        },
+                    )
                     HomeworkCard(
                         count = hwItems.size,
                         item = hwItems.getOrNull(hwIndex % maxOf(1, hwItems.size)),

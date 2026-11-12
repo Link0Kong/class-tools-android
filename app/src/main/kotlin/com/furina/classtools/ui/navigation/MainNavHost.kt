@@ -320,18 +320,26 @@ fun MainNavHost(
                         if (saved) toast(context, "首页快捷已保存")
                     }
                 },
+                onOpenPowerPicker = { navController.navigate(Routes.tool("power", pick = true)) },
             )
         }
 
         composable(
             route = Routes.TOOL,
-            arguments = listOf(navArgument(Routes.TOOL_ARG) { type = NavType.StringType }),
+            arguments = listOf(
+                navArgument(Routes.TOOL_ARG) { type = NavType.StringType },
+                navArgument(Routes.TOOL_PICK_ARG) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+            ),
             enterTransition = { CtPageTransitions.pushEnter() },
             exitTransition = { CtPageTransitions.pushExit() },
             popEnterTransition = { CtPageTransitions.popEnter() },
             popExitTransition = { CtPageTransitions.popExit() },
         ) { entry ->
             val toolId = entry.arguments?.getString(Routes.TOOL_ARG).orEmpty()
+            val pickInTool = entry.arguments?.getBoolean(Routes.TOOL_PICK_ARG) == true
             when (toolId) {
                 "draw" -> DrawScreen(
                     onBack = { navController.popBackStack() },
@@ -558,6 +566,7 @@ fun MainNavHost(
                     repository = container.powerRepository,
                     userDataRepository = container.userDataRepository,
                     session = session,
+                    initialPickerOpen = pickInTool,
                 )
 
                 "water" -> WaterScreen(
@@ -835,6 +844,7 @@ private fun RootTabs(
     onSelectTab: (Int) -> Unit,
     onOpenTool: (AppTool) -> Unit,
     onHomeToolsChange: (List<String>) -> Unit,
+    onOpenPowerPicker: () -> Unit,
 ) {
     val spec = rememberCtAdaptiveSpec()
     val destinations = remember {
@@ -907,6 +917,7 @@ private fun RootTabs(
                     onOpenPermissions = onOpenPermissions,
                     isPageActive = pagerState.currentPage == 0,
                     onHomeToolsChange = onHomeToolsChange,
+                    onOpenPowerPicker = onOpenPowerPicker,
                 )
 
                 1 -> CtAdaptiveContent(spec = spec) {

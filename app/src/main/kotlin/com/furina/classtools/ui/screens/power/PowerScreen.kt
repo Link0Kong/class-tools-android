@@ -137,6 +137,8 @@ fun PowerScreen(
     initialSlowRoom: Boolean = false,
     skipLoad: Boolean = false,
     initialError: String? = null,
+    /** 从工作台「未关注宿舍」卡进入时为 true：首帧直接弹出选择器（H-04）。 */
+    initialPickerOpen: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     val sectionsFlow: kotlinx.coroutines.flow.StateFlow<JsonObject> =
@@ -174,6 +176,13 @@ fun PowerScreen(
     var cursorIndex by remember { mutableStateOf<Int?>(null) }
     var showHousePicker by remember { mutableStateOf(false) }
     var showLowPicker by remember { mutableStateOf(false) }
+
+    // H-04：从工作台「未关注宿舍」卡进入时，首帧直接弹出选择器（一步完成关注）。
+    LaunchedEffect(Unit) {
+        if (initialPickerOpen && !skipLoad && phase == PowerPhase.IDLE && sel.isBlank()) {
+            showHousePicker = true
+        }
+    }
 
     LaunchedEffect(sel, range, refreshToken, skipLoad) {
         if (skipLoad) return@LaunchedEffect
