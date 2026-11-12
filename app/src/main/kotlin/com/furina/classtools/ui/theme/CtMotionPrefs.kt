@@ -2,9 +2,16 @@ package com.furina.classtools.ui.theme
 
 import android.animation.ValueAnimator
 import android.content.Context
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 
 /**
@@ -25,8 +32,26 @@ fun isReduceMotion(context: Context): Boolean {
     return scale == 0f || !animatorsEnabled
 }
 
+/**
+ * 监听系统动画缩放变化：运行中切换「移除动画」无需重进页面即可生效。
+ */
 @Composable
 fun rememberReduceMotion(): Boolean {
     val context = LocalContext.current
-    return remember(context) { isReduceMotion(context) }
+    var reduceMotion by remember(context) {
+        mutableStateOf(isReduceMotion(context))
+    }
+    DisposableEffect(context) {
+        val uri = Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE)
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                reduceMotion = isReduceMotion(context)
+            }
+        }
+        runCatching { context.contentResolver.registerContentObserver(uri, false, observer) }
+        onDispose {
+            runCatching { context.contentResolver.unregisterContentObserver(observer) }
+        }
+    }
+    return reduceMotion
 }
