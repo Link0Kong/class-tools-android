@@ -1,5 +1,10 @@
 # 版本记录（Android 客户端）
 
+## v4.38.0 · 2026-11-12（系统实时活动：Live Updates / ColorOS 流体云）
+
+- 接入 Android 16 Live Updates（ColorOS 16 流体云兼容）：PPT 上传进度实时活动 + 限时投票原生倒计时；POST_PROMOTED_NOTIFICATIONS。
+- 设备实测系统提升 `PROMOTED_ONGOING`（通知栏顶部倒计时卡片）；debug 提供测试入口。
+- 单测 1065/0；快速 E2E **43/0**（975.2s）；Release SHA-256 `FBA2907B…EA27C`（vc54），冷启动 0.31s/0.29s。
 ## v4.37.0 · 2026-11-12（交互：首页快捷编辑返回确认 + 审计扩面）
 
 - 编辑态返回先确认放弃修改（H-03）；新增工具/设置页无障碍审计脚本，12 界面 unlabeled=0。

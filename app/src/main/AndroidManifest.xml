@@ -6,6 +6,8 @@
 
     <!-- v2 通知提醒（Android 13+ 运行时申请；拒绝时静默降级） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 16 Live Updates：允许系统把 ongoing 通知升级为实时活动（ColorOS 16 流体云兼容） -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <!-- v2 课表/通知写日程（运行时申请；拒绝时退回系统 ACTION_INSERT 兜底） -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />

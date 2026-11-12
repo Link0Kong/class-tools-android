@@ -12,6 +12,7 @@ import com.furina.classtools.data.diag.DiagRepository
 import com.furina.classtools.data.diag.FileClientDiagPendingStore
 import com.furina.classtools.data.diag.installCrashHandler
 import com.furina.classtools.data.fitrecs.DefaultFitRecsRepository
+import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.calendar.AndroidCalendarWriter
 import com.furina.classtools.data.calendar.CalendarWriter
 import com.furina.classtools.features.feedback.DefaultFeedbackRepository
@@ -37,6 +38,7 @@ import com.furina.classtools.data.ppt.DefaultPptRepository
 import com.furina.classtools.data.ppt.OkHttpPptImageLoader
 import com.furina.classtools.data.ppt.PptImageLoader
 import com.furina.classtools.data.ppt.PptFileDownloader
+import com.furina.classtools.data.ppt.PptUploadPhase
 import com.furina.classtools.data.ppt.PptLocalStore
 import com.furina.classtools.data.ppt.PptNetworkQualityProvider
 import com.furina.classtools.data.ppt.PptRepository
@@ -227,10 +229,27 @@ class AppContainer(context: Context) {
 
     /** 演示（PPT）仓库：列表/播放清单/分片上传/软删/重试 + 转换机心跳（web/ppt/CONTRACT.md §4）。 */
     /** 懒加载：启动首帧不需要 PPT 仓库。 */
-    val pptRepository: PptRepository by lazy { DefaultPptRepository(
-        api = apiClient,
-        currentSession = { activeSession },
-    ) }
+    val pptRepository: PptRepository by lazy {
+        DefaultPptRepository(
+            api = apiClient,
+            currentSession = { activeSession },
+        ).also { repository ->
+            // Live Updates：PPT 上传/转换进度以系统实时活动（Android 16 实时更新 / ColorOS 流体云）呈现。
+            appScope.launch {
+                repository.uploadProgress.collect { progress ->
+                    when (progress.phase) {
+                        PptUploadPhase.IDLE,
+                        PptUploadPhase.DONE,
+                        PptUploadPhase.FAILED,
+                        PptUploadPhase.CANCELLED,
+                        -> LiveUpdateNotifier.cancelPptUpload(appContext)
+
+                        else -> LiveUpdateNotifier.postPptUpload(appContext, progress)
+                    }
+                }
+            }
+        }
+    }
 
     /** 演示图片加载器：自建 OkHttp + BitmapFactory + LRU（项目无 Coil，不新增依赖）。 */
     /** 懒加载：启动首帧不需要图片加载器（内部会创建 OkHttp 客户端）。 */

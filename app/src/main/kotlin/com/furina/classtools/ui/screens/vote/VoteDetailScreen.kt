@@ -42,6 +42,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -52,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.vote.PollDetail
 import com.furina.classtools.data.vote.PollManageAction
 import com.furina.classtools.data.vote.PollManageResult
@@ -133,6 +136,25 @@ fun VoteDetailScreen(
     var confirmClose by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var showExtend by remember { mutableStateOf(false) }
+
+    // Live Updates：限时投票在系统实时活动/流体云中显示倒计时，离开详情页即撤销。
+    val liveUpdateContext = LocalContext.current
+    LaunchedEffect(detail?.poll?.id, detail?.poll?.deadline, detail?.closed, skipLoad) {
+        if (skipLoad) return@LaunchedEffect
+        val current = detail
+        if (current != null && current.poll.deadline > 0L && !current.closed) {
+            LiveUpdateNotifier.postVoteDeadline(
+                context = liveUpdateContext,
+                pollTitle = current.poll.title,
+                deadlineMillis = current.poll.deadline,
+            )
+        } else {
+            LiveUpdateNotifier.cancelVote(liveUpdateContext)
+        }
+    }
+    DisposableEffect(liveUpdateContext) {
+        onDispose { LiveUpdateNotifier.cancelVote(liveUpdateContext) }
+    }
 
     val nowTick = rememberNowTick(enabled = !skipLoad)
     val effectiveNow = remember(detail, localAtFetch, nowTick) {

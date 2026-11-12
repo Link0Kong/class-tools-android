@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.BuildConfig
+import com.furina.classtools.data.notify.LiveUpdateNotifier
+import androidx.compose.ui.platform.LocalContext
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.ui.adaptive.CtAdaptiveSpec
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
@@ -93,6 +95,7 @@ fun ProfileScreen(
     onOpenFeedback: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
 ) {
+    val context = LocalContext.current
     var showPrivacy by remember { mutableStateOf(false) }
     var showAgreement by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
@@ -315,6 +318,7 @@ private fun ProfileCardContent(
     onOpenFeedback: () -> Unit,
     onOpenGuide: () -> Unit,
 ) {
+    val context = LocalContext.current
     when (card) {
         ProfileCard.ACCOUNT -> AccountCard(session)
         ProfileCard.SYNC -> SettingCard(title = "同步") {
@@ -381,6 +385,20 @@ private fun ProfileCardContent(
             SettingActionRow(label = "反馈建议", actionText = "反馈", onAction = onOpenFeedback)
             SettingDivider()
             SettingActionRow(label = "使用说明", actionText = "查看", onAction = onOpenGuide)
+            if (BuildConfig.DEBUG) {
+                SettingDivider()
+                SettingActionRow(
+                    label = "实时活动测试",
+                    actionText = "发送",
+                    onAction = { LiveUpdateNotifier.postDebugCountdown(context, 60) },
+                )
+                SettingDivider()
+                SettingActionRow(
+                    label = "关闭实时活动",
+                    actionText = "关闭",
+                    onAction = { LiveUpdateNotifier.cancelDebug(context) },
+                )
+            }
         }
 
         ProfileCard.SIGN_OUT -> Column {
