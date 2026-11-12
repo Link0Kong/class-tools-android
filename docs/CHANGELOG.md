@@ -1,5 +1,9 @@
 # 版本记录（Android 客户端）
 
+## v4.39.0 · 2026-11-12（性能维护：Baseline Profile 刷新）
+
+- 重新采集应用级 Baseline Profile：18,166→17,649 规则（清理失效/覆盖新代码），binary profile 12,327B。
+- speed-profile 后冷启动中位 282ms；常规冷启动 0.30s/0.28s；单测 1065/0；E2E **43/0**（974.1s）；SHA-256 `8855DA3C…0738`（vc55）。
 ## v4.38.0 · 2026-11-12（系统实时活动：Live Updates / ColorOS 流体云）
 
 - 接入 Android 16 Live Updates（ColorOS 16 流体云兼容）：PPT 上传进度实时活动 + 限时投票原生倒计时；POST_PROMOTED_NOTIFICATIONS。
