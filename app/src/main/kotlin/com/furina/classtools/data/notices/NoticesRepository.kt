@@ -176,11 +176,13 @@ class DefaultNoticesRepository(
                     )
                 }
             }
-            auto.sortByDescending { it.ts }
-            manual.sortByDescending { it.ts }
+            // 数据层去重：云端可能对同一逻辑通知保留多行（旧行未归档/重新采集/合并来源），
+            // 去重后 UI 只看到一条；hidden/override 已在上面应用，保留 supplements/mergedSources 语义。
+            val dedupedAuto = NoticeDedupe.dedupeAuto(auto).entries.sortedByDescending { it.ts }
+            val dedupedManual = NoticeDedupe.dedupeManual(manual).entries.sortedByDescending { it.ts }
             return NoticesData(
-                auto = auto,
-                manual = manual,
+                auto = dedupedAuto,
+                manual = dedupedManual,
                 hiddenCount = hiddenCount,
                 fetchedAt = now,
                 fromCache = false,

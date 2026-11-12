@@ -22,7 +22,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** v3 引擎测试：可测试注入（假 store/notifier/permission/data）、诊断字段、测试通知、错过补发。 */
+/** v3 引擎测试：可测试注入（假 store/notifier/permission/data）、诊断字段、错过补发。 */
 class ReminderEngineTest {
 
     private val zone: ZoneId = ZoneId.of("Asia/Shanghai")
@@ -211,37 +211,6 @@ class ReminderEngineTest {
         assertEquals("sent=1", diagnostics.lastRunSummary)
         assertEquals(ReminderCatchUp.DEFAULT_GRACE_MS * 3, diagnostics.catchUpLookbackMillis)
         assertTrue(diagnostics.settingsSummary.contains("通知=开"))
-    }
-
-    // ------------------------------------------------------------ 测试通知
-
-    @Test
-    fun `发送测试通知走假 notifier 不真发`() = runTest {
-        val notifier = FakeNotifier()
-        val result = engine(notifier = notifier).testNotification()
-        assertEquals(ReminderTestNotificationResult.Sent, result)
-        val event = notifier.events.single()
-        assertEquals("测试通知", event.title)
-        assertTrue(event.key.startsWith("test:"))
-        assertEquals("hw", event.toolId)
-        assertEquals(1, notifier.channelsEnsured)
-    }
-
-    @Test
-    fun `测试通知权限缺失返回明确结果`() = runTest {
-        val notifier = FakeNotifier()
-        val result = engine(permission = PermissionState.PERMANENTLY_DENIED, notifier = notifier).testNotification()
-        assertEquals(ReminderTestNotificationResult.PermissionMissing, result)
-        assertTrue(notifier.events.isEmpty())
-    }
-
-    @Test
-    fun `测试通知发送失败返回可读错误`() = runTest {
-        val notifier = FakeNotifier(succeed = false)
-        val result = engine(notifier = notifier).testNotification(ReminderKind.NOTICE_DUE)
-        assertTrue(result is ReminderTestNotificationResult.Failed)
-        assertTrue((result as ReminderTestNotificationResult.Failed).message.contains("失败"))
-        assertEquals("nt", notifier.events.single().toolId)
     }
 
     // ------------------------------------------------------------ 错过补发

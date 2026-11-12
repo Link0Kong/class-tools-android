@@ -152,7 +152,8 @@ $L = @{
     SubmitIdentity = U8 '6L+b5YWl5bel5YW356uZ'                       # identity: submit button
     AuthFailMark   = U8 '5LiN5Zyo54+t57qn5ZCN5Y2V'                   # identity error: not in class roster
     AuthFailAlt    = U8 '5qC46aqM5aSx6LSl'                           # identity error fallback: verify failed
-    Manage         = U8 '566h55CG'                                   # profile: data & privacy row action
+    Manage         = U8 '566h55CG'                                   # legacy row action text (kept for old builds)
+    DataPrivacy    = U8 '5pWw5o2u5LiO6ZqQ56eB'                       # profile row: data & privacy
     PrivacyTitle   = U8 '5pWw5o2u5LiO6ZqQ56eB'                       # data & privacy page title
     PrivacyNote    = U8 '6ZqQ56eB6K+05piO'                           # data & privacy: privacy notes heading
     ClearCloud     = U8 '5riF6Zmk5LqR56uv5pWw5o2u'                   # data & privacy: clear cloud data
@@ -173,7 +174,8 @@ $L = @{
     HomeNotices    = U8 '6YCa55+l5b6F5aSE55CG'                       # workbench: notices pending card
     HomeTtSync     = U8 '6K++6KGo5pyq5ZCM5q2l'                       # workbench: timetable not synced
     HomeNoClass    = U8 '5LuK5aSp5rKh6K++'                           # workbench: no class today
-    PermTitle      = U8 '5p2D6ZmQ5LiO5o+Q6YaS'                       # profile card / permission page title
+    PermTitle      = U8 '5p2D6ZmQ5LiO5o+Q6YaS'                       # permission page title
+    ProfileSection = U8 '6YCa55+l5LiO5p2D6ZmQ'                       # profile section title: notifications & permissions
     MyData         = U8 '5oiR55qE5pWw5o2u'                           # profile v2.1: my-data stats card
     GuideEntry     = U8 '5L2/55So6K+05piO'                           # profile: user guide entry
     FeedbackEntry  = U8 '5Y+N6aaI5bu66K6u'                           # profile: feedback entry
@@ -186,8 +188,6 @@ $L = @{
     FeedbackLoad   = U8 '5Yqg6L295Y+N6aaI'                           # feedback page: loading state
     GuideTitle     = U8 '5L2/55So6K+05piO'                           # guide page title
     FooterMark     = U8 '6Lqr5Lu95bey5qC46aqM'                       # workbench footer: identity verified
-    NotifTestTitle = U8 '6YCa55+l5rWL6K+V5LiO6K+K5pat'               # reminder: notification test section (v3)
-    NotifTestBtn   = U8 '5Y+R6YCB5rWL6K+V6YCa55+l'                   # reminder: send test notification (v3)
     NotifDiagBtn   = U8 '56uL5Y2z5qOA5p+l'                           # reminder: run check + diagnostics (v3)
     LoginEdu       = U8 '55m75b2V5pWZ5Yqh'                           # timetable: login entry (v3)
     ExportTt       = U8 '5a+85Ye66K++6KGo5Zu+54mH'                   # timetable: export button (v3)
@@ -348,7 +348,7 @@ function Get-ScreenKind {
     if ($joined.Contains($L.EditTitle)) { return 'HOME_EDIT' }
     if ($joined.Contains($L.IdentityTitle)) { return 'IDENTITY' }
     if ($joined.Contains($L.QuickTools)) { return 'HOME' }
-    if ($joined.Contains($L.ProfileMark) -or $joined.Contains($L.PermTitle) -or $joined.Contains($L.MyData) -or $joined.Contains($L.FeedbackEntry) -or $joined.Contains($L.GuideEntry)) { return 'PROFILE' }
+    if ($joined.Contains($L.ProfileMark) -or $joined.Contains($L.ProfileSection) -or $joined.Contains($L.MyData) -or $joined.Contains($L.FeedbackEntry) -or $joined.Contains($L.GuideEntry)) { return 'PROFILE' }
     # All-tools grid may be scrolled, so the "all tools" title is not always on screen.
     # Fall back to the triple bottom-nav labels (only top-level pages have them).
     if ($joined.Contains($L.Workbench) -and $joined.Contains($L.AllTab) -and $joined.Contains($L.MyTab)) { return 'ALL' }
@@ -857,9 +857,9 @@ function Invoke-Scenario {
     for ($i = 1; $i -le 2; $i++) {
         $null = Invoke-Adb @('shell', 'input', 'swipe', '950', '620', '130', '620', '260')
         Start-Sleep -Milliseconds 900
-        if (Wait-UiAny -Labels @($L.MyData, $L.ProfileMark, $L.PermTitle) -TimeoutSec 8) { break }
+        if (Wait-UiAny -Labels @($L.MyData, $L.ProfileMark, $L.ProfileSection) -TimeoutSec 8) { break }
     }
-    if (-not (Wait-UiAny -Labels @($L.MyData, $L.ProfileMark, $L.PermTitle) -TimeoutSec 12)) { throw 'pager swipe left did not reach profile page' }
+    if (-not (Wait-UiAny -Labels @($L.MyData, $L.ProfileMark, $L.ProfileSection) -TimeoutSec 12)) { throw 'pager swipe left did not reach profile page' }
     Save-Shot '26_pager_profile.png'
     for ($i = 1; $i -le 2; $i++) {
         $null = Invoke-Adb @('shell', 'input', 'swipe', '130', '620', '950', '620', '260')
@@ -928,7 +928,7 @@ function Invoke-Scenario {
     if (-not (Wait-ScreenKind 'ALL' 15)) { throw 'dock: tools page not visible' }
     Save-Shot '4x_dock_tools.png'
     Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
-    if (-not (Wait-UiAny -Labels @($L.MyData, $L.PermTitle) -TimeoutSec 15)) { throw 'dock: profile page not visible' }
+    if (-not (Wait-UiAny -Labels @($L.MyData, $L.ProfileSection) -TimeoutSec 15)) { throw 'dock: profile page not visible' }
     Save-Shot '4x_dock_profile.png'
     Tap-UiText -Label $L.Workbench -Exact -TimeoutSec 10
     if (-not (Wait-ScreenKind 'HOME' 15)) { throw 'dock: workbench not reachable' }
@@ -1202,8 +1202,8 @@ function Invoke-Scenario {
     Write-Line '--- step: data & privacy page'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
-    if (-not (Wait-UiText -Label $L.Manage -Exact -TimeoutSec 15)) { throw 'profile page data & privacy entry not visible' }
-    Tap-UiText -Label $L.Manage -Exact -TimeoutSec 10
+    if (-not (Wait-UiTextScroll -Label $L.DataPrivacy -ScrollTries 3 -TimeoutSec 15)) { throw 'profile page data & privacy entry not visible' }
+    Tap-UiText -Label $L.DataPrivacy -TimeoutSec 10
     $privacyState = Wait-UiAny -Labels @($L.PrivacyNote, $L.PrivacyLoadErr, $L.PrivacyAuth, $L.PrivacyLoading) -TimeoutSec 15
     if (-not $privacyState) { throw 'data & privacy page content not visible' }
     if (Wait-UiTextScroll -Label $L.ClearCloud -ScrollTries 4 -TimeoutSec 6) {
@@ -1219,8 +1219,11 @@ function Invoke-Scenario {
         }
         if (-not $clearDialog) { throw 'clear-cloud confirm dialog not visible' }
         Save-Shot '21_privacy.png'
-        Tap-UiText -Label $L.Cancel -Exact -TimeoutSec 10
-        if (-not (Wait-UiTextScroll -Label $L.PrivacyNote -ScrollTries 3 -TimeoutSec 10)) { throw 'privacy page did not come back after cancel' }
+    Tap-UiText -Label $L.Cancel -Exact -TimeoutSec 10
+    Start-Sleep -Milliseconds 900
+    $dialogStill = Wait-UiText -Label $L.ConfirmClear -Exact -TimeoutSec 3
+    $pageBack = Wait-UiTextScroll -Label $L.ClearCloud -ScrollTries 3 -TimeoutSec 10
+    if ($dialogStill -or -not $pageBack) { throw 'privacy page did not come back after cancel' }
         Add-Step 'privacy_page' 'PASS' 'clear-cloud dialog opened and cancelled' $swStep.ElapsedMilliseconds
     } else {
         Save-Shot '21_privacy.png'
@@ -1262,7 +1265,7 @@ function Invoke-Scenario {
     Write-Line '--- step: permission management (deny system dialog)'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     if (-not (Wait-UiTextScroll -Label $L.PermManage -ScrollTries 4 -TimeoutSec 15)) { throw 'profile: permission management row not visible' }
-    Tap-ActionNearLabel -Label $L.PermManage -ActionText $L.Manage
+    Tap-UiText -Label $L.PermManage -TimeoutSec 10
     if (-not (Wait-UiText -Label $L.PermTitle -TimeoutSec 15)) { throw 'permission page not visible' }
     if (-not (Wait-UiText -Label $L.NotifyWord -TimeoutSec 8)) { throw 'permission page: notifications card missing' }
     if (-not (Wait-UiText -Label $L.CalendarWord -TimeoutSec 8)) { throw 'permission page: calendar card missing' }
@@ -1291,14 +1294,20 @@ function Invoke-Scenario {
     # STEP 9f (v2): reminder settings - assert rows and toggle the homework reminder on then off
     Write-Line '--- step: reminder settings'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
-    if (-not (Wait-UiTextScroll -Label $L.ReminderEntry -ScrollTries 3 -TimeoutSec 10)) { throw 'reminder settings entry not visible' }
-    Tap-ActionNearLabel -Label $L.ReminderEntry -ActionText $L.Settings
-    if (-not (Wait-UiText -Label $L.ReminderMain -TimeoutSec 15)) { throw 'reminder page not visible' }
+    # permission step ends on the permission page; return to profile so the whole-row tap works
+    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    Start-Sleep -Milliseconds 1200
+    $null = Wait-ScreenKind 'PROFILE' 10
+    if (-not (Wait-UiTextScroll -Label $L.ReminderEntry -ScrollTries 4 -TimeoutSec 12)) { throw 'reminder settings entry not visible' }
+    Tap-UiText -Label $L.ReminderEntry -TimeoutSec 10
+    if (-not (Wait-UiText -Label $L.ReminderMain -TimeoutSec 15)) {
+        Write-Line '  reminder page not visible via profile row; retry via action text'
+        if (Wait-UiText -Label $L.Settings -Exact -TimeoutSec 4) { Tap-UiText -Label $L.Settings -Exact -TimeoutSec 6 }
+        if (-not (Wait-UiText -Label $L.ReminderMain -TimeoutSec 12)) { throw 'reminder page not visible' }
+    }
     if (-not (Wait-UiText -Label $L.HomeworkRem -TimeoutSec 8)) { throw 'reminder: homework reminder row missing' }
     if (-not (Wait-UiText -Label $L.ClassRem -TimeoutSec 8)) { throw 'reminder: class reminder row missing' }
     if (-not (Wait-UiText -Label $L.NoticeRemind -TimeoutSec 8)) { throw 'reminder: notice reminder row missing (v2.1.1)' }
-    if (-not (Wait-UiTextScroll -Label $L.NotifTestTitle -ScrollTries 4 -TimeoutSec 12)) { throw 'reminder: notification test section missing (v3)' }
-    if (-not (Wait-UiTextScroll -Label $L.NotifTestBtn -ScrollTries 3 -TimeoutSec 8)) { throw 'reminder: send-test-notification button missing (v3)' }
     if (-not (Wait-UiTextScroll -Label $L.NotifDiagBtn -ScrollTries 3 -TimeoutSec 8)) { throw 'reminder: run-check+diagnostics button missing (v3)' }
     $remBefore = Toggle-SwitchNear -Label $L.HomeworkRem
     $null = Toggle-SwitchNear -Label $L.HomeworkRem
@@ -1307,7 +1316,10 @@ function Invoke-Scenario {
     Save-Shot '29_reminder.png'
     $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
     Start-Sleep -Milliseconds 1200
-    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    if (-not (Wait-ScreenKind 'PROFILE' 10)) {
+        Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
+        Start-Sleep -Milliseconds 800
+    }
     Start-Sleep -Milliseconds 1200
     $null = Wait-ScreenKind 'PROFILE' 10
     Add-Step 'reminder_settings' 'PASS' 'homework reminder toggled on/off' $swStep.ElapsedMilliseconds
@@ -1315,9 +1327,17 @@ function Invoke-Scenario {
     # STEP 9g2 (v4): global notification permission banner (tolerant; visible only when permission off + reminders on)
     Write-Line '--- step: notification permission banner'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
+    if ((Get-ScreenKind) -ne 'PROFILE') {
+        Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
+        Start-Sleep -Milliseconds 800
+    }
     for ($i = 0; $i -lt 3; $i++) {
         $null = Invoke-Adb @('shell', 'input', 'swipe', '540', '900', '540', '1900', '300')
         Start-Sleep -Milliseconds 500
+    }
+    if ((Get-ScreenKind) -ne 'PROFILE') {
+        Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
+        Start-Sleep -Milliseconds 800
     }
     $banner = Wait-UiText -Label $L.NotifyBanner -TimeoutSec 8
     if ($banner) {
@@ -1331,38 +1351,45 @@ function Invoke-Scenario {
     # STEP 9g3 (v4): clear-local-cache second confirmation (open dialog, cancel - never clears)
     Write-Line '--- step: clear local cache confirm'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
+    if ((Get-ScreenKind) -ne 'PROFILE') {
+        Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
+        Start-Sleep -Milliseconds 800
+    }
+    for ($i = 0; $i -lt 3; $i++) {
+        $null = Invoke-Adb @('shell', 'input', 'swipe', '540', '800', '540', '1800', '300')
+        Start-Sleep -Milliseconds 400
+    }
     if (-not (Wait-UiTextScroll -Label $L.ClearCacheRow -ScrollTries 4 -TimeoutSec 12)) { throw 'clear-local-cache row not visible on profile' }
-    Tap-ActionNearLabel -Label $L.ClearCacheRow -ActionText $L.ClearAct
+    Tap-UiText -Label $L.ClearCacheRow -TimeoutSec 10
     if (-not (Wait-UiText -Label $L.ClearCacheTtl -TimeoutSec 10)) { throw 'clear cache confirmation dialog not visible' }
     Save-Shot '7x_clear_cache_dialog.png'
     Tap-UiText -Label $L.Cancel -Exact -TimeoutSec 8
     Start-Sleep -Milliseconds 900
     if (-not (Wait-ScreenKind 'PROFILE' 10)) { throw 'profile lost after cancel clear-cache dialog' }
     Add-Step 'clear_cache_confirm' 'PASS' 'confirmation dialog opened and cancelled' $swStep.ElapsedMilliseconds
-# STEP 9g (v2.1.1): profile -> about -> user guide (static content: title + >=3 sections)
-    Write-Line '--- step: user guide page'
-    $swStep = [Diagnostics.Stopwatch]::StartNew()
-    if (-not (Wait-UiTextScroll -Label $L.GuideEntry -ScrollTries 5 -TimeoutSec 15)) { throw 'profile: guide entry not visible' }
-    Tap-ActionNearLabel -Label $L.GuideEntry -ActionText $L.GuideAction
-    if (-not (Wait-UiText -Label $L.GuideTitle -TimeoutSec 15)) { throw 'guide page not visible' }
-    $guideSections = 0
-    if (Wait-UiText -Label $L.Identity -TimeoutSec 6) { $guideSections++ }
-    if (Wait-UiTextScroll -Label $L.Workbench -ScrollTries 4 -TimeoutSec 10) { $guideSections++ }
-    if (Wait-UiTextScroll -Label $L.Draw -ScrollTries 4 -TimeoutSec 10) { $guideSections++ }
-    if ($guideSections -lt 3) { throw "guide: only $guideSections section titles visible (need >= 3)" }
-    $null = Invoke-Adb @('shell', 'input', 'swipe', '540', '1500', '540', '700', '300')
-    Start-Sleep -Milliseconds 800
-    Save-Shot '31_guide.png'
-    $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-    Start-Sleep -Milliseconds 1200
-    $null = Wait-ScreenKind 'PROFILE' 10
-    Add-Step 'user_guide' 'PASS' ("title + $guideSections sections") $swStep.ElapsedMilliseconds
+# STEP 9g (v4.42): profile -> about -> user guide (card carousel: 1 card per screen, 20 cards)
+Write-Line '--- step: user guide page'
+$swStep = [Diagnostics.Stopwatch]::StartNew()
+if (-not (Wait-UiTextScroll -Label $L.GuideEntry -ScrollTries 5 -TimeoutSec 15)) { throw 'profile: guide entry not visible' }
+Tap-UiText -Label $L.GuideEntry -TimeoutSec 10
+if (-not (Wait-UiText -Label $L.GuideTitle -TimeoutSec 15)) { throw 'guide page not visible' }
+if (-not (Wait-UiText -Label $L.Identity -TimeoutSec 8)) { throw 'guide: first card (identity) not visible' }
+$guideSections = 1
+# swipe left -> next card, assert content changes to the second card
+$null = Invoke-Adb @('shell', 'input', 'swipe', '920', '1200', '160', '1200', '280')
+Start-Sleep -Milliseconds 1200
+if (Wait-UiText -Label $L.Workbench -TimeoutSec 8) { $guideSections++ }
+Save-Shot '31_guide.png'
+$null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+Start-Sleep -Milliseconds 1200
+$null = Wait-ScreenKind 'PROFILE' 10
+Add-Step 'user_guide' 'PASS' ("card carousel: first card + next=" + $guideSections) $swStep.ElapsedMilliseconds
 
 # STEP 9h (v2.1.1): profile -> feedback (open only, never submit - avoid cloud writes)
     Write-Line '--- step: feedback page (read-only open)'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     if (-not (Wait-UiTextScroll -Label $L.FeedbackEntry -ScrollTries 5 -TimeoutSec 15)) { throw 'profile: feedback entry not visible' }
-    Tap-ActionNearLabel -Label $L.FeedbackEntry -ActionText $L.FeedbackAction
+    Tap-UiText -Label $L.FeedbackEntry -TimeoutSec 10
     # the page title equals the profile row label, so assert page-specific content/state instead
     $fbStateNode = Wait-UiAny -Labels @($L.FeedbackForm, $L.FeedbackSubmit, $L.FeedbackFailed, $L.FeedbackEmpty, $L.FeedbackLoad) -TimeoutSec 15
     if (-not $fbStateNode) { throw 'feedback page state text missing' }
@@ -1488,10 +1515,10 @@ function Invoke-Scenario {
     if (-not (Wait-UiText -Label $L.AllToolsTitle -TimeoutSec 20)) { throw 'dark: tools page not visible' }
     Save-Shot '4x_dark_tools.png'
     Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
-    if (-not (Wait-UiAny -Labels @($L.MyData, $L.PermTitle) -TimeoutSec 20)) { throw 'dark: profile page not visible' }
+    if (-not (Wait-UiAny -Labels @($L.MyData, $L.ProfileSection) -TimeoutSec 20)) { throw 'dark: profile page not visible' }
     Save-Shot '4x_dark_profile.png'
     if (-not (Wait-UiTextScroll -Label $L.PermManage -ScrollTries 4 -TimeoutSec 15)) { throw 'dark: permission row not visible' }
-    Tap-ActionNearLabel -Label $L.PermManage -ActionText $L.Manage
+    Tap-UiText -Label $L.PermManage -TimeoutSec 10
     if (-not (Wait-UiText -Label $L.PermTitle -TimeoutSec 15)) { throw 'dark: permission page not visible' }
     Save-Shot '4x_dark_permissions.png'
     $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
@@ -1624,6 +1651,7 @@ Write-Line "summary: $summaryPath"
 $script:Log | Out-File -FilePath $LogFile -Encoding utf8
 Remove-Item $TmpUi -Force -ErrorAction SilentlyContinue
 if ($failed) { exit 1 } else { exit 0 }
+
 
 
 

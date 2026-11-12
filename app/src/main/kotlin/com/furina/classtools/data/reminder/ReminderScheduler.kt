@@ -167,7 +167,7 @@ class ContainerReminderDataProvider(context: Context) : ReminderDataProvider {
  * v3 可测试/可观测：
  * - 主构造器**不依赖 Context**（全部依赖可注入，单测用假实现，见 ReminderEngineTest）；
  * - 生产用 secondary constructor（`ReminderEngine(context)`）自动装配 Android 实现；
- * - [runNow] 与 [runOnce] 等价但语义更明确；[testNotification] 供设置页「发送测试通知」；
+ * - [runNow] 与 [runOnce] 等价但语义更明确（设置变更后立即检查）；
  * - [diagnostics] 返回权限/设置/缓存/上次运行摘要（不含通知正文/隐私数据）；
  * - Doze 延迟补偿：按上次运行时间回看（默认 10 分钟，最多 6 小时），配合去重避免重复。
  */
@@ -317,32 +317,6 @@ class ReminderEngine(
                 catchUpEvents = catchUpSent,
             ),
         )
-    }
-
-    /** 设置页「发送测试通知」：走真实渠道 + PendingIntent；权限缺失返回明确结果（不静默）。 */
-    suspend fun testNotification(kind: ReminderKind = ReminderKind.HOMEWORK_DIGEST): ReminderTestNotificationResult {
-        val permission = runCatching {
-            permissionController.state(PermissionType.NOTIFICATIONS)
-        }.getOrDefault(PermissionState.REQUESTABLE)
-        if (!permission.isGranted) return ReminderTestNotificationResult.PermissionMissing
-        return runCatching {
-            notifier.ensureChannels()
-            val event = ReminderEvent(
-                kind = kind,
-                key = "test:${kind.name}",
-                triggerAtMillis = clock(),
-                title = "测试通知",
-                body = "这是一条测试提醒。收到即说明通知渠道正常；点击可打开对应页面。",
-                toolId = kind.toolId,
-            )
-            if (notifier.notify(event)) {
-                ReminderTestNotificationResult.Sent
-            } else {
-                ReminderTestNotificationResult.Failed("通知发送失败（系统限制或渠道被关闭）")
-            }
-        }.getOrElse { error ->
-            ReminderTestNotificationResult.Failed(error.message ?: "未知错误")
-        }
     }
 
     /** 通知系统诊断快照（设置页展示；缓存/权限/设置/上次运行；不含通知正文）。 */

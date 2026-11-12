@@ -8,7 +8,7 @@ import com.furina.classtools.data.permission.PermissionType
  * 通知系统 v3 可观测性组件：
  * - [ReminderRunStateStore]：记录上次运行时间/摘要（Doze 延迟补偿 + 诊断页）；
  * - [ReminderCatchUp]：根据上次运行时间计算「补发回看窗口」；
- * - [ReminderDiagnostics] / [ReminderTestNotificationResult]：设置页「诊断/发送测试通知」用；
+ * - [ReminderDiagnostics]：设置页「通知诊断」用（权限/设置/缓存/上次运行摘要）；
  * - [ReminderLog]：Worker logcat 摘要（单行、不含隐私数据）。
  *
  * 全部纯逻辑/接口，可单测；Android 实现只有 [SharedPrefsReminderRunStateStore]。
@@ -96,15 +96,6 @@ object ReminderCatchUp {
         triggerAtMillis >= nowMillis - MAX_LOOKBACK_MS
 }
 
-/** 设置页「发送测试通知」结果（区分失败原因，UI 给明确文案）。 */
-sealed interface ReminderTestNotificationResult {
-    data object Sent : ReminderTestNotificationResult
-
-    data object PermissionMissing : ReminderTestNotificationResult
-
-    data class Failed(val message: String) : ReminderTestNotificationResult
-}
-
 /** 通知系统诊断快照（设置页展示；不含通知正文/学号等隐私数据）。 */
 data class ReminderDiagnostics(
     val checkedAtMillis: Long = 0L,
@@ -165,14 +156,8 @@ object ReminderSmallIcon {
     fun isFallback(resolved: Int): Boolean = resolved == FALLBACK_RES
 }
 
-/** UI 便捷入口（设置页/诊断按钮；内部构造 [ReminderEngine] 并调用 suspend API）。 */
+/** UI 便捷入口（设置页诊断按钮；内部构造 [ReminderEngine] 并调用 suspend API）。 */
 object ReminderActions {
-
-    /** 设置页「发送测试通知」：返回明确结果（不静默）。 */
-    suspend fun testNotification(
-        context: Context,
-        kind: ReminderKind = ReminderKind.HOMEWORK_DIGEST,
-    ): ReminderTestNotificationResult = ReminderEngine(context).testNotification(kind)
 
     /** 设置页「通知诊断」：权限/设置/缓存/上次运行摘要。 */
     suspend fun diagnostics(context: Context): ReminderDiagnostics = ReminderEngine(context).diagnostics()

@@ -1,40 +1,57 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.furina.classtools.ui.screens.notices
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Hub
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Warning
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
+import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
@@ -44,19 +61,30 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,10 +92,8 @@ import com.furina.classtools.data.marks.MarkKind
 import com.furina.classtools.data.marks.MarksRepository
 import com.furina.classtools.data.marks.MarksSnapshot
 import com.furina.classtools.data.notices.ManualNotice
-import com.furina.classtools.data.notices.MergedMessage
 import com.furina.classtools.data.notices.NoticeEntry
-import com.furina.classtools.data.notices.NoticeItemMeta
-import com.furina.classtools.data.notices.NoticeManualAttachment
+import com.furina.classtools.data.notices.NoticeGroupDto
 import com.furina.classtools.data.notices.NoticeStatus
 import com.furina.classtools.data.notices.NoticeStatusMachine
 import com.furina.classtools.data.notices.NoticesData
@@ -75,7 +101,7 @@ import com.furina.classtools.data.notices.NoticesLoadResult
 import com.furina.classtools.data.notices.NoticesRepository
 import com.furina.classtools.data.ppt.PptImageLoader
 import com.furina.classtools.data.session.Session
-import com.furina.classtools.ui.components.CtLoading
+import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.EmptyState
@@ -83,7 +109,15 @@ import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtChipOption
 import com.furina.classtools.ui.components.expressive.CtFilterChipRow
 import com.furina.classtools.ui.components.expressive.CtPressableCard
+import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.LocalCtDarkTheme
+import com.furina.classtools.ui.theme.rememberReduceMotion
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -94,51 +128,238 @@ enum class NoticeFilter(val label: String) {
     PINNED("置顶"),
 }
 
-/** UI 列表项（自动通知 + 人工通知统一渲染）。 */
-private sealed interface NoticeUiItem {
-    val key: String
-    val ts: Long
-    val pinned: Boolean
-    val done: Boolean
-    val title: String
-    val summary: String
-    val timeText: String
-    val attachmentCount: Int
+// -----------------------------------------------------------------------------
+// UI 模型（数据层 → 卡片/详情渲染；不在 UI 侧做任何分组/合并，避免重复展示）
+// -----------------------------------------------------------------------------
 
-    data class Auto(
-        val entry: NoticeEntry,
-        val status: NoticeStatus,
-        override val done: Boolean,
-        override val summary: String,
-        override val attachmentCount: Int,
-    ) : NoticeUiItem {
-        override val key: String get() = entry.rowId
-        override val ts: Long get() = entry.ts
-        override val pinned: Boolean get() = false
-        override val title: String get() = entry.title
-        override val timeText: String get() = entry.group.timeLabel.ifBlank { status.label }
+/**
+ * 卡片语义色（类型/状态色点）。
+ *
+ * 只用 MaterialTheme 角色派生（浅/深自动跟随，不在页面硬编码色值）：
+ * 团务=primary（雾青）/ 教务=secondary（灰蓝）/ 考试·时间=tertiary（暖沙）/ 缴费·紧急=error / 其它=outline。
+ */
+internal enum class NoticeTone { TEAL, BLUE, SAND, ROSE, GREY }
+
+/** 通知来源类型（卡片来源色点与小圆点语义）。 */
+internal enum class NoticeSourceKind { WECHAT, QQ, DOC, UNKNOWN }
+
+/**
+ * 通知列表项（自动通知 + 人工通知统一渲染模型）。
+ *
+ * **去重口径**：UI 严格 1:1 消费 `NoticesRepository` 返回的 `NoticesData.auto/manual`，
+ * 不做任何本地分组/合并/去重；同一通知是否重复由数据层（task-38）负责。
+ */
+internal data class NoticeUiItem(
+    val key: String,
+    val auto: NoticeEntry? = null,
+    val manual: ManualNotice? = null,
+    val status: NoticeStatus? = null,
+    val done: Boolean = false,
+    val pinned: Boolean = false,
+    val ts: Long = 0L,
+    val title: String = "",
+    val summary: String = "",
+    val cat: String = "",
+    val tone: NoticeTone = NoticeTone.GREY,
+    val source: String = "",
+    val sourceKind: NoticeSourceKind = NoticeSourceKind.UNKNOWN,
+    val senderLine: String = "",
+    /** 采集端给出的时间文案（group.timeLabel，如「报名 11-07 12:00」；详情里保留展示）。 */
+    val timeLabel: String = "",
+    val postedText: String = "",
+    val whenMillis: Long? = null,
+    val expired: Boolean = false,
+    val attachmentCount: Int = 0,
+    val mergeCount: Int = 0,
+    val edited: Boolean = false,
+    val hidden: Boolean = false,
+    val recurring: Boolean = false,
+) {
+    val isAuto: Boolean get() = auto != null
+}
+
+/** 简报统计（小程序 nt 页「待处理简报」同口径）。 */
+internal data class NoticeBriefStats(
+    val pending: Int,
+    val urgent: Int,
+    val week: Int,
+    val expired: Int,
+)
+
+private const val DAY_MS = 24L * 60L * 60L * 1000L
+
+/** 数据 → UI 列表（纯函数；只做排序，不做合并/去重）。 */
+internal fun buildUiItems(
+    data: NoticesData?,
+    marks: MarksSnapshot,
+    nowMillis: Long,
+): List<NoticeUiItem> {
+    if (data == null) return emptyList()
+    val autoItems = data.auto.map { entry ->
+        val status = NoticeStatusMachine.statusOf(entry.group, nowMillis)
+        val whenMillis = NoticeStatusMachine.whenInfo(entry.group, nowMillis)?.atMillis
+        val summary = entry.group.aiSummary.ifBlank {
+            entry.group.summary.ifBlank {
+                com.furina.classtools.data.notices.NoticeBodyParser.firstTextOf(entry.items)
+            }
+        }
+        NoticeUiItem(
+            key = entry.rowId,
+            auto = entry,
+            status = status,
+            done = marks.isDone(MarkKind.NT_DONE, entry.id),
+            pinned = false,
+            ts = entry.ts,
+            title = entry.title,
+            summary = summary.trim(),
+            cat = entry.cat,
+            tone = toneOfCat(entry.cat),
+            source = entry.group.source,
+            sourceKind = sourceKindOf(entry.group.source),
+            senderLine = listOf(entry.group.senderRole, entry.group.senderName)
+                .filter { it.isNotBlank() }
+                .joinToString(" · "),
+            timeLabel = entry.group.timeLabel,
+            postedText = formatPosted(entry.ts, nowMillis),
+            whenMillis = whenMillis,
+            expired = status.expired,
+            attachmentCount = com.furina.classtools.data.notices.NoticeBodyParser.attachmentCount(entry.items),
+            mergeCount = entry.group.mergedSources.size,
+            edited = entry.edited,
+            hidden = entry.hidden,
+            recurring = entry.group.recurrence != null,
+        )
     }
+    val manualItems = data.manual.map { notice ->
+        val pinned = marks.isDone(MarkKind.NT, notice.id)
+        NoticeUiItem(
+            key = notice.id,
+            manual = notice,
+            pinned = pinned,
+            ts = notice.ts,
+            title = notice.row.title.ifBlank { "班级通知" },
+            summary = notice.row.body.trim(),
+            cat = "班级通知",
+            tone = NoticeTone.GREY,
+            postedText = formatPosted(notice.ts, nowMillis),
+            attachmentCount = notice.attachments.size,
+        )
+    }
+    // 置顶优先 → 未处理在前 → 时间倒序；人工/自动统一按时间交错（与小程序列表一致）。
+    return (manualItems + autoItems).sortedWith(
+        compareBy<NoticeUiItem> { if (it.pinned) 0 else 1 }
+            .thenBy { if (it.done) 1 else 0 }
+            .thenByDescending { it.ts },
+    )
+}
 
-    data class Manual(
-        val notice: ManualNotice,
-        override val pinned: Boolean,
-    ) : NoticeUiItem {
-        override val key: String get() = notice.id
-        override val ts: Long get() = notice.ts
-        override val done: Boolean get() = false
-        override val title: String get() = notice.row.title.ifBlank { "班级通知" }
-        override val summary: String get() = notice.row.body.take(160)
-        override val timeText: String get() = formatTs(notice.ts)
-        override val attachmentCount: Int get() = notice.attachments.size
+internal fun buildBriefStats(items: List<NoticeUiItem>, nowMillis: Long): NoticeBriefStats {
+    val in24h = nowMillis + DAY_MS
+    val in7d = nowMillis + 7 * DAY_MS
+    val pending = items.filter { it.isAuto && !it.done && !it.expired }
+    val pendingWhen = pending.mapNotNull { it.whenMillis }.filter { it > nowMillis }
+    return NoticeBriefStats(
+        pending = pending.size,
+        urgent = pendingWhen.count { it <= in24h },
+        week = pendingWhen.count { it <= in7d },
+        expired = items.count { it.isAuto && it.expired },
+    )
+}
+
+/** 分类 → 语义色（与小程序 nt 页「教务雾蓝 / 团务睡莲青 / 考试暖沙 / 缴费灰粉 / 其它灰」同口径）。 */
+internal fun toneOfCat(cat: String): NoticeTone {
+    val text = cat.trim()
+    if (text.isEmpty()) return NoticeTone.GREY
+    return when {
+        text.contains("团") || text.contains("党") || text.contains("组织") -> NoticeTone.TEAL
+        text.contains("教务") || text.contains("教学") || text.contains("课程") ||
+            text.contains("学籍") || text.contains("成绩") -> NoticeTone.BLUE
+        text.contains("考试") || text.contains("报名") || text.contains("时间") ||
+            text.contains("活动") || text.contains("会议") -> NoticeTone.SAND
+        text.contains("缴费") || text.contains("紧急") || text.contains("安全") ||
+            text.contains("规则") || text.contains("提醒") -> NoticeTone.ROSE
+        else -> NoticeTone.GREY
+    }
+}
+
+/** 来源字符串 → 来源类型（微信 / QQ / 文档 / 未知）。 */
+internal fun sourceKindOf(source: String): NoticeSourceKind = when {
+    source.contains("QQ", ignoreCase = true) -> NoticeSourceKind.QQ
+    source.contains("微信", ignoreCase = true) || source.contains("wx", ignoreCase = true) ||
+        source.contains("群", ignoreCase = true) -> NoticeSourceKind.WECHAT
+    source.isNotBlank() -> NoticeSourceKind.DOC
+    else -> NoticeSourceKind.UNKNOWN
+}
+
+/** 语义色三元组（点 / 容器底 / 容器字）。 */
+internal data class NoticeToneColors(
+    val dot: Color,
+    val container: Color,
+    val content: Color,
+)
+
+@Composable
+internal fun toneColors(tone: NoticeTone): NoticeToneColors {
+    val scheme = MaterialTheme.colorScheme
+    return when (tone) {
+        NoticeTone.TEAL -> NoticeToneColors(scheme.primary, scheme.primaryContainer, scheme.onPrimaryContainer)
+        NoticeTone.BLUE -> NoticeToneColors(scheme.secondary, scheme.secondaryContainer, scheme.onSecondaryContainer)
+        NoticeTone.SAND -> NoticeToneColors(scheme.tertiary, scheme.tertiaryContainer, scheme.onTertiaryContainer)
+        NoticeTone.ROSE -> NoticeToneColors(scheme.error, scheme.errorContainer, scheme.onErrorContainer)
+        NoticeTone.GREY -> NoticeToneColors(scheme.outline, scheme.surfaceContainerHigh, scheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+internal fun statusTone(status: NoticeStatus): NoticeTone = when (status.cls) {
+    "urgent", "alert" -> NoticeTone.ROSE
+    "expired" -> NoticeTone.GREY
+    "extended" -> NoticeTone.SAND
+    "recurring" -> NoticeTone.BLUE
+    else -> NoticeTone.TEAL
+}
+
+/** `MM-dd HH:mm`（详情里的绝对时间）。 */
+internal fun formatTs(ts: Long): String {
+    if (ts <= 0) return ""
+    return DateTimeFormatter
+        .ofPattern("MM-dd HH:mm", Locale.CHINA)
+        .format(Instant.ofEpochMilli(ts).atZone(ZoneId.systemDefault()))
+}
+
+/** 列表卡片上的「什么时候发的」：今天 → HH:mm；昨天 → 昨天 HH:mm；今年 → MM-dd；更早 → yyyy-MM-dd。 */
+internal fun formatPosted(ts: Long, nowMillis: Long = System.currentTimeMillis()): String {
+    if (ts <= 0) return ""
+    val zone = ZoneId.systemDefault()
+    val date = Instant.ofEpochMilli(ts).atZone(zone).toLocalDate()
+    val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+    val clock = DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA)
+    val at = Instant.ofEpochMilli(ts).atZone(zone)
+    return when {
+        date == today -> clock.format(at)
+        date == today.minusDays(1) -> "昨天 ${clock.format(at)}"
+        date.year == today.year -> DateTimeFormatter.ofPattern("MM-dd", Locale.CHINA).format(at)
+        else -> DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.CHINA).format(at)
     }
 }
 
 /**
- * 通知页（原生只读渲染）。
+ * 通知页（原生只读渲染，2026-11-12 以小程序 nt 页为基准重做）。
  *
  * 数据：`NoticesRepository.load()` 两级拉取（轻量签名 → 变化才拉整表），
  * `[[CLASS_NOTICE_V1]]` 解析、hidden 过滤、override 白名单、附件元信息。
  * 已处理 = `marks kind='ntdone'`（ref = 通知组 id）；置顶 = `marks kind='nt'`（仅人工通知有效）。
+ *
+ * 信息架构（对齐小程序 `pages/nt`）：
+ * - 顶部：标题 + 待处理简报（待处理 / 24h 截止 / 7 天内 / 已过期）；
+ * - 筛选 chips（全部 / 未处理 / 置顶）+ 搜索（标题 / 摘要，点顶栏放大镜展开）；
+ * - 列表：分类色块 + 状态色点 + 标题 + 摘要 2 行 + 来源/附件/合并/已更新标记 +
+ *   「标记已处理」/「置顶」操作；「已过期」默认折叠成一段（可展开）；
+ * - 详情：底部弹层展示 AI 摘要 / 字段分段 / 图片网格 / 附件 / 链接 / 合并消息 / 人工通知正文，
+ *   图片附件支持缩略图 + 全屏大图；未知附件统一「暂不支持预览」；
+ * - 四态：骨架加载 / 空态 / 错误重试 / 离线缓存提示 + 下拉刷新。
+ *
+ * **不显示重复通知**：本页只消费数据层返回结果，UI 侧没有任何本地分组/合并逻辑。
  *
  * 接线（Lead 负责 MainNavHost）：
  * ```kotlin
@@ -150,14 +371,18 @@ private sealed interface NoticeUiItem {
  * )
  * ```
  *
- * 详情为**原生渲染**：文本条目展示全文；**img 附件支持缩略图预览 + 点击看大图**
- * （按需拉取原始 data URI、Bitmap 采样解码，列表阶段仍只存元信息）；文件/链接/收集表/合并消息
- * 只展示元信息，未知 kind 显示「暂不支持预览」；不加载 WebView。
- *
  * @param rawAttachmentLoader 图片附件按需加载器（Lead 接线传
  *   `ApiNoticeRawAttachmentLoader(container.apiClient)`；为 null 时降级为元信息占位）
  * @param imageLoader 图片附件网络加载器（外置签名 URL 形态；传入 `container.pptImageLoader` 复用
  *   `data/ppt` 的 OkHttp + BitmapFactory + LRU 实现；为 null 时用内置单例兜底）
+ * @param initialData 预览/测试注入数据（跳过网络）
+ * @param initialMarks 预览/测试注入 marks
+ * @param initialFilter 预览/测试注入初始筛选
+ * @param initialQuery 预览/测试注入初始搜索词（非空时自动展开搜索栏）
+ * @param initialExpiredExpanded 预览/测试注入「已过期」分组是否展开
+ * @param initialLoading 预览/测试：直接停在骨架加载态
+ * @param forcedErrorMessage 预览/测试：直接进入错误态（未注入数据时）
+ * @param skipLoad 预览/测试：跳过加载与刷新
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -170,17 +395,23 @@ fun NoticesScreen(
     /** v3 附件外置：图片 https 签名 URL 加载器（复用 data/ppt 实现，不引入新依赖）。 */
     imageLoader: PptImageLoader? = null,
     /** v2：把有明确时间的结构化通知写入系统日历（null = 不显示入口）。 */
-    onAddToCalendar: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
+    onAddToCalendar: ((NoticeGroupDto) -> Unit)? = null,
     /** v3：单条通知提醒（Lead 弹出提醒时间选项并排程）。 */
-    onRemindNotice: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
+    onRemindNotice: ((NoticeGroupDto) -> Unit)? = null,
     modifier: Modifier = Modifier,
     initialData: NoticesData? = null,
     initialMarks: MarksSnapshot? = null,
+    initialFilter: NoticeFilter = NoticeFilter.ALL,
+    initialQuery: String = "",
+    initialExpiredExpanded: Boolean = false,
+    initialLoading: Boolean = false,
     forcedErrorMessage: String? = null,
     skipLoad: Boolean = false,
 ) {
+    val spec = rememberCtAdaptiveSpec()
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
+    val haptics = LocalHapticFeedback.current
     val fallbackMarks = remember { MutableStateFlow(initialMarks ?: MarksSnapshot()) }
     val marksFlow = remember(marksRepository, initialMarks) { marksRepository?.marks ?: fallbackMarks }
     val marks: MarksSnapshot by marksFlow.collectAsState()
@@ -189,8 +420,10 @@ fun NoticesScreen(
     var phase by remember {
         mutableStateOf(
             when {
-                skipLoad || forcedErrorMessage != null -> Phase.READY
                 initialData != null -> Phase.READY
+                forcedErrorMessage != null -> Phase.FAILED
+                initialLoading -> Phase.LOADING
+                skipLoad -> Phase.READY
                 else -> Phase.LOADING
             },
         )
@@ -198,9 +431,15 @@ fun NoticesScreen(
     var errorMessage by remember { mutableStateOf(forcedErrorMessage) }
     var isRefreshing by remember { mutableStateOf(false) }
     var reloadToken by remember { mutableIntStateOf(0) }
-    var filter by remember { mutableStateOf(NoticeFilter.ALL) }
-    var query by remember { mutableStateOf("") }
-    var selected by remember { mutableStateOf<NoticeUiItem?>(null) }
+    var filterKey by rememberSaveable { mutableStateOf(initialFilter.name) }
+    val filter = remember(filterKey) {
+        NoticeFilter.entries.firstOrNull { it.name == filterKey } ?: NoticeFilter.ALL
+    }
+    var query by rememberSaveable { mutableStateOf(initialQuery) }
+    var searchVisible by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
+    var expiredExpanded by rememberSaveable { mutableStateOf(initialExpiredExpanded) }
+    var selectedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     fun notify(message: String) {
         scope.launch { snackbar.showSnackbar(message) }
@@ -213,6 +452,7 @@ fun NoticesScreen(
                 errorMessage = null
                 phase = Phase.READY
             }
+
             is NoticesLoadResult.Failure -> {
                 errorMessage = result.message
                 phase = if (data == null) Phase.FAILED else Phase.READY
@@ -221,10 +461,7 @@ fun NoticesScreen(
     }
 
     LaunchedEffect(reloadToken) {
-        if (skipLoad || forcedErrorMessage != null) {
-            phase = Phase.READY
-            return@LaunchedEffect
-        }
+        if (skipLoad || initialLoading) return@LaunchedEffect
         if (session == null) {
             errorMessage = "请先完成身份验证后再查看通知"
             phase = Phase.FAILED
@@ -240,7 +477,16 @@ fun NoticesScreen(
         runCatching { marksRepository?.refresh() }
     }
 
+    // 状态文案（「N 分钟后 / 24h 截止」）随时间自然走，页面停留时每分钟刷新一次。
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            nowMillis = System.currentTimeMillis()
+        }
+    }
+
     fun refresh() {
+        if (skipLoad) return
         scope.launch {
             isRefreshing = true
             try {
@@ -252,44 +498,47 @@ fun NoticesScreen(
         }
     }
 
-    fun toggleDone(item: NoticeUiItem.Auto) {
+    fun toggleDone(item: NoticeUiItem) {
         val repository = marksRepository ?: run {
             notify("未登录，无法同步处理状态")
             return
         }
+        val entry = item.auto ?: return
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         scope.launch {
-            when (repository.setMark(MarkKind.NT_DONE, item.entry.id, !item.done)) {
+            when (repository.setMark(MarkKind.NT_DONE, entry.id, !item.done)) {
                 is com.furina.classtools.data.marks.MarksUpdateResult.Success ->
                     notify(if (!item.done) "已标记处理" else "已恢复未处理")
+
                 is com.furina.classtools.data.marks.MarksUpdateResult.Failure ->
                     notify("同步失败，稍后自动重试")
             }
         }
     }
 
-    fun togglePin(item: NoticeUiItem.Manual) {
+    fun togglePin(item: NoticeUiItem) {
         val repository = marksRepository ?: run {
             notify("未登录，无法同步置顶状态")
             return
         }
+        val notice = item.manual ?: return
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         scope.launch {
-            when (repository.setMark(MarkKind.NT, item.notice.id, !item.pinned)) {
+            when (repository.setMark(MarkKind.NT, notice.id, !item.pinned)) {
                 is com.furina.classtools.data.marks.MarksUpdateResult.Success ->
                     notify(if (!item.pinned) "已置顶" else "已取消置顶")
+
                 is com.furina.classtools.data.marks.MarksUpdateResult.Failure ->
                     notify("同步失败，稍后自动重试")
             }
         }
     }
 
-    val nowMillis = remember(reloadToken) { System.currentTimeMillis() }
-    val allItems = remember(data, marks, nowMillis) {
-        buildUiItems(data, marks, nowMillis)
-    }
+    val allItems = remember(data, marks, nowMillis) { buildUiItems(data, marks, nowMillis) }
     val visibleItems = remember(allItems, filter, query) {
         val base = when (filter) {
             NoticeFilter.ALL -> allItems
-            NoticeFilter.PENDING -> allItems.filterIsInstance<NoticeUiItem.Auto>().filter { !it.done }
+            NoticeFilter.PENDING -> allItems.filter { it.isAuto && !it.done && !it.expired }
             NoticeFilter.PINNED -> allItems.filter { it.pinned }
         }
         val q = query.trim()
@@ -301,6 +550,22 @@ fun NoticesScreen(
             }
         }
     }
+    // 「已过期」独立折叠段（仅「全部」筛选且无搜索词时，对齐小程序已过期区）。
+    val expiredSection = filter == NoticeFilter.ALL && query.isBlank()
+    val primaryItems = remember(visibleItems, expiredSection) {
+        if (expiredSection) visibleItems.filter { !it.expired } else visibleItems
+    }
+    val expiredItems = remember(visibleItems, expiredSection) {
+        if (expiredSection) visibleItems.filter { it.expired } else emptyList()
+    }
+
+    val pendingCount = allItems.count { it.isAuto && !it.done && !it.expired }
+    val pinnedCount = allItems.count { it.pinned }
+    val briefStats = remember(allItems, nowMillis) { buildBriefStats(allItems, nowMillis) }
+    val selectedItem = remember(allItems, selectedKey) {
+        selectedKey?.let { key -> allItems.firstOrNull { it.key == key } }
+    }
+    val twoColumn = spec.widthDp >= 600
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -311,154 +576,152 @@ fun NoticesScreen(
             ) {
                 CtTopBar(
                     title = "班级通知",
-                    subtitle = buildString {
-                        val pending = allItems.filterIsInstance<NoticeUiItem.Auto>().count { !it.done }
-                        if (allItems.isNotEmpty()) append("未处理 $pending / ${allItems.size}")
-                        if (data?.fromCache == true) {
-                            if (isNotEmpty()) append(" · ")
-                            append("本机缓存")
-                        }
-                        val hidden = data?.hiddenCount ?: 0
-                        if (hidden > 0) append(" · 已隐藏 $hidden")
-                    },
+                    subtitle = buildSubtitle(
+                        allItemsCount = allItems.size,
+                        pending = pendingCount,
+                        hiddenCount = data?.hiddenCount ?: 0,
+                    ),
                     onBack = onBack,
                     actions = {
+                        IconButton(onClick = {
+                            searchVisible = !searchVisible
+                            if (!searchVisible) query = ""
+                        }) {
+                            Icon(
+                                Icons.Rounded.Search,
+                                contentDescription = if (searchVisible) "关闭搜索" else "搜索通知",
+                                tint = if (searchVisible) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
                         IconButton(onClick = { refresh() }) {
-                            Icon(Icons.Rounded.Refresh, contentDescription = "刷新通知")
+                            Icon(
+                                Icons.Rounded.Refresh,
+                                contentDescription = "刷新通知",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     },
                 )
 
-                val pendingCount = allItems.filterIsInstance<NoticeUiItem.Auto>().count { !it.done }
-                val pinnedCount = allItems.count { it.pinned }
-                CtFilterChipRow(
-                    options = listOf(
-                        CtChipOption(NoticeFilter.ALL.name, "全部 ${allItems.size}"),
-                        CtChipOption(NoticeFilter.PENDING.name, "未处理 $pendingCount"),
-                        CtChipOption(NoticeFilter.PINNED.name, "置顶 $pinnedCount"),
-                    ),
-                    selectedKey = filter.name,
-                    onSelect = { key ->
-                        NoticeFilter.entries.firstOrNull { it.name == key }?.let { filter = it }
-                    },
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                    trailingIcon = if (query.isNotBlank()) {
-                        {
-                            IconButton(onClick = { query = "" }) {
-                                Icon(Icons.Rounded.Close, contentDescription = "清除搜索")
-                            }
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = spec.contentMaxWidth)
+                            .fillMaxSize()
+                            .padding(horizontal = spec.horizontalPadding),
+                    ) {
+                        if (phase != Phase.FAILED && allItems.isNotEmpty()) {
+                            NoticeBriefing(
+                                stats = briefStats,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
                         }
-                    } else {
-                        null
-                    },
-                    placeholder = { Text("搜索通知标题 / 内容") },
-                )
 
-                Box(modifier = Modifier.weight(1f)) {
-                    when {
-                        phase == Phase.LOADING -> CtLoading(
-                            modifier = Modifier.align(Alignment.Center),
-                            text = "加载通知…",
+                        CtFilterChipRow(
+                            options = listOf(
+                                CtChipOption(NoticeFilter.ALL.name, "全部 ${allItems.size}"),
+                                CtChipOption(NoticeFilter.PENDING.name, "未处理 $pendingCount"),
+                                CtChipOption(NoticeFilter.PINNED.name, "置顶 $pinnedCount"),
+                            ),
+                            selectedKey = filter.name,
+                            onSelect = { key ->
+                                NoticeFilter.entries.firstOrNull { it.name == key }?.let { filterKey = it.name }
+                            },
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.padding(top = 2.dp),
                         )
 
-                        phase == Phase.FAILED -> ErrorContent(
-                            message = errorMessage ?: "加载失败",
-                            onRetry = { reloadToken += 1 },
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        if (searchVisible) {
+                            NoticeSearchField(
+                                query = query,
+                                onQueryChange = { query = it },
+                                onClose = {
+                                    query = ""
+                                    searchVisible = false
+                                },
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
 
-                        else -> PullToRefreshBox(
-                            isRefreshing = isRefreshing,
-                            onRefresh = { refresh() },
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            if (visibleItems.isEmpty()) {
-                                Column(
+                        val offline = data?.fromCache == true || (errorMessage != null && data != null)
+                        if (offline && phase != Phase.FAILED) {
+                            NoticeOfflineBanner(
+                                message = errorMessage?.let { "刷新失败，显示本机缓存" }
+                                    ?: ("本机缓存 · 更新于 ${formatTs(data?.fetchedAt ?: 0L)}"),
+                                onRetry = { refresh() },
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
+                        }
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            when {
+                                phase == Phase.LOADING -> NoticeSkeletonList(
                                     modifier = Modifier.fillMaxSize(),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                ) {
-                                    EmptyState(
-                                        icon = Icons.Rounded.CheckCircle,
-                                        title = when {
-                                            query.isNotBlank() -> "没有匹配的通知"
-                                            filter == NoticeFilter.PENDING -> "没有未处理通知"
-                                            filter == NoticeFilter.PINNED -> "没有置顶通知"
-                                            else -> "暂无通知"
-                                        },
-                                        message = when {
-                                            query.isNotBlank() -> "换个关键词试试"
-                                            allItems.isEmpty() -> "班级通知会显示在这里"
-                                            else -> "切换筛选看看"
-                                        },
-                                    )
-                                    if (query.isNotBlank() || filter != NoticeFilter.ALL) {
-                                        TextButton(onClick = {
-                                            query = ""
-                                            filter = NoticeFilter.ALL
-                                        }) { Text("清除搜索与筛选") }
-                                    }
-                                }
-                            } else {
-                                LazyColumn(
+                                )
+
+                                phase == Phase.FAILED -> NoticeErrorState(
+                                    message = errorMessage ?: "加载失败",
+                                    onRetry = { reloadToken += 1 },
                                     modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(
-                                        start = 16.dp,
-                                        end = 16.dp,
-                                        top = 6.dp,
-                                        bottom = 24.dp,
-                                    ),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                )
+
+                                else -> PullToRefreshBox(
+                                    isRefreshing = isRefreshing,
+                                    onRefresh = { refresh() },
+                                    modifier = Modifier.fillMaxSize(),
                                 ) {
-                                    items(visibleItems, key = { it.key }) { item ->
-                                        NoticeCard(
-                                            item = item,
-                                            onOpen = { selected = item },
-                                            onToggleDone = { (item as? NoticeUiItem.Auto)?.let { toggleDone(it) } },
-                                            onTogglePin = { (item as? NoticeUiItem.Manual)?.let { togglePin(it) } },
+                                    val listEmpty = primaryItems.isEmpty() && expiredItems.isEmpty()
+                                    if (listEmpty) {
+                                        // 放进 LazyColumn 以保留下拉刷新（空态也能刷新）
+                                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                            item(key = "empty") {
+                                                NoticeEmptyState(
+                                                    filter = filter,
+                                                    query = query,
+                                                    hasAny = allItems.isNotEmpty(),
+                                                    onClear = {
+                                                        query = ""
+                                                        filterKey = NoticeFilter.ALL.name
+                                                    },
+                                                    modifier = Modifier.fillParentMaxSize(),
+                                                )
+                                            }
+                                        }
+                                    } else if (twoColumn) {
+                                        NoticeGrid(
+                                            items = primaryItems,
+                                            expiredItems = if (expiredExpanded) expiredItems else emptyList(),
+                                            expiredCount = expiredItems.size,
+                                            expiredExpanded = expiredExpanded,
+                                            onToggleExpired = { expiredExpanded = !expiredExpanded },
+                                            onOpen = { selectedKey = it.key },
+                                            onToggleDone = { toggleDone(it) },
+                                            onTogglePin = { togglePin(it) },
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    } else {
+                                        NoticeList(
+                                            items = primaryItems,
+                                            expiredItems = if (expiredExpanded) expiredItems else emptyList(),
+                                            expiredCount = expiredItems.size,
+                                            expiredExpanded = expiredExpanded,
+                                            onToggleExpired = { expiredExpanded = !expiredExpanded },
+                                            onOpen = { selectedKey = it.key },
+                                            onToggleDone = { toggleDone(it) },
+                                            onTogglePin = { togglePin(it) },
+                                            modifier = Modifier.fillMaxSize(),
                                         )
                                     }
                                 }
-                            }
-                        }
-                    }
-
-                    if (phase == Phase.READY && errorMessage != null) {
-                        Surface(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                            shape = CtShapeTokens.listItem,
-                            color = MaterialTheme.colorScheme.errorContainer,
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Warning,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = "刷新失败：$errorMessage（显示本机缓存）",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                )
                             }
                         }
                     }
@@ -475,80 +738,340 @@ fun NoticesScreen(
         }
     }
 
-    selected?.let { item ->
-        NoticeDetailDialog(
+    selectedItem?.let { item ->
+        NoticeDetailSheet(
             item = item,
             rawAttachmentLoader = rawAttachmentLoader,
             imageLoader = imageLoader,
             onAddToCalendar = onAddToCalendar,
             onRemindNotice = onRemindNotice,
-            onDismiss = { selected = null },
-            onToggleDone = {
-                (item as? NoticeUiItem.Auto)?.let {
-                    toggleDone(it)
-                    selected = null
-                }
-            },
-            onTogglePin = {
-                (item as? NoticeUiItem.Manual)?.let {
-                    togglePin(it)
-                    selected = null
-                }
-            },
+            onDismiss = { selectedKey = null },
+            onToggleDone = { toggleDone(item) },
+            onTogglePin = { togglePin(item) },
         )
     }
 }
 
+private fun buildSubtitle(
+    allItemsCount: Int,
+    pending: Int,
+    hiddenCount: Int,
+): String = buildString {
+    if (allItemsCount > 0) {
+        append("未处理 ")
+        append(pending)
+        append(" / 共 ")
+        append(allItemsCount)
+    }
+    if (hiddenCount > 0) {
+        if (isNotEmpty()) append(" · ")
+        append("已隐藏 ")
+        append(hiddenCount)
+    }
+}
+
 // -----------------------------------------------------------------------------
-// 数据 → UI 列表
+// 顶部：简报 / 搜索
 // -----------------------------------------------------------------------------
 
-private fun buildUiItems(
-    data: NoticesData?,
-    marks: MarksSnapshot,
-    nowMillis: Long,
-): List<NoticeUiItem> {
-    if (data == null) return emptyList()
-    val autoItems = data.auto.map { entry ->
-        val status = NoticeStatusMachine.statusOf(entry.group, nowMillis)
-        val done = marks.isDone(MarkKind.NT_DONE, entry.id)
-        val summary = entry.group.aiSummary.ifBlank {
-            entry.group.summary.ifBlank {
-                com.furina.classtools.data.notices.NoticeBodyParser.firstTextOf(entry.items)
+/** 待处理简报（小程序 nt 页简报卡简化版：4 格统计 + 细线分隔，无图表无说明文字）。 */
+@Composable
+private fun NoticeBriefing(
+    stats: NoticeBriefStats,
+    modifier: Modifier = Modifier,
+) {
+    CtGlassCard(modifier = modifier, shape = CtShapeTokens.toolCard) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1.2f)) {
+                Text(
+                    text = "待处理简报",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = stats.pending.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = " 项",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 3.dp),
+                    )
+                }
+            }
+            BriefStatCell(
+                label = "24h 截止",
+                value = stats.urgent,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f),
+            )
+            BriefStatCell(
+                label = "7 天内",
+                value = stats.week,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.weight(1f),
+            )
+            BriefStatCell(
+                label = "已过期",
+                value = stats.expired,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BriefStatCell(
+    label: String,
+    value: Int,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (value > 0) color else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** 搜索栏（点顶栏放大镜展开；标题/摘要匹配，48dp 触控高度）。 */
+@Composable
+private fun NoticeSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
+    OutlinedTextField(
+        value = query,
+        onValueChange = { onQueryChange(it.take(40)) },
+        modifier = modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester),
+        singleLine = true,
+        shape = CtShapeTokens.pill,
+        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+        trailingIcon = {
+            IconButton(onClick = onClose) {
+                Icon(Icons.Rounded.Close, contentDescription = "关闭搜索")
+            }
+        },
+        placeholder = { Text("搜索通知标题 / 摘要") },
+    )
+}
+
+/** 离线/缓存提示条（48dp 触控；带「重试」）。 */
+@Composable
+private fun NoticeOfflineBanner(
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = CtShapeTokens.listItem,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .padding(start = 12.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.WifiOff,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text("重试")
             }
         }
-        NoticeUiItem.Auto(
-            entry = entry,
-            status = status,
-            done = done,
-            summary = summary,
-            attachmentCount = com.furina.classtools.data.notices.NoticeBodyParser.attachmentCount(entry.items),
-        )
-    }.sortedWith(
-        compareBy<NoticeUiItem.Auto> { it.done }
-            .thenByDescending { it.ts },
-    )
-    val manualItems = data.manual.map { notice ->
-        NoticeUiItem.Manual(
-            notice = notice,
-            pinned = marks.isDone(MarkKind.NT, notice.id),
-        )
-    }.sortedWith(
-        compareBy<NoticeUiItem.Manual> { if (it.pinned) 0 else 1 }
-            .thenByDescending { it.ts },
-    )
-    return manualItems + autoItems
-}
-
-private fun formatTs(ts: Long): String {
-    if (ts <= 0) return ""
-    return java.time.format.DateTimeFormatter
-        .ofPattern("MM-dd HH:mm", java.util.Locale.CHINA)
-        .format(java.time.Instant.ofEpochMilli(ts).atZone(java.time.ZoneId.systemDefault()))
+    }
 }
 
 // -----------------------------------------------------------------------------
-// 卡片 / 详情
+// 列表 / 空态 / 错误态 / 骨架
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun NoticeList(
+    items: List<NoticeUiItem>,
+    expiredItems: List<NoticeUiItem>,
+    expiredCount: Int,
+    expiredExpanded: Boolean,
+    onToggleExpired: () -> Unit,
+    onOpen: (NoticeUiItem) -> Unit,
+    onToggleDone: (NoticeUiItem) -> Unit,
+    onTogglePin: (NoticeUiItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(top = 6.dp, bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        items(items = items, key = { "c-${it.key}" }) { item ->
+            NoticeCard(
+                item = item,
+                onOpen = { onOpen(item) },
+                onToggleDone = { onToggleDone(item) },
+                onTogglePin = { onTogglePin(item) },
+            )
+        }
+        if (expiredCount > 0) {
+            item(key = "expired-header") {
+                ExpiredHeader(
+                    count = expiredCount,
+                    expanded = expiredExpanded,
+                    onToggle = onToggleExpired,
+                )
+            }
+        }
+        if (expiredExpanded) {
+            items(items = expiredItems, key = { "e-${it.key}" }) { item ->
+                NoticeCard(
+                    item = item,
+                    onOpen = { onOpen(item) },
+                    onToggleDone = { onToggleDone(item) },
+                    onTogglePin = { onTogglePin(item) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoticeGrid(
+    items: List<NoticeUiItem>,
+    expiredItems: List<NoticeUiItem>,
+    expiredCount: Int,
+    expiredExpanded: Boolean,
+    onToggleExpired: () -> Unit,
+    onOpen: (NoticeUiItem) -> Unit,
+    onToggleDone: (NoticeUiItem) -> Unit,
+    onTogglePin: (NoticeUiItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = modifier,
+        contentPadding = PaddingValues(top = 6.dp, bottom = 96.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items(items = items, key = { "c-${it.key}" }) { item ->
+            NoticeCard(
+                item = item,
+                onOpen = { onOpen(item) },
+                onToggleDone = { onToggleDone(item) },
+                onTogglePin = { onTogglePin(item) },
+            )
+        }
+        if (expiredCount > 0) {
+            item(key = "expired-header", span = { GridItemSpan(maxLineSpan) }) {
+                ExpiredHeader(
+                    count = expiredCount,
+                    expanded = expiredExpanded,
+                    onToggle = onToggleExpired,
+                )
+            }
+        }
+        if (expiredExpanded) {
+            items(items = expiredItems, key = { "e-${it.key}" }) { item ->
+                NoticeCard(
+                    item = item,
+                    onOpen = { onOpen(item) },
+                    onToggleDone = { onToggleDone(item) },
+                    onTogglePin = { onTogglePin(item) },
+                )
+            }
+        }
+    }
+}
+
+/** 已过期分组头（可展开/收起；52dp 触控）。 */
+@Composable
+private fun ExpiredHeader(
+    count: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Surface(
+        onClick = onToggle,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp),
+        shape = CtShapeTokens.listItem,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "已过期",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(8.dp))
+            CtPill(text = "$count 组")
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = if (expanded) "收起" else "展开",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 卡片
 // -----------------------------------------------------------------------------
 
 @Composable
@@ -558,515 +1081,515 @@ private fun NoticeCard(
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val container = when {
-        item.done -> MaterialTheme.colorScheme.surfaceContainerLowest
-        item.pinned -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
+        // 已处理：浅色下沉一档、深色降到最暗一档，弱化但不靠整体透明度（保证文字 AA）
+        item.done -> if (LocalCtDarkTheme.current) scheme.surfaceContainerLowest else scheme.surfaceContainer
+        item.pinned -> scheme.primaryContainer.copy(alpha = 0.32f)
+        else -> scheme.surfaceContainerLow
     }
     CtPressableCard(
         onClick = onOpen,
         containerColor = container,
-        contentDescription = item.title,
+        contentDescription = item.title.ifBlank { "通知" },
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            if (item.pinned) {
-                Box(
-                    modifier = Modifier
-                        .padding(start = 6.dp, top = 14.dp)
-                        .width(3.dp)
-                        .height(48.dp)
-                        .clip(CtShapeTokens.pill)
-                        .background(MaterialTheme.colorScheme.primary),
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                NoticeCatPill(cat = item.cat, tone = item.tone)
+                if (item.status != null) {
+                    Spacer(Modifier.width(8.dp))
+                    StatusDotLine(
+                        status = item.status,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = item.postedText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
             }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val status = (item as? NoticeUiItem.Auto)?.status
-                    CtPill(
-                        text = if (item is NoticeUiItem.Auto) item.entry.cat else "手动通知",
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (status != null) {
-                        Spacer(Modifier.width(6.dp))
-                        StatusPill(status = status)
-                    }
-                    if (item.pinned) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "置顶",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
-                    if (item is NoticeUiItem.Auto) {
-                        Checkbox(
-                            checked = item.done,
-                            onCheckedChange = { onToggleDone() },
-                        )
-                    } else {
-                        IconButton(onClick = onTogglePin) {
-                            Icon(
-                                Icons.Rounded.PushPin,
-                                contentDescription = if (item.pinned) "取消置顶" else "置顶",
-                                tint = if (item.pinned) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                            )
-                        }
-                    }
-                }
 
-                Spacer(Modifier.height(2.dp))
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (item.done) scheme.onSurfaceVariant else scheme.onSurface,
+                textDecoration = if (item.done) TextDecoration.LineThrough else null,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            if (item.summary.isNotBlank()) {
                 Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textDecoration = if (item.done) TextDecoration.LineThrough else null,
+                    text = item.summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (item.summary.isNotBlank()) {
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        text = item.summary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+            }
+
+            NoticeCardMeta(item = item)
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (item.isAuto) {
+                    DonePill(done = item.done, onClick = onToggleDone)
+                } else {
+                    PinPill(pinned = item.pinned, onClick = onTogglePin)
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.weight(1f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = item.timeText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        text = "详情",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = scheme.primary,
                     )
-                    if (item.attachmentCount > 0) {
-                        Spacer(Modifier.width(8.dp))
-                        Icon(
-                            Icons.Rounded.AttachFile,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(13.dp),
-                        )
-                        Text(
-                            text = "${item.attachmentCount}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (item is NoticeUiItem.Auto && item.entry.group.mergedSources.isNotEmpty()) {
-                        Spacer(Modifier.width(8.dp))
-                        Icon(
-                            Icons.Rounded.Hub,
-                            contentDescription = "多源合并",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(13.dp),
-                        )
-                    }
-                    if (item is NoticeUiItem.Auto && item.entry.edited) {
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "已更新",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = null,
+                        tint = scheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
                 }
             }
         }
     }
 }
 
+/** 卡片第三行：来源 / 发送者 / 附件数 / 多源合并 / 长期安排 / 已更新 / 已隐藏（可换行，大字体不截断）。 */
 @Composable
-private fun StatusPill(status: NoticeStatus) {
-    val (container, content) = when (status.cls) {
-        "urgent", "expired" ->
-            MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-
-        "alert" ->
-            MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-
-        "recurring" ->
-            MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-
-        "none" ->
-            MaterialTheme.colorScheme.surfaceContainerHigh to MaterialTheme.colorScheme.onSurfaceVariant
-
-        else ->
-            MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+private fun NoticeCardMeta(item: NoticeUiItem) {
+    val scheme = MaterialTheme.colorScheme
+    val sourceColors = toneColors(
+        when (item.sourceKind) {
+            NoticeSourceKind.WECHAT -> NoticeTone.TEAL
+            NoticeSourceKind.QQ -> NoticeTone.BLUE
+            NoticeSourceKind.DOC, NoticeSourceKind.UNKNOWN -> NoticeTone.GREY
+        },
+    )
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (item.source.isNotBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(sourceColors.dot, CircleShape),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = item.source,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (item.senderLine.isNotBlank()) {
+            Text(
+                text = item.senderLine,
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (item.recurring) {
+            ItemFlag(text = "长期安排", tone = NoticeTone.BLUE)
+        }
+        if (item.attachmentCount > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.AttachFile,
+                    contentDescription = "附件 ${item.attachmentCount} 个",
+                    tint = scheme.onSurfaceVariant,
+                    modifier = Modifier.size(13.dp),
+                )
+                Text(
+                    text = item.attachmentCount.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (item.mergeCount > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Hub,
+                    contentDescription = "多源合并 ${item.mergeCount} 个来源",
+                    tint = scheme.onSurfaceVariant,
+                    modifier = Modifier.size(13.dp),
+                )
+                Text(
+                    text = "多源",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (item.edited) ItemFlag(text = "已更新", tone = NoticeTone.BLUE)
+        if (item.hidden) ItemFlag(text = "已隐藏", tone = NoticeTone.GREY)
     }
-    Surface(shape = CtShapeTokens.pill, color = container, contentColor = content) {
+}
+
+@Composable
+private fun ItemFlag(text: String, tone: NoticeTone) {
+    val colors = toneColors(tone)
+    Surface(shape = CtShapeTokens.chip, color = colors.container, contentColor = colors.content) {
         Text(
-            text = status.label,
+            text = text,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+            maxLines = 1,
+        )
+    }
+}
+
+/** 分类色块（类型色点/标签；小程序 nt-cat 同口径）。 */
+@Composable
+internal fun NoticeCatPill(
+    cat: String,
+    tone: NoticeTone,
+    modifier: Modifier = Modifier,
+) {
+    val colors = toneColors(tone)
+    Surface(
+        modifier = modifier,
+        shape = CtShapeTokens.chip,
+        color = colors.container,
+        contentColor = colors.content,
+    ) {
+        Text(
+            text = cat.ifBlank { "通知" },
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
+/** 状态色点 + 状态文案（例：● 2 小时后 截止）。 */
 @Composable
-private fun ErrorContent(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+private fun StatusDotLine(
+    status: NoticeStatus,
+    modifier: Modifier = Modifier,
+) {
+    val colors = toneColors(statusTone(status))
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        EmptyState(icon = Icons.Rounded.ErrorOutline, title = "通知加载失败", message = message)
-        TextButton(onClick = onRetry) { Text("重试") }
+        Box(
+            modifier = Modifier
+                .size(7.dp)
+                .background(colors.dot, CircleShape),
+        )
+        Spacer(Modifier.width(5.dp))
+        Text(
+            text = status.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (status.expired) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                colors.dot
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** 「标记已处理」胶囊（≥48dp；已处理=次要容器底）。 */
+@Composable
+private fun DonePill(done: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .semantics {
+                role = Role.Checkbox
+                stateDescription = if (done) "已处理" else "未处理"
+            },
+        shape = CtShapeTokens.pill,
+        color = if (done) scheme.primaryContainer else scheme.surfaceContainerHigh,
+        contentColor = if (done) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.CheckCircle,
+                contentDescription = null,
+                modifier = Modifier.size(17.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = if (done) "已处理" else "标记已处理",
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/** 「置顶」胶囊（≥48dp；仅人工通知可置顶）。 */
+@Composable
+private fun PinPill(
+    pinned: Boolean,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .semantics {
+                role = Role.Button
+                stateDescription = if (pinned) "已置顶" else "未置顶"
+            },
+        shape = CtShapeTokens.pill,
+        color = if (pinned) scheme.primaryContainer else scheme.surfaceContainerHigh,
+        contentColor = if (pinned) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.PushPin,
+                contentDescription = null,
+                modifier = Modifier.size(17.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = if (pinned) "已置顶" else "置顶",
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 空 / 错误 / 加载态
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun NoticeEmptyState(
+    filter: NoticeFilter,
+    query: String,
+    hasAny: Boolean,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val filtered = query.isNotBlank() || filter != NoticeFilter.ALL
+    // 页面背景不是 Surface，显式提供内容色（深色下默认黑色会不可读）
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        Column(
+            modifier = modifier,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            EmptyState(
+                icon = when {
+                    query.isNotBlank() -> Icons.Rounded.Search
+                    filter == NoticeFilter.PENDING -> Icons.Rounded.CheckCircle
+                    filter == NoticeFilter.PINNED -> Icons.Rounded.PushPin
+                    else -> Icons.Rounded.Notifications
+                },
+                title = when {
+                    query.isNotBlank() -> "没有匹配的通知"
+                    filter == NoticeFilter.PENDING -> "没有未处理通知"
+                    filter == NoticeFilter.PINNED -> "没有置顶通知"
+                    !hasAny -> "暂无通知"
+                    else -> "没有符合条件的通知"
+                },
+                message = when {
+                    query.isNotBlank() -> "换个关键词试试"
+                    filter == NoticeFilter.PENDING -> "全部通知都处理完了"
+                    filter == NoticeFilter.PINNED -> "在人工通知卡片上点「置顶」"
+                    !hasAny -> "班级通知会显示在这里"
+                    else -> "切换筛选看看"
+                },
+            )
+            if (filtered) {
+                TextButton(
+                    onClick = onClear,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    Text("清除搜索与筛选")
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun NoticeDetailDialog(
-    item: NoticeUiItem,
-    rawAttachmentLoader: NoticeRawAttachmentLoader?,
-    imageLoader: PptImageLoader?,
-    onDismiss: () -> Unit,
-    onToggleDone: () -> Unit,
-    onTogglePin: () -> Unit,
-    onAddToCalendar: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
-    /** v3：单条通知提醒（Lead 弹出提醒时间选项并排程）。 */
-    onRemindNotice: ((com.furina.classtools.data.notices.NoticeGroupDto) -> Unit)? = null,
+private fun NoticeErrorState(
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(text = item.title, style = MaterialTheme.typography.titleLarge)
-        },
-        text = {
-            Column(
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        Column(
+            modifier = modifier.padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.ErrorOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(40.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "通知加载失败",
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onRetry,
+                modifier = Modifier.heightIn(min = 48.dp),
+                shape = CtShapeTokens.pill,
+            ) {
+                Text("重试")
+            }
+        }
+    }
+}
+
+/** 加载骨架（与卡片同表面；系统移除动画时静态显示）。 */
+@Composable
+private fun NoticeSkeletonList(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        repeat(3) { index ->
+            NoticeSkeletonCard(index = index)
+        }
+    }
+}
+
+@Composable
+private fun NoticeSkeletonCard(index: Int) {
+    val reduceMotion = rememberReduceMotion()
+    val alpha = if (reduceMotion) {
+        0.55f
+    } else {
+        val transition = rememberInfiniteTransition(label = "noticeSkeleton")
+        val animated by transition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 0.75f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 900),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "noticeSkeletonAlpha",
+        )
+        animated
+    }
+    val block = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = alpha)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = CtShapeTokens.toolCard,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .width(52.dp)
+                        .height(18.dp)
+                        .background(block, CtShapeTokens.chip),
+                )
+                Spacer(Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .width(84.dp)
+                        .height(13.dp)
+                        .background(block, CircleShape),
+                )
+                Spacer(Modifier.weight(1f))
+                Box(
+                    modifier = Modifier
+                        .width(34.dp)
+                        .height(12.dp)
+                        .background(block, CircleShape),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(if (index == 1) 0.72f else 0.88f)
+                    .height(18.dp)
+                    .background(block, CircleShape),
+            )
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                when (item) {
-                    is NoticeUiItem.Auto -> AutoDetailContent(item, rawAttachmentLoader, imageLoader)
-                    is NoticeUiItem.Manual -> ManualDetailContent(item, rawAttachmentLoader, imageLoader)
-                }
-            }
-        },
-        confirmButton = {
-            when (item) {
-                is NoticeUiItem.Auto -> Row {
-                    if (onAddToCalendar != null) {
-                        TextButton(onClick = { onAddToCalendar(item.entry.group) }) {
-                            Text("加入日程")
-                        }
-                    }
-                    if (onRemindNotice != null) {
-                        TextButton(onClick = { onRemindNotice(item.entry.group) }) {
-                            Text("提醒我")
-                        }
-                    }
-                    TextButton(onClick = onToggleDone) {
-                        Text(if (item.done) "标记未处理" else "标记已处理")
-                    }
-                }
-
-                is NoticeUiItem.Manual -> TextButton(onClick = onTogglePin) {
-                    Text(if (item.pinned) "取消置顶" else "置顶")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        },
-    )
-}
-
-@Composable
-private fun AutoDetailContent(
-    item: NoticeUiItem.Auto,
-    rawAttachmentLoader: NoticeRawAttachmentLoader?,
-    imageLoader: PptImageLoader?,
-) {
-    val group = item.entry.group
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        CtPill(text = item.entry.cat)
-        Spacer(Modifier.width(8.dp))
-        StatusPill(status = item.status)
-        if (item.done) {
-            Spacer(Modifier.width(8.dp))
-            CtPill(
-                text = "已处理",
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    .height(14.dp)
+                    .background(block, CircleShape),
             )
-        }
-    }
-    if (group.source.isNotBlank()) {
-        Text(
-            text = group.source,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    if (group.aiSummary.isNotBlank()) {
-        Text(text = group.aiSummary, style = MaterialTheme.typography.bodyMedium)
-    }
-    if (group.aiPoints.isNotEmpty()) {
-        group.aiPoints.forEach { point ->
-            Row {
-                Text("• ", style = MaterialTheme.typography.bodyMedium)
-                Text(text = point, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    }
-    val segments = group.aiSegments.filter { it.text.isNotBlank() }.take(6)
-    if (segments.isNotEmpty()) {
-        HorizontalDivider()
-        segments.forEach { segment ->
-            Row {
-                Text(
-                    text = "${segment.type} ",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = segment.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-    if (item.entry.items.isNotEmpty()) {
-        HorizontalDivider()
-        var imageOrdinal = 0
-        item.entry.items.forEachIndexed { index, meta ->
-            val currentImageOrdinal = if (meta is NoticeItemMeta.Image) imageOrdinal++ else -1
-            NoticeItemMetaRow(
-                index = index,
-                meta = meta,
-                rowId = item.entry.rowId,
-                imageOrdinal = currentImageOrdinal,
-                rawAttachmentLoader = rawAttachmentLoader,
-                imageLoader = imageLoader,
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.62f)
+                    .height(14.dp)
+                    .background(block, CircleShape),
             )
-        }
-    }
-    Text(
-        text = "图片按需加载 · 文件附件点击可打开",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-}
-
-@Composable
-private fun ManualDetailContent(
-    item: NoticeUiItem.Manual,
-    rawAttachmentLoader: NoticeRawAttachmentLoader?,
-    imageLoader: PptImageLoader?,
-) {
-    val notice = item.notice
-    Text(
-        text = notice.row.body.ifBlank { "（无正文）" },
-        style = MaterialTheme.typography.bodyMedium,
-    )
-    if (notice.attachments.isNotEmpty()) {
-        HorizontalDivider()
-        notice.attachments.forEach { attachment ->
-            ManualAttachmentRow(
-                attachment = attachment,
-                rowId = notice.row.id,
-                rawAttachmentLoader = rawAttachmentLoader,
-                imageLoader = imageLoader,
-            )
-        }
-    }
-    Text(
-        text = formatTs(notice.ts),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-}
-
-@Composable
-private fun NoticeItemMetaRow(
-    index: Int,
-    meta: NoticeItemMeta,
-    rowId: String,
-    imageOrdinal: Int,
-    rawAttachmentLoader: NoticeRawAttachmentLoader?,
-    imageLoader: PptImageLoader?,
-) {
-    when (meta) {
-        is NoticeItemMeta.Text -> {
-            Row {
-                Text(
-                    text = meta.label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .width(112.dp)
+                        .height(30.dp)
+                        .background(block, CircleShape),
                 )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = meta.text.ifBlank { "（空）" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            if (meta.fromName.isNotBlank() || meta.timeText.isNotBlank()) {
-                Text(
-                    text = listOf(meta.fromName, meta.fromRole, meta.timeText)
-                        .filter { it.isNotBlank() }
-                        .joinToString(" · "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Spacer(Modifier.weight(1f))
+                Box(
+                    modifier = Modifier
+                        .width(44.dp)
+                        .height(12.dp)
+                        .background(block, CircleShape),
                 )
             }
         }
-
-        is NoticeItemMeta.Image -> {
-            // 新数据：外置签名 URL（走 data/ppt 网络图片加载器+LRU）；旧数据：按需拉 data URI
-            val hasUrl = meta.url.isNotBlank()
-            if (hasUrl || (meta.hasData && rawAttachmentLoader != null && imageOrdinal >= 0)) {
-                NoticeAttachmentThumb(
-                    loader = rawAttachmentLoader,
-                    rowId = rowId,
-                    ordinal = imageOrdinal.coerceAtLeast(0),
-                    manual = false,
-                    title = "图片",
-                    caption = meta.caption,
-                    url = meta.url,
-                    imageLoader = imageLoader,
-                )
-            } else {
-                MetaRow(
-                    title = "图片",
-                    detail = buildString {
-                        if (meta.caption.isNotBlank()) append(meta.caption)
-                        if (meta.ocr) append(" · OCR")
-                        append(" · 图片加载失败")
-                    },
-                )
-            }
-        }
-
-        is NoticeItemMeta.File -> NoticeFileAttachmentRow(meta = meta)
-
-        is NoticeItemMeta.Form -> MetaRow(
-            title = meta.name,
-            detail = listOf(meta.statusText, meta.note, "请在网页/微信中打开")
-                .filter { it.isNotBlank() }.joinToString(" · "),
-        )
-
-        is NoticeItemMeta.Link -> MetaRow(
-            title = meta.name,
-            detail = listOf(meta.host, meta.account, "无法在 App 内打开")
-                .filter { it.isNotBlank() }.joinToString(" · "),
-        )
-
-        is NoticeItemMeta.Merged -> {
-            Column {
-                Text(
-                    text = "${meta.name} · ${meta.count} 条合并消息",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                meta.messages.forEach { message: MergedMessage ->
-                    Text(
-                        text = listOf(message.fromName, message.timeText)
-                            .filter { it.isNotBlank() }.joinToString(" · ") +
-                            "：" + message.text.take(120),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        }
-
-        is NoticeItemMeta.Unknown -> MetaRow(
-            title = "附件",
-            detail = "暂不支持预览",
-        )
-    }
-}
-
-@Composable
-private fun MetaRow(title: String, detail: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            Icons.Rounded.AttachFile,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(15.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (detail.isNotBlank()) {
-                Text(
-                    text = detail,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ManualAttachmentRow(
-    attachment: NoticeManualAttachment,
-    rowId: String,
-    rawAttachmentLoader: NoticeRawAttachmentLoader?,
-    imageLoader: PptImageLoader?,
-) {
-    val isImage = attachment.mime.startsWith("image/", ignoreCase = true)
-    val url = attachment.url
-    if (isImage && (url.isNotBlank() || (attachment.hasData && rawAttachmentLoader != null))) {
-        NoticeAttachmentThumb(
-            loader = rawAttachmentLoader,
-            rowId = rowId,
-            ordinal = attachment.index,
-            manual = true,
-            title = attachment.name,
-            url = url,
-            imageLoader = imageLoader,
-        )
-    } else if (url.isNotBlank()) {
-        // 新数据：人工通知附件也可能是外置签名 URL（图片以外走「下载 → 系统打开」）
-        NoticeUrlAttachmentRow(
-            title = attachment.name,
-            detail = listOf(attachment.mime, attachment.sizeText).filter { it.isNotBlank() }.joinToString(" · "),
-            source = url,
-            fileName = attachment.name,
-        )
-    } else {
-        MetaRow(
-            title = attachment.name,
-            detail = listOf(
-                attachment.mime,
-                attachment.sizeText,
-                if (isImage) "图片加载失败" else "暂不支持预览",
-            ).filter { it.isNotBlank() }.joinToString(" · "),
-        )
     }
 }
 
 /** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
 private enum class Phase { LOADING, READY, FAILED }
-
-

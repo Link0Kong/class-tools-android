@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.screens.profile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,8 +12,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -20,13 +22,24 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Article
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Feedback
+import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -34,45 +47,58 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.BuildConfig
 import com.furina.classtools.data.notify.LiveUpdateNotifier
-import androidx.compose.ui.platform.LocalContext
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.ui.adaptive.CtAdaptiveSpec
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.BrandMark
-import com.furina.classtools.ui.screens.me.MeStats
-import com.furina.classtools.ui.screens.me.MeStatsSection
-import com.furina.classtools.ui.screens.me.ReminderStatus
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.NotificationPermissionBanner
+import com.furina.classtools.ui.components.glass.CtGlassCard
+import com.furina.classtools.ui.screens.me.MeStats
+import com.furina.classtools.ui.screens.me.MeStatsBuilder
+import com.furina.classtools.ui.screens.me.ReminderStatus
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
 import com.furina.classtools.ui.theme.CtShapeTokens
 import kotlinx.coroutines.launch
 
 /**
- * 「我的」：账号信息、同步、权限与提醒、数据与隐私、外观、关于、退出。
+ * 「我的」（v5 重做：对齐微信小程序 `pages/me` 的信息架构）。
  *
- * v2.0.0 自适应（task-25）：
- * - compact/medium：单栏（内容限宽居中）；
- * - expanded（≥840dp）：**双栏**（左：账号 + 同步 + 权限与提醒；右：数据与隐私 + 外观 + 关于 + 退出），
- *   卡片间距/顶部留白收紧，内容限宽 1200dp 居中；
- * - 所有既有入口与回调签名保持不变（权限管理/提醒设置/数据与隐私由 Lead 接线）。
+ * 结构（自上而下，手机单栏）：
+ * 1. 身份卡：姓名 + 「身份已验证 / 职务 / 徽章 / 管理员」胶囊（**不显示头像/学号**）；
+ * 2. 通知权限提示（可选，一次性可关闭）；
+ * 3. 「数据与同步」：我的数据 2×2 指标 + 云同步开关 + 数据与隐私 / 清除本机缓存；
+ * 4. 「通知与权限」：权限管理 / 提醒设置（副标题实时显示提醒状态）；
+ * 5. 「外观」：壁纸取色开关 / 深浅色跟随系统；
+ * 6. 「关于与帮助」：反馈建议 / 使用说明 / 用户协议 / 隐私政策 / 版本；
+ * 7. 退出登录 + 版本页脚。
  *
- * @param adaptiveSpec 预览/测试注入窗口规格（默认按当前窗口读取；不影响 Lead 接线）
+ * 平板（≥840dp）双栏：左「身份 + 数据与同步」，右「通知与权限 + 外观 + 关于 + 退出」；
+ * 内容限宽 1200dp 居中，页脚/底部留白与浮岛保持一致（120dp）。
+ *
+ * 视觉：沿用 CtGlassCard(hero) + CtShapeTokens + 品牌色；行式列表、次要文字克制；
+ * 不整页换皮、不新增图片资源；所有行高 ≥56dp（点按 ≥48dp）。
+ *
+ * @param adaptiveSpec 预览/测试注入窗口规格
+ * @param initialShowSignOutConfirm 预览：直接打开退出确认
+ * @param initialShowClearCacheConfirm 预览：直接打开清除缓存确认
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -94,129 +120,127 @@ fun ProfileScreen(
     reminderStatus: ReminderStatus = ReminderStatus(),
     onOpenFeedback: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
+    initialShowSignOutConfirm: Boolean = false,
+    initialShowClearCacheConfirm: Boolean = false,
 ) {
     val context = LocalContext.current
     var showPrivacy by remember { mutableStateOf(false) }
     var showAgreement by remember { mutableStateOf(false) }
-    var showSignOutConfirm by remember { mutableStateOf(false) }
-    var showClearCacheConfirm by remember { mutableStateOf(false) }
+    var showSignOutConfirm by remember(initialShowSignOutConfirm) { mutableStateOf(initialShowSignOutConfirm) }
+    var showClearCacheConfirm by remember(initialShowClearCacheConfirm) { mutableStateOf(initialShowClearCacheConfirm) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val spec = adaptiveSpec ?: rememberCtAdaptiveSpec()
-    val layout = remember(spec) { ProfileLayoutLogic.layoutFor(spec) }
+    val twoPane = spec.twoPane
+
+    fun requestClearCache() {
+        showClearCacheConfirm = true
+    }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            val baseModifier = Modifier
-                .widthIn(max = spec.contentMaxWidth)
-                .fillMaxWidth()
-                .fillMaxHeight()
-                .statusBarsPadding()
-                .padding(horizontal = spec.horizontalPadding)
-            if (layout.twoPane) {
-                Row(
-                    modifier = baseModifier,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = spec.contentMaxWidth)
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .statusBarsPadding()
+                    .padding(horizontal = spec.horizontalPadding),
+            ) {
+                ProfileHeader()
+                if (twoPane) {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .weight(0.55f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(top = 6.dp, bottom = 120.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            IdentitySection(session)
+                            NotificationPermissionBanner(
+                                visible = showNotificationPermissionBanner,
+                                onOpenPermissions = onOpenPermissions,
+                            )
+                            DataSection(
+                                stats = meStats,
+                                syncEnabled = syncEnabled,
+                                onSyncEnabledChange = onSyncEnabledChange,
+                                onOpenDataPrivacy = onOpenDataPrivacy,
+                                onClearCache = ::requestClearCache,
+                            )
+                        }
+                        Column(
+                            modifier = Modifier
+                                .weight(0.45f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(top = 6.dp, bottom = 120.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            NotifySection(
+                                reminderStatus = reminderStatus,
+                                onOpenPermissions = onOpenPermissions,
+                                onOpenReminderSettings = onOpenReminderSettings,
+                            )
+                            AppearanceSection(
+                                dynamicColorEnabled = dynamicColorEnabled,
+                                onDynamicColorChange = onDynamicColorChange,
+                            )
+                            AboutSection(
+                                context = context,
+                                onOpenFeedback = onOpenFeedback,
+                                onOpenGuide = onOpenGuide,
+                                onShowPrivacy = { showPrivacy = true },
+                                onShowAgreement = { showAgreement = true },
+                            )
+                            SignOutSection(
+                                version = BuildConfig.VERSION_NAME,
+                                onSignOutClick = { showSignOutConfirm = true },
+                            )
+                        }
+                    }
+                } else {
                     Column(
                         modifier = Modifier
-                            .weight(layout.mainPaneWeight)
+                            .fillMaxSize()
                             .verticalScroll(rememberScrollState())
-                            .padding(top = layout.headerTopPaddingDp.dp, bottom = 120.dp),
-                        verticalArrangement = Arrangement.spacedBy(layout.cardGapDp.dp),
+                            .padding(top = 10.dp, bottom = 120.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        ProfileHeader()
-                        MeStatsSection(
-                            stats = meStats,
-                            reminder = reminderStatus,
-                            onOpenReminder = onOpenReminderSettings,
-                        )
+                        IdentitySection(session)
                         NotificationPermissionBanner(
                             visible = showNotificationPermissionBanner,
                             onOpenPermissions = onOpenPermissions,
                         )
-                        layout.left.forEach { card ->
-                            ProfileCardContent(
-                                card = card,
-                                session = session,
-                                syncEnabled = syncEnabled,
-                                onSyncEnabledChange = onSyncEnabledChange,
-                                onClearLocalCache = { showClearCacheConfirm = true },
-                                onOpenDataPrivacy = onOpenDataPrivacy,
-                                onOpenPermissions = onOpenPermissions,
-                                onOpenReminderSettings = onOpenReminderSettings,
-                                dynamicColorEnabled = dynamicColorEnabled,
-                                onDynamicColorChange = onDynamicColorChange,
-                                onShowPrivacy = { showPrivacy = true },
-                                onShowAgreement = { showAgreement = true },
-                                onSignOutClick = { showSignOutConfirm = true },
-                                onOpenFeedback = onOpenFeedback,
-                                onOpenGuide = onOpenGuide,
-                            )
-                        }
-                    }
-                    Column(
-                        modifier = Modifier
-                            .weight(1f - layout.mainPaneWeight)
-                            .verticalScroll(rememberScrollState())
-                            .padding(top = layout.headerTopPaddingDp.dp, bottom = 120.dp),
-                        verticalArrangement = Arrangement.spacedBy(layout.cardGapDp.dp),
-                    ) {
-                        layout.right.forEach { card ->
-                            ProfileCardContent(
-                                card = card,
-                                session = session,
-                                syncEnabled = syncEnabled,
-                                onSyncEnabledChange = onSyncEnabledChange,
-                                onClearLocalCache = { showClearCacheConfirm = true },
-                                onOpenDataPrivacy = onOpenDataPrivacy,
-                                onOpenPermissions = onOpenPermissions,
-                                onOpenReminderSettings = onOpenReminderSettings,
-                                dynamicColorEnabled = dynamicColorEnabled,
-                                onDynamicColorChange = onDynamicColorChange,
-                                onShowPrivacy = { showPrivacy = true },
-                                onShowAgreement = { showAgreement = true },
-                                onSignOutClick = { showSignOutConfirm = true },
-                                onOpenFeedback = onOpenFeedback,
-                                onOpenGuide = onOpenGuide,
-                            )
-                        }
-                    }
-                }
-            } else {
-                Column(
-                    modifier = baseModifier
-                        .verticalScroll(rememberScrollState())
-                        .padding(top = layout.headerTopPaddingDp.dp, bottom = 120.dp),
-                    verticalArrangement = Arrangement.spacedBy(layout.cardGapDp.dp),
-                ) {
-                    ProfileHeader()
-                    MeStatsSection(
-                        stats = meStats,
-                        reminder = reminderStatus,
-                        onOpenReminder = onOpenReminderSettings,
-                    )
-                    NotificationPermissionBanner(
-                        visible = showNotificationPermissionBanner,
-                        onOpenPermissions = onOpenPermissions,
-                    )
-                    layout.single.forEach { card ->
-                        ProfileCardContent(
-                            card = card,
-                            session = session,
+                        DataSection(
+                            stats = meStats,
                             syncEnabled = syncEnabled,
                             onSyncEnabledChange = onSyncEnabledChange,
-                            onClearLocalCache = { showClearCacheConfirm = true },
                             onOpenDataPrivacy = onOpenDataPrivacy,
+                            onClearCache = ::requestClearCache,
+                        )
+                        NotifySection(
+                            reminderStatus = reminderStatus,
                             onOpenPermissions = onOpenPermissions,
                             onOpenReminderSettings = onOpenReminderSettings,
+                        )
+                        AppearanceSection(
                             dynamicColorEnabled = dynamicColorEnabled,
                             onDynamicColorChange = onDynamicColorChange,
-                            onShowPrivacy = { showPrivacy = true },
-                            onShowAgreement = { showAgreement = true },
-                            onSignOutClick = { showSignOutConfirm = true },
+                        )
+                        AboutSection(
+                            context = context,
                             onOpenFeedback = onOpenFeedback,
                             onOpenGuide = onOpenGuide,
+                            onShowPrivacy = { showPrivacy = true },
+                            onShowAgreement = { showAgreement = true },
+                        )
+                        SignOutSection(
+                            version = BuildConfig.VERSION_NAME,
+                            onSignOutClick = { showSignOutConfirm = true },
                         )
                     }
                 }
@@ -233,13 +257,14 @@ fun ProfileScreen(
 
     if (showPrivacy) PrivacyPolicyDialog(onDismiss = { showPrivacy = false })
     if (showAgreement) UserAgreementDialog(onDismiss = { showAgreement = false })
+
     if (showClearCacheConfirm) {
         AlertDialog(
             onDismissRequest = { showClearCacheConfirm = false },
             title = { Text("清除本机缓存？") },
             text = {
                 Text(
-                    "将清除本机缓存的名单/课表/演示等数据，不影响云端数据与登录状态；下次打开会重新同步。",
+                    "将清除本机缓存的名单 / 课表 / 演示等数据；身份与云端数据保留，下次打开会重新同步。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
@@ -266,7 +291,7 @@ fun ProfileScreen(
             title = { Text("退出登录？") },
             text = {
                 Text(
-                    "将清除本机会话与名单缓存；云端数据（作业完成、通知已处理、体测历史等）不受影响，重新核验后恢复。",
+                    "将清除本机会话与名单缓存；云端数据（作业完成 / 通知已处理 / 体测历史等）不受影响，重新核验后恢复。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
@@ -285,13 +310,18 @@ fun ProfileScreen(
     }
 }
 
+// =============================================================================
+// 顶部 / 分组
+// =============================================================================
+
 @Composable
 private fun ProfileHeader() {
     Row(
+        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        BrandMark(size = 34.dp)
+        BrandMark(size = 32.dp)
         Text(
             text = "我的",
             style = MaterialTheme.typography.titleLarge,
@@ -301,191 +331,444 @@ private fun ProfileHeader() {
 }
 
 @Composable
-private fun ProfileCardContent(
-    card: ProfileCard,
-    session: Session,
-    syncEnabled: Boolean,
-    onSyncEnabledChange: (Boolean) -> Unit,
-    onClearLocalCache: () -> Unit,
-    onOpenDataPrivacy: () -> Unit,
-    onOpenPermissions: () -> Unit,
-    onOpenReminderSettings: () -> Unit,
-    dynamicColorEnabled: Boolean,
-    onDynamicColorChange: (Boolean) -> Unit,
-    onShowPrivacy: () -> Unit,
-    onShowAgreement: () -> Unit,
-    onSignOutClick: () -> Unit,
-    onOpenFeedback: () -> Unit,
-    onOpenGuide: () -> Unit,
-) {
-    val context = LocalContext.current
-    when (card) {
-        ProfileCard.ACCOUNT -> AccountCard(session)
-        ProfileCard.SYNC -> SettingCard(title = "同步") {
-            SettingSwitchRow(
-                label = "云同步",
-                checked = syncEnabled,
-                onCheckedChange = onSyncEnabledChange,
-            )
-            SettingDivider()
-            SettingRow(label = "用户数据", value = "userdata v6")
-            SettingDivider()
-            SettingRow(label = "通知已处理 / 作业完成", value = "marks 同步")
-        }
+private fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 6.dp, top = 6.dp),
+    )
+}
 
-        ProfileCard.PERMISSION -> SettingCard(title = "权限与提醒") {
-            SettingActionRow(
-                label = "权限管理",
-                actionText = "管理",
-                onAction = onOpenPermissions,
-            )
-            SettingDivider()
-            SettingActionRow(label = "提醒设置", actionText = "设置", onAction = onOpenReminderSettings)
-            SettingDivider()
-            SettingRow(label = "通知 / 日历", value = "本地功能 · 不上传")
-        }
-
-        ProfileCard.DATA_PRIVACY -> SettingCard(title = "数据与隐私") {
-            SettingActionRow(
-                label = "数据与隐私",
-                actionText = "管理",
-                onAction = onOpenDataPrivacy,
-            )
-            SettingDivider()
-            SettingRow(label = "本机缓存", value = "随账号隔离")
-            SettingDivider()
-            SettingActionRow(
-                label = "清除本机缓存",
-                actionText = "清除",
-                onAction = onClearLocalCache,
-            )
-        }
-
-        ProfileCard.APPEARANCE -> SettingCard(title = "外观") {
-            SettingSwitchRow(
-                label = "壁纸取色（Material You）",
-                checked = dynamicColorEnabled,
-                onCheckedChange = onDynamicColorChange,
-            )
-            SettingDivider()
-            SettingRow(label = "深浅色", value = "跟随系统")
-        }
-
-        ProfileCard.ABOUT -> SettingCard(title = "关于") {
-            SettingRow(label = "版本", value = "v${BuildConfig.VERSION_NAME}")
-            SettingDivider()
-            SettingRow(label = "设计语言", value = "Android 17 · M3 Expressive")
-            SettingDivider()
-            SettingRow(label = "备案信息", value = "上线前填写")
-            SettingDivider()
-            SettingActionRow(label = "用户协议", actionText = "查看", onAction = onShowAgreement)
-            SettingDivider()
-            SettingActionRow(label = "隐私政策", actionText = "查看", onAction = onShowPrivacy)
-            SettingDivider()
-            SettingActionRow(label = "反馈建议", actionText = "反馈", onAction = onOpenFeedback)
-            SettingDivider()
-            SettingActionRow(label = "使用说明", actionText = "查看", onAction = onOpenGuide)
-            if (BuildConfig.DEBUG) {
-                SettingDivider()
-                SettingActionRow(
-                    label = "实时活动测试",
-                    actionText = "发送",
-                    onAction = { LiveUpdateNotifier.postDebugCountdown(context, 60) },
-                )
-                SettingDivider()
-                SettingActionRow(
-                    label = "关闭实时活动",
-                    actionText = "关闭",
-                    onAction = { LiveUpdateNotifier.cancelDebug(context) },
-                )
-            }
-        }
-
-        ProfileCard.SIGN_OUT -> Column {
-            Spacer(modifier = Modifier.height(2.dp))
-            FilledTonalButton(
-                onClick = onSignOutClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = CtShapeTokens.pill,
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                ),
-            ) {
-                Text("退出登录并清除本机会话")
-            }
-        }
+@Composable
+private fun GroupCard(content: @Composable ColumnScope.() -> Unit) {
+    CtGlassCard(shape = CtShapeTokens.hero) {
+        Column(modifier = Modifier.fillMaxWidth(), content = content)
     }
 }
 
 @Composable
-private fun AccountCard(session: Session) {
-    CtGlassCard(
-        shape = CtShapeTokens.hero,
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+private fun RowDivider() {
+    HorizontalDivider(
+        color = MaterialTheme.colorScheme.outlineVariant,
+        modifier = Modifier.padding(start = 18.dp),
+    )
+}
+
+// =============================================================================
+// 1) 账号与身份
+// =============================================================================
+
+@Composable
+private fun IdentitySection(session: Session) {
+    SectionTitle("账号与身份")
+    CtGlassCard(shape = CtShapeTokens.hero) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
             Text(
                 text = session.name.ifBlank { "班级成员" },
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            // 大字体/长角色名时自动换行（避免横向截断）
+            Spacer(modifier = Modifier.height(10.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                CtPill(text = session.maskedSid)
-                if (session.role.isNotBlank()) CtPill(text = session.role)
+                CtPill(
+                    text = "身份已验证",
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                if (session.role.isNotBlank()) {
+                    CtPill(
+                        text = session.role,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+                if (session.badge.isNotBlank() && session.badge != session.role) {
+                    CtPill(text = session.badge)
+                }
                 if (session.isAdmin) CtPill(text = "管理员")
             }
         }
     }
 }
 
-@Composable
-private fun SettingDivider() {
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-}
+// =============================================================================
+// 2) 数据与同步：我的数据 + 云同步 + 数据与隐私 / 清缓存
+// =============================================================================
 
 @Composable
-private fun SettingCard(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit,
+private fun DataSection(
+    stats: MeStats,
+    syncEnabled: Boolean,
+    onSyncEnabledChange: (Boolean) -> Unit,
+    onOpenDataPrivacy: () -> Unit,
+    onClearCache: () -> Unit,
 ) {
-    CtGlassCard(
-        shape = CtShapeTokens.hero,
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+    SectionTitle("数据与同步")
+    GroupCard {
+        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
             Text(
-                text = title,
+                text = "我的数据",
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            content()
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                MetricCell("待交作业", MeStatsBuilder.formatCount(stats.pendingHomework), Modifier.weight(1f))
+                MetricCell("已完成作业", MeStatsBuilder.formatCount(stats.doneHomework), Modifier.weight(1f))
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                MetricCell("抽签记录", MeStatsBuilder.formatCount(stats.drawRecords), Modifier.weight(1f))
+                MetricCell("体测记录", MeStatsBuilder.formatCount(stats.fitRecords), Modifier.weight(1f))
+            }
+            val extras = MeStatsBuilder.extraMetrics(stats)
+            if (extras.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = extras.joinToString(" · ") { (label, value) -> "$label $value" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
+        RowDivider()
+        SwitchRow(
+            title = "云同步",
+            subtitle = "按账号同步作业 / 通知 / 抽签 / 点名 / 电费等",
+            checked = syncEnabled,
+            onCheckedChange = onSyncEnabledChange,
+        )
+        RowDivider()
+        ActionRow(
+            icon = Icons.Rounded.Shield,
+            title = "数据与隐私",
+            subtitle = "查看与设置",
+            onClick = onOpenDataPrivacy,
+        )
+        RowDivider()
+        ActionRow(
+            icon = Icons.Rounded.DeleteOutline,
+            title = "清除本机缓存",
+            subtitle = "身份保留 · 不影响云端",
+            onClick = onClearCache,
+        )
     }
 }
 
 @Composable
-private fun SettingRow(label: String, value: String) {
+private fun MetricCell(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+// =============================================================================
+// 3) 通知与权限
+// =============================================================================
+
+@Composable
+private fun NotifySection(
+    reminderStatus: ReminderStatus,
+    onOpenPermissions: () -> Unit,
+    onOpenReminderSettings: () -> Unit,
+) {
+    SectionTitle("通知与权限")
+    GroupCard {
+        ActionRow(
+            icon = Icons.Rounded.NotificationsActive,
+            title = "权限管理",
+            subtitle = "通知 / 日历",
+            onClick = onOpenPermissions,
+        )
+        RowDivider()
+        ActionRow(
+            icon = Icons.Rounded.Schedule,
+            title = "提醒设置",
+            subtitle = reminderStatus.label,
+            subtitleHighlight = reminderStatus.isWarning,
+            onClick = onOpenReminderSettings,
+        )
+    }
+}
+
+// =============================================================================
+// 4) 外观
+// =============================================================================
+
+@Composable
+private fun AppearanceSection(
+    dynamicColorEnabled: Boolean,
+    onDynamicColorChange: (Boolean) -> Unit,
+) {
+    SectionTitle("外观")
+    GroupCard {
+        SwitchRow(
+            title = "壁纸取色",
+            subtitle = "Material You · 跟随系统壁纸",
+            leadingIcon = Icons.Rounded.Wallpaper,
+            checked = dynamicColorEnabled,
+            onCheckedChange = onDynamicColorChange,
+        )
+        RowDivider()
+        ValueRow(
+            title = "深浅色",
+            value = "跟随系统",
+        )
+    }
+}
+
+// =============================================================================
+// 5) 关于与帮助
+// =============================================================================
+
+@Composable
+private fun AboutSection(
+    context: android.content.Context,
+    onOpenFeedback: () -> Unit,
+    onOpenGuide: () -> Unit,
+    onShowPrivacy: () -> Unit,
+    onShowAgreement: () -> Unit,
+) {
+    SectionTitle("关于与帮助")
+    GroupCard {
+        ActionRow(
+            icon = Icons.Rounded.Feedback,
+            title = "反馈建议",
+            subtitle = "问题或建议发给管理员",
+            onClick = onOpenFeedback,
+        )
+        RowDivider()
+        ActionRow(
+            icon = Icons.Rounded.MenuBook,
+            title = "使用说明",
+            subtitle = "各功能用法速览",
+            onClick = onOpenGuide,
+        )
+        RowDivider()
+        ActionRow(
+            icon = Icons.Rounded.Description,
+            title = "用户协议",
+            onClick = onShowAgreement,
+        )
+        RowDivider()
+        ActionRow(
+            icon = Icons.Rounded.Article,
+            title = "隐私政策",
+            onClick = onShowPrivacy,
+        )
+        RowDivider()
+        ValueRow(
+            title = "版本",
+            value = "v${BuildConfig.VERSION_NAME}",
+        )
+        if (BuildConfig.DEBUG) {
+            RowDivider()
+            ActionRow(
+                icon = Icons.Rounded.NotificationsActive,
+                title = "实时活动测试（Debug）",
+                subtitle = "发送 60 秒倒计时实时通知",
+                onClick = { LiveUpdateNotifier.postDebugCountdown(context, 60) },
+            )
+            RowDivider()
+            ActionRow(
+                icon = Icons.Rounded.NotificationsActive,
+                title = "关闭实时活动（Debug）",
+                onClick = { LiveUpdateNotifier.cancelDebug(context) },
+            )
+        }
+    }
+}
+
+// =============================================================================
+// 6) 退出 + 页脚
+// =============================================================================
+
+@Composable
+private fun SignOutSection(
+    version: String,
+    onSignOutClick: () -> Unit,
+) {
+    Spacer(modifier = Modifier.height(4.dp))
+    OutlinedButton(
+        onClick = onSignOutClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp),
+        shape = CtShapeTokens.pill,
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.error.copy(alpha = 0.55f),
+        ),
+    ) {
+        Text(
+            text = "退出登录",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+    Text(
+        text = "退出后需重新验证姓名 + 学号才能使用班级数据",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    )
+    Text(
+        text = "v$version · 班级工具站",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp, bottom = 4.dp),
+    )
+}
+
+// =============================================================================
+// 行组件（行式列表，统一 56dp 起、点按区整行）
+// =============================================================================
+
+@Composable
+private fun ActionRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String? = null,
+    subtitleHighlight: Boolean = false,
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .heightIn(min = 56.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (subtitleHighlight) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    subtitle: String? = null,
+    leadingIcon: ImageVector? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 18.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (leadingIcon != null) {
+            Icon(
+                imageVector = leadingIcon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.semantics { contentDescription = title },
+        )
+    }
+}
+
+@Composable
+private fun ValueRow(title: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
@@ -493,53 +776,5 @@ private fun SettingRow(label: String, value: String) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-    }
-}
-
-@Composable
-private fun SettingSwitchRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.semantics { contentDescription = label })
-    }
-}
-
-@Composable
-private fun SettingActionRow(
-    label: String,
-    actionText: String,
-    onAction: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        TextButton(onClick = onAction) { Text(actionText) }
     }
 }

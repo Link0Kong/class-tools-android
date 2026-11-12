@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.41.0（v4 阶段收官）**——42 个签名版本；功能同步 + P0/P1 主体 + P2/性能 + 系统实时活动（Live Updates/流体云）+ 真实背景模糊 Haze + Baseline Profile + 12 屏无障碍审计；单测 **1065/0**、快速 E2E **43/0**。完整验收见 [V4_FINAL_STATUS](docs/V4_FINAL_STATUS.md)，最新版本见 [REPORT_ROUND52](docs/REPORT_ROUND52_20261112.md)。
+- 状态：**v4.42.0**——UI 重构（以微信小程序为基准：我的/通知/设置整合/使用说明卡片化）+ 通知去重/删除测试通知 + 系统实时活动（Live Updates/流体云）；单测 **1098/0**、快速 E2E **43/0**，签名 APK 已交付桌面。详见 [REPORT_ROUND53](docs/REPORT_ROUND53_20261112.md) 与 [UI_REDESIGN_VERIFY](docs/UI_REDESIGN_VERIFY.md)。
 
 ## 目录
 

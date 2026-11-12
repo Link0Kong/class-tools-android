@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -50,7 +51,6 @@ import com.furina.classtools.data.reminder.ReminderDiagnostics
 import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.reminder.ReminderSettingsStore
-import com.furina.classtools.data.reminder.ReminderTestNotificationResult
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
@@ -82,7 +82,6 @@ fun ReminderSettingsScreen(
     val notificationsGranted =
         permissionController.state(PermissionType.NOTIFICATIONS).isGranted
     var diagnostics by remember { mutableStateOf<ReminderDiagnostics?>(null) }
-    var testingNotification by remember { mutableStateOf(false) }
 
     fun update(transform: (ReminderSettings) -> ReminderSettings) {
         scope.launch {
@@ -190,55 +189,28 @@ fun ReminderSettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "通知测试与诊断",
+                            "检查与诊断",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "先发一条测试通知确认系统链路（渠道/权限/图标）；诊断可查看本机缓存与上次运行摘要。",
+                            "立即检查本机通知链路，并查看缓存与上次运行摘要。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                onClick = {
-                                    if (testingNotification) return@OutlinedButton
-                                    testingNotification = true
-                                    scope.launch {
-                                        val result = ReminderActions.testNotification(context)
-                                        testingNotification = false
-                                        val message = when (result) {
-                                            ReminderTestNotificationResult.Sent ->
-                                                "测试通知已发送，请查看通知栏"
-                                            ReminderTestNotificationResult.PermissionMissing -> {
-                                                onOpenPermissions()
-                                                "通知权限未开启：请先开启通知"
-                                            }
-                                            is ReminderTestNotificationResult.Failed ->
-                                                "发送失败：${result.message}"
-                                        }
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            message,
-                                            android.widget.Toast.LENGTH_LONG,
-                                        ).show()
-                                    }
-                                },
-                                enabled = !testingNotification,
-                            ) { Text(if (testingNotification) "发送中…" else "发送测试通知") }
-                            OutlinedButton(
-                                onClick = {
-                                    ReminderRuntime.runNow(context)
-                                    scope.launch {
-                                        diagnostics = runCatching {
-                                            ReminderActions.diagnostics(context)
-                                        }.getOrNull()
-                                    }
-                                },
-                            ) { Text("立即检查 + 诊断") }
-                        }
+                        OutlinedButton(
+                            onClick = {
+                                ReminderRuntime.runNow(context)
+                                scope.launch {
+                                    diagnostics = runCatching {
+                                        ReminderActions.diagnostics(context)
+                                    }.getOrNull()
+                                }
+                            },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) { Text("立即检查 + 诊断") }
                     }
                 }
 
