@@ -622,6 +622,16 @@ function Tap-UiTextScroll([string]$Label, [int]$ScrollTries = 3, [int]$TimeoutSe
     $node = Wait-UiTextScroll -Label $Label -ScrollTries $ScrollTries -TimeoutSec $TimeoutSec
     if (-not $node) { throw "UI text not found (scrolled): '$Label'" }
     $pt = Get-NodeCenter $node
+    # 节点可能已组合但在屏幕外（长页面 dump 会包含全部节点）：先滚动到屏内再点。
+    # 下限 1950：底部悬浮 dock 会盖住内容，落点必须避开 dock（否则会误切底部 tab）。
+    for ($i = 0; $i -lt ($ScrollTries + 3); $i++) {
+        if (-not $pt) { break }
+        if ($pt[1] -ge 260 -and $pt[1] -le 1950 -and $pt[0] -ge 80 -and $pt[0] -le 1000) { break }
+        if ($pt[1] -gt 1950) { Scroll-Up } else { Scroll-Down }
+        $node = Wait-UiText -Label $Label -TimeoutSec 2
+        if (-not $node) { break }
+        $pt = Get-NodeCenter $node
+    }
     if (-not $pt) { throw "cannot parse bounds for '$Label'" }
     Start-Sleep -Milliseconds 300
     $null = Invoke-Adb @('shell', 'input', 'tap', "$($pt[0])", "$($pt[1])")
@@ -1076,7 +1086,17 @@ function Invoke-Scenario {
     Go-AllTools
     if (-not (Wait-UiTextScroll -Label $L.DiagTool -ScrollTries 4 -TimeoutSec 12)) { throw 'diag tool card not visible' }
     Tap-UiTextScroll -Label $L.DiagTool -ScrollTries 2 -TimeoutSec 8
-    if (-not (Wait-UiText -Label $L.DiagSub -TimeoutSec 25)) { throw 'diag page not visible (service-health subtitle missing)' }
+    $diagOpened = Wait-UiText -Label $L.DiagSub -TimeoutSec 18
+    if (-not $diagOpened) {
+        # 导航抖动兜底：从全部工具页重新进入一次诊断页。
+        Write-Line '  diag page did not open -> retry from all tools'
+        Go-AllTools
+        if (Wait-UiTextScroll -Label $L.DiagTool -ScrollTries 4 -TimeoutSec 10) {
+            Tap-UiTextScroll -Label $L.DiagTool -ScrollTries 2 -TimeoutSec 8
+        }
+        $diagOpened = Wait-UiText -Label $L.DiagSub -TimeoutSec 20
+    }
+    if (-not $diagOpened) { throw 'diag page not visible (service-health subtitle missing)' }
     # v4.12 DG-01: 默认简洁模式只显示状态摘要/设备摘要/服务异常；点「详细」后再断言完整分组。
     if (Wait-UiText -Label $L.DiagDetail -TimeoutSec 5) {
         Write-Line '  diag simple mode -> tap 详细 for full sections'
@@ -1175,7 +1195,16 @@ function Invoke-Scenario {
     if (-not $privacyState) { throw 'data & privacy page content not visible' }
     if (Wait-UiTextScroll -Label $L.ClearCloud -ScrollTries 4 -TimeoutSec 6) {
         Tap-UiTextScroll -Label $L.ClearCloud -ScrollTries 2 -TimeoutSec 6
-        if (-not (Wait-UiText -Label $L.ConfirmClear -Exact -TimeoutSec 8)) { throw 'clear-cloud confirm dialog not visible' }
+        $clearDialog = Wait-UiText -Label $L.ConfirmClear -Exact -TimeoutSec 8
+        if (-not $clearDialog) {
+            # 滚动后首次点按可能只滚动了页面，重试一次。
+            Write-Line '  clear-cloud dialog missing -> retry tap'
+            if (Wait-UiTextScroll -Label $L.ClearCloud -ScrollTries 2 -TimeoutSec 5) {
+                Tap-UiTextScroll -Label $L.ClearCloud -ScrollTries 2 -TimeoutSec 5
+            }
+            $clearDialog = Wait-UiText -Label $L.ConfirmClear -Exact -TimeoutSec 10
+        }
+        if (-not $clearDialog) { throw 'clear-cloud confirm dialog not visible' }
         Save-Shot '21_privacy.png'
         Tap-UiText -Label $L.Cancel -Exact -TimeoutSec 10
         if (-not (Wait-UiTextScroll -Label $L.PrivacyNote -ScrollTries 3 -TimeoutSec 10)) { throw 'privacy page did not come back after cancel' }

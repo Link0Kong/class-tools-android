@@ -407,10 +407,16 @@ private fun PrivacyContent(
                     Spacer(Modifier.width(8.dp))
                     Text("隐私说明", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 }
+                // M-08：按「收集与展示 / 存储与同步 / 你的控制」分组，长段说明更易扫读。
+                PrivacySectionLabel("收集与展示")
                 PrivacyBullet("不显示手机号；学号仅脱敏展示（如 32***24）")
                 PrivacyBullet("页面与导出图不含宿舍号；电费数据不导出")
-                PrivacyBullet("导出文件只保存在本机，由你主动分享")
+                PrivacySectionLabel("存储与同步")
+                PrivacyBullet("数据仅存于班级云服务，仅本人可读写；不接入第三方统计或广告")
                 PrivacyBullet("云同步可关闭；退出登录会清除本机会话")
+                PrivacySectionLabel("你的控制")
+                PrivacyBullet("导出文件只保存在本机，由你主动分享")
+                PrivacyBullet("可随时导出，或按需删除云端与本机数据")
             }
         }
 
@@ -605,6 +611,17 @@ private fun PrivacyBullet(text: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+@Composable
+private fun PrivacySectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 4.dp),
+    )
 }
 
 @Composable
