@@ -78,6 +78,7 @@ import com.furina.classtools.data.ppt.PptListResult
 import com.furina.classtools.data.ppt.PptLocalStore
 import com.furina.classtools.data.ppt.PptRepository
 import com.furina.classtools.data.ppt.PptUploadInput
+import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.ppt.PptUploadPhase
 import com.furina.classtools.data.ppt.PptUploadResult
 import com.furina.classtools.data.ppt.PptUriSource
@@ -214,6 +215,9 @@ fun PptListScreen(
     }
 
     fun startUpload(title: String, source: PptByteSource) {
+        if (!LiveUpdateNotifier.isAvailable(context)) {
+            toast(context, "系统通知未开启：上传进度不会显示在通知栏/灵动岛")
+        }
         pendingSource = null
         uploadFailedMessage = null
         uploadTitle = PptLimits.sanitizeTitle(title)

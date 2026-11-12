@@ -238,9 +238,17 @@ class AppContainer(context: Context) {
             appScope.launch {
                 repository.uploadProgress.collect { progress ->
                     when (progress.phase) {
+                        PptUploadPhase.DONE -> {
+                            LiveUpdateNotifier.cancelPptUpload(appContext)
+                            LiveUpdateNotifier.postPptFinished(appContext, success = true, message = progress.message)
+                        }
+
+                        PptUploadPhase.FAILED -> {
+                            LiveUpdateNotifier.cancelPptUpload(appContext)
+                            LiveUpdateNotifier.postPptFinished(appContext, success = false, message = progress.message)
+                        }
+
                         PptUploadPhase.IDLE,
-                        PptUploadPhase.DONE,
-                        PptUploadPhase.FAILED,
                         PptUploadPhase.CANCELLED,
                         -> LiveUpdateNotifier.cancelPptUpload(appContext)
 

@@ -39,6 +39,7 @@ object LiveUpdateNotifier {
     private const val PPT_NOTIFICATION_ID = 7401
     private const val VOTE_NOTIFICATION_ID = 7402
     private const val DEBUG_NOTIFICATION_ID = 7403
+    private const val PPT_RESULT_NOTIFICATION_ID = 7411
     private const val PROGRESS_MAX = 100
 
     private fun ensureChannel(context: Context) {
@@ -58,6 +59,9 @@ object LiveUpdateNotifier {
             )
         }
     }
+
+    /** 供 UI 判断「实时活动是否会显示」；未授权通知时可在页面上给出解释。 */
+    fun isAvailable(context: Context): Boolean = canNotify(context)
 
     private fun canNotify(context: Context): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -127,6 +131,24 @@ object LiveUpdateNotifier {
             .setContentIntent(openToolIntent(context, "ppt"))
         runCatching {
             NotificationManagerCompat.from(context).notify(PPT_NOTIFICATION_ID, builder.build())
+        }
+    }
+
+    /** 上传成功/失败后的短暂结果通知（非实时活动，自动消失）。 */
+    fun postPptFinished(context: Context, success: Boolean, message: String) {
+        if (!canNotify(context)) return
+        ensureChannel(context)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(smallIcon(context))
+            .setContentTitle(if (success) "演示上传完成" else "演示上传失败")
+            .setContentText(message.ifBlank { if (success) "已提交转换，可在演示列表查看进度" else "请稍后重试" })
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message.ifBlank { if (success) "已提交转换，可在演示列表查看进度" else "请稍后重试" }))
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setContentIntent(openToolIntent(context, "ppt"))
+        runCatching {
+            NotificationManagerCompat.from(context).notify(PPT_RESULT_NOTIFICATION_ID, builder.build())
         }
     }
 

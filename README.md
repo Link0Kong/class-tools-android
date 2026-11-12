@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.39.0**——v4 功能同步 + P0 + P1 主体 + P2/性能 + 系统实时活动（Live Updates/流体云）（Baseline Profile 最新代码刷新、底栏真实模糊 Haze、12 屏无障碍审计、移除动画适配、自适应、大图缩放、电费切档、体测删除撤销、房间搜索）；快速 E2E **43/0**、单测 **1065/0**，签名 APK 已交付桌面。详见 [REPORT_ROUND50](docs/REPORT_ROUND50_20261112.md)。
+- 状态：**v4.40.0**——v4 功能同步 + P0 + P1 主体 + P2/性能 + 系统实时活动（Live Updates/流体云，含结果通知与权限提示）（Baseline Profile 最新代码、底栏真实模糊 Haze、12 屏无障碍审计、移除动画适配、自适应、大图缩放、电费切档、体测删除撤销、房间搜索）；快速 E2E **43/0**、单测 **1065/0**，签名 APK 已交付桌面。详见 [REPORT_ROUND51](docs/REPORT_ROUND51_20261112.md)。
 
 ## 目录
 
