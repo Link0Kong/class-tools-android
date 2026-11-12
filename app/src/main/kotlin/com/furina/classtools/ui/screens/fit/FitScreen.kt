@@ -322,12 +322,21 @@ fun FitScreen(
                     onDismissRequest = { renameIndex = null },
                     title = { Text("历史记录名称") },
                     text = {
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it.take(24) },
-                            singleLine = true,
-                            label = { Text("名称") },
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it.take(24) },
+                                singleLine = true,
+                                label = { Text("名称") },
+                            )
+                            // D-07：改名长度计数，避免误输入被静默截断。
+                            Text(
+                                text = "${name.length}/24",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.align(Alignment.End),
+                            )
+                        }
                     },
                     confirmButton = {
                         TextButton(onClick = {

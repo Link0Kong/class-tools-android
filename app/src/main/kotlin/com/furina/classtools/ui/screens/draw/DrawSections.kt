@@ -415,6 +415,8 @@ fun DrawPreviewCard(
 fun DrawResultCard(
     result: DrawResult?,
     autoRedraw: Boolean,
+    /** D-02：本结果已用于分组后显示徽标（由宿主传入，重新抽签/调整参数后重置）。 */
+    grouped: Boolean = false,
     onToggleAutoRedraw: (Boolean) -> Unit,
     onRemove: (Int) -> Unit,
     onSortChange: (DrawSortMode) -> Unit,
@@ -450,6 +452,13 @@ fun DrawResultCard(
                     modifier = Modifier.weight(1f),
                 )
                 CtPill(text = "${result.entries.size} 个 · 池 ${result.pool.size}")
+                if (grouped) {
+                    Spacer(Modifier.width(6.dp))
+                    CtPill(
+                        text = "已用于分组",
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    )
+                }
             }
 
             FlowRow(

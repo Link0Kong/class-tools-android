@@ -332,6 +332,8 @@ private fun DrawReadyContent(
     onExportSheet: (DrawResult) -> Unit,
     onSelectStep: (DrawStep) -> Unit,
 ) {
+    // D-02：记录哪一次结果已用于分组（同一结果对象再次进入结果页保持徽标；重新抽签后自然重置）。
+    var groupedResult by remember { mutableStateOf<DrawResult?>(null) }
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wide = maxWidth >= WIDE_BREAKPOINT
         val horizontal = if (wide) 24.dp else 16.dp
@@ -382,13 +384,19 @@ private fun DrawReadyContent(
                         DrawStep.RESULT -> DrawResultCard(
                             result = workflow.result,
                             autoRedraw = autoRedraw,
+                            grouped = groupedResult === workflow.result,
                             onToggleAutoRedraw = onToggleAutoRedraw,
                             onRemove = onRemove,
                             onSortChange = onSortChange,
                             onReroll = onReroll,
                             onEditConfig = onEditConfig,
                             onExport = onExport,
-                            onGroup = { workflow.result?.let(onGroup) },
+                            onGroup = {
+                                workflow.result?.let {
+                                    groupedResult = it
+                                    onGroup(it)
+                                }
+                            },
                             onExportSheet = { workflow.result?.let(onExportSheet) },
                         )
                     }
@@ -431,13 +439,19 @@ private fun DrawReadyContent(
                         DrawResultCard(
                             result = workflow.result,
                             autoRedraw = autoRedraw,
+                            grouped = groupedResult === workflow.result,
                             onToggleAutoRedraw = onToggleAutoRedraw,
                             onRemove = onRemove,
                             onSortChange = onSortChange,
                             onReroll = onReroll,
                             onEditConfig = onEditConfig,
                             onExport = onExport,
-                            onGroup = { workflow.result?.let(onGroup) },
+                            onGroup = {
+                                workflow.result?.let {
+                                    groupedResult = it
+                                    onGroup(it)
+                                }
+                            },
                             onExportSheet = { workflow.result?.let(onExportSheet) },
                         )
                     }
