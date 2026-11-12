@@ -252,6 +252,21 @@ fun IdentityScreen(
                             )
                         }
                     }
+                    // I-03：按钮不可点时说明缺少什么，避免用户不知道为什么点不了。
+                    val disabledReason = when {
+                        verifying -> null
+                        !consentAccepted -> "请先勾选同意《用户协议》《隐私政策》"
+                        studentId.isBlank() || name.isBlank() -> "请填写 10 位学号与姓名"
+                        studentId.length != 10 -> "学号应为 10 位数字"
+                        else -> null
+                    }
+                    if (!canSubmit && disabledReason != null) {
+                        Text(
+                            text = disabledReason,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 

@@ -139,6 +139,14 @@ fun PermissionSettingsScreen(
                     onAction = { request(PermissionType.CALENDAR) },
                 )
 
+                // M-04：从系统设置授权返回后，可手动重新检测状态。
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = { refreshTick++ }) { Text("重新检测权限状态") }
+                }
+
                 if (onOpenReminderSettings != null) {
                     CtGlassCard(
                         shape = CtShapeTokens.hero,
