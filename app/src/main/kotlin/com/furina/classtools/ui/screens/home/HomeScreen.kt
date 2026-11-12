@@ -88,6 +88,7 @@ import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.ToolCard
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtTokens
 import java.time.Instant
@@ -300,7 +301,10 @@ fun HomeScreen(
     var lifecycleResumed by remember { mutableStateOf(true) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { lifecycleResumed = true }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { lifecycleResumed = false }
+    // G22：系统移除动画时停止卡内容自动轮换。
+    val reduceMotion = rememberReduceMotion()
     val rotationActive = rotationEnabled &&
+        !reduceMotion &&
         isPageActive &&
         lifecycleResumed &&
         HomeWorkbenchLogic.rotationEnabled(maxOf(hwItems.size, ntItems.size), pageVisible = true)

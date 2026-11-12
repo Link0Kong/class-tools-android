@@ -2,6 +2,7 @@ package com.furina.classtools.ui.components.expressive
 
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import com.furina.classtools.ui.theme.ctEmphasized
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -43,9 +45,10 @@ fun CtAnimatedCounter(
     animationSpec: AnimationSpec<Float> = CtMotion.effects,
     label: String = "ctCounter",
 ) {
+    val reduceMotion = rememberReduceMotion()
     val animated = animateFloatAsState(
         targetValue = value.toFloat(),
-        animationSpec = animationSpec,
+        animationSpec = if (reduceMotion) snap() else animationSpec,
         label = label,
     )
     // 只把「格式化后的可见值」作为组合阶段依赖：动画每帧变化时只有显示字符串
@@ -79,9 +82,10 @@ fun CtAnimatedDecimalCounter(
     animationSpec: AnimationSpec<Float> = CtMotion.effects,
     label: String = "ctDecimalCounter",
 ) {
+    val reduceMotion = rememberReduceMotion()
     val animated = animateFloatAsState(
         targetValue = value.toFloat(),
-        animationSpec = animationSpec,
+        animationSpec = if (reduceMotion) snap() else animationSpec,
         label = label,
     )
     val digits = decimals.coerceIn(0, 2)

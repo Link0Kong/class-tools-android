@@ -17,6 +17,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -1166,7 +1167,8 @@ private fun PptHotspotOverlay(
             .clickable { onPlay() },
         contentAlignment = Alignment.Center,
     ) {
-        val pulse = if (failed) {
+        val reduceMotion = rememberReduceMotion()
+        val pulse = if (failed || reduceMotion) {
             1f
         } else {
             val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "ppt-hotspot")
