@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -329,6 +330,26 @@ fun HomeScreen(
     var draft by rememberSaveable { mutableStateOf(quickToolIds) }
     LaunchedEffect(quickToolIds, editing) {
         if (!editing) draft = quickToolIds
+    }
+    // H-03：编辑态按返回键先确认是否放弃修改，避免误触丢草稿。
+    var showDiscardEdit by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = editing) { showDiscardEdit = true }
+    if (showDiscardEdit) {
+        AlertDialog(
+            onDismissRequest = { showDiscardEdit = false },
+            title = { Text("放弃本次修改？") },
+            text = { Text("首页常用工具的改动尚未保存。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardEdit = false
+                    draft = quickToolIds
+                    editing = false
+                }) { Text("放弃") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardEdit = false }) { Text("继续编辑") }
+            },
+        )
     }
     val quickTools = remember(quickToolIds, forceEmptyQuickTools) {
         if (forceEmptyQuickTools) emptyList() else ToolCatalog.quickTools(quickToolIds)
