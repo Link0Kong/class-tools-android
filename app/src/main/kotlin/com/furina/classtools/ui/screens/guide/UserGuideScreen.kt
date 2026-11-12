@@ -1,5 +1,8 @@
 package com.furina.classtools.ui.screens.guide
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -15,26 +20,64 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
+import com.furina.classtools.ui.components.expressive.CtBottomSheetWithState
 import com.furina.classtools.ui.theme.CtShapeTokens
+import kotlinx.coroutines.launch
 
 /**
- * 使用说明（对齐小程序 `pages/ug` 的分节内容）。
+ * 使用说明（卡片化，对齐三端共享契约 `web/使用说明_卡片化重构契约_20261112.md` §5）。
  *
- * 纯静态内容，**零网络请求、零外部链接**（不引入任何 URL，避免审核/遥测风险）。
- * 分节列表 + 编号气泡；小屏单列，宽屏内容限宽 760dp 居中（平板可读性）。
+ * 结构（一屏一张卡）：
+ * 1. 顶栏：返回 + 「使用说明」+ 副标题 + 右侧「总览」按钮（打开全部卡片清单）；
+ * 2. 分类 chips（LazyRow，5 个；点 chip 跳到该分类首张卡，当前卡分类高亮）；
+ * 3. `HorizontalPager` 轮播 20 张卡：卡头分类胶囊 + 页码、hero 自绘配图（11 scene）、
+ *    标题 + 一句话作用、3 条步骤（①②③）、💡 提示；卡片内容超出时卡内纵向滚动；
+ * 4. 底部：上一张 / 页码 / 下一张（≥48dp，首尾禁用、不循环）；
+ * 5. 总览：`ModalBottomSheet` 分组清单（入门 / 学习 / 生活 / 协作 / 更多），
+ *    点条目关闭弹层并滚到对应卡；返回键先关弹层。
  *
- * 接线（Lead）：
+ * 纯本地静态内容：**零网络请求、零外部链接、零新增依赖**（配图全部 Compose 自绘）。
+ * 纵向滚动不被劫持：卡片内部 `verticalScroll` 只处理纵向，横向手势交给 pager。
+ *
+ * 接线（MainNavHost）：
  * ```kotlin
  * "guide" -> UserGuideScreen(onBack = { navController.popBackStack() })
  * // 我的页入口：SettingActionRow(label = "使用说明", actionText = "查看", onAction = { nav.navigate("guide") })
@@ -45,6 +88,16 @@ fun UserGuideScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val cards = UserGuideContent.cards
+    // 空列表兜底（正常恒为 20 张）：pager 至少一页，避免 coerceIn 越界。
+    val pageCount = cards.size.coerceAtLeast(1)
+    val pagerState = rememberPagerState(pageCount = { pageCount })
+    val scope = rememberCoroutineScope()
+    var overviewVisible by rememberSaveable { mutableStateOf(false) }
+
+    // 返回键：总览打开时先关总览（sheet 自身也处理返回，双保险）。
+    BackHandler(enabled = overviewVisible) { overviewVisible = false }
+
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -54,226 +107,479 @@ fun UserGuideScreen(
         ) {
             CtTopBar(
                 title = "使用说明",
-                subtitle = "各功能用法速览",
+                subtitle = "左右滑动切换 · 一键总览",
                 onBack = onBack,
-            )
-            Box(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(top = 4.dp, bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    item(key = "intro") {
-                        IntroCard()
+                actions = {
+                    TextButton(
+                        onClick = { overviewVisible = true },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.GridView,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(text = "总览", style = MaterialTheme.typography.labelLarge)
                     }
-                    itemsIndexed(
-                        items = UserGuideContent.sections,
-                        key = { _, section -> section.id },
-                    ) { index, section ->
-                        GuideSectionCard(index = index + 1, section = section)
+                },
+            )
+
+            GuideCategoryChips(
+                current = cards.getOrNull(pagerState.currentPage)?.category,
+                onSelect = { category ->
+                    val index = UserGuideContent.firstIndexOf(category)
+                    if (index >= 0) scope.launch { pagerState.animateScrollToPage(index) }
+                },
+            )
+
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 18.dp),
+                pageSpacing = 12.dp,
+                beyondViewportPageCount = 1,
+            ) { page ->
+                cards.getOrNull(page)?.let { card ->
+                    // 平板/桌面限宽居中，避免长句行宽过大；手机满宽。
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        GuideCardPage(
+                            card = card,
+                            pageIndex = page,
+                            pageCount = cards.size,
+                            modifier = Modifier
+                                .widthIn(max = 720.dp)
+                                .fillMaxSize()
+                                .padding(vertical = 10.dp),
+                        )
                     }
                 }
+            }
+
+            GuidePagerBar(
+                pageIndex = pagerState.currentPage.coerceIn(0, pageCount - 1),
+                pageCount = cards.size,
+                onPrevious = {
+                    scope.launch {
+                        pagerState.animateScrollToPage(
+                            (pagerState.currentPage - 1).coerceAtLeast(0),
+                        )
+                    }
+                },
+                onNext = {
+                    scope.launch {
+                        pagerState.animateScrollToPage(
+                            (pagerState.currentPage + 1).coerceAtMost(pageCount - 1),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    if (overviewVisible) {
+        GuideOverviewSheet(
+            cards = cards,
+            onDismiss = { overviewVisible = false },
+            onJump = { index ->
+                overviewVisible = false
+                scope.launch {
+                    pagerState.animateScrollToPage(index.coerceIn(0, pageCount - 1))
+                }
+            },
+        )
+    }
+}
+
+// =============================================================================
+// 分类 chips
+// =============================================================================
+
+@Composable
+private fun GuideCategoryChips(
+    current: GuideCategory?,
+    onSelect: (GuideCategory) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        contentPadding = PaddingValues(horizontal = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(items = GuideCategory.entries, key = { it.id }) { category ->
+            GuideCategoryChip(
+                selected = category == current,
+                label = category.label,
+                onClick = { onSelect(category) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun GuideCategoryChip(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier
+            .heightIn(min = 40.dp)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick),
+        shape = CtShapeTokens.pill,
+        color = if (selected) scheme.primary else scheme.surfaceContainerHigh,
+        contentColor = if (selected) scheme.onPrimary else scheme.onSurfaceVariant,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+    }
+}
+
+// =============================================================================
+// 卡片
+// =============================================================================
+
+@Composable
+private fun GuideCardPage(
+    card: GuideCard,
+    pageIndex: Int,
+    pageCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    // hero 约屏幕高度 25%（契约 §1.2：卡片上部约 30–36% 高度），并夹在可读区间。
+    val heroHeight = (LocalConfiguration.current.screenHeightDp * 0.25f)
+        .dp
+        .coerceIn(132.dp, 196.dp)
+
+    Surface(
+        modifier = modifier,
+        shape = CtShapeTokens.hero,
+        color = scheme.surfaceContainerLowest,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.45f)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // 1) 卡头：分类胶囊 + 页码
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val palette = guideSceneColors(card.tone)
+                CtPill(
+                    text = card.category.label,
+                    containerColor = palette.soft,
+                    contentColor = palette.ink,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "${pageIndex + 1}/$pageCount",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+
+            // 2) hero 配图（Compose 自绘）
+            GuideSceneArt(
+                scene = card.scene,
+                tone = card.tone,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(heroHeight),
+            )
+
+            // 3) 标题 + 一句话作用
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = card.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = scheme.onSurface,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = card.subtitle,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+
+            // 4) 上手步骤（①②③）
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                card.steps.forEachIndexed { index, step ->
+                    GuideStepRow(index = index, text = step, tone = card.tone)
+                }
+            }
+
+            // 5) 提示
+            GuideTipRow(tip = card.tip, tone = card.tone)
+        }
+    }
+}
+
+/** 步骤行：① 序号 + 步骤文案。 */
+@Composable
+private fun GuideStepRow(
+    index: Int,
+    text: String,
+    tone: GuideTone,
+) {
+    val palette = guideSceneColors(tone)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = CIRCLED_NUMBERS[index.coerceIn(0, CIRCLED_NUMBERS.lastIndex)],
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = palette.accent,
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** 提示行：💡 + 一句提示。 */
+@Composable
+private fun GuideTipRow(
+    tip: String,
+    tone: GuideTone,
+) {
+    val palette = guideSceneColors(tone)
+    Surface(
+        shape = CtShapeTokens.listItem,
+        color = palette.soft.copy(alpha = 0.55f),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "💡",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = tip,
+                style = MaterialTheme.typography.bodyMedium,
+                color = palette.ink,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+// =============================================================================
+// 底部翻页栏
+// =============================================================================
+
+@Composable
+private fun GuidePagerBar(
+    pageIndex: Int,
+    pageCount: Int,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val hasPrevious = pageIndex > 0
+    val hasNext = pageIndex < pageCount - 1
+    Surface(color = scheme.surface.copy(alpha = 0.72f)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                onClick = onPrevious,
+                enabled = hasPrevious,
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ChevronLeft,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(text = "上一张", style = MaterialTheme.typography.labelLarge)
+            }
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "${pageIndex + 1} / $pageCount",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            TextButton(
+                onClick = onNext,
+                enabled = hasNext,
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+                Text(text = "下一张", style = MaterialTheme.typography.labelLarge)
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
     }
 }
 
-/** 使用说明分节（纯数据，可测试内容完整性）。 */
-data class GuideSection(
-    val id: String,
-    val title: String,
-    val body: String,
-)
+// =============================================================================
+// 一键总览（ModalBottomSheet）
+// =============================================================================
 
-/**
- * 使用说明内容（只读静态；与 Android 当前页面一一对应）。
- *
- * 口径：不写小程序/网页专属路径；Android 没有的功能不写；新增原生能力（提醒/日历/权限）单独成节。
- */
-object UserGuideContent {
-
-    val sections: List<GuideSection> = listOf(
-        GuideSection(
-            id = "identity",
-            title = "身份核验",
-            body = "首次打开先输入「姓名 + 学号」，与班级名单匹配后进入工具站；换设备需重新核验。" +
-                "身份只在本机保存 29 天，过期或 token 失效时回到身份页重新验证。",
-        ),
-        GuideSection(
-            id = "home",
-            title = "工作台",
-            body = "首页只放「今天要做什么」：今日课程与下一节、宿舍电费、作业待交、通知待处理、常用工具。" +
-                "点「编辑首页」可勾选最多 4 个常用工具；右上「全部 ›」进入工具目录。",
-        ),
-        GuideSection(
-            id = "draw",
-            title = "抽签（三步）",
-            body = "第一步选范围、排除序号、参与名单；第二步可「用此结果分组」；第三步结果单支持剔除重抽、复制/导出图片。" +
-                "返回上一页会保留当前步骤，中断后可继续。",
-        ),
-        GuideSection(
-            id = "group",
-            title = "分组",
-            body = "成员可来自上一步抽签序号或班级名单；设置组数与每组人数后打乱分组，结果可导出图片或再抽签。",
-        ),
-        GuideSection(
-            id = "roster",
-            title = "名册 / 点名",
-            body = "名册按座号展示班级成员与班委角色；勾选成员加入点名名单，点名页切换「到 / 假」并可重置本轮。" +
-                "点名状态随账号同步，换设备可恢复。",
-        ),
-        GuideSection(
-            id = "hw",
-            title = "作业",
-            body = "作业板分「未完成 / 已完成」，勾选完成会同步到云端；支持按截止时间排序与查看即将截止项。" +
-                "在「我的 → 提醒设置」可开启作业截止提醒。",
-        ),
-        GuideSection(
-            id = "nt",
-            title = "班级通知",
-            body = "通知按简报 / 筛选展示，未过期自动展开；长文可查看附件图片与文件。已处理状态随账号同步，" +
-                "管理员可置顶或编辑通知。",
-        ),
-        GuideSection(
-            id = "tt",
-            title = "课表",
-            body = "按周查看课表，可切换周/日视图与上一周/下一周；无课表缓存时可下拉刷新。" +
-                "在课表页可把本周课程写入系统日历（需日历权限）。",
-        ),
-        GuideSection(
-            id = "fit",
-            title = "体测计算器",
-            body = "按性别 / 年级录入各项成绩，按国标计算得分与等级；历史记录最多保存 2 条，可查看国标评分表与导出图片。",
-        ),
-        GuideSection(
-            id = "power",
-            title = "宿舍电费",
-            body = "选择关注宿舍后可看余额与 24 小时 / 7 天 / 30 天趋势；点击或拖动趋势查看采样点详情。" +
-                "13/16 号楼为日更数据，会标注「数据更新较慢 / 参考」。",
-        ),
-        GuideSection(
-            id = "water",
-            title = "水量统计",
-            body = "选择关注宿舍与月份，录入 4 人间 / 6 人间抄表读数；超出免费额度按水费折算扣电，历史记录可删除重录。",
-        ),
-        GuideSection(
-            id = "reminder",
-            title = "提醒设置",
-            body = "「我的 → 提醒设置」可开启作业提醒（每日截止汇总 + 提前 0/1/3 天）与上课提醒（提前 5/10/15 分钟）。" +
-                "首次开启需允许通知权限；系统限制下提醒可能有几分钟延迟。",
-        ),
-        GuideSection(
-            id = "calendar",
-            title = "写日程",
-            body = "课表 / 通知页可「写日程」到系统日历；已授予日历权限时直接写入并提前 10 分钟提醒，" +
-                "未授权时会打开系统日历让你确认保存。",
-        ),
-        GuideSection(
-            id = "permission",
-            title = "权限管理",
-            body = "「我的 → 权限与提醒」查看通知 / 日历权限状态；被永久拒绝时需到系统设置中重新开启。" +
-                "权限只用于本机功能，不会上传通知或日历内容。",
-        ),
-        GuideSection(
-            id = "sort",
-            title = "全部工具与排序",
-            body = "全部工具页长按工具可拖动排序，顺序随账号同步；顶部常用工具由首页「编辑首页」勾选。",
-        ),
-        GuideSection(
-            id = "feedback",
-            title = "反馈建议",
-            body = "「我的 → 反馈建议」把问题或建议发给管理员；正文最多 500 字，不收集联系方式。" +
-                "普通用户只看自己的反馈，管理员可标记已处理。",
-        ),
-        GuideSection(
-            id = "privacy",
-            title = "数据与隐私",
-            body = "作业完成 / 通知已处理 / 抽签 / 分组 / 点名 / 偏好随账号同步，云端仅本人 token 可读；" +
-                "在「数据与隐私」可导出我的数据（JSON，不含 token 与学号明文）、清除云端或本机数据。",
-        ),
-        GuideSection(
-            id = "faq",
-            title = "常见问题",
-            body = "① 打不开/空白：检查网络与身份是否过期；② 数据不一致：到「数据与隐私」手动同步或下拉刷新；" +
-                "③ 提醒不响：检查系统通知权限与电量优化；④ 换设备：重新验证身份后同步；⑤ 其他问题：用反馈建议联系管理员。",
-        ),
-    )
-
-    /** 内容版本（内容较上一版有实质变化时递增；供设置页/关于页展示）。 */
-    const val VERSION: String = "2026-11-08.1"
-
-    fun sectionOf(id: String): GuideSection? = sections.firstOrNull { it.id == id }
-}
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun IntroCard() {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .widthIn(max = 760.dp),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.primaryContainer,
+private fun GuideOverviewSheet(
+    cards: List<GuideCard>,
+    onDismiss: () -> Unit,
+    onJump: (Int) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    CtBottomSheetWithState(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "班级工具站 · 使用说明",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Text(
-                text = "按下面的分节快速了解每个功能；所有数据仅班级身份可访问。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-        }
-    }
-}
-
-@Composable
-private fun GuideSectionCard(index: Int, section: GuideSection) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .widthIn(max = 760.dp),
-        shape = CtShapeTokens.listItem,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Row(modifier = Modifier.padding(14.dp)) {
-            Surface(
-                shape = CtShapeTokens.pill,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(26.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = index.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary,
+        CtBottomSheetHeader(
+            title = "全部说明 · ${cards.size} 张",
+            subtitle = "按分类查看，点条目跳到对应卡",
+        )
+        LazyColumn(
+            modifier = Modifier
+                .heightIn(max = 540.dp)
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            GuideCategory.entries.forEach { category ->
+                val indices = cards.indices.filter { cards[it].category == category }
+                if (indices.isEmpty()) return@forEach
+                item(key = "header-${category.id}") {
+                    GuideOverviewGroupHeader(category = category, count = indices.size)
+                }
+                items(items = indices, key = { cards[it].id }) { index ->
+                    GuideOverviewRow(
+                        card = cards[index],
+                        onClick = {
+                            scope.launch {
+                                sheetState.hide()
+                                onJump(index)
+                            }
+                        },
                     )
                 }
             }
-            Spacer(Modifier.width(10.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = section.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = section.body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }
 
+/** 总览分组标题：分类名 + 张数。 */
+@Composable
+private fun GuideOverviewGroupHeader(
+    category: GuideCategory,
+    count: Int,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, top = 14.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = category.label,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "$count 张",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
 
-@Suppress("unused")
-private val unusedGuideVersion = UserGuideContent.VERSION
+/** 总览条目：小场景图标 + 标题 + 一句话作用 + ›。 */
+@Composable
+private fun GuideOverviewRow(
+    card: GuideCard,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val palette = guideSceneColors(card.tone)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(CtShapeTokens.listItem)
+            .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Surface(
+            modifier = Modifier.size(36.dp),
+            shape = CtShapeTokens.pill,
+            color = palette.soft,
+        ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = guideSceneIcon(card.scene),
+                    contentDescription = null,
+                    tint = palette.ink,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = card.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+            )
+            Text(
+                text = card.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = scheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/** 步骤序号字形（① ② ③ ④；契约要求 3 条，保留 ④ 兜底）。 */
+private val CIRCLED_NUMBERS: List<String> = listOf("①", "②", "③", "④")
