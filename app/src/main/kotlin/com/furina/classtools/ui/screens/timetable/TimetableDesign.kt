@@ -206,36 +206,45 @@ data class TimetableMetrics(
 
 object TimetableLayout {
 
-    /** 手机（<600dp）压缩比例；平板/横屏放大行高与字号。 */
-    fun metricsFor(widthDp: Int, twoPane: Boolean): TimetableMetrics = when {
-        widthDp >= 840 || twoPane -> TimetableMetrics(
-            rowHeightDp = 60,
-            labelWidthDp = 52,
-            headerHeightDp = 46,
-            blockCornerDp = 10,
-            courseNameMaxLines = 3,
-            showEndTime = true,
-            blockPaddingDp = 6,
-        )
+    /** 手机（<600dp）压缩比例；平板/横屏放大行高与字号。大字体时按 fontScale 放大行高，减少课程名截断。 */
+    fun metricsFor(widthDp: Int, twoPane: Boolean, fontScale: Float = 1f): TimetableMetrics {
+        val base = when {
+            widthDp >= 840 || twoPane -> TimetableMetrics(
+                rowHeightDp = 60,
+                labelWidthDp = 52,
+                headerHeightDp = 46,
+                blockCornerDp = 10,
+                courseNameMaxLines = 3,
+                showEndTime = true,
+                blockPaddingDp = 6,
+            )
 
-        widthDp >= 600 -> TimetableMetrics(
-            rowHeightDp = 56,
-            labelWidthDp = 48,
-            headerHeightDp = 44,
-            blockCornerDp = 9,
-            courseNameMaxLines = 2,
-            showEndTime = true,
-            blockPaddingDp = 5,
-        )
+            widthDp >= 600 -> TimetableMetrics(
+                rowHeightDp = 56,
+                labelWidthDp = 48,
+                headerHeightDp = 44,
+                blockCornerDp = 9,
+                courseNameMaxLines = 2,
+                showEndTime = true,
+                blockPaddingDp = 5,
+            )
 
-        else -> TimetableMetrics(
-            rowHeightDp = 52,
-            labelWidthDp = 38,
-            headerHeightDp = 40,
-            blockCornerDp = 8,
-            courseNameMaxLines = 2,
-            showEndTime = false,
-            blockPaddingDp = 4,
+            else -> TimetableMetrics(
+                rowHeightDp = 52,
+                labelWidthDp = 38,
+                headerHeightDp = 40,
+                blockCornerDp = 8,
+                courseNameMaxLines = 2,
+                showEndTime = false,
+                blockPaddingDp = 4,
+            )
+        }
+        val scale = fontScale.coerceIn(1f, 1.35f)
+        if (scale <= 1.01f) return base
+        return base.copy(
+            rowHeightDp = (base.rowHeightDp * scale).toInt(),
+            labelWidthDp = (base.labelWidthDp * scale).toInt(),
+            headerHeightDp = (base.headerHeightDp * scale).toInt(),
         )
     }
 

@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -905,8 +906,9 @@ private fun WeekGrid(
             )
         }
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val metrics = remember(maxWidth, twoPane) {
-                TimetableLayout.metricsFor(maxWidth.value.toInt(), twoPane)
+            val fontScale = LocalDensity.current.fontScale
+            val metrics = remember(maxWidth, twoPane, fontScale) {
+                TimetableLayout.metricsFor(maxWidth.value.toInt(), twoPane, fontScale)
             }
             val labelWidth = metrics.labelWidthDp.dp
             val rowHeight = metrics.rowHeightDp.dp
