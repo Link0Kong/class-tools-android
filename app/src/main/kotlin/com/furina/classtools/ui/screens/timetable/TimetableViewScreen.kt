@@ -698,12 +698,19 @@ private fun TabletBody(
         Column(
             modifier = Modifier
                 .weight(0.34f)
-                .verticalScroll(rememberScrollState())
                 .padding(top = 6.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OngoingOrNextCard(plan = plan, nowMillis = nowMillis)
-            AllCoursesCard(snapshot = snapshot, termStart = termStart, week = displayWeek, dark = dark)
+            // T-08：右栏上半可滚动（下一节 + 全部课程），导出卡固定在底部，两栏底部视觉更平衡。
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OngoingOrNextCard(plan = plan, nowMillis = nowMillis)
+                AllCoursesCard(snapshot = snapshot, termStart = termStart, week = displayWeek, dark = dark)
+            }
             if (onExport != null) {
                 ExportCard(onExport = onExport)
             }
