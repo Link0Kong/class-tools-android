@@ -73,3 +73,11 @@ v4 改进：把 `BlurEffect` 直接设到**录层 `GraphicsLayer.renderEffect`**
 - 每个 P0 项：单测（逻辑）+ 预览/截图（浅深）+ E2E 断言 + 真机手测（用户）。
 - 全局：全量单测 ≥ 现有 994/0 且新增覆盖；快速 E2E 38+ 全绿；Release 冷启动/签名/矩阵复验。
 - 文档：本文件 + `V4_UX_AUDIT.md`（design）+ `V4_NEW_FEATURES_UI.md`（design）+ `VOTE_LEAGUE_POWER_IMPL.md`（contract）+ REPORT_ROUND*。
+
+---
+
+## 附：真实背景模糊落地（2026-11-12，v4.33.0）
+
+- 采用 Haze 1.7.3：`HazeState` 由 `RootTabs` 持有，`CtTabPager` 挂 `hazeSource`，底部 `CtFloatingDock` 挂 `hazeEffect` + `HazeDefaults.style(backgroundColor=surface 55%, blurRadius=24dp, noiseFactor=0.02)`。
+- 设备实测（ct-api37，swiftshader）：dock 区域采样下方卡片色并模糊，文字不透出；E2E 43/0。
+- 旧设备（不支持 RenderEffect）自动降级半透明；页面卡片玻璃化仍为半透明+渐变（性能取舍）。

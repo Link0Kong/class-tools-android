@@ -23,8 +23,8 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 48
-        versionName = "4.32.0"
+        versionCode = 49
+        versionName = "4.33.0"
 
         // CloudBase REST 根地址与公开 Publishable Key（role=anon，设计上公开）。
         // 值来自 gradle.properties（ct.restBaseUrl / ct.publishableKey），便于部署时替换。
@@ -99,6 +99,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.window)
+    implementation(libs.haze)
     implementation(libs.androidx.work.runtime.ktx)
 
     implementation(platform(libs.androidx.compose.bom))

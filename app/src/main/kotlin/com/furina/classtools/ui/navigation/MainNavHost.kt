@@ -77,6 +77,10 @@ import com.furina.classtools.features.group.GroupMember
 import com.furina.classtools.features.home.HomeToolsEditor
 import com.furina.classtools.ui.adaptive.CtAdaptiveContent
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
+import dev.chrisbanes.haze.HazeDefaults
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import com.furina.classtools.ui.components.dock.CtDockDestination
 import com.furina.classtools.ui.components.dock.CtFloatingDock
 import com.furina.classtools.ui.components.dock.CtPageTransitions
@@ -846,6 +850,7 @@ private fun RootTabs(
     onHomeToolsChange: (List<String>) -> Unit,
     onOpenPowerPicker: () -> Unit,
 ) {
+    val hazeState = remember { HazeState() }
     val spec = rememberCtAdaptiveSpec()
     val destinations = remember {
         listOf(
@@ -899,7 +904,9 @@ private fun RootTabs(
     Box(modifier = Modifier.fillMaxSize()) {
         CtTabPager(
             pagerState = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(hazeState),
         ) { page ->
             when (page) {
                 0 -> HomeScreen(
@@ -955,6 +962,14 @@ private fun RootTabs(
             onSelect = onSelectTab,
             pagerOffsetFraction = pagerState.currentPageOffsetFraction,
             modifier = Modifier.align(Alignment.BottomCenter),
+            glassModifier = Modifier.hazeEffect(
+                state = hazeState,
+                style = HazeDefaults.style(
+                    backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+                    blurRadius = 24.dp,
+                    noiseFactor = 0.02f,
+                ),
+            ),
         )
     }
 }
