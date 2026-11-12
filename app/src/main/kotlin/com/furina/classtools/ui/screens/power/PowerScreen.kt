@@ -30,13 +30,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apartment
+import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -184,7 +187,7 @@ fun PowerScreen(
 
     // H-04：从工作台「未关注宿舍」卡进入时，首帧直接弹出选择器（一步完成关注）。
     LaunchedEffect(Unit) {
-        if (initialPickerOpen && !skipLoad && phase == PowerPhase.IDLE && sel.isBlank()) {
+        if (initialPickerOpen && phase == PowerPhase.IDLE && sel.isBlank()) {
             showHousePicker = true
         }
     }
@@ -1091,6 +1094,7 @@ private fun HousePickerSheet(
     onDismiss: () -> Unit,
 ) {
     var building by remember { mutableStateOf(PowerRooms.buildingOf(selectedRv).ifBlank { PowerRooms.BUILDINGS.first() }) }
+    var query by remember { mutableStateOf("") }
     CtBottomSheet(onDismissRequest = onDismiss) {
         CtBottomSheetHeader(
             title = "关注宿舍",
@@ -1100,24 +1104,93 @@ private fun HousePickerSheet(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            CtChipGroup(
-                options = PowerRooms.BUILDINGS.map { CtChipOption(key = it, label = it) },
-                selectedKeys = setOf(building),
-                onToggle = { building = it },
-                multiSelect = false,
-            )
-            val rooms = PowerRooms.roomsOfBuilding(building)
-            rooms.chunked(4).forEach { chunk ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    chunk.forEach { room ->
-                        RoomButton(
-                            room = room,
-                            selected = room.rv == selectedRv,
-                            onClick = { onPick(room.rv) },
-                            modifier = Modifier.weight(1f),
-                        )
+            // P-03：房间多时可直接搜索房间号/楼栋，结果跨楼栋展示。
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it.take(20) },
+                singleLine = true,
+                label = { Text("搜索房间号 / 楼栋") },
+                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Rounded.Clear, contentDescription = "清除搜索")
+                        }
                     }
-                    repeat(4 - chunk.size) { Spacer(modifier = Modifier.weight(1f)) }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (query.isBlank()) {
+                CtChipGroup(
+                    options = PowerRooms.BUILDINGS.map { CtChipOption(key = it, label = it) },
+                    selectedKeys = setOf(building),
+                    onToggle = { building = it },
+                    multiSelect = false,
+                )
+                val rooms = PowerRooms.roomsOfBuilding(building)
+                rooms.chunked(4).forEach { chunk ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        chunk.forEach { room ->
+                            RoomButton(
+                                room = room,
+                                selected = room.rv == selectedRv,
+                                onClick = { onPick(room.rv) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        repeat(4 - chunk.size) { Spacer(modifier = Modifier.weight(1f)) }
+                    }
+                }
+            } else {
+                val matches = remember(query) {
+                    val q = query.trim()
+                    PowerRooms.BUILDINGS.flatMap { b ->
+                        PowerRooms.roomsOfBuilding(b).map { room -> b to room }
+                    }.filter { (b, room) ->
+                        room.room.contains(q, ignoreCase = true) || b.contains(q, ignoreCase = true)
+                    }.take(30)
+                }
+                if (matches.isEmpty()) {
+                    Text(
+                        text = "未找到房间",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 260.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        matches.forEach { (b, room) ->
+                            val selected = room.rv == selectedRv
+                            Surface(
+                                onClick = { onPick(room.rv) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurface,
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = "$b · ${room.room}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (selected) {
+                                        Text("已关注", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

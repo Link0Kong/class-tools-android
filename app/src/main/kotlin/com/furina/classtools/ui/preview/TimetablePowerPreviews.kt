@@ -367,6 +367,19 @@ private fun PowerIdlePreview() {
     }
 }
 
+@Preview(name = "27b 电费 房间选择器 · 浅色", showBackground = true, widthDp = 412, heightDp = 820)
+@Composable
+private fun PowerPickerPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        PowerScreen(
+            onBack = {},
+            repository = PreviewPowerRepository,
+            skipLoad = true,
+            initialPickerOpen = true,
+        )
+    }
+}
+
 @Preview(name = "28 电费 错误态 · 深色", showBackground = true, widthDp = 412, heightDp = 640)
 @Composable
 private fun PowerErrorPreview() {
