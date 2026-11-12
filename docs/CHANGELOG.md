@@ -1,5 +1,10 @@
 # 版本记录（Android 客户端）
 
+## v4.22.0 · 2026-11-12（性能：应用级 Baseline Profile）
+
+- 接入 androidx.baselineprofile 1.5.0：18,166 条规则（908 条 app 自身）+ 启动 profile 随 APK 下发。
+- 模拟器：profile 编译后冷启动中位 750ms vs 对照 843ms（约 -11%）；安装后默认 verify 阶段差异不明显。
+- 单测 1065/0；快速 E2E **43/0**（959.2s）；Release 2,987,256 B / SHA-256 `BCEF2431…07A1`（vc38）。
 ## v4.21.0 · 2026-11-12（P2：通知卡数据新鲜度）
 
 - 工作台通知卡就绪时显示「更新 HH:mm」。

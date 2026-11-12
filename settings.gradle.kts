@@ -27,3 +27,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ClassToolsAndroid"
 include(":app")
+include(":baseline-profile")

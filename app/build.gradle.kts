@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.baselineprofile)
 }
 
 // 本机 release 签名：keystore.properties 存在时启用（该文件与 key/ 目录不进版本库）。
@@ -22,8 +23,8 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 37
-        versionName = "4.21.0"
+        versionCode = 38
+        versionName = "4.22.0"
 
         // CloudBase REST 根地址与公开 Publishable Key（role=anon，设计上公开）。
         // 值来自 gradle.properties（ct.restBaseUrl / ct.publishableKey），便于部署时替换。
@@ -84,7 +85,13 @@ kotlin {
     jvmToolchain(17)
 }
 
+baselineProfile {
+    saveInSrc = true
+    automaticGenerationDuringBuild = false
+}
+
 dependencies {
+    baselineProfile(project(":baseline-profile"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
