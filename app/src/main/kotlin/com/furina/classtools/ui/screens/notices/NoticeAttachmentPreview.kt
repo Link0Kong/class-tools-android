@@ -1,9 +1,13 @@
 package com.furina.classtools.ui.screens.notices
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -35,9 +41,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -406,6 +415,7 @@ fun NoticeImageFullDialog(
     onDismiss: () -> Unit,
     imageLoader: PptImageLoader? = null,
 ) {
+    val context = LocalContext.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -413,7 +423,7 @@ fun NoticeImageFullDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(onClick = onDismiss),
+                .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
             contentAlignment = Alignment.Center,
         ) {
             Surface(
@@ -424,6 +434,13 @@ fun NoticeImageFullDialog(
                 Box(contentAlignment = Alignment.Center) {
                     var image by remember(source, imageLoader) { mutableStateOf<ImageBitmap?>(null) }
                     var failed by remember(source, imageLoader) { mutableStateOf(false) }
+                    // N-08：全屏大图支持双指缩放/拖动/双击复位；单击背景关闭。
+                    var scale by remember(source) { mutableFloatStateOf(1f) }
+                    var offset by remember(source) { mutableStateOf(Offset.Zero) }
+                    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+                        scale = (scale * zoomChange).coerceIn(1f, 4f)
+                        offset = if (scale > 1.01f) offset + panChange else Offset.Zero
+                    }
                     LaunchedEffect(source, imageLoader) {
                         val value = source
                         if (value.isNullOrBlank()) {
@@ -448,7 +465,28 @@ fun NoticeImageFullDialog(
                             bitmap = image!!,
                             contentDescription = title,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize().padding(12.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp)
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                    translationX = offset.x
+                                    translationY = offset.y
+                                }
+                                .transformable(transformState)
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onDoubleTap = {
+                                            if (scale > 1.01f) {
+                                                scale = 1f
+                                                offset = Offset.Zero
+                                            } else {
+                                                scale = 2.5f
+                                            }
+                                        },
+                                    )
+                                },
                         )
 
                         failed -> Text(
@@ -458,6 +496,32 @@ fun NoticeImageFullDialog(
                         )
 
                         else -> CircularProgressIndicator(color = Color.White)
+                    }
+                    if (image != null) {
+                        Text(
+                            text = "双指缩放 · 双击复位",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.65f),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 28.dp),
+                        )
+                    }
+                    // 外置签名 URL 的图片可分享链接（data URI 旧数据不分享）。
+                    val shareUrl = source?.takeIf { NoticeAttachmentSource.isHttpUrl(it) }
+                    if (shareUrl != null) {
+                        IconButton(
+                            onClick = {
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, shareUrl)
+                                }
+                                context.startActivity(Intent.createChooser(send, "分享图片链接"))
+                            },
+                            modifier = Modifier.align(Alignment.TopStart),
+                        ) {
+                            Icon(Icons.Rounded.Share, contentDescription = "分享图片链接", tint = Color.White)
+                        }
                     }
                     IconButton(
                         onClick = onDismiss,
