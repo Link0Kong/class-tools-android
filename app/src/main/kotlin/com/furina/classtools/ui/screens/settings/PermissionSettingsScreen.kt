@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.settings
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.permission.PermissionState
 import com.furina.classtools.data.permission.PermissionTexts
@@ -145,6 +148,41 @@ fun PermissionSettingsScreen(
                     horizontalArrangement = Arrangement.End,
                 ) {
                     TextButton(onClick = { refreshTick++ }) { Text("重新检测权限状态") }
+                }
+
+                // 实时活动通知渠道：跳系统「通知类别」设置（Android 16 实时更新 / ColorOS 流体云）。
+                CtGlassCard(
+                    shape = CtShapeTokens.hero,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "实时活动通知",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                "上传进度 · 投票倒计时（Android 16 实时更新 / 流体云）",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        TextButton(onClick = {
+                            LiveUpdateNotifier.ensureChannel(context)
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                        putExtra(Settings.EXTRA_CHANNEL_ID, LiveUpdateNotifier.CHANNEL_ID)
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    },
+                                )
+                            }
+                        }) { Text("设置") }
+                    }
                 }
 
                 if (onOpenReminderSettings != null) {

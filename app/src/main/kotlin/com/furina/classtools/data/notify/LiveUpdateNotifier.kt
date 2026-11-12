@@ -42,7 +42,8 @@ object LiveUpdateNotifier {
     private const val PPT_RESULT_NOTIFICATION_ID = 7411
     private const val PROGRESS_MAX = 100
 
-    private fun ensureChannel(context: Context) {
+    /** 预先创建「实时活动」通知渠道（设置入口跳转前调用）。 */
+    fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
