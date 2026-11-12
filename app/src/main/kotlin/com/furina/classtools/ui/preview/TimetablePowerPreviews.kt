@@ -169,6 +169,25 @@ private fun TimetableDayLightPreview() {
     }
 }
 
+@Preview(
+    name = "21b 课表 周视图 + 全部课程折叠卡（手机，整页）",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 2600,
+)
+@Composable
+private fun TimetableAllCoursesPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        TimetableViewScreen(
+            onBack = {},
+            repository = PreviewTimetableRepository,
+            initialSnapshot = previewTtSnapshot,
+            skipLoad = true,
+            nowMillis = PREVIEW_NOW,
+        )
+    }
+}
+
 @Preview(name = "22 课表 周视图 · 深色", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
 private fun TimetableWeekDarkPreview() {

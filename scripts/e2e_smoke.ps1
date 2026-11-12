@@ -191,6 +191,9 @@ $L = @{
     NotifDiagBtn   = U8 '56uL5Y2z5qOA5p+l'                           # reminder: run check + diagnostics (v3)
     LoginEdu       = U8 '55m75b2V5pWZ5Yqh'                           # timetable: login entry (v3)
     ExportTt       = U8 '5a+85Ye66K++6KGo5Zu+54mH'                   # timetable: export button (v3)
+    AllCourses     = U8 '5YWo6YOo6K++56iL'                           # timetable: all courses card (T-07)
+    AllCoursesMore = U8 '5bGV5byA5YWo6YOo6K++56iL'                   # timetable: expand all courses (a11y)
+    AllCoursesLess = U8 '5pS26LW35YWo6YOo6K++56iL'                   # timetable: collapse all courses (a11y)
     DiagTool       = U8 '6K+K5pat'                                   # all tools: diagnosis card (v3)
     DiagSub        = U8 '5pyN5Yqh5YGl5bq3'                           # diag page: service health subtitle
     DiagLocal      = U8 '5pys5py65Luj55CG'                           # diag section: local agent
@@ -1074,11 +1077,21 @@ function Invoke-Scenario {
     $ttLogin = Wait-UiText -Label $L.LoginEdu -TimeoutSec 5
     $ttExport = Wait-UiText -Label $L.ExportTt -TimeoutSec 3
     if (-not $ttLogin -and -not $ttExport) { Write-Line '  note: timetable login/export entries not visible in this state' }
+    # T-07: 手机端「全部课程」折叠卡（默认收起，可展开）
+    $ttAllCourses = Wait-UiTextScroll -Label $L.AllCourses -ScrollTries 8 -TimeoutSec 5
+    $ttAllCoursesExpanded = $false
+    if ($ttAllCourses) {
+        if (Wait-UiText -Label $L.AllCoursesMore -TimeoutSec 3) {
+            Tap-UiText -Label $L.AllCourses -TimeoutSec 5
+            Start-Sleep -Milliseconds 500
+            $ttAllCoursesExpanded = [bool](Wait-UiText -Label $L.AllCoursesLess -TimeoutSec 4)
+        }
+    }
     Save-Shot '4x_timetable_v3.png'
     $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
     Start-Sleep -Milliseconds 1200
     if (-not (Wait-ScreenKind 'ALL' 15)) { Go-AllTools }
-    Add-Step 'timetable_v3' 'PASS' ("login={0} export={1}" -f [bool]$ttLogin, [bool]$ttExport) $swStep.ElapsedMilliseconds
+    Add-Step 'timetable_v3' 'PASS' ("login={0} export={1} allCourses={2} expanded={3}" -f [bool]$ttLogin, [bool]$ttExport, [bool]$ttAllCourses, [bool]$ttAllCoursesExpanded) $swStep.ElapsedMilliseconds
 
     # STEP 5c (v3): diagnosis tool - open page, assert >=3 sections, BACK; never press report/fix buttons
     Write-Line '--- step: diagnosis tool page'

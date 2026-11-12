@@ -34,6 +34,8 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
@@ -593,6 +595,14 @@ private fun CompactBody(
                 )
             }
         }
+        // T-07：手机端提供「全部课程」折叠卡（默认收起），与平板右栏能力对齐。
+        AllCoursesCard(
+            snapshot = snapshot,
+            termStart = termStart,
+            week = displayWeek,
+            dark = dark,
+            collapsible = true,
+        )
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
@@ -1258,7 +1268,10 @@ private fun AllCoursesCard(
     termStart: LocalDate?,
     week: Int?,
     dark: Boolean,
+    /** T-07：手机端默认收起，避免周表下方内容过长。 */
+    collapsible: Boolean = false,
 ) {
+    var expanded by remember(collapsible) { mutableStateOf(!collapsible) }
     val groups = remember(snapshot, termStart, week) {
         snapshot.c
             .filter { TtCalendar.isActive(it, week) }
@@ -1278,12 +1291,29 @@ private fun AllCoursesCard(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text = "全部课程（${groups.size}）",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (groups.isEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (collapsible) Modifier.clickable { expanded = !expanded } else Modifier),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "全部课程（${groups.size}）",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                if (collapsible) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = if (expanded) "收起全部课程" else "展开全部课程",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+            if (expanded) {
+                if (groups.isEmpty()) {
                 Text(
                     text = "本周无课",
                     style = MaterialTheme.typography.bodySmall,
@@ -1319,6 +1349,7 @@ private fun AllCoursesCard(
                         )
                     }
                 }
+            }
             }
         }
     }
