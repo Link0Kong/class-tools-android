@@ -148,6 +148,8 @@ fun FitScreen(
     var renameIndex by remember { mutableStateOf<Int?>(null) }
     var deleteIndex by remember { mutableStateOf<Int?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
+    // D-07：删除后 5 秒内可撤销（撤销=恢复本地列表并按原 id 重新保存）。
+    var undoRecord by remember { mutableStateOf<FitRecord?>(null) }
 
     val calc: FitCalc = remember(input) { FitScoring.calc(input) }
 
@@ -356,12 +358,13 @@ fun FitScreen(
             AlertDialog(
                 onDismissRequest = { deleteIndex = null },
                 title = { Text("删除记录") },
-                text = { Text("删除后不可恢复（云端记录由 Lead 接线同步删除）") },
+                text = { Text("删除后可在提示条中撤销（云端会同步删除）") },
                 confirmButton = {
                     TextButton(onClick = {
                         val removed = history.getOrNull(index)
                         history = FitHistory.deleteAt(history, index)
                         removed?.let { onDelete(it) }
+                        undoRecord = removed
                         deleteIndex = null
                         toast = "已删除"
                     }) { Text("删除") }
@@ -387,8 +390,12 @@ fun FitScreen(
 
         toast?.let { message ->
             LaunchedEffect(message) {
-                delay(2200)
-                if (toast == message) toast = null
+                // 有可撤销记录时给足 5 秒操作窗口，否则保持 2.2 秒。
+                delay(if (undoRecord != null) 5000 else 2200)
+                if (toast == message) {
+                    toast = null
+                    undoRecord = null
+                }
             }
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                 Surface(
@@ -397,11 +404,27 @@ fun FitScreen(
                     color = MaterialTheme.colorScheme.inverseSurface,
                     contentColor = MaterialTheme.colorScheme.inverseOnSurface,
                 ) {
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 16.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
+                    ) {
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        val pending = undoRecord
+                        if (pending != null) {
+                            TextButton(onClick = {
+                                val restored = (listOf(pending) + history).take(FitRecord.MAX_RECORDS)
+                                history = restored
+                                onSave(pending, restored, emptyList())
+                                undoRecord = null
+                                toast = "已恢复"
+                            }) {
+                                Text("撤销")
+                            }
+                        }
+                    }
                 }
             }
         }
