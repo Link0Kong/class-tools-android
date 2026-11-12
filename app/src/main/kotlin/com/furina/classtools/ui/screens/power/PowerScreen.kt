@@ -5,6 +5,11 @@ package com.furina.classtools.ui.screens.power
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -853,20 +858,27 @@ private fun TrendSection(
                     TextButton(onClick = onRetry) { Text("重试") }
                 }
             } else {
-                PowerTrendChart(
-                    trend = trend,
-                    range = range,
-                    slow = slowRoom,
-                    changeDots = changeDots,
-                    cursorIndex = cursorIndex,
-                    onCursor = onCursor,
-                    yLabelHi = PowerStats.fmtQ(trend.hi),
-                    yLabelMid = PowerStats.fmtQ(trend.mid),
-                    yLabelLo = PowerStats.fmtQ(trend.lo),
-                    legendStart = PowerStats.fmtQ(trend.points.firstOrNull()?.q),
-                    legendCurrent = PowerStats.fmtQ(trend.points.lastOrNull()?.q),
-                    legendDrop = PowerStats.fmtDrop(rangeStats.drop),
-                )
+                // P-05：切档/刷新时图表淡入淡出，避免瞬时跳变。
+                AnimatedContent(
+                    targetState = trend,
+                    transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
+                    label = "powerTrend",
+                ) { shownTrend ->
+                    PowerTrendChart(
+                        trend = shownTrend,
+                        range = range,
+                        slow = slowRoom,
+                        changeDots = changeDots,
+                        cursorIndex = cursorIndex,
+                        onCursor = onCursor,
+                        yLabelHi = PowerStats.fmtQ(shownTrend.hi),
+                        yLabelMid = PowerStats.fmtQ(shownTrend.mid),
+                        yLabelLo = PowerStats.fmtQ(shownTrend.lo),
+                        legendStart = PowerStats.fmtQ(shownTrend.points.firstOrNull()?.q),
+                        legendCurrent = PowerStats.fmtQ(shownTrend.points.lastOrNull()?.q),
+                        legendDrop = PowerStats.fmtDrop(rangeStats.drop),
+                    )
+                }
             }
 
             if (noUpdateText.isNotBlank()) {

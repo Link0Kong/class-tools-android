@@ -328,10 +328,17 @@ fun DataPrivacyScreen(
             icon = { Icon(Icons.Rounded.DeleteForever, contentDescription = null) },
             title = { Text("清除云端数据？") },
             text = {
-                Text(
-                    "将清空本人在云端的 userdata、作业/通知标记与体测历史。\n" +
-                        "此操作**不可恢复**；网页端/微信小程序同账号的数据也会被清空。",
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // M-07：清除前给出范围与数量明细，避免不清楚会清掉什么。
+                    val s = summary
+                    if (s != null) {
+                        Text(
+                            "将清除 ${s.userdataSections} 项同步配置、" +
+                                "${s.marksCount} 条作业/通知标记、${s.fitRecsCount} 条体测历史。",
+                        )
+                    }
+                    Text("此操作不可恢复；网页端/微信小程序同账号的数据也会被清空。")
+                }
             },
             confirmButton = {
                 TextButton(
