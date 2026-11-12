@@ -282,6 +282,13 @@ fun HomeScreen(
     val ntItems = remember(ntEntries, marks, nowMillis) {
         HomeWorkbenchLogic.noticeRotation(ntEntries, marks, nowMillis)
     }
+    // G13：通知卡展示最后更新时间，便于判断数据是否过期。
+    val noticesUpdatedText = remember(noticesData?.fetchedAt) {
+        noticesData?.fetchedAt?.takeIf { it > 0 }?.let { ts ->
+            java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                .format(java.util.Date(ts))
+        }.orEmpty()
+    }
     val powerCard = remember(effectivePowerSel, powerRow, powerLow) {
         HomeWorkbenchLogic.powerCard(effectivePowerSel, powerRow, powerLow)
     }
@@ -419,6 +426,7 @@ fun HomeScreen(
                             errorText = noticesFailedMessage,
                             onOpen = { openToolId("nt") },
                             onRetry = ::retry,
+                            updatedText = noticesUpdatedText,
                         )
                         QuickToolsSection(
                             quickTools = quickTools,
@@ -480,6 +488,7 @@ fun HomeScreen(
                         errorText = noticesFailedMessage,
                         onOpen = { openToolId("nt") },
                         onRetry = ::retry,
+                        updatedText = noticesUpdatedText,
                     )
                     QuickToolsSection(
                         quickTools = quickTools,
@@ -774,6 +783,7 @@ private fun NoticesCard(
     errorText: String,
     onOpen: () -> Unit,
     onRetry: () -> Unit = {},
+    updatedText: String = "",
 ) {
     TaskCard(
         emoji = "📢",
@@ -801,6 +811,13 @@ private fun NoticesCard(
                 item != null -> RotatingText(item)
                 else -> HomeMutedLine("暂无待处理通知")
             }
+        }
+        if (state == NoticeHomeState.READY && updatedText.isNotBlank()) {
+            Text(
+                text = "更新 $updatedText",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
