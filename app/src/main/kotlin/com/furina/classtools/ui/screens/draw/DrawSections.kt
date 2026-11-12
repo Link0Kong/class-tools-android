@@ -49,6 +49,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -226,6 +228,7 @@ fun DrawConfigCard(
                     checked = config.allowDuplicates,
                     onCheckedChange = { onConfigChange(config.copy(allowDuplicates = it)) },
                     enabled = enabled,
+                    modifier = Modifier.semantics { contentDescription = "允许重复" },
                 )
             }
 
@@ -484,7 +487,7 @@ fun DrawResultCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(checked = autoRedraw, onCheckedChange = onToggleAutoRedraw)
+                Switch(checked = autoRedraw, onCheckedChange = onToggleAutoRedraw, modifier = Modifier.semantics { contentDescription = "剔除后自动重抽" })
             }
 
             Text(

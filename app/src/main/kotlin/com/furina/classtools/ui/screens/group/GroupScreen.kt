@@ -496,6 +496,7 @@ private fun ConfigCard(
                 Switch(
                     checked = config.shuffle,
                     onCheckedChange = { onUpdate(config.copy(shuffle = it)) },
+                    modifier = Modifier.semantics { contentDescription = "打乱后再分组" },
                 )
             }
 
