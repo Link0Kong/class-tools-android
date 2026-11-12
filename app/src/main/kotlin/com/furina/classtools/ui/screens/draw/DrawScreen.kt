@@ -108,6 +108,9 @@ fun DrawScreen(
     val scope = rememberCoroutineScope()
     val random: DrawRandom = remember { defaultDrawRandom() }
     val snackbar = remember { SnackbarHostState() }
+    // D-08：参数已自动持久化的首次提示（不打扰；仅本屏首次保存成功时出现）。
+    var configSavedHintShown by remember { mutableStateOf(false) }
+    var configFirstPersistDone by remember { mutableStateOf(false) }
 
     val initialWorkflow = remember {
         val base = DrawWorkflowState(step = initialStep, config = initialConfig)
@@ -195,7 +198,16 @@ fun DrawScreen(
         val store = configStore ?: return@LaunchedEffect
         if (session == null) return@LaunchedEffect
         delay(PERSIST_DEBOUNCE_MS)
-        runCatching { store.save(workflow.config) }
+        val saved = runCatching { store.save(workflow.config) }.isSuccess
+        if (saved) {
+            if (!configFirstPersistDone) {
+                // 首次持久化通常是恢复的旧参数，不提示；用户改动后的首次保存再提示。
+                configFirstPersistDone = true
+            } else if (!configSavedHintShown) {
+                configSavedHintShown = true
+                snackbar.showSnackbar("参数已保存")
+            }
+        }
     }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {

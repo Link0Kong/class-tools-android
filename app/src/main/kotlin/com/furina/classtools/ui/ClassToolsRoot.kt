@@ -1,5 +1,6 @@
 package com.furina.classtools.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,6 +43,7 @@ fun ClassToolsRoot(
         initialValue = SessionState.Loading,
     )
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // 把会话同步给数据层（tokenProvider / currentSid 读取），并做 29 天本地过期判定。
     LaunchedEffect(sessionState) {
@@ -91,6 +94,8 @@ fun ClassToolsRoot(
                 scope.launch {
                     container.authRepository.logout()
                     container.signOut()
+                    // M-02：退出登录给一个明确结果提示。
+                    Toast.makeText(context, "已退出登录", Toast.LENGTH_SHORT).show()
                 }
             },
         )
