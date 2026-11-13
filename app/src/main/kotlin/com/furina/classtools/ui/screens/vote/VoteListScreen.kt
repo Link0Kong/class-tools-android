@@ -3,6 +3,7 @@ package com.furina.classtools.ui.screens.vote
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -57,10 +58,9 @@ import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.ExpressiveBackground
-import com.furina.classtools.ui.components.expressive.CtFilterChipRow
-import com.furina.classtools.ui.components.expressive.CtPressableCard
-import com.furina.classtools.ui.components.expressive.CtSegmentOption
-import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
+import com.furina.classtools.ui.components.tool.CtToolChip
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.theme.CtShapeTokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -230,24 +230,27 @@ fun VoteListScreen(
                                 .padding(top = 4.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            CtSegmentedButtons(
+                            CtToolSegmented(
                                 options = listOf(
-                                    CtSegmentOption("open", "进行中 ${current?.openCount ?: 0}"),
-                                    CtSegmentOption("closed", "已结束 ${current?.closedCount ?: 0}"),
+                                    "进行中 ${current?.openCount ?: 0}",
+                                    "已结束 ${current?.closedCount ?: 0}",
                                 ),
-                                selectedKey = if (showClosed) "closed" else "open",
-                                onSelect = { key -> showClosed = key == "closed" },
-                                showCheckIcon = false,
+                                selectedIndex = if (showClosed) 1 else 0,
+                                onSelect = { index -> showClosed = index == 1 },
                             )
                             if (current?.polls?.any { it.mine } == true) {
-                                CtFilterChipRow(
-                                    options = listOf(
-                                        com.furina.classtools.ui.components.expressive.CtChipOption("all", "全部"),
-                                        com.furina.classtools.ui.components.expressive.CtChipOption("mine", "我发起的"),
-                                    ),
-                                    selectedKey = if (mineOnly) "mine" else "all",
-                                    onSelect = { key -> mineOnly = key == "mine" },
-                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    CtToolChip(
+                                        text = "全部",
+                                        selected = !mineOnly,
+                                        onClick = { mineOnly = false },
+                                    )
+                                    CtToolChip(
+                                        text = "我发起的",
+                                        selected = mineOnly,
+                                        onClick = { mineOnly = true },
+                                    )
+                                }
                             }
                             if (backgroundError != null || current?.fromCache == true) {
                                 VoteOfflineBanner(
@@ -284,7 +287,8 @@ fun VoteListScreen(
                                             "换个筛选条件看看"
                                         },
                                     )
-                                    Button(
+                                    CtToolPrimaryButton(
+                                        text = if (current == null || current.polls.isEmpty()) "发起投票" else "查看全部",
                                         onClick = {
                                             if (current == null || current.polls.isEmpty()) {
                                                 onCreate()
@@ -293,10 +297,8 @@ fun VoteListScreen(
                                                 showClosed = false
                                             }
                                         },
-                                        shape = CtShapeTokens.pill,
-                                    ) {
-                                        Text(if (current == null || current.polls.isEmpty()) "发起投票" else "查看全部")
-                                    }
+                                        modifier = Modifier.widthIn(max = 260.dp),
+                                    )
                                 }
                             } else if (spec.isExpanded) {
                                 LazyVerticalGrid(
@@ -352,15 +354,9 @@ private fun VoteCard(
     onClick: () -> Unit,
 ) {
     val audienceTag = VoteLogic.audienceTag(summary.audience, summary.audienceCount)
-    CtPressableCard(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
+    VoteToolCard(onClick = onClick) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.Top) {
@@ -384,13 +380,14 @@ private fun VoteCard(
                 }
             }
             VoteTagRow(
+                // 右上角已有「我已投」胶囊，避免标签行重复同一关键字
                 tags = voteTags(
                     settings = summary.settings,
                     closed = summary.closed,
                     hasVoted = summary.hasVoted,
                     audienceTag = audienceTag,
                     mine = summary.mine,
-                ),
+                ).filterNot { it == "我已投" },
             )
             androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
                 VoteCountdownPill(closed = summary.closed, deadline = summary.deadline, nowMillis = nowMillis)

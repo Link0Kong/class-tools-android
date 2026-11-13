@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -74,6 +76,8 @@ import com.furina.classtools.data.vote.VoteRepository
 import com.furina.classtools.data.vote.VoteResult
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.CtLoading
@@ -319,26 +323,18 @@ fun VoteDetailScreen(
                             }
                             if (poll.description.isNotBlank()) {
                                 item(key = "desc") {
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = CtShapeTokens.toolCard,
-                                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    ) {
+                                    CtToolCard {
                                         Text(
                                             text = poll.description,
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.padding(14.dp),
                                         )
                                     }
                                 }
                             }
                             item(key = "options-title") {
-                                Text(
-                                    text = if (resultsVisible) "选项与结果" else "选项",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 4.dp),
+                                CtToolSectionHeader(
+                                    title = if (resultsVisible) "选项与结果" else "选项",
                                 )
                             }
                             items(items = poll.options, key = { it.id }) { option ->
@@ -516,13 +512,9 @@ private fun VoteDetailHero(
     onRefresh: () -> Unit,
 ) {
     val poll = detail.poll
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.hero,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
+    CtToolCard {
         Column(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
@@ -579,33 +571,26 @@ private fun VoteOptionRow(
     total: Int,
     onClick: () -> Unit,
 ) {
-    val container = if (checked) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
     val percent = VoteLogic.percent(count, total)
+    val ringColor = if (checked) MaterialTheme.colorScheme.primary else Color.Transparent
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(CtShapeTokens.listItem)
-            .background(container)
-            .then(
-                if (checked) {
-                    Modifier.border(1.dp, MaterialTheme.colorScheme.primary, CtShapeTokens.listItem)
-                } else {
-                    Modifier
-                },
-            )
+            .clip(RoundedCornerShape(24.dp))
+            .border(1.5.dp, ringColor, RoundedCornerShape(24.dp))
             .selectable(
                 selected = checked,
                 enabled = enabled,
                 role = if (singleChoice) Role.RadioButton else Role.Checkbox,
                 onClick = onClick,
-            )
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        CtToolCard(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (singleChoice) {
                 RadioButton(selected = checked, onClick = null, enabled = enabled)
@@ -652,6 +637,8 @@ private fun VoteOptionRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+            }
+        }
     }
 }
 
@@ -663,13 +650,9 @@ private fun VoteHiddenResults(
     hasVoted: Boolean,
     total: Int,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
+    CtToolCard {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
@@ -706,13 +689,9 @@ private fun VoteVotersCard(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val shown = if (expanded) voters else voters.take(20)
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
+    CtToolCard {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
@@ -758,13 +737,13 @@ private fun VoteDetailActionBar(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 2.dp,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val hint = when {
@@ -788,7 +767,7 @@ private fun VoteDetailActionBar(
                 enabled = blockReason == null && selectedCount > 0 && !submitting,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 48.dp),
+                    .heightIn(min = 52.dp),
                 shape = CtShapeTokens.pill,
             ) {
                 if (submitting) {

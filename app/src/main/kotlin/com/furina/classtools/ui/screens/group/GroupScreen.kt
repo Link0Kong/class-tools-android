@@ -2,6 +2,7 @@
 
 package com.furina.classtools.ui.screens.group
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,6 +71,10 @@ import com.furina.classtools.features.group.GroupWorkflow
 import com.furina.classtools.features.group.GroupWorkflowState
 import com.furina.classtools.features.group.SeededGroupRandom
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSegmented
+import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
@@ -228,10 +233,6 @@ fun GroupScreen(
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             CtTopBar(
                 title = "分组",
-                subtitle = when (state.step) {
-                    GroupStep.CONFIG -> "配置 · 第 2 步"
-                    GroupStep.RESULT -> "分组结果 · 第 2 步"
-                },
                 onBack = onBack,
                 actions = {
                     if (state.step == GroupStep.RESULT) {
@@ -312,7 +313,7 @@ private fun GroupContent(
                         modifier = Modifier.weight(0.42f).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        StepIndicator(state.step)
+                        StepIndicator(state.step, onBackToConfig)
                         ConfigCard(
                             config = state.config,
                             memberCount = effectiveMembers.size,
@@ -348,7 +349,7 @@ private fun GroupContent(
                         .padding(horizontal = padding),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    StepIndicator(state.step)
+                    StepIndicator(state.step, onBackToConfig)
                     when (state.step) {
                         GroupStep.CONFIG -> ConfigCard(
                             config = state.config,
@@ -382,39 +383,15 @@ private fun GroupContent(
 }
 
 @Composable
-private fun StepIndicator(step: GroupStep) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        StepPill(text = "1 配置", active = step == GroupStep.CONFIG, done = step == GroupStep.RESULT)
-        Text("→", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        StepPill(text = "2 分组结果", active = step == GroupStep.RESULT, done = false)
-        Spacer(modifier = Modifier.weight(1f))
-        Text(
-            text = "第 2 步 / 3",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun StepPill(text: String, active: Boolean, done: Boolean) {
-    val container = when {
-        active -> MaterialTheme.colorScheme.primaryContainer
-        done -> MaterialTheme.colorScheme.secondaryContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh
-    }
-    Surface(shape = CtShapeTokens.pill, color = container) {
-        Text(
-            text = if (done) "$text ✓" else text,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-        )
-    }
+private fun StepIndicator(step: GroupStep, onBackToConfig: () -> Unit, modifier: Modifier = Modifier) {
+    CtToolSegmented(
+        options = listOf("1 配置", "2 分组结果"),
+        selectedIndex = if (step == GroupStep.CONFIG) 0 else 1,
+        onSelect = { index ->
+            if (index == 0 && step == GroupStep.RESULT) onBackToConfig()
+        },
+        modifier = modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -426,103 +403,90 @@ private fun ConfigCard(
     onUpdate: (GroupConfig) -> Unit,
     onOpenRosterPicker: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("成员来源", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            CtSegmentedButtons(
-                options = listOf(
-                    CtSegmentOption(GroupSource.PREV.wire, GroupSource.PREV.label),
-                    CtSegmentOption(GroupSource.NAMES.wire, GroupSource.NAMES.label),
-                ),
-                selectedKey = config.source.wire,
-                onSelect = { onUpdate(config.copy(source = GroupSource.fromWire(it))) },
-                showCheckIcon = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = "成员：${memberCount} 人",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
+    CtToolCard(title = "分组设置") {
+        CtToolSectionHeader(title = "成员来源")
+        CtToolSegmented(
+            options = listOf(GroupSource.PREV.label, GroupSource.NAMES.label),
+            selectedIndex = if (config.source == GroupSource.PREV) 0 else 1,
+            onSelect = { index ->
+                onUpdate(
+                    config.copy(
+                        source = if (index == 0) GroupSource.PREV else GroupSource.NAMES,
+                    ),
                 )
-                if (config.source == GroupSource.NAMES) {
-                    TextButton(onClick = onOpenRosterPicker) {
-                        Text("选择名单（${config.selectedSeats.size}/${rosterCount}）")
-                    }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "成员：${memberCount} 人",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            if (config.source == GroupSource.NAMES) {
+                TextButton(onClick = onOpenRosterPicker) {
+                    Text("选择名单（${config.selectedSeats.size}/$rosterCount）")
                 }
             }
+        }
 
-            Text("分组方式", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            CtSegmentedButtons(
-                options = listOf(
-                    CtSegmentOption(GroupMode.GROUPS.wire, GroupMode.GROUPS.label),
-                    CtSegmentOption(GroupMode.PER_GROUP.wire, GroupMode.PER_GROUP.label),
-                ),
-                selectedKey = config.mode.wire,
-                onSelect = { onUpdate(config.copy(mode = GroupMode.fromWire(it))) },
-                showCheckIcon = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            NumberStepper(
-                label = if (config.mode == GroupMode.GROUPS) "组数" else "每组人数",
-                value = config.n,
-                valueLabel = if (config.mode == GroupMode.GROUPS) "${config.n} 组" else "${config.n} 人/组",
-                onChange = { onUpdate(config.copy(n = it)) },
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("打乱后再分组", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = "开启后成员顺序随机（Fisher-Yates）",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = config.shuffle,
-                    onCheckedChange = { onUpdate(config.copy(shuffle = it)) },
-                    modifier = Modifier.semantics { contentDescription = "打乱后再分组" },
+        CtToolSectionHeader(title = "分组方式")
+        CtToolSegmented(
+            options = listOf(GroupMode.GROUPS.label, GroupMode.PER_GROUP.label),
+            selectedIndex = if (config.mode == GroupMode.GROUPS) 0 else 1,
+            onSelect = { index ->
+                onUpdate(
+                    config.copy(
+                        mode = if (index == 0) GroupMode.GROUPS else GroupMode.PER_GROUP,
+                    ),
                 )
-            }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
 
-            if (memberCount > 0) {
+        NumberStepper(
+            label = if (config.mode == GroupMode.GROUPS) "组数" else "每组人数",
+            value = config.n,
+            valueLabel = if (config.mode == GroupMode.GROUPS) "${config.n} 组" else "${config.n} 人/组",
+            onChange = { onUpdate(config.copy(n = it)) },
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("打乱后再分组", style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    text = "预计：${GroupEngine.groupCount(memberCount, config)} 组",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            } else {
-                Text(
-                    text = when (config.source) {
-                        GroupSource.PREV -> "还没有抽签结果 · 请先在第 1 步抽签"
-                        GroupSource.NAMES -> "名单为空 · 请选择名单"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "开启后成员顺序随机（Fisher-Yates）",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (inlineError != null) {
-                Text(
-                    text = inlineError,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
+            Switch(
+                checked = config.shuffle,
+                onCheckedChange = { onUpdate(config.copy(shuffle = it)) },
+                modifier = Modifier.semantics { contentDescription = "打乱后再分组" },
+            )
+        }
+
+        Text(
+            text = "预计：${GroupEngine.groupCount(memberCount, config)} 组",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        if (inlineError != null) {
+            Text(
+                text = inlineError,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }
@@ -574,32 +538,36 @@ private fun PrimaryActions(
     onExport: () -> Unit,
     onCopy: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        when (step) {
-            GroupStep.CONFIG -> {
-                FilledTonalButton(onClick = onRun, shape = CtShapeTokens.pill, modifier = Modifier.weight(1f)) {
-                    Text("开始分组")
-                }
-            }
+    when (step) {
+        GroupStep.CONFIG -> CtToolPrimaryButton(
+            text = "开始分组",
+            onClick = onRun,
+            modifier = Modifier.fillMaxWidth(),
+        )
 
-            GroupStep.RESULT -> {
-                OutlinedButton(onClick = onBackToConfig, shape = CtShapeTokens.pill, modifier = Modifier.weight(1f)) {
-                    Text("修改参数")
-                }
-                FilledTonalButton(onClick = onRegroup, shape = CtShapeTokens.pill, modifier = Modifier.weight(1f)) {
-                    Text("重新分组")
-                }
-                FilledTonalButton(
-                    onClick = onExport,
-                    enabled = result != null,
-                    shape = CtShapeTokens.pill,
+        GroupStep.RESULT -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(onClick = onBackToConfig) { Text("修改参数") }
+                CtToolPrimaryButton(
+                    text = "重新分组",
+                    onClick = onRegroup,
                     modifier = Modifier.weight(1f),
-                ) {
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(onClick = onExport) {
+                    Icon(Icons.Rounded.IosShare, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text("导出图片")
                 }
+                Spacer(Modifier.weight(1f))
                 IconButton(onClick = onCopy, enabled = result != null) {
                     Icon(Icons.Rounded.ContentCopy, contentDescription = "复制分组结果")
                 }
@@ -616,13 +584,9 @@ private fun ResultArea(
 ) {
     val result = state.result
     if (result == null) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = CtShapeTokens.toolCard,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
+        CtToolCard {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -641,30 +605,16 @@ private fun ResultArea(
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = CtShapeTokens.toolCard,
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+        CtToolCard(
+            title = "${result.snapshot.groupCount} 组 · ${result.totalMembers} 人",
+            subtitle = "${result.snapshot.sourceLabel} · ${result.snapshot.innerLabel}",
+            trailing = { CtPill(text = result.snapshot.modeLabel) },
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "${result.snapshot.groupCount} 组 · ${result.totalMembers} 人",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Text(
-                        text = "${result.snapshot.sourceLabel} · ${result.snapshot.innerLabel}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                    )
-                }
-                CtPill(text = result.snapshot.modeLabel, containerColor = MaterialTheme.colorScheme.surface)
-            }
+            Text(
+                text = "分组结果已生成；可复制、导出或重新分组。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         result.groups.chunked(2).forEach { rowGroups ->
             Row(
@@ -685,52 +635,36 @@ private fun GroupCard(
     group: com.furina.classtools.features.group.MemberGroup,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    CtToolCard(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        title = "第 ${group.index} 组",
+        trailing = { CtPill(text = "${group.size} 人") },
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        group.members.forEach { member ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
+                        RoundedCornerShape(10.dp),
+                    )
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = "第 ${group.index} 组",
-                    style = MaterialTheme.typography.titleSmall,
+                    text = member.seat.toString().padStart(2, '0'),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.width(30.dp),
+                )
+                Text(
+                    text = member.name.ifBlank { "—" },
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = "${group.size} 人",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            group.members.forEach { member ->
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = member.seat.toString().padStart(2, '0'),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.width(30.dp),
-                        )
-                        Text(
-                            text = member.name.ifBlank { "—" },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
             }
         }
     }

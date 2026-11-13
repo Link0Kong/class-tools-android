@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PictureAsPdf
@@ -72,8 +73,13 @@ import com.furina.classtools.data.ppt.PptRepository
 import com.furina.classtools.features.ppt.PptDownloadLogic
 import com.furina.classtools.features.ppt.PptMediaDownloadLogic
 import com.furina.classtools.features.ppt.PptStatusTexts
+import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.theme.CtShapeTokens
 import java.io.File
 import kotlinx.coroutines.launch
@@ -291,25 +297,21 @@ fun PptDownloadDetailContent(
             )
 
             when {
-                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(26.dp))
-                }
+                loading -> CtLoading(modifier = Modifier.fillMaxSize(), text = "加载下载详情…")
 
                 error != null || detail == null -> Column(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Text(
-                        text = error ?: "加载失败",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = onRetryLoad) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("重试")
+                    CtToolCard(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)) {
+                        EmptyState(
+                            icon = Icons.Rounded.ErrorOutline,
+                            title = "下载详情加载失败",
+                            message = error ?: "请稍后重试",
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        CtToolPrimaryButton(text = "重试", onClick = onRetryLoad)
                     }
                 }
 
@@ -322,12 +324,21 @@ fun PptDownloadDetailContent(
                 ) {
                     DetailHeader(detail = detail, imageLoader = imageLoader)
                     if (!detail.isReady) {
+                        CtToolSectionHeader(title = "处理状态", subtitle = "转换机处理完成后可下载")
                         NotReadyCard(
                             detail = detail,
                             reprocessing = reprocessing,
                             onReprocess = onReprocess,
                         )
                     } else {
+                        CtToolSectionHeader(
+                            title = "文件下载",
+                            subtitle = if (!PptDownloadLogic.isLegacyDeck(detail)) {
+                                "兼容版 PPTX / PDF / 原始文件"
+                            } else {
+                                "旧版演示：仅提供原始文件"
+                            },
+                        )
                         val warnings = PptDownloadLogic.warnings(detail)
                         if (warnings.isNotEmpty()) {
                             CompatWarningsCard(warnings = warnings)
@@ -375,14 +386,19 @@ fun PptDownloadDetailContent(
                             )
                         }
                         if (!PptDownloadLogic.isLegacyDeck(detail) && PptDownloadLogic.canPreview(detail)) {
-                            TextButton(onClick = onOpenPreview) {
-                                Icon(
-                                    Icons.Rounded.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text("在线预览")
+                            CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
+                                TextButton(
+                                    onClick = onOpenPreview,
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("在线预览")
+                                }
                             }
                         }
                     }
@@ -397,13 +413,9 @@ fun PptDownloadDetailContent(
 
 @Composable
 private fun DetailHeader(detail: PptDeckDetail, imageLoader: PptImageLoader) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
+    CtToolCard(contentPadding = PaddingValues(12.dp)) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -481,13 +493,8 @@ private fun PptTag(text: String) {
 @Composable
 private fun NotReadyCard(detail: PptDeckDetail, reprocessing: Boolean, onReprocess: () -> Unit) {
     val kind = PptStatusTexts.kindOf(detail.status)
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
+    CtToolCard {
         Column(
-            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -525,26 +532,19 @@ private fun NotReadyCard(detail: PptDeckDetail, reprocessing: Boolean, onReproce
 
 @Composable
 private fun CompatWarningsCard(warnings: List<String>) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
+    CtToolCard {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(
                     Icons.Rounded.WarningAmber,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    tint = MaterialTheme.colorScheme.tertiary,
                 )
                 Text(
                     text = "兼容提示",
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
             warnings.forEach { warning ->
@@ -552,12 +552,12 @@ private fun CompatWarningsCard(warnings: List<String>) {
                     Text(
                         text = "·",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        color = MaterialTheme.colorScheme.tertiary,
                     )
                     Text(
                         text = warning,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -573,29 +573,26 @@ private fun LegacyCard(
     onReprocess: () -> Unit,
     onOpenPreview: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    CtToolCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = PptDownloadLogic.LEGACY_TITLE,
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (canPreview) {
-                    TextButton(onClick = onOpenPreview) {
+                    TextButton(onClick = onOpenPreview, modifier = Modifier.heightIn(min = 48.dp)) {
                         Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("在线预览")
                     }
                 }
-                TextButton(onClick = onReprocess, enabled = !reprocessing) {
+                TextButton(
+                    onClick = onReprocess,
+                    enabled = !reprocessing,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
                     Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(if (reprocessing) "处理中…" else "重新处理")
@@ -613,13 +610,9 @@ private fun DownloadRowCard(
     onOpen: () -> Unit,
     onShare: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
+    CtToolCard(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -679,10 +672,14 @@ private fun DownloadRowCard(
                 }
 
                 state is PptRowDownloadState.Done -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onOpen, contentPadding = PaddingValues(horizontal = 10.dp)) {
+                    TextButton(
+                        onClick = onOpen,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp),
+                    ) {
                         Text("打开")
                     }
-                    IconButton(onClick = onShare, modifier = Modifier.size(36.dp)) {
+                    IconButton(onClick = onShare, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.Rounded.Share,
                             contentDescription = "分享",
@@ -692,13 +689,16 @@ private fun DownloadRowCard(
                     }
                 }
 
-                state is PptRowDownloadState.Failed -> TextButton(onClick = onDownload) { Text("重试") }
+                state is PptRowDownloadState.Failed -> TextButton(
+                    onClick = onDownload,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text("重试") }
 
                 else -> Button(
                     onClick = onDownload,
-                    modifier = Modifier.height(34.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    shape = CtShapeTokens.pill,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 ) {
                     Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -724,20 +724,10 @@ private fun MediaDownloadGroup(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = PptMediaDownloadLogic.GROUP_TITLE,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = PptMediaDownloadLogic.summaryText(rows),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-        }
+        CtToolSectionHeader(
+            title = PptMediaDownloadLogic.GROUP_TITLE,
+            subtitle = PptMediaDownloadLogic.summaryText(rows),
+        )
         rows.forEach { row ->
             MediaDownloadRowCard(
                 row = row,
@@ -760,16 +750,11 @@ private fun MediaDownloadRowCard(
     onShare: () -> Unit,
 ) {
     val isAudio = row.kind == PptMediaKind.AUDIO
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
+    CtToolCard(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .heightIn(min = 64.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {

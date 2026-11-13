@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,15 +31,11 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Opacity
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -81,6 +78,12 @@ import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolChip
+import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.components.tool.CtToolInfoRow
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolStat
 import com.furina.classtools.ui.theme.CtShapeTokens
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -316,21 +319,22 @@ fun WaterScreen(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .padding(24.dp),
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(16.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
-                                    EmptyState(
-                                        icon = Icons.Rounded.Apartment,
-                                        title = "还没有关注宿舍",
-                                        message = "选择本人宿舍后可录入抄表；数据随账号同步，不导出",
-                                    )
-                                    FilledTonalButton(
-                                        onClick = { showRoomPicker = true },
-                                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
-                                    ) {
-                                        Text("选择宿舍")
+                                    CtToolCard {
+                                        EmptyState(
+                                            icon = Icons.Rounded.Apartment,
+                                            title = "还没有关注宿舍",
+                                            message = "选择本人宿舍后可录入抄表；数据随账号同步，不导出",
+                                        )
                                     }
+                                    CtToolPrimaryButton(
+                                        text = "选择宿舍",
+                                        onClick = { showRoomPicker = true },
+                                    )
                                 }
                             } else {
                                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -586,18 +590,13 @@ private fun RoomCard(
     onPersons: (Int) -> Unit,
     onClearRoom: () -> Unit,
 ) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = CtShapeTokens.toolCard, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "关注宿舍",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onPickRoom) { Text(if (selectedRv.isBlank()) "选择" else "更换") }
-                TextButton(onClick = onClearRoom) { Text("清除本间") }
-            }
+    CtToolCard(
+        title = "关注宿舍",
+        trailing = {
+            TextButton(onClick = onPickRoom) { Text(if (selectedRv.isBlank()) "选择" else "更换") }
+        },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = PowerRooms.labelOf(selectedRv).ifBlank { "未选择宿舍" },
                 style = MaterialTheme.typography.titleLarge,
@@ -610,12 +609,16 @@ private fun RoomCard(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 WaterRules.PERSONS_OPTIONS.forEach { option ->
-                    FilterChip(
+                    CtToolChip(
+                        text = "$option 人间",
                         selected = persons == option,
                         onClick = { onPersons(option) },
-                        label = { Text("$option 人间") },
                     )
                 }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onClearRoom) { Text("清除本间") }
             }
         }
     }
@@ -629,11 +632,8 @@ private fun MonthSelector(
     onPick: () -> Unit,
     onCurrent: () -> Unit,
 ) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = CtShapeTokens.toolCard, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Row(
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    CtToolCard(contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onPrev) { Icon(Icons.Rounded.ChevronLeft, contentDescription = "上个月") }
             TextButton(onClick = onPick) {
                 Text(
@@ -661,31 +661,33 @@ private fun EntryCard(
     onInput: (String) -> Unit,
     onSave: () -> Unit,
 ) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = CtShapeTokens.toolCard, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = "新增抄表", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    CtToolCard(title = "新增抄表") {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = "月份 ${WaterMonth.label(month)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedTextField(
+            CtToolField(
+                label = "读数（吨）",
                 value = readingInput,
                 onValueChange = onInput,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                isError = error != null,
-                label = { Text("读数（吨）") },
-                placeholder = { Text("例如 130.10") },
-                supportingText = {
-                    if (error != null) {
-                        Text(error, color = MaterialTheme.colorScheme.error)
-                    } else {
-                        Text("两位小数；不得小于上月读数")
-                    }
-                },
+                placeholder = "例如 130.10",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             )
+            if (error != null) {
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else {
+                Text(
+                    text = "两位小数；不得小于上月读数",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (preview is WaterRecordReview.Valid) {
                 val temp = WaterRecord(month = preview.record.month, reading = preview.record.reading, ts = preview.record.ts)
                 val tempRoom = room.copy(records = (room.records + temp).distinctBy { it.month }.sortedBy { it.month })
@@ -698,15 +700,14 @@ private fun EntryCard(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (WaterMonth.isCurrent(month)) {
-                    CtPill(text = "本月")
-                }
-                Spacer(Modifier.weight(1f))
-                FilledTonalButton(onClick = onSave, enabled = readingInput.isNotBlank()) {
-                    Text("保存记录")
-                }
+            if (WaterMonth.isCurrent(month)) {
+                CtPill(text = "本月")
             }
+            CtToolPrimaryButton(
+                text = "保存记录",
+                onClick = onSave,
+                enabled = readingInput.isNotBlank(),
+            )
         }
     }
 }
@@ -729,58 +730,51 @@ private fun PreviewLine(charge: WaterCharge) {
 
 @Composable
 private fun StatsCard(stats: WaterMonthStats) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = CtShapeTokens.toolCard, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Rounded.Opacity,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
+    val charge = stats.charge
+    CtToolCard(title = "${WaterMonth.label(stats.month)} 统计") {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CtToolStat(
+                    value = if (charge.usage == null) "—" else WaterCalculator.fmtReading(charge.usage),
+                    label = "本月用量（吨）",
+                    modifier = Modifier.weight(1f),
+                    valueColor = MaterialTheme.colorScheme.primary,
                 )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "${WaterMonth.label(stats.month)} 统计",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                CtToolStat(
+                    value = charge.fee?.let { WaterCalculator.fmtMoney(it) } ?: "—",
+                    label = "本期水费（元）",
+                    modifier = Modifier.weight(1f),
                 )
             }
-            val charge = stats.charge
-            StatRow("本月用量", if (charge.usage == null) "首次记录" else "${WaterCalculator.fmtReading(charge.usage)} 吨")
-            StatRow("日均用量", if (stats.dailyAverage == null) "—" else "${WaterCalculator.fmtReading(stats.dailyAverage)} 吨/天")
-            val delta = stats.deltaVsPreviousMonth
-            StatRow(
-                "对比上月",
-                when {
-                    delta == null -> "—"
-                    delta > 0.0 -> "+${WaterCalculator.fmtReading(delta)} 吨"
-                    delta < 0.0 -> "${WaterCalculator.fmtReading(delta)} 吨"
+            CtToolInfoRow(
+                label = "日均用量",
+                value = stats.dailyAverage?.let { "${WaterCalculator.fmtReading(it)} 吨/天" } ?: "—",
+            )
+            CtToolInfoRow(
+                label = "对比上月",
+                value = when {
+                    stats.deltaVsPreviousMonth == null -> "—"
+                    stats.deltaVsPreviousMonth > 0.0 -> "+${WaterCalculator.fmtReading(stats.deltaVsPreviousMonth)} 吨"
+                    stats.deltaVsPreviousMonth < 0.0 -> "${WaterCalculator.fmtReading(stats.deltaVsPreviousMonth)} 吨"
                     else -> "持平"
                 },
             )
-            StatRow("本期水费", if (charge.fee == null) "—" else "${WaterCalculator.fmtMoney(charge.fee)} 元")
-            StatRow("折合扣电", if (charge.degree == null) "—" else "${WaterCalculator.fmtDegree(charge.degree)} 度")
-            StatRow("免费额度", "${WaterCalculator.fmtReading(charge.free)} 吨（超出 ${WaterCalculator.fmtReading(charge.excess)} 吨）")
+            CtToolInfoRow(
+                label = "折合扣电",
+                value = charge.degree?.let { "${WaterCalculator.fmtDegree(it)} 度" } ?: "—",
+            )
+            CtToolInfoRow(
+                label = "免费额度",
+                value = "${WaterCalculator.fmtReading(charge.free)} 吨（超出 ${WaterCalculator.fmtReading(charge.excess)} 吨）",
+            )
             HorizontalDivider()
-            StatRow("上次抄表", stats.previous?.let { "${WaterMonth.label(it.month)} · ${WaterCalculator.fmtReading(it.reading)} 吨" } ?: "—")
+            CtToolInfoRow(
+                label = "上次抄表",
+                value = stats.previous?.let {
+                    "${WaterMonth.label(it.month)} · ${WaterCalculator.fmtReading(it.reading)} 吨"
+                } ?: "—",
+            )
         }
-    }
-}
-
-@Composable
-private fun StatRow(label: String, value: String) {
-    Row {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.weight(1f))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-        )
     }
 }
 
@@ -791,13 +785,8 @@ private fun HistoryCard(
     room: WaterRoomState,
     onDelete: (String) -> Unit,
 ) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = CtShapeTokens.toolCard, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "抄表历史（${records.size}）",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
+    CtToolCard(title = "抄表历史（${records.size}）") {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (records.isEmpty()) {
                 Text(
                     text = "还没有抄表记录 · 保存第一条后可对比用量",
@@ -808,7 +797,11 @@ private fun HistoryCard(
                 records.sortedByDescending { it.month }.forEach { record ->
                     val charge = WaterCalculator.charge(room, record, persons)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(vertical = 4.dp),
+                        ) {
                             Text(
                                 text = "${WaterMonth.label(record.month)} · ${WaterCalculator.fmtReading(record.reading)} 吨",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -824,7 +817,10 @@ private fun HistoryCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        IconButton(onClick = { onDelete(record.month) }) {
+                        IconButton(
+                            onClick = { onDelete(record.month) },
+                            modifier = Modifier.size(48.dp),
+                        ) {
                             Icon(
                                 Icons.Rounded.DeleteOutline,
                                 contentDescription = "删除 ${WaterMonth.label(record.month)} 记录",
@@ -840,13 +836,8 @@ private fun HistoryCard(
 
 @Composable
 private fun RuleCard(persons: Int) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = CtShapeTokens.toolCard, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "计费规则（只读）",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
+    CtToolCard(title = "计费规则（只读）") {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             WaterCalculator.ruleLines(persons).forEach { (label, value) ->
                 if (value.isBlank()) {
                     Text(
@@ -913,6 +904,7 @@ fun WaterMonthGrid(
                     Surface(
                         modifier = Modifier
                             .weight(1f)
+                            .heightIn(min = 48.dp)
                             .clip(CtShapeTokens.listItem)
                             .clickable { onPick(monthKey) },
                         shape = CtShapeTokens.listItem,
@@ -1005,13 +997,11 @@ private fun RoomPickerDialog(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedTextField(
+                CtToolField(
+                    label = "搜索房间号 / 楼栋",
                     value = query,
                     onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                    placeholder = { Text("搜索房间号 / 楼栋") },
+                    placeholder = "输入房间号或楼栋",
                 )
                 PowerRooms.BUILDINGS.forEach { building ->
                     Text(
@@ -1033,6 +1023,7 @@ private fun RoomPickerDialog(
                                 Surface(
                                     modifier = Modifier
                                         .weight(1f)
+                                        .heightIn(min = 48.dp)
                                         .clip(CtShapeTokens.pill)
                                         .clickable { onPick(roomInfo.rv) },
                                     shape = CtShapeTokens.pill,
@@ -1073,12 +1064,16 @@ private fun RoomPickerDialog(
 @Composable
 private fun ErrorContent(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.padding(24.dp),
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        EmptyState(icon = Icons.Rounded.ErrorOutline, title = "水量数据不可用", message = message)
-        TextButton(onClick = onRetry) { Text("选择宿舍后重试") }
+        CtToolCard {
+            EmptyState(icon = Icons.Rounded.ErrorOutline, title = "水量数据不可用", message = message)
+        }
+        CtToolPrimaryButton(text = "选择宿舍后重试", onClick = onRetry)
     }
 }
 

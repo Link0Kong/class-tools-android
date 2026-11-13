@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -66,6 +67,13 @@ import com.furina.classtools.features.draw.DrawResult
 import com.furina.classtools.features.draw.DrawSortMode
 import com.furina.classtools.features.draw.DrawStep
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolChip
+import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.components.tool.CtToolInfoRow
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSegmented
+import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -81,47 +89,21 @@ fun DrawStepIndicator(
     onSelect: (DrawStep) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        DrawStep.entries.forEach { step ->
-            val isCurrent = step == current
-            val isDone = step.index < current.index
-            val clickable = isDone
-            val background = when {
-                isCurrent -> MaterialTheme.colorScheme.primary
-                isDone -> MaterialTheme.colorScheme.primaryContainer
-                else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    CtToolSegmented(
+        options = DrawStep.entries.map { "${it.index} ${it.title}" },
+        selectedIndex = current.index - 1,
+        onSelect = { index ->
+            DrawStep.entries.getOrNull(index)?.let { target ->
+                if (target.index <= current.index) onSelect(target)
             }
-            val content = when {
-                isCurrent -> MaterialTheme.colorScheme.onPrimary
-                isDone -> MaterialTheme.colorScheme.onPrimaryContainer
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .defaultMinSize(minHeight = 44.dp)
-                    .clip(CtShapeTokens.pill)
-                    .background(background)
-                    .then(if (clickable) Modifier.clickable { onSelect(step) } else Modifier)
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = if (isDone) "✓ ${step.title}" else "${step.index} ${step.title}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = content,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
+        },
+        modifier = modifier,
+    )
 }
 
 /** STEP1 参数表单卡（实时校验：错误显示在对应输入框下或卡片底部）。 */
+/** STEP1 参数表单卡（v6：CtToolCard + CtToolField + CtToolChip；实时校验）。 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DrawConfigCard(
     config: DrawConfig,
@@ -136,159 +118,139 @@ fun DrawConfigCard(
     var countText by remember(config.count) { mutableStateOf(config.count.toString()) }
     var excludedText by remember(config.excludedText) { mutableStateOf(config.excludedText) }
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    CtToolCard(
+        modifier = modifier,
+        title = "抽签参数",
+        trailing = { CtPill(text = "共 ${config.upperBound - config.lowerBound + 1} 个号") },
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "抽签参数",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                CtPill(text = "共 ${config.upperBound - config.lowerBound + 1} 个号")
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                NumberField(
-                    value = startText,
-                    label = "起始",
-                    enabled = enabled,
-                    modifier = Modifier.weight(1f),
-                    onValueChange = { text ->
-                        startText = text
-                        text.toIntOrNull()?.let { onConfigChange(config.copy(start = it)) }
-                    },
-                )
-                NumberField(
-                    value = endText,
-                    label = "结束",
-                    enabled = enabled,
-                    modifier = Modifier.weight(1f),
-                    onValueChange = { text ->
-                        endText = text
-                        text.toIntOrNull()?.let { onConfigChange(config.copy(end = it)) }
-                    },
-                )
-            }
-
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             NumberField(
-                value = countText,
-                label = "抽取个数",
+                value = startText,
+                label = "起始",
                 enabled = enabled,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
                 onValueChange = { text ->
-                    countText = text
-                    text.toIntOrNull()?.let { onConfigChange(config.copy(count = it)) }
+                    startText = text
+                    text.toIntOrNull()?.let { onConfigChange(config.copy(start = it)) }
                 },
             )
-
-            OutlinedTextField(
-                value = excludedText,
-                onValueChange = { text ->
-                    excludedText = text
-                    onConfigChange(config.copy(excludedText = text))
-                },
-                label = { Text("排除序号") },
-                placeholder = { Text("如 3,7,10-12") },
-                singleLine = true,
+            NumberField(
+                value = endText,
+                label = "结束",
                 enabled = enabled,
-                isError = error?.code == DrawErrorCode.EXCLUSION_INVALID,
-                supportingText = {
-                    if (error?.code == DrawErrorCode.EXCLUSION_INVALID) {
-                        Text(error.message)
-                    } else {
-                        Text("格式示例：3,7,10-12")
-                    }
+                modifier = Modifier.weight(1f),
+                onValueChange = { text ->
+                    endText = text
+                    text.toIntOrNull()?.let { onConfigChange(config.copy(end = it)) }
                 },
-                shape = CtShapeTokens.input,
-                modifier = Modifier.fillMaxWidth(),
             )
+        }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "允许重复",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "同一序号可被抽中多次",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = config.allowDuplicates,
-                    onCheckedChange = { onConfigChange(config.copy(allowDuplicates = it)) },
-                    enabled = enabled,
-                    modifier = Modifier.semantics { contentDescription = "允许重复" },
-                )
-            }
+        NumberField(
+            value = countText,
+            label = "抽取个数",
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+            onValueChange = { text ->
+                countText = text
+                text.toIntOrNull()?.let { onConfigChange(config.copy(count = it)) }
+            },
+        )
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
+        CtToolField(
+            value = excludedText,
+            onValueChange = { text ->
+                excludedText = text
+                onConfigChange(config.copy(excludedText = text))
+            },
+            label = "排除序号",
+            placeholder = "如 3,7,10-12",
+            singleLine = true,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (error?.code == DrawErrorCode.EXCLUSION_INVALID) {
             Text(
-                text = "候选来源",
-                style = MaterialTheme.typography.labelLarge,
+                text = error.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        } else {
+            Text(
+                text = "格式示例：3,7,10-12",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DrawPoolSource.entries.forEach { source ->
-                    FilterChip(
-                        selected = config.poolSource == source,
-                        onClick = { onConfigChange(config.copy(poolSource = source)) },
-                        enabled = enabled && (source == DrawPoolSource.RANGE || rosterCount > 0),
-                        label = {
-                            Text(
-                                if (source == DrawPoolSource.ROSTER) {
-                                    "${source.label}($rosterCount)"
-                                } else {
-                                    source.label
-                                },
-                            )
-                        },
-                    )
-                }
-            }
-            if (rosterCount <= 0) {
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "班级名单未获取，暂只支持号码范围",
+                    text = "允许重复",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "同一序号可被抽中多次",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
-            Text(
-                text = "结果排序",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Switch(
+                checked = config.allowDuplicates,
+                onCheckedChange = { onConfigChange(config.copy(allowDuplicates = it)) },
+                enabled = enabled,
+                modifier = Modifier.semantics { contentDescription = "允许重复" },
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DrawSortMode.entries.forEach { mode ->
-                    FilterChip(
-                        selected = config.sort == mode,
-                        onClick = { onConfigChange(config.copy(sort = mode)) },
-                        enabled = enabled,
-                        label = { Text(mode.label) },
-                    )
-                }
-            }
+        }
 
-            val cardError = error?.takeIf { it.code !in setOf(DrawErrorCode.EXCLUSION_INVALID) }
-            if (cardError != null) {
-                Text(
-                    text = cardError.message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+        CtToolSectionHeader(title = "候选来源")
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            DrawPoolSource.entries.forEach { source ->
+                val selectable = enabled && (source == DrawPoolSource.RANGE || rosterCount > 0)
+                CtToolChip(
+                    text = if (source == DrawPoolSource.ROSTER) {
+                        "${source.label}($rosterCount)"
+                    } else {
+                        source.label
+                    },
+                    selected = config.poolSource == source,
+                    onClick = { if (selectable) onConfigChange(config.copy(poolSource = source)) },
                 )
             }
+        }
+        if (rosterCount <= 0) {
+            Text(
+                text = "班级名单未获取，暂只支持号码范围",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        CtToolSectionHeader(title = "结果排序")
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            DrawSortMode.entries.forEach { mode ->
+                CtToolChip(
+                    text = mode.label,
+                    selected = config.sort == mode,
+                    onClick = { if (enabled) onConfigChange(config.copy(sort = mode)) },
+                )
+            }
+        }
+
+        val cardError = error?.takeIf { it.code !in setOf(DrawErrorCode.EXCLUSION_INVALID) }
+        if (cardError != null) {
+            Text(
+                text = cardError.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }
@@ -301,14 +263,13 @@ private fun NumberField(
     modifier: Modifier = Modifier,
     onValueChange: (String) -> Unit,
 ) {
-    OutlinedTextField(
+    CtToolField(
         value = value,
         onValueChange = { text -> onValueChange(text.filter { it.isDigit() }.take(4)) },
-        label = { Text(label) },
-        singleLine = true,
+        label = label,
         enabled = enabled,
+        singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        shape = CtShapeTokens.input,
         modifier = modifier,
     )
 }
@@ -322,48 +283,37 @@ fun DrawPoolPreviewCard(
     error: DrawError?,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+    CtToolCard(
+        modifier = modifier,
+        title = "候选池",
+        trailing = { CtPill(text = if (numbers != null) "${numbers.size} 个" else "—") },
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        when {
+            error != null -> Text(
+                text = error.message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+
+            numbers == null || numbers.isEmpty() -> Text(
+                text = "设置参数后显示候选",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            else -> {
                 Text(
-                    text = "候选池",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                CtPill(text = if (numbers != null) "${numbers.size} 个" else "—")
-            }
-            when {
-                error != null -> Text(
-                    text = error.message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                numbers == null || numbers.isEmpty() -> Text(
-                    text = "设置参数后显示候选",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "范围 ${config.start}–${config.end}，排除 ${config.excludedText.ifBlank { "无" }}",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                else -> {
-                    Text(
-                        text = "范围 ${config.start}–${config.end}，排除 ${config.excludedText.ifBlank { "无" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        numbers.take(24).forEach { n -> DrawNumberChip(number = n, name = null) }
-                        if (numbers.size > 24) {
-                            DrawNumberChip(number = null, name = "+${numbers.size - 24}")
-                        }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    numbers.take(24).forEach { n -> DrawNumberChip(number = n, name = null) }
+                    if (numbers.size > 24) {
+                        DrawNumberChip(number = null, name = "+${numbers.size - 24}")
                     }
                 }
             }
@@ -371,54 +321,40 @@ fun DrawPoolPreviewCard(
     }
 }
 
-/** STEP2 候选预览卡。 */
+/** STEP2 候选预览卡（v6）。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DrawPreviewCard(
     candidates: List<DrawEntry>,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth().animateContentSize(animationSpec = CtMotion.spatialSize),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    CtToolCard(
+        modifier = modifier.animateContentSize(animationSpec = CtMotion.spatialSize),
+        title = "候选名单",
+        trailing = { CtPill(text = "${candidates.size} 人/号") },
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Text(
+            text = "确认候选无误后点「开始抽签」；结果页可剔除并重抽。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "候选名单",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                CtPill(text = "${candidates.size} 人/号")
-            }
-            Text(
-                text = "确认候选无误后点「开始抽签」；结果页可剔除并重抽。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                candidates.forEach { entry ->
-                    DrawEntryChip(entry = entry, onRemove = null)
-                }
+            candidates.forEach { entry ->
+                DrawEntryChip(entry = entry, onRemove = null)
             }
         }
     }
 }
 
-/** STEP3 结果卡（胶囊 + 剔除 + 排序 + 剔除记录）。 */
+/** STEP3 结果卡（胶囊 + 剔除 + 排序 + 剔除记录；v6 卡片/按钮）。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DrawResultCard(
     result: DrawResult?,
     autoRedraw: Boolean,
-    /** D-02：本结果已用于分组后显示徽标（由宿主传入，重新抽签/调整参数后重置）。 */
     grouped: Boolean = false,
     onToggleAutoRedraw: (Boolean) -> Unit,
     onRemove: (Int) -> Unit,
@@ -430,31 +366,11 @@ fun DrawResultCard(
     onExportSheet: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth().animateContentSize(animationSpec = CtMotion.spatialSize),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (result == null || result.entries.isEmpty()) {
-                EmptyState(
-                    icon = Icons.Rounded.Inbox,
-                    title = "还没有抽签结果",
-                    message = "返回上一步设置参数后开始抽签",
-                )
-                return@Column
-            }
-
+    val hasEntries = result != null && result.entries.isNotEmpty()
+    val trailing: (@Composable () -> Unit)? = if (hasEntries) {
+        {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "抽签结果",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                CtPill(text = "${result.entries.size} 个 · 池 ${result.pool.size}")
+                CtPill(text = "${result!!.entries.size} 个 · 池 ${result.pool.size}")
                 if (grouped) {
                     Spacer(Modifier.width(6.dp))
                     CtPill(
@@ -463,169 +379,129 @@ fun DrawResultCard(
                     )
                 }
             }
+        }
+    } else {
+        null
+    }
+    CtToolCard(
+        modifier = modifier.animateContentSize(animationSpec = CtMotion.spatialSize),
+        title = "抽签结果",
+        trailing = trailing,
+    ) {
+        if (result == null || result.entries.isEmpty()) {
+            EmptyState(
+                icon = Icons.Rounded.Inbox,
+                title = "还没有抽签结果",
+                message = "返回上一步设置参数后开始抽签",
+            )
+            return@CtToolCard
+        }
 
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                result.entries.forEachIndexed { index, entry ->
-                    DrawEntryChip(entry = entry, onRemove = { onRemove(index) })
-                }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            result.entries.forEachIndexed { index, entry ->
+                DrawEntryChip(entry = entry, onRemove = { onRemove(index) })
             }
+        }
 
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "剔除后自动重抽",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    text = "剔除一项后立即从剩余池补抽",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = autoRedraw,
+                onCheckedChange = onToggleAutoRedraw,
+                modifier = Modifier.semantics { contentDescription = "剔除后自动重抽" },
+            )
+        }
+
+        CtToolSectionHeader(title = "排序")
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            DrawSortMode.entries.forEach { mode ->
+                CtToolChip(
+                    text = mode.label,
+                    selected = result.config.sort == mode,
+                    onClick = { onSortChange(mode) },
+                )
+            }
+        }
+
+        if (result.log.isNotEmpty()) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "剔除后自动重抽",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        text = "剔除一项后立即从剩余池补抽",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = autoRedraw, onCheckedChange = onToggleAutoRedraw, modifier = Modifier.semantics { contentDescription = "剔除后自动重抽" })
-            }
-
             Text(
-                text = "排序",
+                text = "剔除重抽记录（${result.log.size}）",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DrawSortMode.entries.forEach { mode ->
-                    FilterChip(
-                        selected = result.config.sort == mode,
-                        onClick = { onSortChange(mode) },
-                        label = { Text(mode.label) },
-                    )
-                }
-            }
-
-            if (result.log.isNotEmpty()) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            result.log.forEachIndexed { i, entry ->
+                val added = entry.added?.label ?: "未补抽"
                 Text(
-                    text = "剔除重抽记录（${result.log.size}）",
-                    style = MaterialTheme.typography.labelLarge,
+                    text = "#${i + 1} 剔除 ${entry.removed.label} → $added",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                result.log.forEachIndexed { i, entry ->
-                    val added = entry.added?.label ?: "未补抽"
-                    Text(
-                        text = "#${i + 1} 剔除 ${entry.removed.label} → $added",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onEditConfig) {
-                    Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("调整参数")
-                }
-                FilledTonalButton(onClick = onReroll) {
-                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("重新抽签")
-                }
-                Spacer(Modifier.weight(1f))
-                OutlinedButton(onClick = onGroup) {
-                    Icon(Icons.Rounded.Groups, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("用此结果分组")
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onExport) { Text("导出抽签图") }
-                Button(onClick = onExportSheet) {
-                    Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("导出结果单")
-                }
             }
         }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onEditConfig) {
+                Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("调整参数")
+            }
+            OutlinedButton(onClick = onReroll) {
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("重新抽签")
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onGroup) {
+                Icon(Icons.Rounded.Groups, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("用此结果分组")
+            }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onExport) { Text("导出抽签图") }
+        }
+
+        CtToolPrimaryButton(
+            text = "导出结果单",
+            onClick = onExportSheet,
+        )
     }
 }
 
 /** STEP2/3 顶部参数摘要（只读）。 */
+/** STEP2/3 顶部参数摘要（只读，v6 信息行）。 */
 @Composable
 fun DrawConfigSummaryCard(
     config: DrawConfig,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = CtShapeTokens.listItem,
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+    CtToolCard(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Row {
-                SummaryItem("范围", "${config.start}–${config.end}", Modifier.weight(1f))
-                SummaryItem("个数", config.count.toString(), Modifier.weight(1f))
-            }
-            Row {
-                SummaryItem("重复", if (config.allowDuplicates) "允许" else "不重复", Modifier.weight(1f))
-                SummaryItem("排序", config.sort.label, Modifier.weight(1f))
-            }
-            SummaryItem("排除", config.excludedText.ifBlank { "无" }, Modifier.fillMaxWidth())
-        }
-    }
-}
-
-@Composable
-private fun SummaryItem(label: String, value: String, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = "$label ",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-/** 步骤指示上方的阶段标题。 */
-@Composable
-fun DrawStepHeadline(step: DrawStep, modifier: Modifier = Modifier) {
-    val title = when (step) {
-        DrawStep.CONFIG -> "设置抽签参数"
-        DrawStep.PREVIEW -> "确认候选"
-        DrawStep.RESULT -> "抽签结果"
-    }
-    val subtitle = when (step) {
-        DrawStep.CONFIG -> "范围、个数、排除号与排序"
-        DrawStep.PREVIEW -> "开始前可再检查一遍名单"
-        DrawStep.RESULT -> "可剔除重抽、排序并导出"
-    }
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        CtToolInfoRow(label = "范围", value = "${config.start}–${config.end}")
+        CtToolInfoRow(label = "个数", value = config.count.toString())
+        CtToolInfoRow(label = "重复", value = if (config.allowDuplicates) "允许" else "不重复")
+        CtToolInfoRow(label = "排序", value = config.sort.label)
+        CtToolInfoRow(label = "排除", value = config.excludedText.ifBlank { "无" })
     }
 }
 
@@ -696,7 +572,7 @@ fun DrawNumberChip(number: Int?, name: String?) {
     }
 }
 
-/** 底部动作条（避让 gesture bar）。 */
+/** 底部动作条（v6：主按钮统一 CtToolPrimaryButton；避让 gesture bar）。 */
 @Composable
 fun DrawBottomBar(
     step: DrawStep,
@@ -725,45 +601,31 @@ fun DrawBottomBar(
                 ) { Text("上一步") }
             }
             when (step) {
-                DrawStep.CONFIG -> Button(
+                DrawStep.CONFIG -> CtToolPrimaryButton(
+                    text = "下一步：预览候选",
                     onClick = onNext,
                     enabled = canContinue,
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    shape = CtShapeTokens.pill,
-                ) { Text("下一步：预览候选") }
-                DrawStep.PREVIEW -> Button(
+                    modifier = Modifier.weight(1f),
+                )
+
+                DrawStep.PREVIEW -> CtToolPrimaryButton(
+                    text = if (isDrawing) "抽签中…" else "开始抽签",
                     onClick = onStartDraw,
                     enabled = !isDrawing,
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    shape = CtShapeTokens.pill,
-                ) {
-                    if (isDrawing) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text("抽签中…")
-                    } else {
-                        Text("开始抽签")
-                    }
-                }
-                DrawStep.RESULT -> Button(
+                    modifier = Modifier.weight(1f),
+                )
+
+                DrawStep.RESULT -> CtToolPrimaryButton(
+                    text = "完成",
                     onClick = onNext,
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    shape = CtShapeTokens.pill,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ),
-                ) { Text("完成") }
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }
 }
 
-/** 全屏错误态（身份失效/恢复失败）。 */
+/** 全屏错误态（身份失效/恢复失败；v6 卡片 + 主按钮）。 */
 @Composable
 fun DrawErrorState(
     message: String,
@@ -774,15 +636,22 @@ fun DrawErrorState(
     Column(
         modifier = modifier.fillMaxWidth().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        EmptyState(
-            icon = Icons.Rounded.Inbox,
-            title = "暂时无法打开抽签",
-            message = message,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        CtToolCard {
+            EmptyState(
+                icon = Icons.Rounded.Inbox,
+                title = "暂时无法打开抽签",
+                message = message,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = onBack) { Text("返回") }
-            Button(onClick = onRetry) { Text("重试") }
+            CtToolPrimaryButton(
+                text = "重试",
+                onClick = onRetry,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }

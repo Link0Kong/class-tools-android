@@ -3,6 +3,7 @@
 package com.furina.classtools.ui.screens.fit
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +68,11 @@ import com.furina.classtools.features.fit.FitScoring
 import com.furina.classtools.features.fit.FitSex
 import com.furina.classtools.features.fit.FitTables
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSegmented
+import com.furina.classtools.ui.components.tool.CtToolStat
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
@@ -202,7 +208,7 @@ fun FitScreen(
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             CtTopBar(
                 title = "体测",
-                subtitle = "国标 2014 大学组 · 实时评分",
+                subtitle = "国标 2014 大学组",
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = { showTable = true }) {
@@ -435,78 +441,64 @@ private enum class FitPhase { LOADING, READY, ERROR }
 
 @Composable
 private fun InputCard(input: FitInput, onInput: (FitInput) -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            CtSegmentedButtons(
-                options = listOf(
-                    CtSegmentOption(FitSex.M.wire, FitSex.M.label),
-                    CtSegmentOption(FitSex.F.wire, FitSex.F.label),
-                ),
-                selectedKey = input.sex.wire,
-                onSelect = { onInput(input.copy(sex = FitSex.fromWire(it))) },
-                showCheckIcon = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            CtSegmentedButtons(
-                options = listOf(
-                    CtSegmentOption(FitGrade.G12.wire, FitGrade.G12.label),
-                    CtSegmentOption(FitGrade.G34.wire, FitGrade.G34.label),
-                ),
-                selectedKey = input.grade.wire,
-                onSelect = { onInput(input.copy(grade = FitGrade.fromWire(it))) },
-                showCheckIcon = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
+    CtToolCard(title = "填写成绩", subtitle = "实时计算，未填写项不计分") {
+        CtToolSegmented(
+            options = listOf(FitSex.M.label, FitSex.F.label),
+            selectedIndex = if (input.sex == FitSex.M) 0 else 1,
+            onSelect = { index -> onInput(input.copy(sex = if (index == 0) FitSex.M else FitSex.F)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        CtToolSegmented(
+            options = listOf(FitGrade.G12.label, FitGrade.G34.label),
+            selectedIndex = if (input.grade == FitGrade.G12) 0 else 1,
+            onSelect = { index -> onInput(input.copy(grade = if (index == 0) FitGrade.G12 else FitGrade.G34)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
 
-            FIT_INPUT_FIELDS.chunked(2).forEach { rowFields ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    rowFields.forEach { spec ->
-                        val label = if (spec.key == "pull") {
-                            if (input.sex == FitSex.F) "1 分钟仰卧起坐" else "引体向上"
-                        } else {
-                            spec.label
-                        }
-                        NumberField(
-                            value = input.valueOf(spec.key),
-                            label = label,
-                            unit = spec.unit,
-                            spec = spec,
-                            onValueChange = { value -> onInput(input.withValue(spec.key, value)) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    if (rowFields.size == 1) Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-            // 长跑：分 + 秒
+        FIT_INPUT_FIELDS.chunked(2).forEach { rowFields ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                NumberField(
-                    value = input.durM,
-                    label = if (input.sex == FitSex.M) "1000 米跑 · 分" else "800 米跑 · 分",
-                    unit = "分",
-                    spec = FitFieldSpec("durM", "长跑分", "分", 0),
-                    onValueChange = { onInput(input.copy(durM = it)) },
-                    modifier = Modifier.weight(1f),
-                )
-                NumberField(
-                    value = input.durS,
-                    label = "长跑 · 秒",
-                    unit = "秒",
-                    spec = FitFieldSpec("durS", "长跑秒", "秒", 0),
-                    onValueChange = { onInput(input.copy(durS = it)) },
-                    modifier = Modifier.weight(1f),
-                )
+                rowFields.forEach { spec ->
+                    val label = if (spec.key == "pull") {
+                        if (input.sex == FitSex.F) "1 分钟仰卧起坐" else "引体向上"
+                    } else {
+                        spec.label
+                    }
+                    NumberField(
+                        value = input.valueOf(spec.key),
+                        label = label,
+                        unit = spec.unit,
+                        spec = spec,
+                        onValueChange = { value -> onInput(input.withValue(spec.key, value)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (rowFields.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
+        }
+        // 长跑：分 + 秒
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            NumberField(
+                value = input.durM,
+                label = if (input.sex == FitSex.M) "1000 米跑 · 分" else "800 米跑 · 分",
+                unit = "分",
+                spec = FitFieldSpec("durM", "长跑分", "分", 0),
+                onValueChange = { onInput(input.copy(durM = it)) },
+                modifier = Modifier.weight(1f),
+            )
+            NumberField(
+                value = input.durS,
+                label = "长跑 · 秒",
+                unit = "秒",
+                spec = FitFieldSpec("durS", "长跑秒", "秒", 0),
+                onValueChange = { onInput(input.copy(durS = it)) },
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -520,109 +512,111 @@ private fun NumberField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    OutlinedTextField(
+    CtToolField(
         value = value,
         onValueChange = { raw -> onValueChange(FitScoring.sanitizeInput(raw, spec)) },
-        modifier = modifier,
-        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-        suffix = { Text(unit, style = MaterialTheme.typography.labelSmall) },
+        label = label,
         singleLine = true,
-        shape = CtShapeTokens.input,
         keyboardOptions = KeyboardOptions(
             keyboardType = if (spec.decimals > 0) KeyboardType.Decimal else KeyboardType.Number,
         ),
+        trailing = {
+            Text(
+                text = unit,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        modifier = modifier,
     )
 }
 
 @Composable
 private fun ScoreCard(calc: FitCalc) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+    val gradePalette = com.furina.classtools.ui.theme.GradeColors.tokens()
+    val gradeTone = if (calc.wtDone > 0) gradePalette.toneOf(calc.grade) else null
+    CtToolCard(
+        title = "实时评分",
+        trailing = {
+            CtPill(
+                text = if (calc.wtDone > 0) calc.grade else "未填写",
+                containerColor = gradeTone?.container ?: androidx.compose.ui.graphics.Color.Transparent,
+                contentColor = gradeTone?.content ?: MaterialTheme.colorScheme.onSurface,
+            )
+        },
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = calc.totalText,
-                    style = MaterialTheme.ctEmphasized.displayMediumEmphasized,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = " 分",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 6.dp),
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                // v4：等级胶囊改主题 semantic（浅/深两套，见 GradeColors）。
-                val gradePalette = com.furina.classtools.ui.theme.GradeColors.tokens()
-                val gradeTone = if (calc.wtDone > 0) gradePalette.toneOf(calc.grade) else null
-                CtPill(
-                    text = if (calc.wtDone > 0) calc.grade else "未填写",
-                    containerColor = gradeTone?.container ?: androidx.compose.ui.graphics.Color.Transparent,
-                    contentColor = gradeTone?.content ?: MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatChip("标准分", calc.std.toString())
-                StatChip("加分", calc.plus.toString())
-                StatChip("缺项", calc.miss.toString())
-                StatChip("已填权重", "${calc.wtDone}%")
-            }
-            if (calc.miss > 0) {
-                Text(
-                    text = "未填项按 0 计（共 ${calc.miss} 项缺项）",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            calc.rows.forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = row.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = "${row.sub} · 权重 ${row.weight}%",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = calc.totalText,
+                style = MaterialTheme.ctEmphasized.displayMediumEmphasized,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = " 分",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            CtToolStat(value = calc.std.toString(), label = "标准分", modifier = Modifier.weight(1f))
+            CtToolStat(value = calc.plus.toString(), label = "加分", modifier = Modifier.weight(1f))
+            CtToolStat(value = calc.miss.toString(), label = "缺项", modifier = Modifier.weight(1f))
+            CtToolStat(value = "${calc.wtDone}%", label = "已填权重", modifier = Modifier.weight(1f))
+        }
+        if (calc.miss > 0) {
+            Text(
+                text = "未填项按 0 计（共 ${calc.miss} 项缺项）",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        calc.rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = row.value,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.End,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.width(88.dp),
+                        text = row.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = row.score?.toString() ?: "—",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = if (row.score == null) MaterialTheme.colorScheme.onSurfaceVariant
-                        else MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier.width(40.dp),
-                    )
-                    Text(
-                        text = if (row.plus > 0) "+${row.plus}" else "",
+                        text = "${row.sub} · 权重 ${row.weight}%",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier.width(32.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Text(
+                    text = row.value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.width(88.dp),
+                )
+                Text(
+                    text = row.score?.toString() ?: "—",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (row.score == null) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(40.dp),
+                )
+                Text(
+                    text = if (row.plus > 0) "+${row.plus}" else "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(32.dp),
+                )
             }
         }
     }
 }
+
 
 
 @Composable
@@ -658,10 +652,13 @@ private fun ActionRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FilledTonalButton(onClick = onSave, enabled = canSave, shape = CtShapeTokens.pill, modifier = Modifier.weight(1f)) {
-            Text("保存记录")
-        }
-        OutlinedButton(onClick = onClear, shape = CtShapeTokens.pill, modifier = Modifier.weight(0.8f)) {
+        CtToolPrimaryButton(
+            text = "保存记录",
+            onClick = onSave,
+            enabled = canSave,
+            modifier = Modifier.weight(1f),
+        )
+        OutlinedButton(onClick = onClear, shape = CtShapeTokens.pill) {
             Text("清空")
         }
         IconButton(onClick = onCopy) {
@@ -680,64 +677,59 @@ private fun HistoryCard(
     onRename: (Int) -> Unit,
     onDelete: (Int) -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    CtToolCard(
+        title = "历史记录",
+        trailing = { CtPill(text = "最多 2 条") },
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (history.isEmpty()) {
             Text(
-                text = "历史记录（最多 2 条）",
-                style = MaterialTheme.typography.titleSmall,
+                text = "还没有历史记录 · 保存后最多保留最近 2 条",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (history.isEmpty()) {
-                Text(
-                    text = "还没有历史记录 · 保存后最多保留最近 2 条",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                history.forEachIndexed { index, record ->
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = record.displayName(),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = "${record.totalText()} 分 · ${record.grade}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            Text(
-                                text = "${record.timeText()} · ${record.sexEnum.label} · ${record.gradeEnum.short}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = record.detailText(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                TextButton(onClick = { onRestore(index) }) { Text("回填") }
-                                TextButton(onClick = { onRename(index) }) { Text("改名") }
-                                TextButton(onClick = { onDelete(index) }) { Text("删除") }
-                            }
-                        }
+        } else {
+            history.forEachIndexed { index, record ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
+                            RoundedCornerShape(16.dp),
+                        )
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = record.displayName(),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "${record.totalText()} 分 · ${record.grade}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Text(
+                        text = "${record.timeText()} · ${record.sexEnum.label} · ${record.gradeEnum.short}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = record.detailText(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { onRestore(index) }) { Text("回填") }
+                        TextButton(onClick = { onRename(index) }) { Text("改名") }
+                        TextButton(onClick = { onDelete(index) }) { Text("删除") }
                     }
                 }
             }
@@ -819,29 +811,52 @@ private fun StandardsSheet(
 @Composable
 private fun FitCenteredLoading(text: String) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
-        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        CtToolCard {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun FitCenteredError(message: String, onRetry: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 48.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("加载失败", style = MaterialTheme.typography.titleMedium)
-        Text(
-            text = message.ifBlank { "请稍后重试" },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        FilledTonalButton(onClick = onRetry, shape = CtShapeTokens.pill) { Text("重试") }
+        CtToolCard {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("加载失败", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = message.ifBlank { "请稍后重试" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                CtToolPrimaryButton(
+                    text = "重试",
+                    onClick = onRetry,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
     }
 }

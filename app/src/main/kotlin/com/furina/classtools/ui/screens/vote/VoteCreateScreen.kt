@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
@@ -38,7 +40,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -84,10 +85,11 @@ import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
-import com.furina.classtools.ui.components.expressive.CtChipGroup
-import com.furina.classtools.ui.components.expressive.CtChipOption
-import com.furina.classtools.ui.components.expressive.CtSegmentOption
-import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolChip
+import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.theme.CtShapeTokens
 import java.time.Instant
 import java.time.LocalDateTime
@@ -398,7 +400,7 @@ fun VoteCreateScreen(
                                 item(key = "errors") {
                                     Surface(
                                         modifier = Modifier.fillMaxWidth(),
-                                        shape = CtShapeTokens.toolCard,
+                                        shape = RoundedCornerShape(24.dp),
                                         color = MaterialTheme.colorScheme.errorContainer,
                                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                                     ) {
@@ -424,12 +426,12 @@ fun VoteCreateScreen(
 
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                             color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            tonalElevation = 2.dp,
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text(
                                     text = if (editing) {
@@ -446,7 +448,7 @@ fun VoteCreateScreen(
                                     enabled = !submitting && !submittingImage,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .heightIn(min = 48.dp),
+                                        .heightIn(min = 52.dp),
                                     shape = CtShapeTokens.pill,
                                 ) {
                                     if (submitting) {
@@ -515,31 +517,29 @@ private fun VoteBasicSection(
 ) {
     VoteSectionCard(title = "基本信息") {
         val titleError = voteErrorFor(errors, VoteField.TITLE)
-        OutlinedTextField(
+        CtToolField(
+            label = "标题",
             value = form.title,
             onValueChange = { value -> onUpdate { copy(title = value.take(VoteLimits.MAX_TITLE + 20)) } },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("标题") },
-            placeholder = { Text("例如：本周班会时间") },
-            isError = titleError != null,
-            supportingText = {
-                Text("${form.title.length}/${VoteLimits.MAX_TITLE}" + (titleError?.let { " · $it" } ?: ""))
-            },
+            placeholder = "例如：本周班会时间",
+        )
+        Text(
+            text = "${form.title.length}/${VoteLimits.MAX_TITLE}" + (titleError?.let { " · $it" } ?: ""),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (titleError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         val descError = voteErrorFor(errors, VoteField.DESCRIPTION)
-        OutlinedTextField(
+        CtToolField(
+            label = "说明（可选）",
             value = form.description,
             onValueChange = { value -> onUpdate { copy(description = value.take(VoteLimits.MAX_DESCRIPTION + 100)) } },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 3,
-            maxLines = 6,
-            label = { Text("说明（可选）") },
-            placeholder = { Text("补充背景、注意事项…") },
-            isError = descError != null,
-            supportingText = {
-                Text("${form.description.length}/${VoteLimits.MAX_DESCRIPTION}" + (descError?.let { " · $it" } ?: ""))
-            },
+            placeholder = "补充背景、注意事项…",
+            singleLine = false,
+        )
+        Text(
+            text = "${form.description.length}/${VoteLimits.MAX_DESCRIPTION}" + (descError?.let { " · $it" } ?: ""),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (descError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -555,22 +555,18 @@ private fun VoteDeadlineSection(
     val zone = remember { ZoneId.systemDefault() }
     val deadlineError = voteErrorFor(errors, VoteField.DEADLINE)
     VoteSectionCard(title = "截止时间") {
-        CtSegmentedButtons(
-            options = listOf(
-                CtSegmentOption("quick", "限时"),
-                CtSegmentOption("at", "指定"),
-                CtSegmentOption("none", "不限"),
-            ),
-            selectedKey = when (form.deadlineType) {
-                DeadlineType.QUICK -> "quick"
-                DeadlineType.AT -> "at"
-                DeadlineType.NONE -> "none"
+        CtToolSegmented(
+            options = listOf("限时", "指定", "不限"),
+            selectedIndex = when (form.deadlineType) {
+                DeadlineType.QUICK -> 0
+                DeadlineType.AT -> 1
+                DeadlineType.NONE -> 2
             },
-            onSelect = { key ->
+            onSelect = { index ->
                 onUpdate {
-                    when (key) {
-                        "quick" -> copy(deadlineType = DeadlineType.QUICK)
-                        "at" -> copy(
+                    when (index) {
+                        0 -> copy(deadlineType = DeadlineType.QUICK)
+                        1 -> copy(
                             deadlineType = DeadlineType.AT,
                             deadlineAt = deadlineAt.takeIf { it > 0L }
                                 ?: (nowMillis + 24L * 60 * 60 * 1000),
@@ -580,20 +576,21 @@ private fun VoteDeadlineSection(
                     }
                 }
             },
-            showCheckIcon = false,
         )
         when (form.deadlineType) {
             DeadlineType.QUICK -> {
-                CtChipGroup(
-                    options = VoteLimits.QUICK_MINUTES.map { minutes ->
-                        CtChipOption(key = minutes.toString(), label = "$minutes 分钟")
-                    },
-                    selectedKeys = setOf(form.quickMinutes.toString()),
-                    onToggle = { key ->
-                        key.toIntOrNull()?.let { minutes -> onUpdate { copy(quickMinutes = minutes) } }
-                    },
-                    multiSelect = false,
-                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    VoteLimits.QUICK_MINUTES.forEach { minutes ->
+                        CtToolChip(
+                            text = "$minutes 分钟",
+                            selected = form.quickMinutes == minutes,
+                            onClick = { onUpdate { copy(quickMinutes = minutes) } },
+                        )
+                    }
+                }
                 Text(
                     text = "将于 ${VoteLogic.formatAt(VoteLogic.quickDeadline(nowMillis, form.quickMinutes))} 截止",
                     style = MaterialTheme.typography.bodySmall,
@@ -717,14 +714,14 @@ private fun VoteOptionsSection(
         VoteFieldError(optionsError)
         form.options.forEachIndexed { index, option ->
             var descVisible by remember { mutableStateOf(option.desc.isNotBlank()) }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(CtShapeTokens.listItem)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f))
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+            CtToolCard(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
             ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "${index + 1}",
@@ -732,16 +729,14 @@ private fun VoteOptionsSection(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.width(20.dp),
                     )
-                    OutlinedTextField(
+                    CtToolField(
+                        label = "选项文字",
                         value = option.text,
                         onValueChange = { value ->
                             onUpdate { copy(options = options.replaceAt(index) { it.copy(text = value.take(100)) }) }
                         },
                         modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        placeholder = { Text("选项文字") },
-                        isError = voteOptionError(errors, index, "OPTION_TEXT") != null,
-                        supportingText = { Text("${option.text.length}/${VoteLimits.MAX_OPTION_TEXT}") },
+                        placeholder = "选项文字",
                     )
                     IconButton(
                         onClick = {
@@ -779,17 +774,14 @@ private fun VoteOptionsSection(
                 val imageError = voteOptionError(errors, index, "OPTION_IMAGE") ?: voteErrorFor(errors, VoteField.OPTION_IMAGE)
                 VoteFieldError(textError)
                 if (descVisible) {
-                    OutlinedTextField(
+                    CtToolField(
+                        label = "补充说明（可选）",
                         value = option.desc,
                         onValueChange = { value ->
                             onUpdate { copy(options = options.replaceAt(index) { it.copy(desc = value.take(240)) }) }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        minLines = 1,
-                        maxLines = 3,
-                        label = { Text("补充说明（可选）") },
-                        isError = descError != null,
-                        supportingText = { Text("${option.desc.length}/${VoteLimits.MAX_OPTION_DESC}") },
+                        singleLine = false,
                     )
                     VoteFieldError(descError)
                 }
@@ -830,7 +822,7 @@ private fun VoteOptionsSection(
                             contentDescription = "第 ${index + 1} 个选项配图",
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(CtShapeTokens.listItem),
+                                .clip(RoundedCornerShape(18.dp)),
                         )
                         IconButton(
                             onClick = {
@@ -849,6 +841,7 @@ private fun VoteOptionsSection(
                             )
                         }
                     }
+                }
                 }
             }
         }
@@ -876,22 +869,18 @@ private fun VoteRulesSection(
 ) {
     val settingsError = voteErrorFor(errors, VoteField.SETTINGS)
     VoteSectionCard(title = "投票规则") {
-        CtSegmentedButtons(
-            options = listOf(
-                CtSegmentOption("single", "单选"),
-                CtSegmentOption("multi", "多选"),
-            ),
-            selectedKey = if (form.multi) "multi" else "single",
-            onSelect = { key ->
+        CtToolSegmented(
+            options = listOf("单选", "多选"),
+            selectedIndex = if (form.multi) 1 else 0,
+            onSelect = { index ->
                 onUpdate {
-                    if (key == "multi") {
+                    if (index == 1) {
                         copy(multi = true, maxChoices = maxChoices.coerceAtLeast(2))
                     } else {
                         copy(multi = false, maxChoices = 1)
                     }
                 }
             },
-            showCheckIcon = false,
         )
         if (form.multi) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -947,29 +936,24 @@ private fun VoteRulesSection(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        CtSegmentedButtons(
-            options = listOf(
-                CtSegmentOption("always", "始终"),
-                CtSegmentOption("afterVote", "投票后"),
-                CtSegmentOption("afterClose", "截止后"),
-            ),
-            selectedKey = when (form.resultVisibility) {
-                PollResultVisibility.ALWAYS -> "always"
-                PollResultVisibility.AFTER_VOTE -> "afterVote"
-                PollResultVisibility.AFTER_CLOSE -> "afterClose"
+        CtToolSegmented(
+            options = listOf("始终", "投票后", "截止后"),
+            selectedIndex = when (form.resultVisibility) {
+                PollResultVisibility.ALWAYS -> 0
+                PollResultVisibility.AFTER_VOTE -> 1
+                PollResultVisibility.AFTER_CLOSE -> 2
             },
-            onSelect = { key ->
+            onSelect = { index ->
                 onUpdate {
                     copy(
-                        resultVisibility = when (key) {
-                            "always" -> PollResultVisibility.ALWAYS
-                            "afterClose" -> PollResultVisibility.AFTER_CLOSE
+                        resultVisibility = when (index) {
+                            0 -> PollResultVisibility.ALWAYS
+                            2 -> PollResultVisibility.AFTER_CLOSE
                             else -> PollResultVisibility.AFTER_VOTE
                         },
                     )
                 }
             },
-            showCheckIcon = false,
         )
     }
 }
@@ -984,30 +968,24 @@ private fun VoteAudienceSection(
 ) {
     val audienceError = voteErrorFor(errors, VoteField.AUDIENCE)
     VoteSectionCard(title = "可见范围") {
-        CtSegmentedButtons(
-            options = listOf(
-                CtSegmentOption("all", "全班"),
-                CtSegmentOption("committee", "班委"),
-                CtSegmentOption("league", "团员"),
-                CtSegmentOption("custom", "指定"),
-            ),
-            selectedKey = when (form.audience) {
-                PollAudience.ALL -> "all"
-                PollAudience.COMMITTEE -> "committee"
-                PollAudience.LEAGUE -> "league"
-                PollAudience.CUSTOM -> "custom"
+        CtToolSegmented(
+            options = listOf("全班", "班委", "团员", "指定"),
+            selectedIndex = when (form.audience) {
+                PollAudience.ALL -> 0
+                PollAudience.COMMITTEE -> 1
+                PollAudience.LEAGUE -> 2
+                PollAudience.CUSTOM -> 3
             },
-            onSelect = { key ->
+            onSelect = { index ->
                 onUpdate {
-                    when (key) {
-                        "committee" -> copy(audience = PollAudience.COMMITTEE)
-                        "league" -> copy(audience = PollAudience.LEAGUE)
-                        "custom" -> copy(audience = PollAudience.CUSTOM)
+                    when (index) {
+                        1 -> copy(audience = PollAudience.COMMITTEE)
+                        2 -> copy(audience = PollAudience.LEAGUE)
+                        3 -> copy(audience = PollAudience.CUSTOM)
                         else -> copy(audience = PollAudience.ALL)
                     }
                 }
             },
-            showCheckIcon = false,
         )
         Text(
             text = when (form.audience) {
@@ -1020,22 +998,15 @@ private fun VoteAudienceSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (form.audience == PollAudience.CUSTOM) {
-            OutlinedButton(
+            CtToolPrimaryButton(
+                text = if (form.audienceSeats.isEmpty()) {
+                    "选择可见成员"
+                } else {
+                    "已选 ${form.audienceSeats.size} 人 · 修改"
+                },
                 onClick = onOpenPicker,
                 enabled = memberSourceAvailable,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-                shape = CtShapeTokens.pill,
-            ) {
-                Text(
-                    text = if (form.audienceSeats.isEmpty()) {
-                        "选择可见成员"
-                    } else {
-                        "已选 ${form.audienceSeats.size} 人 · 修改"
-                    },
-                )
-            }
+            )
             if (!memberSourceAvailable) {
                 Text(
                     text = "成员名单暂不可用，请稍后再试",
@@ -1058,20 +1029,12 @@ private fun VoteSectionCard(
     title: String,
     content: @Composable () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
+    // v6：统一卡片外壳 + 卡片标题；内部保持 10dp 字段间距
+    CtToolCard(title = title) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             content()
         }
     }

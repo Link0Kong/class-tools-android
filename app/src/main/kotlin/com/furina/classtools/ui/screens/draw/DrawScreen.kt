@@ -363,7 +363,6 @@ private fun DrawReadyContent(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    DrawStepHeadline(step = workflow.step)
                     DrawStepIndicator(current = workflow.step, onSelect = onSelectStep)
                     if (workflow.step == DrawStep.CONFIG) {
                         DrawConfigCard(
@@ -422,7 +421,6 @@ private fun DrawReadyContent(
                     .padding(horizontal = horizontal),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                DrawStepHeadline(step = workflow.step)
                 DrawStepIndicator(current = workflow.step, onSelect = onSelectStep)
 
                 when (workflow.step) {

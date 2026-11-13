@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
@@ -63,6 +64,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -90,7 +93,12 @@ import com.furina.classtools.features.ppt.PptResumeLogic
 import com.furina.classtools.features.ppt.PptResumeRecord
 import com.furina.classtools.features.ppt.PptStatusTexts
 import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.theme.CtShapeTokens
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -401,9 +409,9 @@ fun PptListContent(
                 actions = {
                     Button(
                         onClick = onUpload,
-                        modifier = Modifier.height(36.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        shape = CtShapeTokens.pill,
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 0.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     ) {
                         Icon(
@@ -500,6 +508,21 @@ fun PptListContent(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
+                        item(key = "v6-section") {
+                            Box(modifier = Modifier.semantics { heading() }) {
+                                CtToolSectionHeader(
+                                    title = "演示库",
+                                    subtitle = "全部班级成员可上传 · 点击卡片下载或预览",
+                                    trailing = {
+                                        Text(
+                                            text = "${visibleDecks.size} 个",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    },
+                                )
+                            }
+                        }
                         uploadBar?.let { bar ->
                             item(key = "local-upload") {
                                 PptDeckCard(
@@ -576,18 +599,14 @@ private fun PptDeckCard(
     val statusKind = PptStatusTexts.kindOf(deck.status)
     val uploading = statusKind == PptStatusTexts.Kind.UPLOADING && uploadPercent != null
     val percent = uploadPercent ?: deck.localUploadPercent ?: 0
-    Surface(
+    CtToolCard(
         modifier = Modifier
-            .fillMaxWidth()
             .heightIn(min = 96.dp)
-            .clip(CtShapeTokens.toolCard)
             .clickable { onOpen() },
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 0.dp,
+        contentPadding = PaddingValues(12.dp),
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -703,15 +722,10 @@ private fun PptDeckCard(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        Text(
-                            text = "取消",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { onCancelUpload?.invoke() }
-                                .padding(horizontal = 8.dp, vertical = 2.dp),
-                        )
+                        TextButton(
+                            onClick = { onCancelUpload?.invoke() },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) { Text("取消", style = MaterialTheme.typography.labelMedium) }
                     }
 
                     else -> Row(
@@ -723,15 +737,10 @@ private fun PptDeckCard(
                             failed = statusKind == PptStatusTexts.Kind.FAILED,
                         )
                         if (onRetry != null) {
-                            Text(
-                                text = "重试",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable { onRetry() }
-                                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                            )
+                            TextButton(
+                                onClick = onRetry,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) { Text("重试", style = MaterialTheme.typography.labelMedium) }
                         }
                     }
                 }
@@ -835,13 +844,12 @@ private fun PptListSkeleton() {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         repeat(3) {
-            Surface(
+            CtToolCard(
                 modifier = Modifier.fillMaxWidth().height(96.dp),
-                shape = CtShapeTokens.toolCard,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                contentPadding = PaddingValues(12.dp),
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -877,33 +885,18 @@ private fun PptListSkeleton() {
 @Composable
 private fun PptListEmpty(onUpload: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            imageVector = Icons.Rounded.Slideshow,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(44.dp),
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = PptStatusTexts.EMPTY_TITLE,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = PptStatusTexts.EMPTY_HINT,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(18.dp))
-        Button(onClick = onUpload, shape = RoundedCornerShape(14.dp)) {
-            Icon(Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("上传 PPT")
+        CtToolCard(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)) {
+            EmptyState(
+                icon = Icons.Rounded.Slideshow,
+                title = PptStatusTexts.EMPTY_TITLE,
+                message = PptStatusTexts.EMPTY_HINT,
+            )
+            Spacer(Modifier.height(8.dp))
+            CtToolPrimaryButton(text = "上传 PPT", onClick = onUpload)
         }
     }
 }
@@ -911,20 +904,18 @@ private fun PptListEmpty(onUpload: () -> Unit) {
 @Composable
 private fun PptListError(message: String, onRetry: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
-        )
-        Spacer(Modifier.height(14.dp))
-        Button(onClick = onRetry) {
-            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("重试")
+        CtToolCard(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)) {
+            EmptyState(
+                icon = Icons.Rounded.ErrorOutline,
+                title = "加载失败",
+                message = message,
+            )
+            Spacer(Modifier.height(8.dp))
+            CtToolPrimaryButton(text = "重试", onClick = onRetry)
         }
     }
 }
@@ -952,20 +943,26 @@ private fun PptTitleDialog(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                OutlinedTextField(
+                CtToolField(
+                    label = "标题（≤80 字）",
                     value = title,
                     onValueChange = { onTitleChange(it.take(PptLimits.MAX_TITLE_CHARS)) },
-                    label = { Text("标题（≤80 字）") },
+                    placeholder = "给演示起个名字",
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(title) }) { Text("开始上传") }
+            TextButton(
+                onClick = { onConfirm(title) },
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) { Text("开始上传") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) { Text("取消") }
         },
     )
 }

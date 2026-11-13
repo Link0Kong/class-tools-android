@@ -2,53 +2,37 @@
 
 package com.furina.classtools.ui.screens.notices
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.grid.LazyGridItemScope
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.SnapshotStateMap
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -61,15 +45,12 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.furina.classtools.ui.components.expressive.CtAnimatedCounter
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.theme.CtMotion
-import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlinx.coroutines.delay
-
 // =============================================================================
 // 通知页高级动效（task-43）
 //
@@ -216,16 +197,25 @@ internal fun NoticeEntrance(
  * - 点开详情（[expanded]）：scale → 1.016、圆角变大、投影抬升 5dp，配合弹层滑入形成延伸感；
  * - reduceMotion：不缩放/无高光动画（[expanded] 直接终态），仍保留可点击与语义。
  */
+/**
+ * 通知卡片（v6 外壳 + task-43 按压/延伸动效）：
+ *
+ * - 外壳直接使用 [CtToolCard]（24dp / 软描边 / 统一 18·16 padding），与其它工具页一致；
+ * - 按下 spring 缩放 0.965 + 顶部高光；点开详情 expanded 缩放 1.016 + 投影抬升（配合弹层滑入）；
+ * - 置顶用 1dp primary 描边环表达；已处理由标题删除线 + 「已处理」胶囊表达（卡片本身保持统一底色）；
+ * - reduceMotion：不缩放/不高光，仍保留点击与语义。
+ */
 @Composable
 internal fun NoticePressableCard(
     onClick: () -> Unit,
-    containerColor: Color,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     expanded: Boolean = false,
     previewPressed: Boolean = false,
-    content: @Composable BoxScope.() -> Unit,
+    pinned: Boolean = false,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -237,22 +227,13 @@ internal fun NoticePressableCard(
         animationSpec = if (reduceMotion && !previewPressed) snap() else NoticeMotionTokens.pressSpring,
         label = "noticeCardPress",
     )
-    // reduceMotion 下不做装饰性延伸（避免弹层打开时卡片瞬间跳一下）
     val expandTarget = if (expanded && !reduceMotion) 1f else 0f
     val expand by animateFloatAsState(
         targetValue = expandTarget,
         animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.expandSpring,
         label = "noticeCardExpand",
     )
-
-    val radius by animateDpAsState(
-        targetValue = 16.dp -
-            (NoticeMotionTokens.PRESS_RADIUS_DELTA_DP * press).dp +
-            (NoticeMotionTokens.EXPAND_RADIUS_DELTA_DP * expand).dp,
-        animationSpec = if (reduceMotion) snap() else CtMotion.spatialFastDp,
-        label = "noticeCardRadius",
-    )
-    val elevation by animateDpAsState(
+    val shadowElevation by animateDpAsState(
         targetValue = (NoticeMotionTokens.PRESS_ELEVATION_DP * press).dp +
             (NoticeMotionTokens.EXPAND_ELEVATION_DP * expand).dp,
         animationSpec = if (reduceMotion) snap() else CtMotion.spatialFastDp,
@@ -275,52 +256,60 @@ internal fun NoticePressableCard(
     } else {
         Modifier.semantics { role = Role.Button }
     }
+    val shape = RoundedCornerShape(24.dp)
+    val ringColor = if (pinned) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+    } else {
+        Color.Transparent
+    }
 
-    Surface(
-        onClick = onClick,
+    Box(
         modifier = modifier
+            .fillMaxWidth()
             .minimumInteractiveComponentSize()
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
+            .shadow(elevation = shadowElevation, shape = shape, clip = false)
+            .clip(shape)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+            )
             .then(semanticsModifier),
-        shape = RoundedCornerShape(radius),
-        color = containerColor,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        shadowElevation = elevation,
-        interactionSource = interaction,
     ) {
-        Box {
-            content()
-            if (highlightAlpha > 0.005f) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clip(RoundedCornerShape(radius))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    highlight.copy(alpha = highlightAlpha),
-                                    Color.Transparent,
-                                ),
+        CtToolCard(
+            modifier = Modifier.border(1.dp, ringColor, shape),
+            contentPadding = contentPadding,
+            content = content,
+        )
+        if (highlightAlpha > 0.005f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(shape)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                highlight.copy(alpha = highlightAlpha),
+                                Color.Transparent,
                             ),
                         ),
-                )
-            }
+                    ),
+            )
         }
     }
 }
-
 // -----------------------------------------------------------------------------
 // 筛选 chips：弹性选中 + 勾选动画 + 计数动画
 // -----------------------------------------------------------------------------
 
-/** 通知筛选 chip（key/label/可选计数）。 */
+/** 通知筛选 chip（key + 展示文案；计数由调用方拼进文案以保留逐帧动画）。 */
 internal data class NoticeChip(
     val key: String,
     val label: String,
-    val count: Int? = null,
 )
 
 /**
@@ -361,7 +350,6 @@ private fun NoticeElasticChip(
     previewBounce: Boolean,
     onClick: () -> Unit,
 ) {
-    val scheme = MaterialTheme.colorScheme
     val bounce = remember { Animatable(1f) }
     LaunchedEffect(selected, reduceMotion) {
         if (reduceMotion) {
@@ -380,33 +368,12 @@ private fun NoticeElasticChip(
         }
     }
     val scale = if (previewBounce) 1.07f else bounce.value
-
-    val container by animateColorAsState(
-        targetValue = if (selected) scheme.secondaryContainer else Color.Transparent,
-        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
-        label = "noticeChipContainer",
-    )
-    val content by animateColorAsState(
-        targetValue = if (selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
-        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
-        label = "noticeChipContent",
-    )
-    val border by animateColorAsState(
-        targetValue = if (selected) Color.Transparent else scheme.outlineVariant,
-        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
-        label = "noticeChipBorder",
-    )
-
-    val checkEnter: EnterTransition =
-        if (reduceMotion) EnterTransition.None else fadeIn(tween(90)) + scaleIn(initialScale = 0.4f, animationSpec = tween(140))
-    val checkExit: ExitTransition =
-        if (reduceMotion) ExitTransition.None else fadeOut(tween(70)) + scaleOut(targetScale = 0.4f, animationSpec = tween(100))
-
-    Surface(
+    // v6 统一筛选胶囊（CtToolChip）；弹性缩放与选中态语义保留，计数文本由调用方逐帧动画生成。
+    CtToolChip(
+        text = chip.label,
+        selected = selected,
         onClick = onClick,
         modifier = Modifier
-            .minimumInteractiveComponentSize()
-            .heightIn(min = 40.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -416,46 +383,5 @@ private fun NoticeElasticChip(
                 this.selected = selected
                 stateDescription = if (selected) "已选中" else "未选中"
             },
-        shape = CtShapeTokens.chip,
-        color = container,
-        contentColor = content,
-        border = BorderStroke(1.dp, border),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AnimatedVisibility(
-                visible = selected,
-                enter = checkEnter,
-                exit = checkExit,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                }
-            }
-            Text(
-                text = chip.label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (chip.count != null) {
-                Spacer(Modifier.width(5.dp))
-                CtAnimatedCounter(
-                    value = chip.count,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = content,
-                    animationSpec = NoticeMotionTokens.crossFade,
-                    label = "noticeChipCount_${chip.key}",
-                )
-            }
-        }
-    }
+    )
 }

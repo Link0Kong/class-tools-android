@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -90,6 +91,9 @@ import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolSectionHeader
+import com.furina.classtools.ui.components.tool.CtToolStat
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.CtShapeTokens
 import java.text.SimpleDateFormat
@@ -438,16 +442,11 @@ fun DiagScreen(
                         LoadingRow()
                     }
                     if (loadError.isNotBlank() && groups.isEmpty()) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = CtShapeTokens.toolCard,
-                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                        ) {
+                        CtToolCard {
                             Text(
                                 text = "加载失败：${DiagSanitizer.sanitizeDisplay(loadError)}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(12.dp),
+                                color = MaterialTheme.colorScheme.error,
                             )
                         }
                     }
@@ -521,56 +520,62 @@ private fun SummaryStrip(
     lastUpdated: String,
     horizontalPadding: androidx.compose.ui.unit.Dp,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = horizontalPadding, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "$anomalyCount 项异常",
-            style = MaterialTheme.typography.labelMedium,
-            color = if (anomalyCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium,
-        )
-        val stats = buildList {
-            if (autoFixable > 0) add("可自动修复 $autoFixable")
-            if (fixedCount > 0) add("已修复 $fixedCount")
-        }
-        if (stats.isNotEmpty()) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = stats.joinToString(" · "),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding)) {
+        Box(modifier = Modifier.semantics { heading() }) {
+            CtToolSectionHeader(
+                title = "诊断摘要",
+                subtitle = "只展示异常 / 可自动修复项，点分组查看详情",
             )
         }
-        Spacer(modifier = Modifier.weight(1f))
-        if (lastUpdated.isNotBlank()) {
-            Text(
-                text = "最后更新 $lastUpdated",
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                maxLines = 1,
-            )
+        CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CtToolStat(
+                    value = "$anomalyCount",
+                    label = "项异常",
+                    valueColor = if (anomalyCount > 0) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+                if (autoFixable > 0) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    CtToolStat(value = "$autoFixable", label = "可自动修复")
+                }
+                if (fixedCount > 0) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    CtToolStat(value = "$fixedCount", label = "已修复")
+                }
+            }
+            if (lastUpdated.isNotBlank()) {
+                Text(
+                    text = "最后更新 $lastUpdated",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun LoadingRow() {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-        Text(
-            text = "加载诊断数据…",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            Text(
+                text = "加载诊断数据…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -581,28 +586,28 @@ private fun DiagCard(
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    Surface(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .weight(1f)
-                        .semantics { heading() },
-                )
-                if (status != null) StatusPill(status)
-                trailing?.invoke()
+        Box(modifier = Modifier.semantics { heading() }) {
+            CtToolSectionHeader(
+                title = title,
+                trailing = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (status != null) StatusPill(status)
+                        trailing?.invoke()
+                    }
+                },
+            )
+        }
+        CtToolCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                content()
             }
-            content()
         }
     }
 }
@@ -656,7 +661,7 @@ private fun AiAnalysisRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 34.dp)
+                .heightIn(min = 48.dp)
                 .clickable(onClick = onToggle)
                 .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1194,56 +1199,56 @@ private fun OthersSection(
 ) {
     if (index.othersCount == 0) return
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 34.dp)
-                .clickable(onClick = onToggleExpanded)
-                .padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .heightIn(min = 48.dp)
+                .semantics { heading() }
+                .clickable(onClick = onToggleExpanded),
         ) {
-            Text(
-                text = "其它诊断",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            CtPill(
-                text = "${index.othersCount}",
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "›",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.rotate(if (expanded) 90f else 0f),
+            CtToolSectionHeader(
+                title = "其它诊断",
+                subtitle = "无关联 AI 结论 / 历史修复，默认收起",
+                trailing = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CtPill(
+                            text = "${index.othersCount}",
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "›",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.rotate(if (expanded) 90f else 0f),
+                        )
+                    }
+                },
             )
         }
         if (expanded) {
-            Column(
-                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                index.others.forEach { analysis ->
-                    AiAnalysisRow(
-                        analysis = analysis,
-                        repair = index.repairFor(analysis),
-                        expanded = analysis.id in expandedIds,
-                        onToggle = { onToggleAnalysis(analysis.id) },
-                        nowMillis = nowMillis,
-                    )
-                }
-                index.orphanRepairs.forEach { repair ->
-                    RelatedRepairBlock(repair = repair, nowMillis = nowMillis)
-                }
-                if (index.others.isEmpty() && index.orphanRepairs.isNotEmpty() && !agentOnline) {
-                    Text(
-                        text = DiagUiText.pendingText(false),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    )
+            CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    index.others.forEach { analysis ->
+                        AiAnalysisRow(
+                            analysis = analysis,
+                            repair = index.repairFor(analysis),
+                            expanded = analysis.id in expandedIds,
+                            onToggle = { onToggleAnalysis(analysis.id) },
+                            nowMillis = nowMillis,
+                        )
+                    }
+                    index.orphanRepairs.forEach { repair ->
+                        RelatedRepairBlock(repair = repair, nowMillis = nowMillis)
+                    }
+                    if (index.others.isEmpty() && index.orphanRepairs.isNotEmpty() && !agentOnline) {
+                        Text(
+                            text = DiagUiText.pendingText(false),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        )
+                    }
                 }
             }
         }
@@ -1333,7 +1338,7 @@ private val previewSession = Session(
     token = "preview-token",
 )
 
-private object PreviewDiagRepository : DiagRepository {
+internal object PreviewDiagRepository : DiagRepository {
     override suspend fun loadServiceHealth(): DiagResult<List<ServiceHealthRow>> =
         DiagResult.Success(previewHealthRows())
 

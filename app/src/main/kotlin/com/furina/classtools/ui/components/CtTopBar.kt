@@ -28,8 +28,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
- * 轻量顶栏：返回 + 标题 + 右侧动作。
- * 原生实现（不用实验性 TopAppBar API），滚动行为由各页面自己控制。
+ * 轻量顶栏 v6：圆形玻璃返回 + 大标题（+ 副标题）+ 右侧动作胶囊。
+ *
+ * 不再铺满半透明底条：直接落在 [com.furina.classtools.ui.components.ExpressiveBackground] 的新背景上，
+ * 与「我的」hero / 工作台 hero 的层级一致；滚动行为仍由各页面自己控制。
  */
 @Composable
 fun CtTopBar(
@@ -45,28 +47,35 @@ fun CtTopBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
-            )
-            .heightIn(min = if (tight) 52.dp else 56.dp)
-            .padding(horizontal = if (tight) 4.dp else 8.dp, vertical = if (tight) 4.dp else 6.dp),
+            .heightIn(min = if (tight) 56.dp else 60.dp)
+            .padding(
+                start = if (tight) 12.dp else 12.dp,
+                end = if (tight) 12.dp else 12.dp,
+                top = if (tight) 6.dp else 8.dp,
+                bottom = if (tight) 4.dp else 6.dp,
+            ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (onBack != null) {
-            IconButton(
+            Surface(
                 onClick = onBack,
-                colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                ),
+                modifier = Modifier.size(44.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                tonalElevation = 1.dp,
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "返回",
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.size(21.dp),
+                    )
+                }
             }
         } else {
-            Box(modifier = Modifier.size(12.dp))
+            Box(modifier = Modifier.size(4.dp))
         }
 
         androidx.compose.foundation.layout.Column(
@@ -74,8 +83,9 @@ fun CtTopBar(
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 // 读屏「按标题导航」可定位到页面标题。

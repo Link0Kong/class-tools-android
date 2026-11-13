@@ -11,12 +11,18 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -30,6 +36,7 @@ import androidx.compose.material.icons.rounded.StopCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +53,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -66,8 +75,15 @@ import com.furina.classtools.ui.components.expressive.CtBottomSheetFooter
 import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
 import com.furina.classtools.ui.components.expressive.CtSegmentOption
 import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolChip
+import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -95,6 +111,41 @@ internal fun rememberNowTick(enabled: Boolean = true): Long {
 internal fun voteEffectiveNow(serverNow: Long, localAtFetch: Long, localNowClient: Long): Long =
     if (serverNow > 0L) serverNow + (localNowClient - localAtFetch) else localNowClient
 
+/**
+ * v6 可点击工具卡：CtToolCard 外壳（24dp/软描边/统一 padding）+ 按压缩放（稳定优先，不做共享元素）。
+ * 用于投票列表/详情/发起页的可点卡片。
+ */
+@Composable
+internal fun VoteToolCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.985f else 1f,
+        animationSpec = CtMotion.spatialFast,
+        label = "voteToolCardPress",
+    )
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(24.dp))
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+            ),
+    ) {
+        CtToolCard(contentPadding = contentPadding, content = content)
+    }
+}
 /** 倒计时胶囊：不限时不显示；已结束显示「已结束」；其余显示「剩 mm:ss / hh:mm:ss」。 */
 @Composable
 internal fun VoteCountdownPill(
@@ -211,7 +262,11 @@ internal fun VoteErrorContent(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Button(onClick = onRetry, shape = CtShapeTokens.pill) { Text("重试") }
+        CtToolPrimaryButton(
+            text = "重试",
+            onClick = onRetry,
+            modifier = Modifier.widthIn(max = 240.dp),
+        )
     }
 }
 
@@ -224,7 +279,7 @@ internal fun VoteOfflineBanner(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = CtShapeTokens.listItem,
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
@@ -281,9 +336,12 @@ internal fun VoteManageActionRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .padding(horizontal = 24.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -418,13 +476,12 @@ internal fun VoteExtendDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                CtSegmentedButtons(
-                    options = VoteLimits.QUICK_MINUTES.map { minutes ->
-                        CtSegmentOption(key = minutes.toString(), label = "$minutes 分钟")
+                CtToolSegmented(
+                    options = VoteLimits.QUICK_MINUTES.map { minutes -> "$minutes 分钟" },
+                    selectedIndex = VoteLimits.QUICK_MINUTES.indexOf(selectedMinutes).coerceAtLeast(0),
+                    onSelect = { index ->
+                        VoteLimits.QUICK_MINUTES.getOrNull(index)?.let { selectedMinutes = it }
                     },
-                    selectedKey = selectedMinutes.toString(),
-                    onSelect = { key -> key.toIntOrNull()?.let { selectedMinutes = it } },
-                    showCheckIcon = false,
                 )
                 Text(
                     text = "新截止：${VoteLogic.formatAt(VoteLogic.quickDeadline(nowMillis, selectedMinutes))}",
@@ -501,22 +558,22 @@ internal fun VoteMemberPickerSheet(
             title = "选择可见成员",
             subtitle = "已选 ${selected.size} 人 · 仅显示姓名与座号",
         )
-        CtSegmentedButtons(
-            options = MemberCategory.entries.map { CtSegmentOption(key = it.name, label = it.label) },
-            selectedKey = category.name,
-            onSelect = { key -> MemberCategory.entries.firstOrNull { it.name == key }?.let { category = it } },
+        CtToolSegmented(
+            options = MemberCategory.entries.map { it.label },
+            selectedIndex = MemberCategory.entries.indexOf(category).coerceAtLeast(0),
+            onSelect = { index ->
+                MemberCategory.entries.getOrNull(index)?.let { category = it }
+            },
             modifier = Modifier.padding(horizontal = 24.dp),
-            showCheckIcon = false,
         )
-        OutlinedTextField(
+        CtToolField(
+            label = "搜索",
             value = query,
             onValueChange = { query = it.take(20) },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 8.dp),
-            singleLine = true,
-            placeholder = { Text("搜索姓名 / 座号") },
-            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+            placeholder = "搜索姓名 / 座号",
         )
         Row(
             modifier = Modifier

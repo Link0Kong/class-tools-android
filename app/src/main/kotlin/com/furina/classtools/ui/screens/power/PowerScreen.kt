@@ -13,6 +13,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,13 +34,9 @@ import androidx.compose.material.icons.rounded.Apartment
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -88,8 +86,12 @@ import com.furina.classtools.ui.components.expressive.CtBottomSheetFooter
 import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
 import com.furina.classtools.ui.components.expressive.CtChipGroup
 import com.furina.classtools.ui.components.expressive.CtChipOption
-import com.furina.classtools.ui.components.expressive.CtSegmentOption
-import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.components.tool.CtToolInfoRow
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSectionHeader
+import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtTokens
 import com.furina.classtools.ui.theme.ctEmphasized
@@ -362,7 +364,6 @@ fun PowerScreen(
             when (phase) {
                 PowerPhase.IDLE -> IdleGuide(
                     onPick = { showHousePicker = true },
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
                 )
 
                 PowerPhase.LOADING -> LoadingState()
@@ -464,70 +465,78 @@ private fun IdleGuide(onPick: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(
-            imageVector = Icons.Rounded.Bolt,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(48.dp),
-        )
-        Text(
-            text = "关注一个宿舍，查看剩余电量",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = "选择保存在账号里，换设备登录会同步；未选择时不请求任何电量数据。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        FilledTonalButton(onClick = onPick, shape = CtShapeTokens.pill) {
-            Text("选择宿舍")
+        CtToolCard {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Bolt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(44.dp),
+                )
+                Text(
+                    text = "关注一个宿舍，查看剩余电量",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = "选择保存在账号里，换设备登录会同步；未选择时不请求任何电量数据。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
+        CtToolPrimaryButton(text = "选择宿舍", onClick = onPick)
         PrivacyFooter()
     }
 }
 
 @Composable
 private fun LoadingState() {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 56.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
-        Text(
-            text = "电量加载中…",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    com.furina.classtools.ui.components.CtLoading(
+        modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+        text = "电量加载中…",
+    )
 }
 
 @Composable
 private fun ErrorState(message: String, onRetry: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = "电费加载失败",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = message.ifBlank { "请稍后重试" },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        FilledTonalButton(onClick = onRetry, shape = CtShapeTokens.pill) { Text("重试") }
+        CtToolCard {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = "电费加载失败",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = message.ifBlank { "请稍后重试" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        CtToolPrimaryButton(text = "重试", onClick = onRetry)
     }
 }
 
@@ -595,6 +604,7 @@ private fun ReadyContent(
             onCursor = onCursor,
             onRetry = onRetryHistory,
         )
+        CtToolSectionHeader(title = "区间指标", subtitle = "用电、估算与计费参考")
         TilesSection(
             tiles = tiles,
             bill = rangeStatsForBill,
@@ -611,14 +621,13 @@ private fun ReadyContent(
 
 @Composable
 private fun PickRoomCard(sel: String, onPick: () -> Unit) {
-    Surface(
-        onClick = onPick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    CtToolCard(
+        modifier = Modifier
+            .clip(RoundedCornerShape(24.dp))
+            .clickable(onClick = onPick),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -638,6 +647,8 @@ private fun PickRoomCard(sel: String, onPick: () -> Unit) {
                     text = if (sel.isBlank()) "未选择" else PowerRooms.labelOf(sel),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Text(
@@ -664,61 +675,61 @@ private fun HeroCard(
         PowerState.OK -> brand.powerPositive
         PowerState.IDLE -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.hero,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+    CtToolCard(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // 余额 hero：环形仪表 + 大数字（ctEmphasized displaySmall）
+            RingGauge(
+                progress = ringArc,
+                accent = stateColor,
+                description = "剩余电量 ${PowerStats.fmtMain(row?.q)} ${row?.unit ?: "度"}，${PowerStats.stateText(state)}",
             ) {
-                RingGauge(
-                    progress = ringArc,
-                    accent = stateColor,
-                    description = "剩余电量 ${PowerStats.fmtMain(row?.q)} ${row?.unit ?: "度"}，${PowerStats.stateText(state)}",
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = PowerStats.fmtMain(row?.q),
-                            style = MaterialTheme.ctEmphasized.displaySmallEmphasized,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = row?.unit ?: "度",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        CtPill(
-                            text = PowerStats.stateText(state),
-                            containerColor = stateColor.copy(alpha = 0.16f),
-                            contentColor = stateColor,
-                        )
-                        if (slowRoom) {
-                            CtPill(text = "日更", containerColor = MaterialTheme.colorScheme.tertiaryContainer)
-                        }
-                    }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "剩余电量",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = "估算可用 $estimateDaysText 天",
-                        style = MaterialTheme.typography.titleSmall,
+                        text = PowerStats.fmtMain(row?.q),
+                        style = MaterialTheme.ctEmphasized.displaySmallEmphasized,
                         color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "更新 ${PowerStats.updText(row?.updatedAt).ifBlank { "—" }}",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = row?.unit ?: "度",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    CtPill(
+                        text = PowerStats.stateText(state),
+                        containerColor = stateColor.copy(alpha = 0.16f),
+                        contentColor = stateColor,
+                    )
+                    if (slowRoom) {
+                        CtPill(text = "日更", containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                    }
+                }
+                Text(
+                    text = "剩余电量",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "估算可用 $estimateDaysText 天",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "更新 ${PowerStats.updText(row?.updatedAt).ifBlank { "—" }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -790,19 +801,14 @@ private fun TrendSection(
     onCursor: (Int?) -> Unit,
     onRetry: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = range.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
+    CtToolCard(
+        title = range.title,
+        subtitle = slowUpdateText.takeIf { it.isNotBlank() && !slowRoom },
+        trailing = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 if (slowRoom) {
                     CtPill(text = "日更", containerColor = MaterialTheme.colorScheme.tertiaryContainer)
                 }
@@ -810,38 +816,25 @@ private fun TrendSection(
                     CtPill(text = "期间有充值", containerColor = MaterialTheme.colorScheme.secondaryContainer)
                 }
             }
-            if (slowUpdateText.isNotBlank() && !slowRoom) {
-                Text(
-                    text = slowUpdateText,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
-            }
-
-            // 区间分段 + 固定右上角气泡（气泡固定在绘图区外，不随手指移动）
-            Row(
+        },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 区间分段（v6 统一分段组件）；气泡/游标文案固定在图表上方右侧，不跟手。
+            CtToolSegmented(
+                options = ranges.map { it.label },
+                selectedIndex = ranges.indexOf(range).coerceAtLeast(0),
+                onSelect = { index -> ranges.getOrNull(index)?.let(onRangeChange) },
+            )
+            Text(
+                text = cursorText ?: "点按图表查看采样点",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (cursorText != null) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                CtSegmentedButtons(
-                    options = ranges.map { CtSegmentOption(key = it.key, label = it.label) },
-                    selectedKey = range.key,
-                    onSelect = { onRangeChange(PowerRange.fromKey(it)) },
-                    showCheckIcon = false,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = cursorText ?: "点按图表查看采样点",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (cursorText != null) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.End,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.width(150.dp),
-                )
-            }
+            )
             if (ranges.size < PowerRange.entries.size) {
                 Text(
                     text = "13/16 号楼为日更数据，不提供 24h 趋势",
@@ -910,9 +903,9 @@ private fun TilesSection(
     onCompareClick: () -> Unit,
     onTileClick: (PowerTile) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         tiles.chunked(2).forEachIndexed { rowIndex, rowTiles ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 rowTiles.forEachIndexed { colIndex, tile ->
                     Tile(
                         tile = tile,
@@ -937,21 +930,31 @@ private fun Tile(
     compare: PowerCompareResult? = null,
     onCompareClick: () -> Unit = {},
 ) {
-    val container = if (tile.highlight) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-    else MaterialTheme.colorScheme.surfaceContainerLow
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = container,
-        enabled = tile.clickable,
+    val accent = if (tile.highlight) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.onSurface
+    CtToolCard(
+        modifier = modifier.then(
+            if (tile.clickable) {
+                Modifier
+                    .clip(RoundedCornerShape(24.dp))
+                    .clickable(onClick = onClick)
+            } else {
+                Modifier
+            },
+        ),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Text(
                     text = tile.label,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 if (tile.ref) {
                     Text(
@@ -972,7 +975,9 @@ private fun Tile(
                 Text(
                     text = tile.value,
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = accent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 if (tile.unit.isNotBlank()) {
                     Text(
@@ -997,9 +1002,10 @@ private fun Tile(
                 val delta = availableCompare.percent ?: 0.0
                 val increase = delta > 0.05
                 val tone = if (increase) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-                Row(
+                Surface(
                     modifier = Modifier
-                        .heightIn(min = 24.dp)
+                        .padding(top = 4.dp)
+                        .heightIn(min = 28.dp)
                         .clickable(onClick = onCompareClick)
                         .semantics {
                             // 颜色只区分增减，读屏需明确方向（无障碍：不依赖颜色传达信息）。
@@ -1012,7 +1018,9 @@ private fun Tile(
                                 PowerCompareLogic.formatPercent(kotlin.math.abs(delta))
                             }，点击查看说明"
                         },
-                    verticalAlignment = Alignment.CenterVertically,
+                    shape = CtShapeTokens.pill,
+                    color = tone.copy(alpha = 0.12f),
+                    contentColor = tone,
                 ) {
                     Text(
                         text = buildString {
@@ -1023,9 +1031,9 @@ private fun Tile(
                             append(PowerCompareLogic.formatPercent(delta))
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = tone,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
             }
@@ -1035,16 +1043,12 @@ private fun Tile(
 
 @Composable
 private fun BillCard(bill: com.furina.classtools.data.power.BillInfo) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            BillLine("电价", bill.elecText)
-            BillLine("区间电费", bill.feeText)
-            BillLine("免费额度", bill.freeText)
-            BillLine("水费", bill.waterText)
+    CtToolCard(title = "计费参考") {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            CtToolInfoRow(label = "电价", value = bill.elecText)
+            CtToolInfoRow(label = "区间电费", value = bill.feeText)
+            CtToolInfoRow(label = "免费额度", value = bill.freeText)
+            CtToolInfoRow(label = "水费", value = bill.waterText)
             if (bill.hasDeduct) {
                 Text(
                     text = bill.deductText,
@@ -1053,22 +1057,6 @@ private fun BillCard(bill: com.furina.classtools.data.power.BillInfo) {
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun BillLine(label: String, value: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
     }
 }
 
@@ -1105,20 +1093,18 @@ private fun HousePickerSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // P-03：房间多时可直接搜索房间号/楼栋，结果跨楼栋展示。
-            OutlinedTextField(
+            CtToolField(
+                label = "搜索房间号 / 楼栋",
                 value = query,
                 onValueChange = { query = it.take(20) },
-                singleLine = true,
-                label = { Text("搜索房间号 / 楼栋") },
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                trailingIcon = {
+                placeholder = "例如 321 / 23号楼",
+                trailing = {
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { query = "" }) {
                             Icon(Icons.Rounded.Clear, contentDescription = "清除搜索")
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
             )
             if (query.isBlank()) {
                 CtChipGroup(
@@ -1168,8 +1154,10 @@ private fun HousePickerSheet(
                             val selected = room.rv == selectedRv
                             Surface(
                                 onClick = { onPick(room.rv) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 color = if (selected) MaterialTheme.colorScheme.primaryContainer
                                 else MaterialTheme.colorScheme.surfaceContainerHigh,
                                 contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
@@ -1207,8 +1195,8 @@ private fun HousePickerSheet(
 private fun RoomButton(room: RoomInfo, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.heightIn(min = 48.dp),
+        shape = RoundedCornerShape(16.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
@@ -1245,8 +1233,10 @@ private fun LowThresholdSheet(
                         val selected = value == current
                         Surface(
                             onClick = { onPick(value) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp),
+                            shape = RoundedCornerShape(16.dp),
                             color = if (selected) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceContainerHigh,
                             contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer

@@ -18,6 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -65,6 +67,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -89,6 +92,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -120,16 +124,17 @@ import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
-import com.furina.classtools.ui.components.expressive.CtAnimatedCounter
-import com.furina.classtools.ui.components.glass.CtGlassCard
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolSectionHeader
+import com.furina.classtools.ui.components.tool.CtToolStat
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
-import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -659,9 +664,18 @@ fun NoticesScreen(
 
                         NoticeFilterChips(
                             chips = listOf(
-                                NoticeChip(NoticeFilter.ALL.name, "全部", allItems.size),
-                                NoticeChip(NoticeFilter.PENDING.name, "未处理", pendingCount),
-                                NoticeChip(NoticeFilter.PINNED.name, "置顶", pinnedCount),
+                                NoticeChip(
+                                    NoticeFilter.ALL.name,
+                                    "全部 " + animatedStatText(allItems.size, reduceMotion),
+                                ),
+                                NoticeChip(
+                                    NoticeFilter.PENDING.name,
+                                    "未处理 " + animatedStatText(pendingCount, reduceMotion),
+                                ),
+                                NoticeChip(
+                                    NoticeFilter.PINNED.name,
+                                    "置顶 " + animatedStatText(pinnedCount, reduceMotion),
+                                ),
                             ),
                             selectedKey = filter.name,
                             onSelect = { key ->
@@ -842,101 +856,57 @@ private fun buildSubtitle(
 // 顶部：简报 / 搜索
 // -----------------------------------------------------------------------------
 
-/** 待处理简报（小程序 nt 页简报卡简化版：4 格统计 + 细线分隔，无图表无说明文字）。 */
+/** 待处理简报（v6：CtToolCard + CtToolStat；数字保留逐帧滚动，移除旧玻璃卡）。 */
 @Composable
 private fun NoticeBriefing(
     stats: NoticeBriefStats,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    CtGlassCard(modifier = modifier, shape = CtShapeTokens.toolCard) {
+    CtToolCard(modifier = modifier, title = "待处理简报") {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(modifier = Modifier.weight(1.2f)) {
-                Text(
-                    text = "待处理简报",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(verticalAlignment = Alignment.Bottom) {
-                    CtAnimatedCounter(
-                        value = stats.pending,
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.primary,
-                        animationSpec = if (reduceMotion) snap() else CtMotion.effects,
-                        label = "noticeBriefPending",
-                    )
-                    Text(
-                        text = " 项",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 3.dp),
-                    )
-                }
-            }
-            BriefStatCell(
+            CtToolStat(
+                value = animatedStatText(stats.pending, reduceMotion),
+                label = "待处理",
+                valueColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+            )
+            CtToolStat(
+                value = animatedStatText(stats.urgent, reduceMotion),
                 label = "24h 截止",
-                value = stats.urgent,
-                color = MaterialTheme.colorScheme.error,
-                reduceMotion = reduceMotion,
+                valueColor = MaterialTheme.colorScheme.error,
                 modifier = Modifier.weight(1f),
             )
-            BriefStatCell(
+            CtToolStat(
+                value = animatedStatText(stats.week, reduceMotion),
                 label = "7 天内",
-                value = stats.week,
-                color = MaterialTheme.colorScheme.secondary,
-                reduceMotion = reduceMotion,
+                valueColor = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.weight(1f),
             )
-            BriefStatCell(
+            CtToolStat(
+                value = animatedStatText(stats.expired, reduceMotion),
                 label = "已过期",
-                value = stats.expired,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                reduceMotion = reduceMotion,
+                valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
         }
     }
 }
 
+/** 数字滚动文本（简报/筛选计数）：reduceMotion 直接终值；切换时逐帧刷新，保留「有生命感」的计数。 */
 @Composable
-private fun BriefStatCell(
-    label: String,
-    value: Int,
-    color: Color,
-    reduceMotion: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val valueColor by animateColorAsState(
-        targetValue = if (value > 0) color else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
-        label = "briefStatColor",
+internal fun animatedStatText(value: Int, reduceMotion: Boolean): String {
+    if (reduceMotion) return value.toString()
+    val animated by animateFloatAsState(
+        targetValue = value.toFloat(),
+        animationSpec = CtMotion.effects,
+        label = "noticeStatValue",
     )
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        CtAnimatedCounter(
-            value = value,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = valueColor,
-            animationSpec = if (reduceMotion) snap() else CtMotion.effects,
-            label = "noticeBriefStat",
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    return animated.roundToInt().toString()
 }
-
 /** 搜索栏（点顶栏放大镜展开；标题/摘要匹配，48dp 触控高度）。 */
 @Composable
 private fun NoticeSearchField(
@@ -951,6 +921,7 @@ private fun NoticeSearchField(
         delay(80)
         runCatching { focusRequester.requestFocus() }
     }
+    val scheme = MaterialTheme.colorScheme
     OutlinedTextField(
         value = query,
         onValueChange = { onQueryChange(it.take(40)) },
@@ -958,7 +929,7 @@ private fun NoticeSearchField(
             .fillMaxWidth()
             .focusRequester(focusRequester),
         singleLine = true,
-        shape = CtShapeTokens.pill,
+        shape = RoundedCornerShape(18.dp),
         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
         trailingIcon = {
             IconButton(onClick = onClose) {
@@ -966,6 +937,12 @@ private fun NoticeSearchField(
             }
         },
         placeholder = { Text("搜索通知标题 / 摘要") },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = scheme.surfaceContainerHigh,
+            unfocusedContainerColor = scheme.surfaceContainerHigh.copy(alpha = 0.72f),
+            focusedBorderColor = scheme.primary.copy(alpha = 0.55f),
+            unfocusedBorderColor = Color.Transparent,
+        ),
     )
 }
 
@@ -978,7 +955,7 @@ private fun NoticeOfflineBanner(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = CtShapeTokens.listItem,
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.tertiaryContainer,
         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
     ) {
@@ -1173,7 +1150,7 @@ private fun NoticeGrid(
     }
 }
 
-/** 已过期分组头（可展开/收起；52dp 触控；箭头旋转动画）。 */
+/** 已过期分组头（v6：CtToolSectionHeader + 整行可点；箭头旋转动画保留）。 */
 @Composable
 private fun ExpiredHeader(
     count: Int,
@@ -1187,43 +1164,31 @@ private fun ExpiredHeader(
         animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.pressSpring,
         label = "expiredArrow",
     )
-    Surface(
-        onClick = onToggle,
+    CtToolSectionHeader(
+        title = "已过期",
+        subtitle = "$count 组",
         modifier = modifier
-            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onToggle)
             .heightIn(min = 52.dp),
-        shape = CtShapeTokens.listItem,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "已过期",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(8.dp))
-            CtPill(text = "$count 组")
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = if (expanded) "收起" else "展开",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Icon(
-                imageVector = Icons.Rounded.ExpandMore,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(20.dp)
-                    .graphicsLayer { rotationZ = arrowRotation },
-            )
-        }
-    }
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (expanded) "收起" else "展开",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Icon(
+                    imageVector = Icons.Rounded.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .graphicsLayer { rotationZ = arrowRotation },
+                )
+            }
+        },
+    )
 }
 
 // -----------------------------------------------------------------------------
@@ -1241,18 +1206,7 @@ private fun NoticeCard(
     previewPressed: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val targetContainer = when {
-        // 已处理：浅色下沉一档、深色降到最暗一档，弱化但不靠整体透明度（保证文字 AA）
-        item.done -> if (LocalCtDarkTheme.current) scheme.surfaceContainerLowest else scheme.surfaceContainer
-        item.pinned -> scheme.primaryContainer.copy(alpha = 0.32f)
-        else -> scheme.surfaceContainerLow
-    }
-    // 已处理 / 置顶后卡片颜色平滑过渡（位置变化由 Lazy nimateItem 负责）
-    val container by animateColorAsState(
-        targetValue = targetContainer,
-        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
-        label = "noticeCardContainer",
-    )
+    // 已处理：标题色/删除线过渡（位置变化由 Lazy animateItem 负责）；卡片底色按 v6 统一 CtToolCard
     val doneProgress by animateFloatAsState(
         targetValue = if (item.done) 1f else 0f,
         animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.crossFade,
@@ -1265,16 +1219,14 @@ private fun NoticeCard(
     )
     NoticePressableCard(
         onClick = onOpen,
-        containerColor = container,
         reduceMotion = reduceMotion,
         contentDescription = item.title.ifBlank { "通知" },
         expanded = expanded,
         previewPressed = previewPressed,
+        pinned = item.pinned,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

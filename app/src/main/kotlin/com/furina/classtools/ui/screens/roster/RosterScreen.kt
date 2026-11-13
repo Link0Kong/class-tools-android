@@ -3,6 +3,7 @@
 package com.furina.classtools.ui.screens.roster
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,17 +31,12 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -59,6 +55,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.semantics
@@ -86,9 +83,11 @@ import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
-import com.furina.classtools.ui.components.expressive.CtSegmentOption
-import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
-import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolChip
+import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSegmented
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -340,14 +339,11 @@ fun RosterScreen(
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    CtSegmentedButtons(
-                        options = listOf(
-                            CtSegmentOption(RosterTab.ROSTER.name, "名册", Icons.Rounded.Groups),
-                            CtSegmentOption(RosterTab.ROLL.name, "点名", Icons.Rounded.HowToReg),
-                        ),
-                        selectedKey = tab.name,
-                        onSelect = { key ->
-                            RosterTab.entries.firstOrNull { it.name == key }?.let { tab = it }
+                    CtToolSegmented(
+                        options = listOf("名册", "点名"),
+                        selectedIndex = RosterTab.entries.indexOf(tab).coerceAtLeast(0),
+                        onSelect = { index ->
+                            RosterTab.entries.getOrNull(index)?.let { tab = it }
                         },
                         modifier = Modifier
                             .widthIn(max = 880.dp)
@@ -473,7 +469,7 @@ fun RosterScreen(
                                 .align(Alignment.TopCenter)
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 6.dp),
-                            shape = CtShapeTokens.listItem,
+                            shape = RoundedCornerShape(18.dp),
                             color = MaterialTheme.colorScheme.errorContainer,
                         ) {
                             Row(
@@ -579,31 +575,31 @@ private fun RosterListContent(
             .fillMaxWidth(),
     ) {
         // 名册内三分类（班委 / 团员 / 全班；学员无学号）。
-        CtSegmentedButtons(
+        CtToolSegmented(
             options = MemberCategory.entries.map { option ->
                 val count = when (option) {
                     MemberCategory.COMMITTEE -> committeeCount
                     MemberCategory.LEAGUE -> leagueCount
                     MemberCategory.ALL -> allCount
                 }
-                CtSegmentOption(option.name, "${option.label} $count")
+                "${option.label} $count"
             },
-            selectedKey = category.name,
-            onSelect = { key -> MemberCategory.entries.firstOrNull { it.name == key }?.let(onCategory) },
-            showCheckIcon = false,
+            selectedIndex = MemberCategory.entries.indexOf(category).coerceAtLeast(0),
+            onSelect = { index ->
+                MemberCategory.entries.getOrNull(index)?.let(onCategory)
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp),
         )
-        OutlinedTextField(
+        CtToolField(
+            label = "搜索",
             value = query,
             onValueChange = onQuery,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp),
-            singleLine = true,
-            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-            placeholder = { Text("搜索姓名 / 座号") },
+            placeholder = "搜索姓名 / 座号",
         )
         Row(
             modifier = Modifier
@@ -612,8 +608,8 @@ private fun RosterListContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            FilterChipSmall(
-                label = "已加入点名 ${rows.count { it.inRoll }}",
+            CtToolChip(
+                text = "已加入点名 ${rows.count { it.inRoll }}",
                 selected = showOnlyInRoll,
                 onClick = { onToggleOnlyInRoll(!showOnlyInRoll) },
             )
@@ -621,7 +617,6 @@ private fun RosterListContent(
             TextButton(onClick = onSelectAll) { Text("全选点名") }
             TextButton(onClick = onClear) { Text("清空") }
         }
-        HorizontalDivider()
         when {
             category == MemberCategory.LEAGUE && leagueLoading -> Box(
                 modifier = Modifier.fillMaxSize(),
@@ -686,7 +681,7 @@ private fun RosterListContent(
                     .fillMaxSize()
                     .widthIn(max = 720.dp),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (category == MemberCategory.LEAGUE && leagueError != null) {
                     item(key = "league-warning") {
@@ -712,38 +707,43 @@ private fun MemberRow(
     row: com.furina.classtools.features.roster.RosterRow,
     onToggleRoll: () -> Unit,
 ) {
-    Surface(
+    // v6：统一卡片外壳 + 两行布局（姓名行 + 职务/状态胶囊行，避免大字体/窄屏胶囊换行挤压）
+    CtToolCard(
         modifier = Modifier
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {},
-        shape = CtShapeTokens.listItem,
-        color = if (row.inRoll) {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        },
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = row.member.seat.toString().padStart(2, '0'),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(30.dp),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = row.member.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = row.member.seat.toString().padStart(2, '0'),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(32.dp),
+                )
+                Text(
+                    text = row.member.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Checkbox(
+                    checked = row.inRoll,
+                    onCheckedChange = { onToggleRoll() },
+                    modifier = Modifier.size(48.dp),
+                )
+            }
+            val hasTags = row.member.role.isNotBlank() || row.member.badge.isNotBlank() || row.inRoll
+            if (hasTags) {
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.padding(start = 32.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     if (row.member.role.isNotBlank()) {
-                        Spacer(Modifier.width(6.dp))
                         CtPill(
                             text = row.member.role,
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -751,28 +751,20 @@ private fun MemberRow(
                         )
                     }
                     if (row.member.badge.isNotBlank()) {
-                        Spacer(Modifier.width(6.dp))
                         CtPill(text = row.member.badge)
+                    }
+                    if (row.inRoll) {
+                        CtPill(
+                            text = "点名中",
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
                     }
                 }
             }
-            Checkbox(
-                checked = row.inRoll,
-                onCheckedChange = { onToggleRoll() },
-            )
         }
     }
 }
-
-@Composable
-private fun FilterChipSmall(label: String, selected: Boolean, onClick: () -> Unit) {
-    androidx.compose.material3.FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-    )
-}
-
 // -----------------------------------------------------------------------------
 // 点名页签
 // -----------------------------------------------------------------------------
@@ -798,9 +790,9 @@ private fun RollContent(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedButton(onClick = onUseRosterSel) { Text("沿用抽签名单") }
-            OutlinedButton(onClick = onSelectAll) { Text("全选") }
-            OutlinedButton(onClick = onClear) { Text("清空") }
+            CtToolChip(text = "沿用抽签名单", selected = false, onClick = onUseRosterSel)
+            CtToolChip(text = "全选", selected = false, onClick = onSelectAll)
+            CtToolChip(text = "清空", selected = false, onClick = onClear)
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onReset, enabled = hasRollList) { Text("重置本轮") }
         }
@@ -844,14 +836,12 @@ private fun RollContent(
 
 @Composable
 private fun RollStatsCard(stats: RollStats) {
-    Surface(
+    CtToolCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 StatItem("应到", stats.total.toString())
                 StatItem("已处理", stats.handled.toString())
@@ -896,73 +886,82 @@ private fun RollBubble(
     onToggle: () -> Unit,
     onSetStatus: (RollStatus?) -> Unit,
 ) {
-    val container = when (status) {
-        RollStatus.IN -> MaterialTheme.colorScheme.primaryContainer
-        RollStatus.AB -> MaterialTheme.colorScheme.tertiaryContainer
-        null -> MaterialTheme.colorScheme.surfaceContainerLow
+    val statusText = when (status) {
+        RollStatus.IN -> "到"
+        RollStatus.AB -> "假"
+        null -> "未点"
     }
-    Surface(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp)
+            .clip(RoundedCornerShape(24.dp))
             .clickable(onClick = onToggle),
-        shape = CtShapeTokens.listItem,
-        color = container,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        CtToolCard(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "座号 $seat" + when (status) {
-                        RollStatus.IN -> " · 到"
-                        RollStatus.AB -> " · 假"
-                        null -> ""
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(
-                onClick = { onSetStatus(RollStatus.IN) },
-                modifier = Modifier.size(36.dp),
-            ) {
-                Icon(
-                    Icons.Rounded.CheckCircle,
-                    contentDescription = "到",
-                    tint = if (status == RollStatus.IN) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(
-                onClick = { onSetStatus(RollStatus.AB) },
-                modifier = Modifier.size(36.dp),
-            ) {
-                Icon(
-                    Icons.Rounded.Cancel,
-                    contentDescription = "假",
-                    tint = if (status == RollStatus.AB) {
-                        MaterialTheme.colorScheme.tertiary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "座号 $seat",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    CtPill(
+                        text = statusText,
+                        containerColor = when (status) {
+                            RollStatus.IN -> MaterialTheme.colorScheme.primaryContainer
+                            RollStatus.AB -> MaterialTheme.colorScheme.tertiaryContainer
+                            null -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                        contentColor = when (status) {
+                            RollStatus.IN -> MaterialTheme.colorScheme.onPrimaryContainer
+                            RollStatus.AB -> MaterialTheme.colorScheme.onTertiaryContainer
+                            null -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    IconButton(onClick = { onSetStatus(RollStatus.IN) }) {
+                        Icon(
+                            Icons.Rounded.CheckCircle,
+                            contentDescription = "到",
+                            tint = if (status == RollStatus.IN) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                    IconButton(onClick = { onSetStatus(RollStatus.AB) }) {
+                        Icon(
+                            Icons.Rounded.Cancel,
+                            contentDescription = "假",
+                            tint = if (status == RollStatus.AB) {
+                                MaterialTheme.colorScheme.tertiary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                }
             }
         }
     }
 }
-
 @Composable
 private fun ErrorContent(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     Column(
@@ -971,7 +970,11 @@ private fun ErrorContent(message: String, onRetry: () -> Unit, modifier: Modifie
         verticalArrangement = Arrangement.Center,
     ) {
         EmptyState(icon = Icons.Rounded.ErrorOutline, title = "名单加载失败", message = message)
-        FilledTonalButton(onClick = onRetry) { Text("重试") }
+        CtToolPrimaryButton(
+            text = "重试",
+            onClick = onRetry,
+            modifier = Modifier.widthIn(max = 220.dp),
+        )
     }
 }
 
