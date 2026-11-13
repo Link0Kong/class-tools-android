@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.tool.AppTool
+import com.furina.classtools.ui.navigation.ctToolTransitionSource
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 
@@ -67,10 +68,12 @@ internal fun AllToolCard(
     val cornerDp = 20f + (16f - 20f) * pressProgress
     val shape = RoundedCornerShape(cornerDp.dp)
 
+    val transitionSource = Modifier.ctToolTransitionSource(tool.id)
     Surface(
         onClick = onClick,
         modifier = modifier
             .fillMaxSize()
+            .then(transitionSource)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale

@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.data.tool.AppTool
+import com.furina.classtools.ui.navigation.ctToolTransitionSource
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.theme.CtMotion
@@ -469,12 +470,15 @@ internal fun QuickToolTile(
         animationSpec = if (reduceMotion) snap() else CtMotion.effectsFast,
         label = "quickToolTint",
     )
+    val transitionSource = Modifier.ctToolTransitionSource(tool.id)
     Surface(
         onClick = onClick,
-        modifier = modifier.graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        },
+        modifier = modifier
+            .then(transitionSource)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
         shape = RoundedCornerShape(18.dp),
         color = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,

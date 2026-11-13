@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -117,6 +118,7 @@ import com.furina.classtools.ui.screens.vote.VoteMemberSource
 import com.furina.classtools.ui.screens.tools.ToolPlaceholderScreen
 import com.furina.classtools.ui.screens.water.WaterScreen
 import kotlinx.coroutines.launch
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -174,6 +176,13 @@ fun MainNavHost(
     // 根页 Pager 状态 hoist 到 NavHost 外层：进入工具页再返回时保持当前 Tab。
     val pagerState = rememberCtTabPagerState(pageCount = TOP_LEVEL_COUNT)
 
+    // 工具卡 → 工具页「一镜到底」覆盖转场状态（参考 HFUT 的连续性原则，自行实现）。
+    val toolTransitionAnchors = remember { ToolTransitionAnchors() }
+    var transitionTool by remember { mutableStateOf<AppTool?>(null) }
+    var transitionStart by remember { mutableStateOf<Rect?>(null) }
+    var transitionRoute by remember { mutableStateOf<String?>(null) }
+    val reduceMotion = rememberReduceMotion()
+
     // 通知点击带入的工具（hw/tt）：登录/进入主界面后消费一次。
     LaunchedEffect(initialToolId) {
         if (!initialToolId.isNullOrBlank()) {
@@ -193,10 +202,23 @@ fun MainNavHost(
 
     /** 打开工具；「设置」落到「我的」Tab（与小程序一致，不设独立占位页）。 */
     fun openTool(tool: AppTool) {
-        when (tool.id) {
-            "settings" -> selectTab(2)
-            "vote" -> navController.navigate(Routes.VOTE)
-            else -> navController.navigate(Routes.tool(tool.id))
+        val route = when (tool.id) {
+            "settings" -> {
+                selectTab(2)
+                return
+            }
+
+            "vote" -> Routes.VOTE
+            else -> Routes.tool(tool.id)
+        }
+        // 有卡片锚点且未移除动画时，走覆盖层「卡片展开成页面」转场；否则直接导航。
+        val anchor = toolTransitionAnchors.get(tool.id)
+        if (!reduceMotion && anchor != null) {
+            transitionStart = anchor
+            transitionTool = tool
+            transitionRoute = route
+        } else {
+            navController.navigate(route)
         }
     }
 
@@ -282,11 +304,13 @@ fun MainNavHost(
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = Routes.ROOT,
-        modifier = modifier.fillMaxSize(),
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalToolTransitionAnchors provides toolTransitionAnchors) {
+            NavHost(
+                navController = navController,
+                startDestination = Routes.ROOT,
+                modifier = modifier.fillMaxSize(),
+            ) {
         composable(Routes.ROOT) {
             RootTabs(
                 container = container,
@@ -817,6 +841,23 @@ fun MainNavHost(
                 onEdit = { id -> navController.navigate(Routes.voteCreate(id)) },
             )
         }
+            }
+        }
+        ToolTransitionOverlay(
+            tool = transitionTool,
+            startBounds = transitionStart,
+            onHalfway = {
+                transitionRoute?.let { route ->
+                    transitionRoute = null
+                    navController.navigate(route)
+                }
+            },
+            onDone = {
+                transitionTool = null
+                transitionStart = null
+                transitionRoute = null
+            },
+        )
     }
 }
 
