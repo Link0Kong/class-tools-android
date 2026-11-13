@@ -8,7 +8,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,20 +22,19 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.automirrored.rounded.Assignment
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -51,9 +49,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -72,6 +71,7 @@ import com.furina.classtools.data.power.PowerRow
 import com.furina.classtools.data.power.PowerRowResult
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
+import com.furina.classtools.data.timetable.SessionInfo
 import com.furina.classtools.data.timetable.SessionState
 import com.furina.classtools.data.timetable.TimetableRepository
 import com.furina.classtools.data.timetable.TodayState
@@ -87,11 +87,13 @@ import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
-import com.furina.classtools.ui.components.ToolCard
+import com.furina.classtools.ui.theme.BrandMistTeal
+import com.furina.classtools.ui.theme.BrandSlateBlue
+import com.furina.classtools.ui.theme.BrandWarmSand
 import com.furina.classtools.ui.theme.CtMotion
-import com.furina.classtools.ui.theme.rememberReduceMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtTokens
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -103,19 +105,25 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 
 /**
- * 工作台（v2.0.0，对齐微信小程序 `pages/index/index`）。
+ * 工作台 v5（参考 HFUT-Schedule 卡片层次 + xiaoying 渐变 hero / 快捷图标行；只借鉴设计）。
  *
  * 结构（自上而下）：
- * 1. 问候：`{问候}，{姓名}` + 日期 · 周次 · 角色；
- * 2. 今日课程卡：时间线（多节/上课中 pill/已结束）+「课表 ›」；无课含下次课；未同步引导打开课表；
- * 3. 宿舍电费卡：关注宿舍/剩余电量/状态 pill/更新时间；未关注只引导（**0 请求**）；
- * 4. 作业待交卡：待交数量 + 最新一条（每 5s 上浮淡出/下浮淡入轮换，页面不可见暂停）；
- * 5. 通知待处理卡：待处理数量 + 最新一条（轮换；同步中/失败/离线文案）；
- * 6. 常用工具：勾选 ≤4；无勾选空态引导去工具页/本页编辑；右上「全部 ›」。
+ * 0. 「今日」hero：日期/星期 + 周次/角色 + 问候 + 上课中/下一节/已结束/无课 + 进度条；
+ * 1. 今日课程卡：时间线（多节/上课中 pill/已结束）+「现在」时间线（H-05）+「课表 ›」；
+ * 2. 宿舍电费卡：关注宿舍/剩余电量/状态 pill/更新时间；未关注只引导（**0 请求**）；
+ * 3. 作业待交卡：待交数量 + 最新一条（每 5s 上浮淡出/下浮淡入轮换，页面不可见暂停）；
+ * 4. 通知待处理卡：待处理数量 + 最新一条（轮换；同步中/失败/离线文案 + 行内重试）；
+ * 5. 常用工具：xiaoying 式四图标行（无勾选空态引导去工具页/本页编辑；右上「全部 ›」）。
  *
- * 自适应：≥600dp 双栏（左：今日课程 + 电费；右：待办 + 常用工具）；内容限宽居中（见 `ui/adaptive`）。
+ * 交互/无障碍：
+ * - 首次进入逐块错峰淡入（系统「移除动画」/ 预览渲染时自动退化为无动画）；
+ * - 快捷工具编辑保持原逻辑（点击加入/移出、最多 4 个、H-03 返回二次确认）；
+ * - 下拉刷新（[PullToRefreshBox]）保持；四态（加载/空/失败/离线）全部保留。
  *
- * 接线（Lead 在 MainNavHost）：新增可选参数传仓库 + `onOpenAll`（跳「工具」Tab）：
+ * 自适应：≥840dp 双栏（左：今日课程 + 电费；右：作业 + 通知 + 常用工具），hero 全宽；
+ * 内容限宽居中（见 `ui/adaptive`）。
+ *
+ * 接线（Lead 在 MainNavHost；参数保持 v4 完全一致）：
  * ```kotlin
  * HomeScreen(
  *     session = session,
@@ -302,7 +310,7 @@ fun HomeScreen(
     var lifecycleResumed by remember { mutableStateOf(true) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { lifecycleResumed = true }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { lifecycleResumed = false }
-    // G22：系统移除动画时停止卡内容自动轮换。
+    // G22：系统移除动画时停止卡内容自动轮换 + 首屏错峰淡入。
     val reduceMotion = rememberReduceMotion()
     val rotationActive = rotationEnabled &&
         !reduceMotion &&
@@ -381,6 +389,9 @@ fun HomeScreen(
         scope.launch { runCatching { marksRepository?.refresh(force = true) } }
     }
 
+    // 预览渲染（android.exe preview / Android Studio）不播放首屏错峰动画，避免首帧全透明。
+    val animateEntrance = !reduceMotion && !LocalInspectionMode.current
+
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         PullToRefreshBox(
             isRefreshing = refreshing,
@@ -390,150 +401,173 @@ fun HomeScreen(
             },
             modifier = Modifier.fillMaxSize(),
         ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            val contentModifier = Modifier
-                .widthIn(max = spec.contentMaxWidth)
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = spec.horizontalPadding)
-            if (spec.twoPane) {
-                Row(
-                    modifier = contentModifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .weight(spec.mainPaneWeight)
-                            .verticalScroll(rememberScrollState())
-                            .padding(top = 6.dp, bottom = 120.dp),
-                        verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
-                    ) {
-                        GreetingHeader(session, ttPlan, today, nowMillis)
-                        HomePermissionBanner(
-                            show = showNotificationPermissionBanner,
-                            onOpenPermissions = onOpenPermissions,
-                        )
-                        TodayCoursesCard(
-                            plan = ttPlan,
-                            loading = ttLoading,
-                            onOpen = { openToolId("tt") },
-                        )
-                        PowerCard(
-                            card = powerCard,
-                            loading = powerLoading,
-                            onOpen = {
-                                if (powerCard == null && onOpenPowerPicker != null) {
-                                    onOpenPowerPicker()
-                                } else {
-                                    openToolId("power")
-                                }
-                            },
-                        )
-                    }
-                    Column(
-                        modifier = Modifier
-                            .weight(1f - spec.mainPaneWeight)
-                            .verticalScroll(rememberScrollState())
-                            .padding(top = 6.dp, bottom = 120.dp),
-                        verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
-                    ) {
-                        HomeworkCard(
-                            count = hwItems.size,
-                            item = hwItems.getOrNull(hwIndex % maxOf(1, hwItems.size)),
-                            loading = homeworkLoading,
-                            failed = homeworkFailed,
-                            onOpen = { openToolId("hw") },
-                        )
-                        NoticesCard(
-                            pendingCount = ntItems.size,
-                            item = ntItems.getOrNull(ntIndex % maxOf(1, ntItems.size)),
-                            state = noticesState,
-                            errorText = noticesFailedMessage,
-                            onOpen = { openToolId("nt") },
-                            onRetry = ::retry,
-                            updatedText = noticesUpdatedText,
-                        )
-                        QuickToolsSection(
-                            quickTools = quickTools,
-                            editing = editing,
-                            draft = draft,
-                            editableTools = editableTools,
-                            columns = spec.gridColumns,
-                            onToggle = ::toggleTool,
-                            onStartEdit = {
-                                draft = quickToolIds
-                                editing = true
-                            },
-                            onFinishEdit = ::finishEditing,
-                            onOpenTool = onOpenTool,
-                            onOpenAll = onOpenAll,
-                        )
-                    }
-                }
-            } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 Column(
-                    modifier = contentModifier
-                        .fillMaxSize()
+                    modifier = Modifier
+                        .widthIn(max = spec.contentMaxWidth)
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = spec.horizontalPadding)
                         .verticalScroll(rememberScrollState())
                         .padding(top = 10.dp, bottom = 124.dp),
                     verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                 ) {
-                    GreetingHeader(session, ttPlan, today, nowMillis)
-                    HomePermissionBanner(
-                        show = showNotificationPermissionBanner,
-                        onOpenPermissions = onOpenPermissions,
-                    )
-                    TodayCoursesCard(
-                        plan = ttPlan,
-                        loading = ttLoading,
-                        onOpen = { openToolId("tt") },
-                    )
-                    PowerCard(
-                        card = powerCard,
-                        loading = powerLoading,
-                        onOpen = {
-                            if (powerCard == null && onOpenPowerPicker != null) {
-                                onOpenPowerPicker()
-                            } else {
-                                openToolId("power")
+                    HomeReveal(enabled = animateEntrance, index = 0) {
+                        HomeHeroCard(
+                            session = session,
+                            date = today,
+                            plan = ttPlan,
+                            loading = ttLoading,
+                            nowMillis = nowMillis,
+                            reduceMotion = reduceMotion,
+                            onOpenTimetable = { openToolId("tt") },
+                        )
+                    }
+                    if (showNotificationPermissionBanner && onOpenPermissions != null) {
+                        HomeReveal(enabled = animateEntrance, index = 1) {
+                            NotificationPermissionBanner(
+                                visible = true,
+                                onOpenPermissions = onOpenPermissions,
+                            )
+                        }
+                    }
+                    if (spec.twoPane) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(20.dp),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(spec.mainPaneWeight),
+                                verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
+                            ) {
+                                HomeReveal(enabled = animateEntrance, index = 2) {
+                                    HomeTodayCoursesCard(
+                                        plan = ttPlan,
+                                        loading = ttLoading,
+                                        onOpen = { openToolId("tt") },
+                                    )
+                                }
+                                HomeReveal(enabled = animateEntrance, index = 3) {
+                                    HomePowerCard(
+                                        card = powerCard,
+                                        loading = powerLoading,
+                                        onOpen = {
+                                            if (powerCard == null && onOpenPowerPicker != null) {
+                                                onOpenPowerPicker()
+                                            } else {
+                                                openToolId("power")
+                                            }
+                                        },
+                                    )
+                                }
                             }
-                        },
-                    )
-                    HomeworkCard(
-                        count = hwItems.size,
-                        item = hwItems.getOrNull(hwIndex % maxOf(1, hwItems.size)),
-                        loading = homeworkLoading,
-                        failed = homeworkFailed,
-                        onOpen = { openToolId("hw") },
-                    )
-                    NoticesCard(
-                        pendingCount = ntItems.size,
-                        item = ntItems.getOrNull(ntIndex % maxOf(1, ntItems.size)),
-                        state = noticesState,
-                        errorText = noticesFailedMessage,
-                        onOpen = { openToolId("nt") },
-                        onRetry = ::retry,
-                        updatedText = noticesUpdatedText,
-                    )
-                    QuickToolsSection(
-                        quickTools = quickTools,
-                        editing = editing,
-                        draft = draft,
-                        editableTools = editableTools,
-                        columns = spec.gridColumns,
-                        onToggle = ::toggleTool,
-                        onStartEdit = {
-                            draft = quickToolIds
-                            editing = true
-                        },
-                        onFinishEdit = ::finishEditing,
-                        onOpenTool = onOpenTool,
-                        onOpenAll = onOpenAll,
-                    )
-
+                            Column(
+                                modifier = Modifier.weight(1f - spec.mainPaneWeight),
+                                verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
+                            ) {
+                                HomeReveal(enabled = animateEntrance, index = 4) {
+                                    HomeHomeworkCard(
+                                        count = hwItems.size,
+                                        item = hwItems.getOrNull(hwIndex % maxOf(1, hwItems.size)),
+                                        loading = homeworkLoading,
+                                        failed = homeworkFailed,
+                                        onOpen = { openToolId("hw") },
+                                    )
+                                }
+                                HomeReveal(enabled = animateEntrance, index = 5) {
+                                    HomeNoticesCard(
+                                        pendingCount = ntItems.size,
+                                        item = ntItems.getOrNull(ntIndex % maxOf(1, ntItems.size)),
+                                        state = noticesState,
+                                        errorText = noticesFailedMessage,
+                                        updatedText = noticesUpdatedText,
+                                        onOpen = { openToolId("nt") },
+                                        onRetry = ::retry,
+                                    )
+                                }
+                                HomeReveal(enabled = animateEntrance, index = 6) {
+                                    HomeQuickToolsSection(
+                                        quickTools = quickTools,
+                                        editing = editing,
+                                        draft = draft,
+                                        editableTools = editableTools,
+                                        columns = spec.gridColumns,
+                                        reduceMotion = reduceMotion,
+                                        onToggle = ::toggleTool,
+                                        onStartEdit = {
+                                            draft = quickToolIds
+                                            editing = true
+                                        },
+                                        onFinishEdit = ::finishEditing,
+                                        onOpenTool = onOpenTool,
+                                        onOpenAll = onOpenAll,
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        HomeReveal(enabled = animateEntrance, index = 2) {
+                            HomeTodayCoursesCard(
+                                plan = ttPlan,
+                                loading = ttLoading,
+                                onOpen = { openToolId("tt") },
+                            )
+                        }
+                        HomeReveal(enabled = animateEntrance, index = 3) {
+                            HomePowerCard(
+                                card = powerCard,
+                                loading = powerLoading,
+                                onOpen = {
+                                    if (powerCard == null && onOpenPowerPicker != null) {
+                                        onOpenPowerPicker()
+                                    } else {
+                                        openToolId("power")
+                                    }
+                                },
+                            )
+                        }
+                        HomeReveal(enabled = animateEntrance, index = 4) {
+                            HomeHomeworkCard(
+                                count = hwItems.size,
+                                item = hwItems.getOrNull(hwIndex % maxOf(1, hwItems.size)),
+                                loading = homeworkLoading,
+                                failed = homeworkFailed,
+                                onOpen = { openToolId("hw") },
+                            )
+                        }
+                        HomeReveal(enabled = animateEntrance, index = 5) {
+                            HomeNoticesCard(
+                                pendingCount = ntItems.size,
+                                item = ntItems.getOrNull(ntIndex % maxOf(1, ntItems.size)),
+                                state = noticesState,
+                                errorText = noticesFailedMessage,
+                                updatedText = noticesUpdatedText,
+                                onOpen = { openToolId("nt") },
+                                onRetry = ::retry,
+                            )
+                        }
+                        HomeReveal(enabled = animateEntrance, index = 6) {
+                            HomeQuickToolsSection(
+                                quickTools = quickTools,
+                                editing = editing,
+                                draft = draft,
+                                editableTools = editableTools,
+                                columns = spec.gridColumns,
+                                reduceMotion = reduceMotion,
+                                onToggle = ::toggleTool,
+                                onStartEdit = {
+                                    draft = quickToolIds
+                                    editing = true
+                                },
+                                onFinishEdit = ::finishEditing,
+                                onOpenTool = onOpenTool,
+                                onOpenAll = onOpenAll,
+                            )
+                        }
+                    }
                 }
             }
-        }
         }
     }
 }
@@ -542,49 +576,24 @@ fun HomeScreen(
 private enum class NoticeHomeState { LOADING, READY, OFFLINE, ERROR }
 
 // =============================================================================
-// 问候
+// 今日课程卡（v5 玻璃卡 + 分类色图标 + 课程时间线）
 // =============================================================================
 
 @Composable
-private fun GreetingHeader(session: Session, plan: TtPlan?, date: LocalDate, nowMillis: Long) {
-    val zone = remember { ZoneId.systemDefault() }
-    val hour = remember(nowMillis) { Instant.ofEpochMilli(nowMillis).atZone(zone).hour }
-    val greeting = HomeWorkbenchLogic.greeting(hour)
-    val subtitle = HomeWorkbenchLogic.subtitle(
-        date = date,
-        week = plan?.week,
-        role = session.role,
-    )
-    Column(modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)) {
-        Text(
-            text = "$greeting，${session.name.ifBlank { "同学" }}",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-// =============================================================================
-// 今日课程
-// =============================================================================
-
-@Composable
-private fun TodayCoursesCard(
+private fun HomeTodayCoursesCard(
     plan: TtPlan?,
     loading: Boolean,
     onOpen: () -> Unit,
 ) {
-    HomeCard(
+    val todayCount = plan?.today?.size ?: 0
+    val countBadge = if (plan?.hasData == true && todayCount > 0) "$todayCount 节" else null
+    HomeInfoCard(
+        icon = Icons.Rounded.CalendarMonth,
+        title = "今日课程",
+        accent = MaterialTheme.colorScheme.secondary,
         onClick = onOpen,
-        header = {
-            Text("今天", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.weight(1f))
+        badge = countBadge,
+        trailing = {
             Text(
                 text = "课表 ›",
                 style = MaterialTheme.typography.labelLarge,
@@ -607,71 +616,36 @@ private fun TodayCoursesCard(
             )
 
             else -> {
-                plan.today.forEachIndexed { index, sessionInfo ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = sessionInfo.startText,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.width(46.dp),
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = sessionInfo.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = listOf(sessionInfo.span, sessionInfo.room)
-                                    .filter { it.isNotBlank() }
-                                    .joinToString(" · "),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        if (sessionInfo.state == SessionState.ONGOING) {
-                            CtPill(
-                                text = "上课中",
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
-                    // H-05：在「已结束」与「未开始」之间插入当前时间线。
-                    val nextSession = plan.today.getOrNull(index + 1)
-                    if (sessionInfo.state == SessionState.DONE &&
-                        nextSession != null &&
-                        nextSession.state != SessionState.DONE
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    plan.today.forEachIndexed { index, sessionInfo ->
+                        CourseRow(index = index, sessionInfo = sessionInfo)
+                        // H-05：在「已结束」与「未开始」之间插入当前时间线。
+                        val nextSession = plan.today.getOrNull(index + 1)
+                        if (sessionInfo.state == SessionState.DONE &&
+                            nextSession != null &&
+                            nextSession.state != SessionState.DONE
                         ) {
-                            HorizontalDivider(
-                                modifier = Modifier.weight(1f),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                            )
-                            Text(
-                                text = "现在",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 6.dp),
-                            )
-                            HorizontalDivider(
-                                modifier = Modifier.weight(1f),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                HorizontalDivider(
+                                    modifier = Modifier.weight(1f),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                )
+                                Text(
+                                    text = "现在",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 6.dp),
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.weight(1f),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                )
+                            }
                         }
                     }
                 }
@@ -694,26 +668,86 @@ private fun TodayCoursesCard(
     }
 }
 
+/** 单节课程行：时间 + 课程色条 + 课程名/节次/教室 + 上课中 pill。 */
+@Composable
+private fun CourseRow(index: Int, sessionInfo: SessionInfo) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = sessionInfo.startText,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            // 大字体 1.3x 下时间不换行（旧实现固定 46dp 会截断）：至少保留最小宽度，宽度随字号自然增长。
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.widthIn(min = 46.dp),
+        )
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(34.dp)
+                .clip(CircleShape)
+                .background(courseAccent(index)),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = sessionInfo.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = listOf(sessionInfo.span, sessionInfo.room)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (sessionInfo.state == SessionState.ONGOING) {
+            CtPill(
+                text = "上课中",
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+    }
+}
+
+/** 课程色条（HFUT 课表马卡龙色的克制版：只用于 3dp 色条，不改变卡片底色）。 */
+private fun courseAccent(index: Int): Color {
+    val palette = listOf(
+        BrandMistTeal,
+        BrandSlateBlue,
+        BrandWarmSand,
+        Color(0xFF5F8F5B),
+        Color(0xFF8A6A92),
+        Color(0xFFB06A55),
+    )
+    return palette[index.mod(palette.size)]
+}
+
 // =============================================================================
-// 电费
+// 电费卡
 // =============================================================================
 
 @Composable
-private fun PowerCard(card: HomePowerCard?, loading: Boolean, onOpen: () -> Unit) {
-    HomeCard(onClick = onOpen) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("宿舍电费", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.weight(1f))
-            if (card != null) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(6.dp))
+private fun HomePowerCard(card: HomePowerCard?, loading: Boolean, onOpen: () -> Unit) {
+    HomeInfoCard(
+        icon = Icons.Rounded.Bolt,
+        title = "宿舍电费",
+        accent = MaterialTheme.colorScheme.tertiary,
+        onClick = onOpen,
+        badge = if (card != null && card.hasReading) card.stateText else null,
+    ) {
         when {
             card == null -> HomeEmptyHint(
                 title = "关注宿舍后显示剩余电量",
@@ -752,12 +786,6 @@ private fun PowerCard(card: HomePowerCard?, loading: Boolean, onOpen: () -> Unit
                         modifier = Modifier.padding(bottom = 3.dp),
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                CtPill(
-                    text = if (card.hasReading) card.stateText else "读取中",
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = stateColor(card.stateKey),
-                )
             }
         }
     }
@@ -776,19 +804,19 @@ private fun stateColor(stateKey: String): Color = when (stateKey) {
 // =============================================================================
 
 @Composable
-private fun HomeworkCard(
+private fun HomeHomeworkCard(
     count: Int,
     item: HomeRotationItem?,
     loading: Boolean,
     failed: Boolean,
     onOpen: () -> Unit,
 ) {
-    TaskCard(
-        emoji = "📝",
+    HomeInfoCard(
+        icon = Icons.AutoMirrored.Rounded.Assignment,
         title = "作业待交",
-        count = count,
-        onOpen = onOpen,
         accent = MaterialTheme.colorScheme.tertiary,
+        onClick = onOpen,
+        badge = count.takeIf { it > 0 }?.toString(),
     ) {
         when {
             loading && count == 0 -> HomeLoadingRow("同步作业…")
@@ -801,7 +829,7 @@ private fun HomeworkCard(
 }
 
 @Composable
-private fun NoticesCard(
+private fun HomeNoticesCard(
     pendingCount: Int,
     item: HomeRotationItem?,
     state: NoticeHomeState,
@@ -810,12 +838,12 @@ private fun NoticesCard(
     onRetry: () -> Unit = {},
     updatedText: String = "",
 ) {
-    TaskCard(
-        emoji = "📢",
+    HomeInfoCard(
+        icon = Icons.Rounded.Notifications,
         title = "通知待处理",
-        count = pendingCount,
-        onOpen = onOpen,
         accent = MaterialTheme.colorScheme.primary,
+        onClick = onOpen,
+        badge = pendingCount.takeIf { it > 0 }?.toString(),
     ) {
         when (state) {
             NoticeHomeState.LOADING -> HomeLoadingRow("通知同步中…")
@@ -842,63 +870,6 @@ private fun NoticesCard(
                 text = "更新 $updatedText",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun TaskCard(
-    emoji: String,
-    title: String,
-    count: Int,
-    onOpen: () -> Unit,
-    accent: Color,
-    content: @Composable () -> Unit,
-) {
-    CtGlassCard(
-        onClick = onOpen,
-        shape = CtShapeTokens.toolCard,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = accent.copy(alpha = 0.14f),
-            ) {
-                Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                    Text(text = emoji, style = MaterialTheme.typography.titleMedium)
-                }
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    if (count > 0) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        CtPill(
-                            text = count.toString(),
-                            containerColor = accent.copy(alpha = 0.16f),
-                            contentColor = accent,
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(3.dp))
-                content()
-            }
-            Icon(
-                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
             )
         }
     }
@@ -932,16 +903,17 @@ private fun RotatingText(item: HomeRotationItem) {
 }
 
 // =============================================================================
-// 常用工具
+// 常用工具（v5：四图标快捷行 + 编辑网格）
 // =============================================================================
 
 @Composable
-private fun QuickToolsSection(
+private fun HomeQuickToolsSection(
     quickTools: List<AppTool>,
     editing: Boolean,
     draft: List<String>,
     editableTools: List<AppTool>,
     columns: Int,
+    reduceMotion: Boolean,
     onToggle: (String) -> Unit,
     onStartEdit: () -> Unit,
     onFinishEdit: () -> Unit,
@@ -958,6 +930,14 @@ private fun QuickToolsSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
+            if (!editing && quickTools.isNotEmpty()) {
+                Text(
+                    text = "${quickTools.size}/${HomeToolsEditor.MAX_QUICK_TOOLS}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+            }
             TextButton(onClick = if (editing) onFinishEdit else onStartEdit) {
                 Text(if (editing) "完成" else "编辑")
             }
@@ -970,17 +950,17 @@ private fun QuickToolsSection(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            HomeToolGrid(
+            HomeEditableToolGrid(
                 tools = editableTools,
                 columns = columns,
-                showSelection = true,
-                isSelected = { tool -> tool.id in draft },
-                onClick = { tool -> onToggle(tool.id) },
+                draft = draft,
+                reduceMotion = reduceMotion,
+                onToggle = onToggle,
             )
         } else if (quickTools.isEmpty()) {
             CtGlassCard(
                 onClick = onOpenAll,
-                shape = CtShapeTokens.toolCard,
+                shape = HomeCardShape,
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
@@ -1006,67 +986,55 @@ private fun QuickToolsSection(
                 }
             }
         } else {
-            HomeToolGrid(
-                tools = quickTools,
-                columns = columns,
-                showSelection = false,
-                isSelected = { false },
-                onClick = onOpenTool,
-            )
+            CtGlassCard(shape = HomeCardShape) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    quickTools.forEach { tool ->
+                        QuickToolTile(
+                            tool = tool,
+                            onClick = { onOpenTool(tool) },
+                            modifier = Modifier.weight(1f),
+                            reduceMotion = reduceMotion,
+                        )
+                    }
+                    repeat((HomeToolsEditor.MAX_QUICK_TOOLS - quickTools.size).coerceAtLeast(0)) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
         }
     }
 }
 
-/** 2/3/4 列工具网格（不依赖 LazyGrid，便于嵌在可滚动的双栏里）。 */
+/** 编辑网格：2/3/4 列（随窗口），点击加入/移出逻辑由 [onToggle] 保持原样。 */
 @Composable
-private fun HomeToolGrid(
+private fun HomeEditableToolGrid(
     tools: List<AppTool>,
     columns: Int,
-    showSelection: Boolean,
-    isSelected: (AppTool) -> Boolean,
-    onClick: (AppTool) -> Unit,
+    draft: List<String>,
+    reduceMotion: Boolean,
+    onToggle: (String) -> Unit,
 ) {
-    tools.chunked(columns.coerceAtLeast(1)).forEach { rowTools ->
+    val cols = columns.coerceAtLeast(1)
+    tools.chunked(cols).forEach { rowTools ->
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
         ) {
             rowTools.forEach { tool ->
-                val selected = isSelected(tool)
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(
-                            if (showSelection && selected) {
-                                Modifier.border(
-                                    width = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    shape = CtShapeTokens.toolCard,
-                                )
-                            } else {
-                                Modifier
-                            },
-                        ),
-                ) {
-                    ToolCard(
-                        tool = tool,
-                        onClick = { onClick(tool) },
-                        modifier = Modifier.height(126.dp),
-                    )
-                    if (showSelection && selected) {
-                        Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
-                            contentDescription = "已选",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(8.dp)
-                                .size(20.dp),
-                        )
-                    }
-                }
+                EditableToolTile(
+                    tool = tool,
+                    selected = tool.id in draft,
+                    onClick = { onToggle(tool.id) },
+                    modifier = Modifier.weight(1f),
+                    reduceMotion = reduceMotion,
+                )
             }
-            repeat(columns - rowTools.size) {
+            repeat(cols - rowTools.size) {
                 Spacer(modifier = Modifier.weight(1f))
             }
         }
@@ -1076,32 +1044,6 @@ private fun HomeToolGrid(
 // =============================================================================
 // 通用小部件
 // =============================================================================
-
-@Composable
-private fun HomeCard(
-    onClick: () -> Unit,
-    header: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
-    content: @Composable () -> Unit,
-) {
-    CtGlassCard(
-        onClick = onClick,
-        shape = CtShapeTokens.toolCard,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) { header() }
-            Spacer(modifier = Modifier.height(2.dp))
-            content()
-        }
-    }
-}
 
 @Composable
 private fun HomeEmptyHint(
@@ -1162,11 +1104,4 @@ private fun HomeMutedLine(text: String) {
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
-}
-
-@Composable
-private fun HomePermissionBanner(show: Boolean, onOpenPermissions: (() -> Unit)?) {
-    if (show && onOpenPermissions != null) {
-        NotificationPermissionBanner(visible = true, onOpenPermissions = onOpenPermissions)
-    }
 }

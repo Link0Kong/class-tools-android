@@ -35,44 +35,44 @@ object TimetablePalette {
 
     const val COLOR_COUNT: Int = 16
 
-    /** 浅色 16 组（取自网页 `TT_COLORS`，对比度均 ≥ 4.5:1）。 */
+    /** 浅色 16 组马卡龙配色（低饱和 pastel 底 + 深字，对比度 5.3–7.5:1；本任务生成并校验）。 */
     val LIGHT: List<CourseColorPair> = listOf(
-        CourseColorPair(0xFFDCE6F0, 0xFF3D5872),
-        CourseColorPair(0xFFE7D9EC, 0xFF5A4368),
-        CourseColorPair(0xFFDDEBDD, 0xFF3F6047),
-        CourseColorPair(0xFFF1DDD9, 0xFF6E4441),
-        CourseColorPair(0xFFF0E5CD, 0xFF66572F),
-        CourseColorPair(0xFFD9E3E8, 0xFF3E5A63),
-        CourseColorPair(0xFFEEDCE4, 0xFF6B4356),
-        CourseColorPair(0xFFDFE6CD, 0xFF546132),
-        CourseColorPair(0xFFD8E7E4, 0xFF35605A),
-        CourseColorPair(0xFFE8DBD2, 0xFF644A3A),
-        CourseColorPair(0xFFDEDBEC, 0xFF474569),
-        CourseColorPair(0xFFF2E3D4, 0xFF6D4F36),
-        CourseColorPair(0xFFD5E3F2, 0xFF3B5578),
-        CourseColorPair(0xFFE9E2C9, 0xFF625A33),
-        CourseColorPair(0xFFE5D8DE, 0xFF5D4250),
-        CourseColorPair(0xFFD3E5DB, 0xFF39604E),
+        CourseColorPair(0xFFF7D9DE, 0xFF6D3B47), // 樱粉 6.73
+        CourseColorPair(0xFFFBE3D1, 0xFF6B4A2F), // 蜜桃 6.43
+        CourseColorPair(0xFFF8EDC9, 0xFF6A5A28), // 奶油黄 5.78
+        CourseColorPair(0xFFDDEEDD, 0xFF3F6047), // 薄荷 5.83
+        CourseColorPair(0xFFE6EBCF, 0xFF58622C), // 鼠尾草 5.36
+        CourseColorPair(0xFFDCE9F7, 0xFF3A5575), // 天空 6.23
+        CourseColorPair(0xFFE8DEF7, 0xFF4E3F72), // 丁香 7.12
+        CourseColorPair(0xFFF6DEE7, 0xFF6B3D51), // 玫瑰 6.85
+        CourseColorPair(0xFFE4E2F6, 0xFF46406B), // 薰衣草 7.48
+        CourseColorPair(0xFFDCE7EC, 0xFF3C5963), // 雾蓝 5.96
+        CourseColorPair(0xFFF6F1D8, 0xFF665A2E), // 柠檬 6.03
+        CourseColorPair(0xFFFADFD9, 0xFF6E4038), // 珊瑚 6.77
+        CourseColorPair(0xFFD8EDE8, 0xFF356057), // 水青 5.81
+        CourseColorPair(0xFFF3DFE0, 0xFF674049), // 胭脂 6.83
+        CourseColorPair(0xFFE0E4F5, 0xFF465071), // 长春花 6.27
+        CourseColorPair(0xFFE7EFD8, 0xFF4F5F2E), // 开心果 5.89
     )
 
-    /** 深色 16 组（同色相深底 + 浅字，对比度 6.2–9.0:1）。 */
+    /** 深色 16 组马卡龙配色（同色相深底 + 浅字，对比度 6.4–9.1:1）。 */
     val DARK: List<CourseColorPair> = listOf(
-        CourseColorPair(0xFF1A3856, 0xFFC5D1DE),
-        CourseColorPair(0xFF441F51, 0xFFD3C8DA),
-        CourseColorPair(0xFF244C24, 0xFFC9DACD),
-        CourseColorPair(0xFF572419, 0xFFDCC8C6),
-        CourseColorPair(0xFF574419, 0xFFE0D8C2),
-        CourseColorPair(0xFF253E4B, 0xFFC8D6DB),
-        CourseColorPair(0xFF521E35, 0xFFDBC8D1),
-        CourseColorPair(0xFF43511F, 0xFFD7DEC4),
-        CourseColorPair(0xFF264A43, 0xFFC5DDDA),
-        CourseColorPair(0xFF513420, 0xFFDCCEC6),
-        CourseColorPair(0xFF292150, 0xFFCAC9DA),
-        CourseColorPair(0xFF573819, 0xFFDFD0C3),
-        CourseColorPair(0xFF193757, 0xFFC3CFDF),
-        CourseColorPair(0xFF574919, 0xFFDEDAC4),
-        CourseColorPair(0xFF472937, 0xFFD8CAD1),
-        CourseColorPair(0xFF254C36, 0xFFC7DCD2),
+        CourseColorPair(0xFF4F1720, 0xFFDDBBC3), // 樱粉 8.11
+        CourseColorPair(0xFF4F2F17, 0xFFE2CAB6), // 蜜桃 7.63
+        CourseColorPair(0xFF4F4217, 0xFFE5D9B3), // 奶油黄 7.02
+        CourseColorPair(0xFF194D19, 0xFFC0D8C6), // 薄荷 6.56
+        CourseColorPair(0xFF454F17, 0xFFD9E1B7), // 鼠尾草 6.46
+        CourseColorPair(0xFF17324F, 0xFFB9CADF), // 天空 7.83
+        CourseColorPair(0xFF2D174F, 0xFFC5BCDC), // 丁香 8.61
+        CourseColorPair(0xFF4F172C, 0xFFDBBDCA), // 玫瑰 8.14
+        CourseColorPair(0xFF1D174F, 0xFFC2BEDA), // 薰衣草 9.06
+        CourseColorPair(0xFF1C3B4A, 0xFFBED3DA), // 雾蓝 7.62
+        CourseColorPair(0xFF4F4617, 0xFFE1D8B7), // 柠檬 6.62
+        CourseColorPair(0xFF4F2117, 0xFFDEBFBA), // 珊瑚 7.85
+        CourseColorPair(0xFF174F42, 0xFFBCDCD5), // 水青 6.42
+        CourseColorPair(0xFF4F171A, 0xFFD9BFC5), // 胭脂 8.31
+        CourseColorPair(0xFF17224F, 0xFFBFC5D9), // 长春花 8.86
+        CourseColorPair(0xFF3C4F17, 0xFFD3DFB9), // 开心果 6.47
     )
 
     /** 稳定配色索引：同一课程名永远同一色（跨设备/跨会话一致，深色模式同索引）。 */
@@ -150,6 +150,77 @@ object TimetableSwipe {
     }
 }
 
+/** 「现在」指示线状态（纯逻辑，可单测）。 */
+sealed interface TimetableNowState {
+    /** [fraction] 为 0..1 的网格高度比例（第 1 节顶部 = 0，第 12 节底部 = 1）。 */
+    data class Visible(val fraction: Float, val label: String) : TimetableNowState
+
+    data object Hidden : TimetableNowState
+}
+
+/**
+ * 当前时间在节次网格中的位置（v5「现在」指示线）+ 进行中课程进度。
+ *
+ * 口径：以 [TtPeriods.PERIODS] 的 12 节起止时间为准；节内按分钟线性插值到该行；
+ * 课间间隙映射到下一行顶部；课前/课后/无节次数据返回 [TimetableNowState.Hidden]。
+ */
+object TimetableNowLogic {
+
+    private val TIME_FORMAT = java.time.format.DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA)
+
+    /** 解析 `HH:mm` → 当天分钟数。 */
+    fun minutesOf(text: String): Int? {
+        val parts = text.trim().split(":")
+        if (parts.size != 2) return null
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+        if (hour !in 0..23 || minute !in 0..59) return null
+        return hour * 60 + minute
+    }
+
+    fun label(nowMillis: Long, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
+        val time = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalTime()
+        return "现在 " + TIME_FORMAT.format(time)
+    }
+
+    fun indicator(
+        nowMillis: Long,
+        zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+    ): TimetableNowState {
+        val periods = TtPeriods.PERIODS
+        if (periods.isEmpty()) return TimetableNowState.Hidden
+        val local = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone)
+        val minutes = local.hour * 60 + local.minute
+        val firstStart = minutesOf(periods.first().first) ?: return TimetableNowState.Hidden
+        val lastEnd = minutesOf(periods.last().second) ?: return TimetableNowState.Hidden
+        if (minutes < firstStart || minutes > lastEnd) return TimetableNowState.Hidden
+        for (index in periods.indices) {
+            val start = minutesOf(periods[index].first) ?: continue
+            val end = minutesOf(periods[index].second) ?: continue
+            if (minutes in start..end) {
+                val within = if (end == start) 0f else (minutes - start).toFloat() / (end - start)
+                val fraction = ((index + within) / periods.size).coerceIn(0f, 1f)
+                return TimetableNowState.Visible(fraction, label(nowMillis, zone))
+            }
+            val next = periods.getOrNull(index + 1) ?: continue
+            val nextStart = minutesOf(next.first) ?: continue
+            if (minutes > end && minutes < nextStart) {
+                return TimetableNowState.Visible(
+                    fraction = ((index + 1).toFloat() / periods.size).coerceIn(0f, 1f),
+                    label = label(nowMillis, zone),
+                )
+            }
+        }
+        return TimetableNowState.Hidden
+    }
+
+    /** 进行中课程进度（0..1；未开始 0，已结束 1）。 */
+    fun progress(startAt: Long, endAt: Long, nowMillis: Long): Float {
+        if (endAt <= startAt) return 0f
+        return ((nowMillis - startAt).toFloat() / (endAt - startAt).toFloat()).coerceIn(0f, 1f)
+    }
+}
+
 /** 周次计算（浏览周 ≠ 当前教学周；weekOffset=0 表示本周）。 */
 object TimetableWeekLogic {
 
@@ -213,7 +284,7 @@ object TimetableLayout {
                 rowHeightDp = 60,
                 labelWidthDp = 52,
                 headerHeightDp = 46,
-                blockCornerDp = 10,
+                blockCornerDp = 16,
                 courseNameMaxLines = 3,
                 showEndTime = true,
                 blockPaddingDp = 6,
@@ -223,7 +294,7 @@ object TimetableLayout {
                 rowHeightDp = 56,
                 labelWidthDp = 48,
                 headerHeightDp = 44,
-                blockCornerDp = 9,
+                blockCornerDp = 14,
                 courseNameMaxLines = 2,
                 showEndTime = true,
                 blockPaddingDp = 5,
@@ -233,7 +304,7 @@ object TimetableLayout {
                 rowHeightDp = 52,
                 labelWidthDp = 38,
                 headerHeightDp = 40,
-                blockCornerDp = 8,
+                blockCornerDp = 14,
                 courseNameMaxLines = 2,
                 showEndTime = false,
                 blockPaddingDp = 4,
@@ -247,6 +318,17 @@ object TimetableLayout {
             headerHeightDp = (base.headerHeightDp * scale).toInt(),
         )
     }
+
+    /** 平板两栏阈值（v5：800dp 起即两栏；仍兼容 spec.twoPane 的 840dp 判断）。 */
+    const val TABLET_MIN_WIDTH_DP: Int = 800
+
+    fun twoPaneFor(widthDp: Int, specTwoPane: Boolean = false): Boolean =
+        specTwoPane || widthDp >= TABLET_MIN_WIDTH_DP
+
+    /** 课程块错峰入场延迟：24ms/块，最多 15 块后不再增加（避免长列表尾块等待过久）。 */
+    const val ENTRANCE_STAGGER_MS: Int = 24
+
+    fun entranceDelayMs(index: Int): Int = index.coerceIn(0, 15) * ENTRANCE_STAGGER_MS
 
     /** 7 列恒不横向溢出：可用宽 = 内容宽 - 左标签列；每列 = 可用宽 / 天数。 */
     fun columnWidthDp(availableWidthDp: Float, dayCount: Int): Float {

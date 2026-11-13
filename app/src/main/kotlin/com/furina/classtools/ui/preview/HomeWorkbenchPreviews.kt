@@ -1,8 +1,8 @@
 package com.furina.classtools.ui.preview
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.data.notices.NoticeEntry
 import com.furina.classtools.data.notices.NoticeGroupDto
@@ -16,15 +16,22 @@ import com.furina.classtools.data.timetable.TtMeta
 import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.data.timetable.TtSnapshot
 import com.furina.classtools.data.timetable.TodayState
+import com.furina.classtools.data.tool.ToolCatalog
+import com.furina.classtools.ui.screens.all.AllToolsScreen
 import com.furina.classtools.ui.screens.home.HomeScreen
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import java.time.ZoneId
 
 /**
- * v2.0.0 工作台（对齐小程序 `pages/index`）预览。
+ * 工作台 + 全部工具 v5 预览（参考 HFUT-Schedule / xiaoying 的布局与动效语言）。
  *
  * 全部使用注入状态（initial*），不读网络、不读 userdata：
- * 有课 / 上课中 / 今天没课 / 课表未同步 / 深色 / 平板双栏 / 大字体 / 常用工具空态。
+ * - 工作台：上课中 / 下一节 / 今天没课 / 课表未同步 / 深色 / 平板双栏 1000dp / 平板 800dp /
+ *   大字体 1.3x / 常用工具空态；
+ * - 全部工具：浅色 2 列 / 深色 / 拖动中 / 大字体 / 平板 800dp（3 列）/ 平板 1000dp（4 列）。
+ *
+ * 预览不要网络：HomeScreen 不传 repository，全部走 initial* 注入；
+ * 首屏错峰淡入在 `LocalInspectionMode` 下自动关闭，静态预览看到的是完整内容。
  */
 private const val HOME_NOW_FRIDAY_1000: Long = 1_793_930_400_000L // 2026-11-06 10:00 +08
 private const val HOME_NOW_FRIDAY_0830: Long = 1_793_925_000_000L // 2026-11-06 08:30 +08
@@ -146,13 +153,20 @@ private val homePreviewPowerRow = PowerRow(
 )
 
 @Composable
-private fun HomePreviewFrame(nowMillis: Long, dark: Boolean, twoPanePlan: TtPlan, emptyQuick: Boolean = false) {
+private fun HomePreviewFrame(
+    nowMillis: Long,
+    dark: Boolean,
+    plan: TtPlan,
+    emptyQuick: Boolean = false,
+    quickToolIds: List<String> = ToolCatalog.defaultQuickIds,
+) {
     ClassToolsTheme(darkTheme = dark) {
         HomeScreen(
             session = homePreviewSession,
             onOpenTool = {},
             onHomeToolsChange = {},
-            initialTtPlan = twoPanePlan,
+            quickToolIds = quickToolIds,
+            initialTtPlan = plan,
             initialHomeworkRows = homePreviewHomework,
             initialNoticesData = homePreviewNotices(),
             initialPowerSel = "4-23A---321",
@@ -163,98 +177,182 @@ private fun HomePreviewFrame(nowMillis: Long, dark: Boolean, twoPanePlan: TtPlan
     }
 }
 
-@Preview(name = "80 工作台 · 有课（浅色）", showBackground = true, widthDp = 412, heightDp = 1500)
-@Composable
-private fun HomeWorkbenchLightPreview() {
-    HomePreviewFrame(
-        nowMillis = HOME_NOW_FRIDAY_1000,
-        dark = false,
-        twoPanePlan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
-    )
-}
+// =============================================================================
+// 工作台
+// =============================================================================
 
-@Preview(name = "81 工作台 · 上课中（浅色）", showBackground = true, widthDp = 412, heightDp = 1500)
+@Preview(name = "80 工作台 v5 · 上课中（浅色）", showBackground = true, widthDp = 412, heightDp = 1400)
 @Composable
 private fun HomeWorkbenchOngoingPreview() {
     HomePreviewFrame(
         nowMillis = HOME_NOW_FRIDAY_0830,
         dark = false,
-        twoPanePlan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_0830),
+        plan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_0830),
     )
 }
 
-@Preview(name = "82 工作台 · 今天没课（浅色）", showBackground = true, widthDp = 412, heightDp = 1400)
+@Preview(name = "81 工作台 v5 · 下一节（浅色）", showBackground = true, widthDp = 412, heightDp = 1400)
 @Composable
-private fun HomeWorkbenchNoClassPreview() {
+private fun HomeWorkbenchNextPreview() {
     HomePreviewFrame(
         nowMillis = HOME_NOW_FRIDAY_1000,
         dark = false,
-        twoPanePlan = homePreviewPlan(homePreviewNoClassSnapshot, HOME_NOW_FRIDAY_1000),
+        plan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
     )
 }
 
-@Preview(name = "83 工作台 · 课表未同步（浅色）", showBackground = true, widthDp = 412, heightDp = 1300)
-@Composable
-private fun HomeWorkbenchNotSyncedPreview() {
-    HomePreviewFrame(
-        nowMillis = HOME_NOW_FRIDAY_1000,
-        dark = false,
-        twoPanePlan = homePreviewNotSyncedPlan,
-    )
-}
-
-@Preview(name = "84 工作台 · 深色", showBackground = true, widthDp = 412, heightDp = 1500)
+@Preview(name = "82 工作台 v5 · 深色", showBackground = true, widthDp = 412, heightDp = 1400)
 @Composable
 private fun HomeWorkbenchDarkPreview() {
     HomePreviewFrame(
         nowMillis = HOME_NOW_FRIDAY_1000,
         dark = true,
-        twoPanePlan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
+        plan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
     )
 }
 
-@Preview(name = "85 工作台 · 平板双栏（1000dp）", showBackground = true, widthDp = 1000, heightDp = 1200)
-@Composable
-private fun HomeWorkbenchTabletPreview() {
-    HomePreviewFrame(
-        nowMillis = HOME_NOW_FRIDAY_1000,
-        dark = false,
-        twoPanePlan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
-    )
-}
-
-@Preview(name = "86 工作台 · 大字体 1.3x", showBackground = true, widthDp = 412, heightDp = 1600, fontScale = 1.3f)
+@Preview(name = "83 工作台 v5 · 大字体 1.3x", showBackground = true, widthDp = 412, heightDp = 1600, fontScale = 1.3f)
 @Composable
 private fun HomeWorkbenchLargeFontPreview() {
     HomePreviewFrame(
         nowMillis = HOME_NOW_FRIDAY_1000,
         dark = false,
-        twoPanePlan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
+        plan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
     )
 }
 
-@Preview(name = "87 工作台 · 常用工具空态", showBackground = true, widthDp = 412, heightDp = 1400)
+@Preview(name = "84 工作台 v5 · 今天没课", showBackground = true, widthDp = 412, heightDp = 1300)
 @Composable
-private fun HomeWorkbenchEmptyQuickPreview() {
+private fun HomeWorkbenchNoClassPreview() {
     HomePreviewFrame(
         nowMillis = HOME_NOW_FRIDAY_1000,
         dark = false,
-        twoPanePlan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
-        emptyQuick = true,
+        plan = homePreviewPlan(homePreviewNoClassSnapshot, HOME_NOW_FRIDAY_1000),
     )
 }
 
-@Preview(name = "88 工作台 · 平板深色双栏", showBackground = true, widthDp = 1000, heightDp = 1200)
+@Preview(name = "85 工作台 v5 · 课表未同步", showBackground = true, widthDp = 412, heightDp = 1200)
+@Composable
+private fun HomeWorkbenchNotSyncedPreview() {
+    HomePreviewFrame(
+        nowMillis = HOME_NOW_FRIDAY_1000,
+        dark = false,
+        plan = homePreviewNotSyncedPlan,
+    )
+}
+
+@Preview(name = "86 工作台 v5 · 平板双栏（1000dp）", showBackground = true, widthDp = 1000, heightDp = 1100)
+@Composable
+private fun HomeWorkbenchTabletPreview() {
+    HomePreviewFrame(
+        nowMillis = HOME_NOW_FRIDAY_1000,
+        dark = false,
+        plan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
+    )
+}
+
+@Preview(name = "87 工作台 v5 · 平板 800dp 单栏", showBackground = true, widthDp = 800, heightDp = 1200)
+@Composable
+private fun HomeWorkbenchMediumPreview() {
+    HomePreviewFrame(
+        nowMillis = HOME_NOW_FRIDAY_1000,
+        dark = false,
+        plan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
+    )
+}
+
+@Preview(name = "88 工作台 v5 · 平板深色双栏", showBackground = true, widthDp = 1000, heightDp = 1100)
 @Composable
 private fun HomeWorkbenchTabletDarkPreview() {
     HomePreviewFrame(
         nowMillis = HOME_NOW_FRIDAY_1000,
         dark = true,
-        twoPanePlan = homePreviewPlan(homePreviewNoClassSnapshot, HOME_NOW_FRIDAY_1000),
+        plan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
     )
 }
 
-@Suppress("unused")
-private val homePreviewWidthHint = 412.dp
+@Preview(name = "89 工作台 v5 · 常用工具空态", showBackground = true, widthDp = 412, heightDp = 1300)
+@Composable
+private fun HomeWorkbenchEmptyQuickPreview() {
+    HomePreviewFrame(
+        nowMillis = HOME_NOW_FRIDAY_1000,
+        dark = false,
+        plan = homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000),
+        emptyQuick = true,
+        quickToolIds = emptyList(),
+    )
+}
 
+// =============================================================================
+// 全部工具
+// =============================================================================
 
+private val allToolIds = ToolCatalog.tools.map { it.id }
+
+@Preview(name = "90 全部工具 v5 · 浅色 2 列", showBackground = true, widthDp = 412, heightDp = 1200)
+@Composable
+private fun AllToolsLightPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        AllToolsScreen(onOpenTool = {}, skipRestore = true, initialOrder = allToolIds)
+    }
+}
+
+@Preview(name = "91 全部工具 v5 · 深色 2 列", showBackground = true, widthDp = 412, heightDp = 1200)
+@Composable
+private fun AllToolsDarkPreview() {
+    ClassToolsTheme(darkTheme = true) {
+        AllToolsScreen(onOpenTool = {}, skipRestore = true, initialOrder = allToolIds)
+    }
+}
+
+@Preview(name = "92 全部工具 v5 · 拖动中（浅色）", showBackground = true, widthDp = 412, heightDp = 915)
+@Composable
+private fun AllToolsDraggingPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        AllToolsScreen(
+            onOpenTool = {},
+            skipRestore = true,
+            initialOrder = allToolIds,
+            previewDraggingToolId = "hw",
+            previewDragOffset = Offset(206f, 430f),
+        )
+    }
+}
+
+@Preview(name = "93 全部工具 v5 · 大字体 1.3x", showBackground = true, widthDp = 412, heightDp = 1200, fontScale = 1.3f)
+@Composable
+private fun AllToolsLargeFontPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        AllToolsScreen(onOpenTool = {}, skipRestore = true, initialOrder = allToolIds)
+    }
+}
+
+@Preview(name = "94 全部工具 v5 · 平板 800dp（3 列）", showBackground = true, widthDp = 800, heightDp = 1000)
+@Composable
+private fun AllToolsMediumPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        AllToolsScreen(onOpenTool = {}, skipRestore = true, initialOrder = allToolIds)
+    }
+}
+
+@Preview(name = "95 全部工具 v5 · 平板 1000dp（4 列）", showBackground = true, widthDp = 1000, heightDp = 900)
+@Composable
+private fun AllToolsTabletPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        AllToolsScreen(onOpenTool = {}, skipRestore = true, initialOrder = allToolIds)
+    }
+}
+
+@Preview(name = "96 全部工具 v5 · 拖动中（深色 4 列）", showBackground = true, widthDp = 1000, heightDp = 900)
+@Composable
+private fun AllToolsTabletDraggingDarkPreview() {
+    ClassToolsTheme(darkTheme = true) {
+        AllToolsScreen(
+            onOpenTool = {},
+            skipRestore = true,
+            initialOrder = allToolIds,
+            previewDraggingToolId = "draw",
+            previewDragOffset = Offset(500f, 360f),
+        )
+    }
+}

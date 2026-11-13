@@ -9,10 +9,12 @@ import com.furina.classtools.data.notices.NoticeStatusMachine
 import com.furina.classtools.data.power.PowerRow
 import com.furina.classtools.data.power.PowerState
 import com.furina.classtools.data.power.PowerStats
+import com.furina.classtools.data.timetable.SessionInfo
+import com.furina.classtools.data.timetable.SessionState
+import com.furina.classtools.data.timetable.TodayState
 import com.furina.classtools.data.timetable.TtPlan
 import java.time.LocalDate
-import java.time.format.TextStyle
-import java.util.Locale
+import kotlin.math.roundToInt
 
 /** 工作台轮换条目（作业待交 / 通知待处理卡内最新一条）。 */
 data class HomeRotationItem(
@@ -35,6 +37,30 @@ data class HomePowerCard(
 )
 
 /**
+ * 工作台 v5 顶部「今日」hero 的纯数据概览。
+ *
+ * @param kind 语义状态：`loading / ongoing / next / done / none / nodata`（UI 据此选强调色/图标）
+ * @param tag 状态标签（`上课中 / 下一节 / 已结束 / 今日无课 / 未同步`）
+ * @param title 主标题（上课中 = 课程名；下一节 = 课程名；其余 = 空态标题）
+ * @param detail 副标题（时间 · 地点 / 下次课程）
+ * @param hint 右下提示（`还剩 22 分钟` / `距上课 35 分钟` / `点此打开课表`）
+ * @param progress 进度条 0..1；null = 不展示（未同步/无课/无数据）
+ * @param progressText 进度说明（`已上 40%` / `今日 2/5 节`）
+ */
+data class HomeHeroState(
+    val kind: String,
+    val tag: String,
+    val title: String,
+    val detail: String,
+    val hint: String,
+    val progress: Float?,
+    val progressText: String,
+) {
+    /** 是否处于「需要用户行动」的未同步空态（hero 显示打开课表 CTA）。 */
+    val needsAction: Boolean get() = kind == "nodata"
+}
+
+/**
  * 工作台纯逻辑（可单测，无 Compose 依赖）。
  *
  * 对齐微信小程序 `pages/index/index`：
@@ -42,7 +68,8 @@ data class HomePowerCard(
  * - 作业待交 = 未完成且未过期，按截止时间升序（最近截止优先）；
  * - 通知待处理 = 未 mark ntdone，按时间倒序；
  * - 电费卡 = 关注宿舍（userdata.power.sel）+ 读数/状态；
- * - 轮换：每 5s 下一条（页面不可见时暂停由 UI 层控制）。
+ * - 轮换：每 5s 下一条（页面不可见时暂停由 UI 层控制）；
+ * - v5：`heroState()` 汇总「今日 hero」（上课中/下一节/已结束/无课/未同步 + 进度条）。
  */
 object HomeWorkbenchLogic {
 
@@ -188,8 +215,129 @@ object HomeWorkbenchLogic {
     /** 是否存在「上课中」的课（卡片显示 pill）。 */
     fun hasOngoing(plan: TtPlan?): Boolean =
         plan?.today?.any {
-            it.state == com.furina.classtools.data.timetable.SessionState.ONGOING
+            it.state == SessionState.ONGOING
         } == true
+
+    // ---- 今日 hero ----------------------------------------------------------
+
+    /** 课程进度：`(now - start) / (end - start)`，钳制 0..1（时间异常时返回 0）。 */
+    fun lessonProgress(startAt: Long, endAt: Long, nowMillis: Long): Float {
+        val total = endAt - startAt
+        if (total <= 0L) return 0f
+        val elapsed = (nowMillis - startAt).coerceIn(0L, total)
+        return (elapsed.toDouble() / total.toDouble()).toFloat().coerceIn(0f, 1f)
+    }
+
+    /** 距离 [atMillis] 的分钟数（向上取整；已过返回 0）。 */
+    fun minutesUntil(atMillis: Long, nowMillis: Long): Int {
+        val delta = atMillis - nowMillis
+        if (delta <= 0L) return 0
+        return ((delta + 59_999L) / 60_000L).toInt()
+    }
+
+    /**
+     * 工作台顶部「今日」hero 状态。
+     *
+     * 优先级：上课中 > 今日下一节 > 今日已结束 > 今日无课 > 未同步。
+     * 进度条口径：
+     * - 上课中 = 本节课已上比例；
+     * - 下一节 / 已结束 = 今日已完成节数比例（无今日课程时不展示）；
+     * - 未同步 / 无课 = 不展示。
+     */
+    fun heroState(plan: TtPlan?, loading: Boolean, nowMillis: Long): HomeHeroState {
+        if (plan == null || !plan.hasData) {
+            return if (loading) {
+                HomeHeroState(
+                    kind = "loading",
+                    tag = "同步中",
+                    title = "正在读取今日课表",
+                    detail = "稍后自动更新",
+                    hint = "",
+                    progress = null,
+                    progressText = "",
+                )
+            } else {
+                HomeHeroState(
+                    kind = "nodata",
+                    tag = "未同步",
+                    title = "课表未同步",
+                    detail = "打开课表拉取本周课程",
+                    hint = "点此打开课表",
+                    progress = null,
+                    progressText = "",
+                )
+            }
+        }
+
+        val ongoing = plan.today.firstOrNull { it.state == SessionState.ONGOING }
+        if (ongoing != null) {
+            val progress = lessonProgress(ongoing.startAt, ongoing.endAt, nowMillis)
+            val remainMin = ((ongoing.endAt - nowMillis).coerceAtLeast(0L) / 60_000L).toInt()
+            return HomeHeroState(
+                kind = "ongoing",
+                tag = "上课中",
+                title = ongoing.name,
+                detail = courseDetail(ongoing.startText, ongoing.endText, ongoing.room),
+                hint = if (remainMin > 0) "还剩 $remainMin 分钟" else "即将下课",
+                progress = progress,
+                progressText = "已上 ${(progress * 100f).roundToInt()}%",
+            )
+        }
+
+        val totalToday = plan.today.size
+        val doneToday = plan.today.count { it.state == SessionState.DONE }
+        val nextToday = plan.today.firstOrNull { it.state == SessionState.NEXT }
+        if (nextToday != null) {
+            val minutes = minutesUntil(nextToday.startAt, nowMillis)
+            return HomeHeroState(
+                kind = "next",
+                tag = "下一节",
+                title = nextToday.name,
+                detail = courseDetail(nextToday.startText, nextToday.endText, nextToday.room),
+                hint = if (minutes > 0) "距上课 $minutes 分钟" else "即将上课",
+                progress = if (totalToday > 0) doneToday.toFloat() / totalToday.toFloat() else null,
+                progressText = "今日 $doneToday/$totalToday 节",
+            )
+        }
+
+        val next = plan.next
+        if (plan.todayState == TodayState.DONE && totalToday > 0) {
+            return HomeHeroState(
+                kind = "done",
+                tag = "已结束",
+                title = "今日课程已结束",
+                detail = next?.let { "下次 ${it.dayText} ${it.span} ${it.name}" } ?: "近期暂无课程",
+                hint = "",
+                progress = 1f,
+                progressText = "今日 $totalToday/$totalToday 节",
+            )
+        }
+
+        return HomeHeroState(
+            kind = "none",
+            tag = "今日无课",
+            title = "今天没课",
+            detail = next?.let { "下次 ${it.dayText} ${it.span} ${it.name}" } ?: "近期暂无课程",
+            hint = "",
+            progress = null,
+            progressText = "",
+        )
+    }
+
+    /** `08:10–09:40 · 01104`（空项自动省略；时间相同或结束为空时只显示开始时间）。 */
+    private fun courseDetail(startText: String, endText: String, room: String): String = buildList {
+        val start = startText.trim()
+        val end = endText.trim()
+        when {
+            start.isNotEmpty() && end.isNotEmpty() && start != end -> add("$start–$end")
+            start.isNotEmpty() -> add(start)
+            end.isNotEmpty() -> add(end)
+        }
+        room.trim().takeIf { it.isNotEmpty() }?.let { add(it) }
+    }.joinToString(" · ")
+
+    /** 供 hero 展示的今日课程列表（含进行中/已结束；空表 = 无数据）。 */
+    fun heroSessions(plan: TtPlan?): List<SessionInfo> = plan?.today.orEmpty()
 
     // ---- 轮换 ---------------------------------------------------------------
 

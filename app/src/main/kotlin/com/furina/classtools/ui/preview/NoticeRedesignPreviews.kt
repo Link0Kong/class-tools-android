@@ -48,6 +48,10 @@ import java.time.ZoneId
 // 188 大字体 1.3x / 189 平板 800dp / 190 离线缓存 / 191 搜索无结果 / 192 加载骨架
 //
 // 全部使用注入数据（skipLoad），不发网络请求、不读真实账号。
+//
+// task-43 动效预览（新增 195–201）：
+// 195 列表错峰入场帧 / 196 卡片按压态 · 深色 / 197 筛选 chips 弹性帧 / 198 详情延伸帧
+// 199 搜索展开 / 200 大字体 1.3x 按压态 / 201 平板 800dp 错峰入场
 // =============================================================================
 
 /** 预览用 1x1 透明 PNG（与 NoticeAttachmentDragPreviews 同源），验证图片附件缩略图链路。 */
@@ -655,6 +659,143 @@ private fun NoticeRedesignFilterDarkLargeFontPreview() {
             initialMarks = previewMarks(),
             initialFilter = NoticeFilter.PINNED,
             skipLoad = true,
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// task-43：高级交互动效（预览注入动画帧；真机由 spring/Animatable 驱动）
+// -----------------------------------------------------------------------------
+
+/** 195 列表错峰入场中间帧（后两项仍在下方淡入上浮）。 */
+@Preview(name = "195 通知动效 · 错峰入场 浅色", showBackground = true, widthDp = 412, heightDp = 915)
+@Composable
+private fun NoticeMotionEntrancePreview() {
+    ClassToolsTheme(darkTheme = false) {
+        NoticesScreen(
+            onBack = {},
+            session = null,
+            marksRepository = null,
+            noticesRepository = null,
+            initialData = previewNoticesData(),
+            initialMarks = previewMarks(),
+            skipLoad = true,
+            previewEntranceProgress = 0.72f,
+        )
+    }
+}
+
+/** 196 卡片按压缩放/高光（深色）。 */
+@Preview(name = "196 通知动效 · 卡片按压 深色", showBackground = true, widthDp = 412, heightDp = 915)
+@Composable
+private fun NoticeMotionPressedDarkPreview() {
+    ClassToolsTheme(darkTheme = true) {
+        NoticesScreen(
+            onBack = {},
+            session = null,
+            marksRepository = null,
+            noticesRepository = null,
+            initialData = previewNoticesData(),
+            initialMarks = previewMarks(),
+            skipLoad = true,
+            previewPressedKey = "auto_g_meeting",
+        )
+    }
+}
+
+/** 197 筛选 chips 弹性放大帧 + 计数。 */
+@Preview(name = "197 通知动效 · 筛选 chips 弹性", showBackground = true, widthDp = 412, heightDp = 915)
+@Composable
+private fun NoticeMotionChipBouncePreview() {
+    ClassToolsTheme(darkTheme = false) {
+        NoticesScreen(
+            onBack = {},
+            session = null,
+            marksRepository = null,
+            noticesRepository = null,
+            initialData = previewNoticesData(),
+            initialMarks = previewMarks(),
+            initialFilter = NoticeFilter.PENDING,
+            skipLoad = true,
+            previewChipBounceKey = NoticeFilter.PENDING.name,
+        )
+    }
+}
+
+/** 198 点开详情时卡片延伸帧（scale/圆角/投影 + 高光；配合弹层滑入）。 */
+@Preview(name = "198 通知动效 · 详情延伸帧", showBackground = true, widthDp = 412, heightDp = 915)
+@Composable
+private fun NoticeMotionExpandedCardPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        NoticesScreen(
+            onBack = {},
+            session = null,
+            marksRepository = null,
+            noticesRepository = null,
+            initialData = previewNoticesData(),
+            initialMarks = previewMarks(),
+            skipLoad = true,
+            previewExpandedKey = "auto_g_meeting",
+        )
+    }
+}
+
+/** 199 搜索展开（尺寸 + 透明度动画终态；结果列表按关键词过滤）。 */
+@Preview(name = "199 通知动效 · 搜索展开", showBackground = true, widthDp = 412, heightDp = 915)
+@Composable
+private fun NoticeMotionSearchExpandedPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        NoticesScreen(
+            onBack = {},
+            session = null,
+            marksRepository = null,
+            noticesRepository = null,
+            initialData = previewNoticesData(),
+            initialMarks = previewMarks(),
+            initialQuery = "班会",
+            skipLoad = true,
+        )
+    }
+}
+
+/** 200 大字体 1.3x 下的按压/入场（触控与文字不裁切）。 */
+@Preview(
+    name = "200 通知动效 · 大字体 1.3x 按压",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 980,
+    fontScale = 1.3f,
+)
+@Composable
+private fun NoticeMotionLargeFontPressedPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        NoticesScreen(
+            onBack = {},
+            session = null,
+            marksRepository = null,
+            noticesRepository = null,
+            initialData = previewNoticesData(),
+            initialMarks = previewMarks(),
+            skipLoad = true,
+            previewPressedKey = "auto_g_meeting",
+        )
+    }
+}
+
+/** 201 平板 800dp：两列网格 + 错峰入场帧。 */
+@Preview(name = "201 通知动效 · 平板 800dp 错峰", showBackground = true, widthDp = 800, heightDp = 1000)
+@Composable
+private fun NoticeMotionTabletEntrancePreview() {
+    ClassToolsTheme(darkTheme = false) {
+        NoticesScreen(
+            onBack = {},
+            session = null,
+            marksRepository = null,
+            noticesRepository = null,
+            initialData = previewNoticesData(),
+            initialMarks = previewMarks(),
+            skipLoad = true,
+            previewEntranceProgress = 0.8f,
         )
     }
 }

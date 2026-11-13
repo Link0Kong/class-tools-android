@@ -72,7 +72,7 @@ private class PreviewReminderStore : ReminderSettingsStore {
 
 private val allToolIds = ToolCatalog.tools.map { it.id }
 
-@Preview(name = "90 全部工具 3 列 · 浅色", showBackground = true, widthDp = 700, heightDp = 900)
+@Preview(name = "97 全部工具 · 3 列 700dp 浅色", showBackground = true, widthDp = 700, heightDp = 900)
 @Composable
 private fun AllToolsThreeColumnsPreview() {
     ClassToolsTheme(darkTheme = false) {
@@ -80,7 +80,7 @@ private fun AllToolsThreeColumnsPreview() {
     }
 }
 
-@Preview(name = "91 全部工具 3 列 · 拖动中", showBackground = true, widthDp = 700, heightDp = 900)
+@Preview(name = "98 全部工具 · 3 列 拖动中", showBackground = true, widthDp = 700, heightDp = 900)
 @Composable
 private fun AllToolsThreeColumnsDraggingPreview() {
     ClassToolsTheme(darkTheme = false) {
@@ -94,7 +94,7 @@ private fun AllToolsThreeColumnsDraggingPreview() {
     }
 }
 
-@Preview(name = "92 全部工具 4 列 · 拖动中", showBackground = true, widthDp = 1000, heightDp = 900)
+@Preview(name = "99 全部工具 · 4 列 拖动中", showBackground = true, widthDp = 1000, heightDp = 900)
 @Composable
 private fun AllToolsFourColumnsDraggingPreview() {
     ClassToolsTheme(darkTheme = false) {
@@ -108,7 +108,7 @@ private fun AllToolsFourColumnsDraggingPreview() {
     }
 }
 
-@Preview(name = "93 全部工具 4 列 · 深色", showBackground = true, widthDp = 1000, heightDp = 900)
+@Preview(name = "101 全部工具 · 4 列 深色", showBackground = true, widthDp = 1000, heightDp = 900)
 @Composable
 private fun AllToolsFourColumnsDarkPreview() {
     ClassToolsTheme(darkTheme = true) {
@@ -189,7 +189,7 @@ private fun IdentitySmallScreenPreview() {
     }
 }
 
-@Preview(name = "100 工作台 · 平板 700dp 深色", showBackground = true, widthDp = 700, heightDp = 1000)
+@Preview(name = "102 工作台 · 平板 700dp 深色", showBackground = true, widthDp = 700, heightDp = 1000)
 @Composable
 private fun WorkbenchTabletDarkPreview() {
     ClassToolsTheme(darkTheme = true) {

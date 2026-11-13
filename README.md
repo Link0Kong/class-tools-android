@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.42.0**——UI 重构（以微信小程序为基准：我的/通知/设置整合/使用说明卡片化）+ 通知去重/删除测试通知 + 系统实时活动（Live Updates/流体云）；单测 **1098/0**、快速 E2E **43/0**，签名 APK 已交付桌面。详见 [REPORT_ROUND53](docs/REPORT_ROUND53_20261112.md) 与 [UI_REDESIGN_VERIFY](docs/UI_REDESIGN_VERIFY.md)。
+- 状态：**v4.43.0**——参考 HFUT-Schedule / xiaoying 重做课表 v5（马卡龙块/日期头/周胶囊/现在指示/下一节条/spring 动效）、工作台+全部工具 v5、通知页动效、我的 hero；单测 **1104/0**、快速 E2E **43/0**，签名 APK 已交付桌面。详见 [REPORT_ROUND54](docs/REPORT_ROUND54_20261113.md) 与 [UI_REFERENCE](docs/design/UI_REFERENCE_20261113.md)。
 
 ## 目录
 

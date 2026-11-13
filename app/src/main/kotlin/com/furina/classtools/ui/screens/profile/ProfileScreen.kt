@@ -1,5 +1,11 @@
 package com.furina.classtools.ui.screens.profile
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +27,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -45,6 +53,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +61,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -75,7 +88,9 @@ import com.furina.classtools.ui.screens.me.MeStatsBuilder
 import com.furina.classtools.ui.screens.me.ReminderStatus
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
+import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
 
 /**
@@ -361,40 +376,115 @@ private fun RowDivider() {
 
 @Composable
 private fun IdentitySection(session: Session) {
-    SectionTitle("账号与身份")
-    CtGlassCard(shape = CtShapeTokens.hero) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
-            Text(
-                text = session.name.ifBlank { "班级成员" },
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+    val reduceMotion = rememberReduceMotion()
+    var appeared by remember(reduceMotion) { mutableStateOf(reduceMotion) }
+    LaunchedEffect(reduceMotion) {
+        if (!reduceMotion) appeared = true
+    }
+    AnimatedVisibility(
+        visible = appeared,
+        enter = fadeIn(animationSpec = CtMotion.fadeIn) +
+            slideInVertically(animationSpec = CtMotion.spatialSpec()) { height -> height / 10 },
+    ) {
+        ProfileHeroCard(session)
+    }
+}
+
+/**
+ * 「我的」顶部身份 hero（v5，参考 xiaoying 渐变 banner + 重叠圆形标识的层级感；不复制样式/素材）。
+ *
+ * 隐私：不展示头像与学号，只用姓名首字圆形标识 + 姓名/身份胶囊；深色/浅色统一使用品牌深青→灰蓝渐变 + 白字，
+ * 对比度按大字号/胶囊字重保证可读；右上角放品牌三圆点（BrandMark）呼应启动图标。
+ */
+@Composable
+private fun ProfileHeroCard(session: Session) {
+    val heroStart = Color(0xFF2F5D54)
+    val heroEnd = Color(0xFF44566E)
+    val initial = session.name.trim().take(1).ifBlank { "班" }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 168.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(Brush.linearGradient(listOf(heroStart, heroEnd))),
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                color = Color.White.copy(alpha = 0.06f),
+                radius = size.minDimension * 0.42f,
+                center = Offset(size.width * 0.94f, size.height * 0.10f),
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            drawCircle(
+                color = Color.White.copy(alpha = 0.05f),
+                radius = size.minDimension * 0.30f,
+                center = Offset(size.width * 0.72f, size.height * 1.02f),
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.16f))
+                        .border(1.dp, Color.White.copy(alpha = 0.26f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = initial,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "班级工具站",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.74f),
+                    )
+                    Text(
+                        text = session.name.ifBlank { "班级成员" },
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                BrandMark(size = 38.dp, container = Color.White.copy(alpha = 0.14f))
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                CtPill(
-                    text = "身份已验证",
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                if (session.role.isNotBlank()) {
-                    CtPill(
-                        text = session.role,
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                }
-                if (session.badge.isNotBlank() && session.badge != session.role) {
-                    CtPill(text = session.badge)
-                }
-                if (session.isAdmin) CtPill(text = "管理员")
+                HeroPill(text = "身份已验证", emphasis = true)
+                if (session.role.isNotBlank()) HeroPill(text = session.role)
+                if (session.badge.isNotBlank() && session.badge != session.role) HeroPill(text = session.badge)
+                if (session.isAdmin) HeroPill(text = "管理员", emphasis = true)
             }
         }
     }
+}
+
+@Composable
+private fun HeroPill(text: String, emphasis: Boolean = false) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = Color.White,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = if (emphasis) 0.22f else 0.13f))
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    )
 }
 
 // =============================================================================

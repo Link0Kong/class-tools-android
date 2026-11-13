@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -30,15 +29,23 @@ import com.furina.classtools.ui.screens.timetable.TimetablePalette
 import com.furina.classtools.ui.screens.timetable.TimetableViewScreen
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 /**
- * v3 课表页预览：手机周视图（浅/深/滑动中/7 列/小屏）、日视图、平板双栏、空态/错误、详情、16 色板。
+ * 课表页 v5 预览（马卡龙配色 / 日期头 / 现在指示 / 详情 / 平板 / 大字体 / 状态页）。
+ * 对应 `docs/design/UI_REFERENCE_20261113.md`。
  */
-private const val V3_NOW: Long = 1_793_930_400_000L // 2026-11-06 10:00 +08（周五，第 10 周）
+private const val V5_NOW: Long = 1_793_930_400_000L // 2026-11-06 10:00 +08（周五，第 10 周，第 3 节）
 
-private val v3TermStart = LocalDate.of(2026, 8, 31)
+private fun v5Millis(hour: Int, minute: Int): Long =
+    ZonedDateTime.of(2026, 11, 6, hour, minute, 0, 0, ZoneId.of("Asia/Shanghai"))
+        .toInstant()
+        .toEpochMilli()
 
-private val v3Snapshot: TtSnapshot = TtSnapshot(
+private val v5TermStart = LocalDate.of(2026, 8, 31)
+
+private val v5Snapshot: TtSnapshot = TtSnapshot(
     c = listOf(
         Course("数据结构", "龚志伟", "明理楼(教室02201)", day = 0, start = 1, end = 2, weeks = "1-16"),
         Course("高等数学", "刘老师", "自强楼(教室01104)", day = 0, start = 3, end = 4, weeks = "1-16"),
@@ -51,8 +58,8 @@ private val v3Snapshot: TtSnapshot = TtSnapshot(
     t = "2026-08-31",
 )
 
-private val v3SnapshotWithWeekend: TtSnapshot = v3Snapshot.copy(
-    c = v3Snapshot.c + Course(
+private val v5SnapshotWithWeekend: TtSnapshot = v5Snapshot.copy(
+    c = v5Snapshot.c + Course(
         "周末选修",
         "周老师",
         "综合楼(教室04102)",
@@ -63,11 +70,11 @@ private val v3SnapshotWithWeekend: TtSnapshot = v3Snapshot.copy(
     ),
 )
 
-private object V3PreviewTimetableRepository : TimetableRepository {
+private object V5PreviewTimetableRepository : TimetableRepository {
     override suspend fun load(force: Boolean): TtLoadResult =
-        TtLoadResult.Success(v3Snapshot, fromCache = false, fetchedAt = V3_NOW)
+        TtLoadResult.Success(v5Snapshot, fromCache = false, fetchedAt = V5_NOW)
 
-    override suspend fun cached(): TtSnapshot = v3Snapshot
+    override suspend fun cached(): TtSnapshot = v5Snapshot
 
     override suspend fun clear() = Unit
 }
@@ -75,119 +82,120 @@ private object V3PreviewTimetableRepository : TimetableRepository {
 @Composable
 private fun TimetablePreviewFrame(
     dark: Boolean,
-    snapshot: TtSnapshot = v3Snapshot,
+    snapshot: TtSnapshot = v5Snapshot,
     dayView: Boolean = false,
     weekOffset: Int = 0,
     swipeOffset: Float = 0f,
+    nowMillis: Long = V5_NOW,
 ) {
     ClassToolsTheme(darkTheme = dark) {
         TimetableViewScreen(
             onBack = {},
-            repository = V3PreviewTimetableRepository,
+            repository = V5PreviewTimetableRepository,
             initialSnapshot = snapshot,
             initialDayView = dayView,
             initialWeekOffset = weekOffset,
             initialSwipeOffsetPx = swipeOffset,
             skipLoad = true,
-            nowMillis = V3_NOW,
+            nowMillis = nowMillis,
             onAddToCalendar = { _, _, _ -> },
             onExportTimetable = {},
         )
     }
 }
 
-@Preview(name = "120 课表 周视图 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "200 课表 v5 周视图 · 浅色", showBackground = true, widthDp = 412, heightDp = 960)
 @Composable
-private fun TimetableWeekLightPreview() {
+private fun V5WeekLightPreview() {
     TimetablePreviewFrame(dark = false)
 }
 
-@Preview(name = "121 课表 周视图 · 深色", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "201 课表 v5 周视图 · 深色", showBackground = true, widthDp = 412, heightDp = 960)
 @Composable
-private fun TimetableWeekDarkPreview() {
+private fun V5WeekDarkPreview() {
     TimetablePreviewFrame(dark = true)
 }
 
-@Preview(name = "122 课表 周视图 · 滑动中（切下一周）", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "202 课表 v5 滑动中（切下一周）", showBackground = true, widthDp = 412, heightDp = 960)
 @Composable
-private fun TimetableSwipePreview() {
-    TimetablePreviewFrame(dark = false, swipeOffset = -96f)
+private fun V5SwipePreview() {
+    TimetablePreviewFrame(dark = false, swipeOffset = -96f, weekOffset = 0)
 }
 
-@Preview(name = "123 课表 周视图 · 7 列（周末有课）", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "203 课表 v5 7 列（周末有课）", showBackground = true, widthDp = 412, heightDp = 960)
 @Composable
-private fun TimetableWeekendColumnsPreview() {
-    TimetablePreviewFrame(dark = false, snapshot = v3SnapshotWithWeekend)
+private fun V5WeekendPreview() {
+    TimetablePreviewFrame(dark = false, snapshot = v5SnapshotWithWeekend)
 }
 
-@Preview(name = "124 课表 日视图 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "204 课表 v5 日视图 · 浅色", showBackground = true, widthDp = 412, heightDp = 960)
 @Composable
-private fun TimetableDayLightPreview() {
+private fun V5DayLightPreview() {
     TimetablePreviewFrame(dark = false, dayView = true)
 }
 
-@Preview(name = "125 课表 日视图 · 深色", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "205 课表 v5 日视图 · 深色", showBackground = true, widthDp = 412, heightDp = 960)
 @Composable
-private fun TimetableDayDarkPreview() {
+private fun V5DayDarkPreview() {
     TimetablePreviewFrame(dark = true, dayView = true)
 }
 
-@Preview(name = "126 课表 平板双栏 · 浅色", showBackground = true, widthDp = 1000, heightDp = 900)
+@Preview(name = "206 课表 v5 平板两栏 · 浅色", showBackground = true, widthDp = 1000, heightDp = 900)
 @Composable
-private fun TimetableTabletPreview() {
+private fun V5TabletPreview() {
     TimetablePreviewFrame(dark = false)
 }
 
-@Preview(name = "127 课表 平板双栏 · 深色", showBackground = true, widthDp = 1000, heightDp = 900)
+@Preview(name = "207 课表 v5 平板两栏 · 深色", showBackground = true, widthDp = 1000, heightDp = 900)
 @Composable
-private fun TimetableTabletDarkPreview() {
+private fun V5TabletDarkPreview() {
     TimetablePreviewFrame(dark = true)
 }
 
-@Preview(name = "128 课表 下一周 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(
+    name = "208 课表 v5 大字体 1.3x",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 1100,
+    fontScale = 1.3f,
+)
 @Composable
-private fun TimetableNextWeekPreview() {
-    TimetablePreviewFrame(dark = false, weekOffset = 1)
-}
-
-@Preview(name = "129 课表 空态 · 浅色", showBackground = true, widthDp = 412, heightDp = 640)
-@Composable
-private fun TimetableEmptyPreview() {
-    ClassToolsTheme(darkTheme = false) {
-        TimetableViewScreen(
-            onBack = {},
-            repository = V3PreviewTimetableRepository,
-            initialSnapshot = TtSnapshot(),
-            skipLoad = true,
-            nowMillis = V3_NOW,
-        )
-    }
-}
-
-@Preview(name = "130 课表 网络错误 · 深色", showBackground = true, widthDp = 412, heightDp = 640)
-@Composable
-private fun TimetableErrorPreview() {
-    ClassToolsTheme(darkTheme = true) {
-        TimetableViewScreen(
-            onBack = {},
-            repository = V3PreviewTimetableRepository,
-            initialError = "网络不可用，请稍后重试",
-            initialErrorKind = com.furina.classtools.data.timetable.TtFailureKind.NETWORK,
-            skipLoad = true,
-            nowMillis = V3_NOW,
-        )
-    }
-}
-
-@Preview(name = "131 课表 小屏 360dp", showBackground = true, widthDp = 360, heightDp = 780)
-@Composable
-private fun TimetableSmallScreenPreview() {
+private fun V5LargeFontPreview() {
     TimetablePreviewFrame(dark = false)
 }
 
-@Preview(name = "132 课程详情（写日程入口）", showBackground = true, widthDp = 412, heightDp = 620)
+@Preview(name = "209 课表 v5 空态 · 浅色", showBackground = true, widthDp = 412, heightDp = 640)
 @Composable
-private fun CourseDetailPreview() {
+private fun V5EmptyPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        TimetableViewScreen(
+            onBack = {},
+            repository = V5PreviewTimetableRepository,
+            initialSnapshot = TtSnapshot(),
+            skipLoad = true,
+            nowMillis = V5_NOW,
+        )
+    }
+}
+
+@Preview(name = "210 课表 v5 网络错误 · 深色", showBackground = true, widthDp = 412, heightDp = 640)
+@Composable
+private fun V5ErrorPreview() {
+    ClassToolsTheme(darkTheme = true) {
+        TimetableViewScreen(
+            onBack = {},
+            repository = V5PreviewTimetableRepository,
+            initialError = "网络不可用，请稍后重试",
+            initialErrorKind = com.furina.classtools.data.timetable.TtFailureKind.NETWORK,
+            skipLoad = true,
+            nowMillis = V5_NOW,
+        )
+    }
+}
+
+@Preview(name = "211 课表 v5 课程详情", showBackground = true, widthDp = 412, heightDp = 640)
+@Composable
+private fun V5CourseDetailPreview() {
     ClassToolsTheme(darkTheme = false) {
         Surface(
             modifier = Modifier.padding(12.dp),
@@ -195,18 +203,18 @@ private fun CourseDetailPreview() {
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             TimetableCourseDetailContent(
-                course = v3Snapshot.c.first(),
+                course = v5Snapshot.c.first(),
                 displayWeek = 10,
-                termStart = v3TermStart,
+                termStart = v5TermStart,
                 onAddToCalendar = { _, _, _ -> },
             )
         }
     }
 }
 
-@Preview(name = "133 16 色课程配色板", showBackground = true, widthDp = 412, heightDp = 760)
+@Preview(name = "212 课表 v5 马卡龙 16 色板", showBackground = true, widthDp = 412, heightDp = 820)
 @Composable
-private fun TimetablePalettePreview() {
+private fun V5PalettePreview() {
     ClassToolsTheme(darkTheme = false) {
         Column(
             modifier = Modifier
@@ -214,9 +222,9 @@ private fun TimetablePalettePreview() {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("16 色 · 浅色", style = MaterialTheme.typography.titleSmall)
+            Text("马卡龙 16 色 · 浅色（对比度 5.3–7.5）", style = MaterialTheme.typography.titleSmall)
             PaletteGrid(pairs = TimetablePalette.LIGHT)
-            Text("16 色 · 深色（同索引）", style = MaterialTheme.typography.titleSmall)
+            Text("马卡龙 16 色 · 深色（同索引，对比度 6.4–9.1）", style = MaterialTheme.typography.titleSmall)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -255,5 +263,17 @@ private fun PaletteGrid(pairs: List<TimetablePalette.CourseColorPair>) {
     }
 }
 
+@Preview(name = "213 课表 v5 小屏 360dp", showBackground = true, widthDp = 360, heightDp = 800)
+@Composable
+private fun V5SmallScreenPreview() {
+    TimetablePreviewFrame(dark = false)
+}
+
+@Preview(name = "214 课表 v5 上课中与现在指示", showBackground = true, widthDp = 412, heightDp = 960)
+@Composable
+private fun V5OngoingPreview() {
+    TimetablePreviewFrame(dark = false, nowMillis = v5Millis(8, 20))
+}
+
 @Suppress("unused")
-private val v3PreviewHint = 412.dp
+private val v5PreviewHint = 412.dp

@@ -3,6 +3,8 @@ package com.furina.classtools.ui.screens.timetable
 import com.furina.classtools.data.timetable.Course
 import com.furina.classtools.data.timetable.TtSnapshot
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -243,5 +245,69 @@ class TimetableDesignTest {
             nowMillis = 1_000L,
         )
         assertNull(empty)
+    }
+
+    // ---- v5：现在指示线 / 进度 / 平板阈值 / 错峰入场 ------------------------
+
+    private val v5Zone: ZoneId = ZoneId.of("Asia/Shanghai")
+
+    private fun v5Millis(hour: Int, minute: Int): Long =
+        ZonedDateTime.of(2026, 11, 6, hour, minute, 0, 0, v5Zone).toInstant().toEpochMilli()
+
+    @Test
+    fun nowIndicator_hiddenOutsidePeriods() {
+        assertEquals(TimetableNowState.Hidden, TimetableNowLogic.indicator(v5Millis(7, 0), v5Zone))
+        assertEquals(TimetableNowState.Hidden, TimetableNowLogic.indicator(v5Millis(22, 0), v5Zone))
+    }
+
+    @Test
+    fun nowIndicator_insideFirstSecondAndLastPeriod() {
+        // 08:10 第 1 节开始 → 0.0
+        val first = TimetableNowLogic.indicator(v5Millis(8, 10), v5Zone)
+        assertTrue(first is TimetableNowState.Visible)
+        assertEquals(0f, (first as TimetableNowState.Visible).fraction, 0.001f)
+        assertTrue(first.label.startsWith("现在 08:10"))
+
+        // 08:30 第 1 节内 20/45 → (0 + 20/45) / 12
+        val mid = TimetableNowLogic.indicator(v5Millis(8, 30), v5Zone) as TimetableNowState.Visible
+        assertEquals((20f / 45f) / 12f, mid.fraction, 0.001f)
+
+        // 21:20 第 12 节结束 → 1.0
+        val last = TimetableNowLogic.indicator(v5Millis(21, 20), v5Zone) as TimetableNowState.Visible
+        assertEquals(1f, last.fraction, 0.001f)
+    }
+
+    @Test
+    fun nowIndicator_gapMapsToNextRowTop() {
+        // 09:40–09:50 为第 2/3 节之间的课间 → 第 3 节顶部 = 2/12
+        val gap = TimetableNowLogic.indicator(v5Millis(9, 45), v5Zone) as TimetableNowState.Visible
+        assertEquals(2f / 12f, gap.fraction, 0.001f)
+    }
+
+    @Test
+    fun nowProgress_clampsToRange() {
+        val start = 1_000L
+        val end = 3_000L
+        assertEquals(0f, TimetableNowLogic.progress(start, end, 0L), 0.001f)
+        assertEquals(0f, TimetableNowLogic.progress(start, end, start), 0.001f)
+        assertEquals(0.5f, TimetableNowLogic.progress(start, end, 2_000L), 0.001f)
+        assertEquals(1f, TimetableNowLogic.progress(start, end, 5_000L), 0.001f)
+        assertEquals(0f, TimetableNowLogic.progress(end, start, 2_000L), 0.001f)
+    }
+
+    @Test
+    fun tabletTwoPane_from800dp() {
+        assertFalse(TimetableLayout.twoPaneFor(widthDp = 799, specTwoPane = false))
+        assertTrue(TimetableLayout.twoPaneFor(widthDp = 800, specTwoPane = false))
+        assertTrue(TimetableLayout.twoPaneFor(widthDp = 412, specTwoPane = true))
+        assertFalse(TimetableLayout.twoPaneFor(widthDp = 412, specTwoPane = false))
+    }
+
+    @Test
+    fun entranceStagger_bounded() {
+        assertEquals(0, TimetableLayout.entranceDelayMs(0))
+        assertEquals(72, TimetableLayout.entranceDelayMs(3))
+        assertEquals(15 * TimetableLayout.ENTRANCE_STAGGER_MS, TimetableLayout.entranceDelayMs(40))
+        assertEquals(0, TimetableLayout.entranceDelayMs(-2))
     }
 }

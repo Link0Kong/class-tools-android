@@ -1,9 +1,12 @@
 package com.furina.classtools.ui.screens.all
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +18,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -28,9 +33,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -39,33 +47,43 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
-import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtBrandDots
 import com.furina.classtools.ui.components.ExpressiveBackground
-import com.furina.classtools.ui.components.ToolCard
-import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.reorderableSemantics
+import com.furina.classtools.ui.theme.LocalCtDarkTheme
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * 全部工具：长按拖动排序 + 点击打开。
+ * 全部工具 v5：渐变页头 + 2 列分类色卡片 + 长按拖动排序。
  *
- * 交互（与 `mp-class-tools/pages/all/all.js` 拖动 v2 同口径）：
- * - 长按约 350ms 进入拖动（触感反馈）；ghost 跟手，2 列网格按「行 + x 中线」计算插入位置；
+ * 交互（与 `mp-class-tools/pages/all/all.js` 拖动 v2 同口径，**逻辑保持 v4 完全不变**）：
+ * - 长按约 350ms 进入拖动（触感反馈）；ghost 跟手，网格按「行 + x 中线」计算插入位置；
  * - 拖动中实时让位（被拖卡片半透明、ghost 覆盖）；靠近上下边缘自动滚动；
  * - 松手落位：**只有顺序真的变化时才**回调 [onToolOrderChange] 并（传入仓库时）写
  *   `userdata v6 prefs.toolOrder`（`at.prefs` 提升，等价 mp `toolOrderSetAt` 语义）；默认自然顺序不写；
  * - 拖动结束后 250ms 内的点击被抑制（拖动不触发打开工具）。
+ *
+ * 视觉（v5，只借鉴 HFUT-Schedule / xiaoying 设计语言，不复制代码/素材）：
+ * - 页头渐变（品牌雾青→灰蓝）+ 工具数量 + 拖动提示（拖动中变成「松手保存顺序」）；
+ * - 卡片 2/3/4 列随窗口（手机 2 列），分类色点缀 + 图标气泡 + 主/副标题，按压缩放；
+ * - 网格仍用自定义 [Layout] 保证拖动重排时卡片节点 identity 稳定（13 张卡片全量布局，
+ *   与旧实现相同，不引入 LazyGrid 让拖动状态被回收的性能/行为回退）。
+ *
+ * 「设置」卡片仍通过 [onOpenTool] 交给宿主（MainNavHost 把它导航到「我的」Tab），本页不改导航逻辑。
  *
  * 接线（Lead 负责 MainNavHost）：
  * ```kotlin
@@ -81,7 +99,7 @@ import kotlin.math.roundToInt
  * @param initialOrder 预览/测试注入顺序（非空时不读 userdata）
  * @param skipRestore 预览/测试：跳过 userdata 读取
  * @param previewDraggingToolId 预览注入：渲染「拖动中」态（ghost + 半透明卡片）
- * @param previewDragOffset 预览注入：ghost 在容器内的位置（px）
+ * @param previewDragOffset 预览注入：ghost 中心在容器内的位置（**dp**，与屏幕密度无关）
  */
 @Composable
 fun AllToolsScreen(
@@ -97,6 +115,7 @@ fun AllToolsScreen(
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
+    val reduceMotion = rememberReduceMotion()
     val naturalIds = remember { ToolCatalog.tools.map { it.id } }
     val spec = rememberCtAdaptiveSpec()
     val columns = spec.gridColumns
@@ -127,13 +146,18 @@ fun AllToolsScreen(
     var containerHeightPx by remember { mutableFloatStateOf(0f) }
     val scrollState = rememberScrollState()
 
-    val itemHeightDp = 142.dp
+    // v5 卡片更高（图标气泡 + 分类标签 + 两行文字）；拖动几何随 itemHeight 参数自动一致。
+    val itemHeightDp = 148.dp
     val spacingDp = 12.dp
     val itemHeightPx = with(density) { itemHeightDp.toPx() }
     val spacingPx = with(density) { spacingDp.toPx() }
 
     val effectiveDraggingId = draggingId ?: previewDraggingToolId
-    val effectiveGhostPointer = if (draggingId != null) dragPointer else previewDragOffset
+    // previewDragOffset 以 dp 计（与预览/设备密度无关），渲染「拖动中」态时 ghost 位置一致。
+    val previewGhostPointer = with(density) {
+        Offset(previewDragOffset.x.dp.toPx(), previewDragOffset.y.dp.toPx())
+    }
+    val effectiveGhostPointer = if (draggingId != null) dragPointer else previewGhostPointer
 
     fun persistOrder(newOrder: List<String>) {
         onToolOrderChange?.invoke(newOrder)
@@ -227,32 +251,16 @@ fun AllToolsScreen(
                     .statusBarsPadding()
                     .verticalScroll(scrollState),
             ) {
-                CtGlassCard(
-                    modifier = Modifier.padding(horizontal = spec.horizontalPadding, vertical = 8.dp),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
-                        androidx.compose.foundation.layout.Row(
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                        ) {
-                            CtBrandDots(dotSize = 7.dp, gap = 5.dp)
-                            androidx.compose.foundation.layout.Spacer(
-                                modifier = androidx.compose.ui.Modifier.width(10.dp),
-                            )
-                            Text(
-                                text = "全部工具",
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "长按卡片拖动排序 · 松手自动保存",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                AllToolsHeader(
+                    modifier = Modifier.padding(
+                        start = spec.horizontalPadding,
+                        end = spec.horizontalPadding,
+                        top = 8.dp,
+                        bottom = 2.dp,
+                    ),
+                    toolCount = toolsInOrder.size,
+                    dragging = effectiveDraggingId != null,
+                )
 
                 // 2 列网格：custom Layout 保证拖动重排时卡片节点 identity 稳定（不会中断手势）
                 Layout(
@@ -286,7 +294,7 @@ fun AllToolsScreen(
                                         )
                                     },
                             ) {
-                                ToolCard(
+                                AllToolCard(
                                     tool = tool,
                                     onClick = {
                                         val now = System.currentTimeMillis()
@@ -304,13 +312,14 @@ fun AllToolsScreen(
                                         onMoveUp = { moveCardBy(tool.id, -1) },
                                         onMoveDown = { moveCardBy(tool.id, +1) },
                                     ),
+                                    reduceMotion = reduceMotion,
                                 )
                             }
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = spec.horizontalPadding)
+                        .padding(horizontal = spec.horizontalPadding, vertical = 8.dp)
                         .onGloballyPositioned { coordinates ->
                             gridLeftPx = coordinates.positionInRoot().x - containerOrigin.x
                             gridTopPx = coordinates.positionInRoot().y - containerOrigin.y
@@ -345,7 +354,7 @@ fun AllToolsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = spec.horizontalPadding, end = spec.horizontalPadding, top = 18.dp, bottom = 124.dp),
+                        .padding(start = spec.horizontalPadding, end = spec.horizontalPadding, top = 16.dp, bottom = 124.dp),
                 )
             }
 
@@ -370,13 +379,78 @@ fun AllToolsScreen(
                             shadowElevation = 20f
                         },
                 ) {
-                    ToolCard(tool = ghostTool, onClick = {})
+                    AllToolCard(
+                        tool = ghostTool,
+                        onClick = {},
+                        pressable = false,
+                        reduceMotion = reduceMotion,
+                    )
                 }
             }
         }
     }
 }
 
+/**
+ * v5 页头：渐变（品牌雾青→灰蓝）+ 工具数量 + 拖动提示。
+ * 深色模式用 primaryContainer/secondaryContainer + 浅色文字，保持可读与品牌识别。
+ */
+@Composable
+private fun AllToolsHeader(
+    toolCount: Int,
+    dragging: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val dark = LocalCtDarkTheme.current
+    val start = if (dark) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary
+    val end = if (dark) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.secondary
+    val content = if (dark) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimary
 
-
-
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        color = Color.Transparent,
+        contentColor = content,
+        border = BorderStroke(1.dp, content.copy(alpha = 0.14f)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Brush.linearGradient(colors = listOf(start, end))),
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 15.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CtBrandDots(dotSize = 6.dp, gap = 4.dp)
+                    Spacer(modifier = Modifier.width(9.dp))
+                    Text(
+                        text = "全部工具",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = content,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = content.copy(alpha = 0.18f),
+                        contentColor = content,
+                    ) {
+                        Text(
+                            text = "$toolCount 个",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(
+                    text = if (dragging) "拖动中 · 松手保存顺序" else "长按卡片拖动排序 · 松手自动保存",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = content.copy(alpha = 0.84f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}

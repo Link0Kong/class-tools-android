@@ -2,11 +2,21 @@
 
 package com.furina.classtools.ui.screens.notices
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,7 +41,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AttachFile
@@ -39,7 +51,6 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Notifications
@@ -67,7 +78,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -77,6 +90,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -106,10 +120,9 @@ import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
-import com.furina.classtools.ui.components.expressive.CtChipOption
-import com.furina.classtools.ui.components.expressive.CtFilterChipRow
-import com.furina.classtools.ui.components.expressive.CtPressableCard
+import com.furina.classtools.ui.components.expressive.CtAnimatedCounter
 import com.furina.classtools.ui.components.glass.CtGlassCard
+import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import com.furina.classtools.ui.theme.rememberReduceMotion
@@ -405,6 +418,14 @@ fun NoticesScreen(
     initialQuery: String = "",
     initialExpiredExpanded: Boolean = false,
     initialLoading: Boolean = false,
+    /** 预览：列表错峰入场帧（0..1；null = 正常动画）。 */
+    previewEntranceProgress: Float? = null,
+    /** 预览：强制指定通知卡处于按压态（NoticeUiItem.key）。 */
+    previewPressedKey: String? = null,
+    /** 预览：强制指定通知卡处于「点开延伸」态（NoticeUiItem.key）。 */
+    previewExpandedKey: String? = null,
+    /** 预览：强制指定筛选 chip 处于弹性放大帧（NoticeFilter.name）。 */
+    previewChipBounceKey: String? = null,
     forcedErrorMessage: String? = null,
     skipLoad: Boolean = false,
 ) {
@@ -412,6 +433,15 @@ fun NoticesScreen(
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val haptics = LocalHapticFeedback.current
+    // 动效：系统「移除动画」时全部退化为无动画；预览注入动画帧时按注入态渲染（不看系统开关）。
+    val systemReduceMotion = rememberReduceMotion()
+    val reduceMotion = systemReduceMotion &&
+        previewEntranceProgress == null &&
+        previewPressedKey == null &&
+        previewExpandedKey == null &&
+        previewChipBounceKey == null
+    // 已入场 key（跨滚动/重组持久，避免滚回来重复播放错峰入场）
+    val appearedKeys = remember { mutableStateMapOf<String, Boolean>() }
     val fallbackMarks = remember { MutableStateFlow(initialMarks ?: MarksSnapshot()) }
     val marksFlow = remember(marksRepository, initialMarks) { marksRepository?.marks ?: fallbackMarks }
     val marks: MarksSnapshot by marksFlow.collectAsState()
@@ -622,25 +652,39 @@ fun NoticesScreen(
                         if (phase != Phase.FAILED && allItems.isNotEmpty()) {
                             NoticeBriefing(
                                 stats = briefStats,
+                                reduceMotion = reduceMotion,
                                 modifier = Modifier.padding(top = 4.dp),
                             )
                         }
 
-                        CtFilterChipRow(
-                            options = listOf(
-                                CtChipOption(NoticeFilter.ALL.name, "全部 ${allItems.size}"),
-                                CtChipOption(NoticeFilter.PENDING.name, "未处理 $pendingCount"),
-                                CtChipOption(NoticeFilter.PINNED.name, "置顶 $pinnedCount"),
+                        NoticeFilterChips(
+                            chips = listOf(
+                                NoticeChip(NoticeFilter.ALL.name, "全部", allItems.size),
+                                NoticeChip(NoticeFilter.PENDING.name, "未处理", pendingCount),
+                                NoticeChip(NoticeFilter.PINNED.name, "置顶", pinnedCount),
                             ),
                             selectedKey = filter.name,
                             onSelect = { key ->
                                 NoticeFilter.entries.firstOrNull { it.name == key }?.let { filterKey = it.name }
                             },
-                            contentPadding = PaddingValues(0.dp),
+                            reduceMotion = reduceMotion,
                             modifier = Modifier.padding(top = 2.dp),
+                            previewBounceKey = previewChipBounceKey,
                         )
 
-                        if (searchVisible) {
+                        AnimatedVisibility(
+                            visible = searchVisible,
+                            enter = if (reduceMotion) {
+                                EnterTransition.None
+                            } else {
+                                expandVertically(expandFrom = Alignment.Top) + fadeIn(tween(160))
+                            },
+                            exit = if (reduceMotion) {
+                                ExitTransition.None
+                            } else {
+                                shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(tween(110))
+                            },
+                        ) {
                             NoticeSearchField(
                                 query = query,
                                 onQueryChange = { query = it },
@@ -653,7 +697,19 @@ fun NoticesScreen(
                         }
 
                         val offline = data?.fromCache == true || (errorMessage != null && data != null)
-                        if (offline && phase != Phase.FAILED) {
+                        AnimatedVisibility(
+                            visible = offline && phase != Phase.FAILED,
+                            enter = if (reduceMotion) {
+                                EnterTransition.None
+                            } else {
+                                expandVertically(expandFrom = Alignment.Top) + fadeIn(tween(160))
+                            },
+                            exit = if (reduceMotion) {
+                                ExitTransition.None
+                            } else {
+                                shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(tween(110))
+                            },
+                        ) {
                             NoticeOfflineBanner(
                                 message = errorMessage?.let { "刷新失败，显示本机缓存" }
                                     ?: ("本机缓存 · 更新于 ${formatTs(data?.fetchedAt ?: 0L)}"),
@@ -706,6 +762,12 @@ fun NoticesScreen(
                                             onOpen = { selectedKey = it.key },
                                             onToggleDone = { toggleDone(it) },
                                             onTogglePin = { togglePin(it) },
+                                            reduceMotion = reduceMotion,
+                                            appearedKeys = appearedKeys,
+                                            selectedKey = selectedKey,
+                                            previewEntranceProgress = previewEntranceProgress,
+                                            previewPressedKey = previewPressedKey,
+                                            previewExpandedKey = previewExpandedKey,
                                             modifier = Modifier.fillMaxSize(),
                                         )
                                     } else {
@@ -718,6 +780,12 @@ fun NoticesScreen(
                                             onOpen = { selectedKey = it.key },
                                             onToggleDone = { toggleDone(it) },
                                             onTogglePin = { togglePin(it) },
+                                            reduceMotion = reduceMotion,
+                                            appearedKeys = appearedKeys,
+                                            selectedKey = selectedKey,
+                                            previewEntranceProgress = previewEntranceProgress,
+                                            previewPressedKey = previewPressedKey,
+                                            previewExpandedKey = previewExpandedKey,
                                             modifier = Modifier.fillMaxSize(),
                                         )
                                     }
@@ -778,6 +846,7 @@ private fun buildSubtitle(
 @Composable
 private fun NoticeBriefing(
     stats: NoticeBriefStats,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
     CtGlassCard(modifier = modifier, shape = CtShapeTokens.toolCard) {
@@ -794,11 +863,12 @@ private fun NoticeBriefing(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = stats.pending.toString(),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold,
+                    CtAnimatedCounter(
+                        value = stats.pending,
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.primary,
+                        animationSpec = if (reduceMotion) snap() else CtMotion.effects,
+                        label = "noticeBriefPending",
                     )
                     Text(
                         text = " 项",
@@ -812,18 +882,21 @@ private fun NoticeBriefing(
                 label = "24h 截止",
                 value = stats.urgent,
                 color = MaterialTheme.colorScheme.error,
+                reduceMotion = reduceMotion,
                 modifier = Modifier.weight(1f),
             )
             BriefStatCell(
                 label = "7 天内",
                 value = stats.week,
                 color = MaterialTheme.colorScheme.secondary,
+                reduceMotion = reduceMotion,
                 modifier = Modifier.weight(1f),
             )
             BriefStatCell(
                 label = "已过期",
                 value = stats.expired,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                reduceMotion = reduceMotion,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -835,18 +908,24 @@ private fun BriefStatCell(
     label: String,
     value: Int,
     color: Color,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val valueColor by animateColorAsState(
+        targetValue = if (value > 0) color else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
+        label = "briefStatColor",
+    )
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = value.toString(),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = if (value > 0) color else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
+        CtAnimatedCounter(
+            value = value,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = valueColor,
+            animationSpec = if (reduceMotion) snap() else CtMotion.effects,
+            label = "noticeBriefStat",
         )
         Text(
             text = label,
@@ -867,7 +946,11 @@ private fun NoticeSearchField(
     modifier: Modifier = Modifier,
 ) {
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
+    // 等展开动画完成首帧布局后再聚焦，避免 AnimatedVisibility 中节点未 attach 导致聚焦失败
+    LaunchedEffect(Unit) {
+        delay(80)
+        runCatching { focusRequester.requestFocus() }
+    }
     OutlinedTextField(
         value = query,
         onValueChange = { onQueryChange(it.take(40)) },
@@ -940,6 +1023,12 @@ private fun NoticeList(
     onOpen: (NoticeUiItem) -> Unit,
     onToggleDone: (NoticeUiItem) -> Unit,
     onTogglePin: (NoticeUiItem) -> Unit,
+    reduceMotion: Boolean,
+    appearedKeys: SnapshotStateMap<String, Boolean>,
+    selectedKey: String?,
+    previewEntranceProgress: Float?,
+    previewPressedKey: String?,
+    previewExpandedKey: String?,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -947,13 +1036,25 @@ private fun NoticeList(
         contentPadding = PaddingValues(top = 6.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(items = items, key = { "c-${it.key}" }) { item ->
-            NoticeCard(
-                item = item,
-                onOpen = { onOpen(item) },
-                onToggleDone = { onToggleDone(item) },
-                onTogglePin = { onTogglePin(item) },
-            )
+        itemsIndexed(items = items, key = { _, item -> "c-${item.key}" }) { index, item ->
+            NoticeEntrance(
+                itemKey = item.key,
+                index = index,
+                reduceMotion = reduceMotion,
+                appearedKeys = appearedKeys,
+                previewBaseProgress = previewEntranceProgress,
+                modifier = this.noticeAnimateItem(reduceMotion),
+            ) {
+                NoticeCard(
+                    item = item,
+                    reduceMotion = reduceMotion,
+                    expanded = selectedKey == item.key || previewExpandedKey == item.key,
+                    previewPressed = previewPressedKey == item.key,
+                    onOpen = { onOpen(item) },
+                    onToggleDone = { onToggleDone(item) },
+                    onTogglePin = { onTogglePin(item) },
+                )
+            }
         }
         if (expiredCount > 0) {
             item(key = "expired-header") {
@@ -961,17 +1062,31 @@ private fun NoticeList(
                     count = expiredCount,
                     expanded = expiredExpanded,
                     onToggle = onToggleExpired,
+                    reduceMotion = reduceMotion,
+                    modifier = this.noticeAnimateItem(reduceMotion),
                 )
             }
         }
         if (expiredExpanded) {
-            items(items = expiredItems, key = { "e-${it.key}" }) { item ->
-                NoticeCard(
-                    item = item,
-                    onOpen = { onOpen(item) },
-                    onToggleDone = { onToggleDone(item) },
-                    onTogglePin = { onTogglePin(item) },
-                )
+            itemsIndexed(items = expiredItems, key = { _, item -> "e-${item.key}" }) { index, item ->
+                NoticeEntrance(
+                    itemKey = "e-${item.key}",
+                    index = items.size + 1 + index,
+                    reduceMotion = reduceMotion,
+                    appearedKeys = appearedKeys,
+                    previewBaseProgress = previewEntranceProgress,
+                    modifier = this.noticeAnimateItem(reduceMotion),
+                ) {
+                    NoticeCard(
+                        item = item,
+                        reduceMotion = reduceMotion,
+                        expanded = selectedKey == item.key || previewExpandedKey == item.key,
+                        previewPressed = previewPressedKey == item.key,
+                        onOpen = { onOpen(item) },
+                        onToggleDone = { onToggleDone(item) },
+                        onTogglePin = { onTogglePin(item) },
+                    )
+                }
             }
         }
     }
@@ -987,6 +1102,12 @@ private fun NoticeGrid(
     onOpen: (NoticeUiItem) -> Unit,
     onToggleDone: (NoticeUiItem) -> Unit,
     onTogglePin: (NoticeUiItem) -> Unit,
+    reduceMotion: Boolean,
+    appearedKeys: SnapshotStateMap<String, Boolean>,
+    selectedKey: String?,
+    previewEntranceProgress: Float?,
+    previewPressedKey: String?,
+    previewExpandedKey: String?,
     modifier: Modifier = Modifier,
 ) {
     LazyVerticalGrid(
@@ -996,13 +1117,25 @@ private fun NoticeGrid(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items(items = items, key = { "c-${it.key}" }) { item ->
-            NoticeCard(
-                item = item,
-                onOpen = { onOpen(item) },
-                onToggleDone = { onToggleDone(item) },
-                onTogglePin = { onTogglePin(item) },
-            )
+        itemsIndexed(items = items, key = { _, item -> "c-${item.key}" }) { index, item ->
+            NoticeEntrance(
+                itemKey = item.key,
+                index = index,
+                reduceMotion = reduceMotion,
+                appearedKeys = appearedKeys,
+                previewBaseProgress = previewEntranceProgress,
+                modifier = this.noticeAnimateItem(reduceMotion),
+            ) {
+                NoticeCard(
+                    item = item,
+                    reduceMotion = reduceMotion,
+                    expanded = selectedKey == item.key || previewExpandedKey == item.key,
+                    previewPressed = previewPressedKey == item.key,
+                    onOpen = { onOpen(item) },
+                    onToggleDone = { onToggleDone(item) },
+                    onTogglePin = { onTogglePin(item) },
+                )
+            }
         }
         if (expiredCount > 0) {
             item(key = "expired-header", span = { GridItemSpan(maxLineSpan) }) {
@@ -1010,32 +1143,53 @@ private fun NoticeGrid(
                     count = expiredCount,
                     expanded = expiredExpanded,
                     onToggle = onToggleExpired,
+                    reduceMotion = reduceMotion,
+                    modifier = this.noticeAnimateItem(reduceMotion),
                 )
             }
         }
         if (expiredExpanded) {
-            items(items = expiredItems, key = { "e-${it.key}" }) { item ->
-                NoticeCard(
-                    item = item,
-                    onOpen = { onOpen(item) },
-                    onToggleDone = { onToggleDone(item) },
-                    onTogglePin = { onTogglePin(item) },
-                )
+            itemsIndexed(items = expiredItems, key = { _, item -> "e-${item.key}" }) { index, item ->
+                NoticeEntrance(
+                    itemKey = "e-${item.key}",
+                    index = items.size + 1 + index,
+                    reduceMotion = reduceMotion,
+                    appearedKeys = appearedKeys,
+                    previewBaseProgress = previewEntranceProgress,
+                    modifier = this.noticeAnimateItem(reduceMotion),
+                ) {
+                    NoticeCard(
+                        item = item,
+                        reduceMotion = reduceMotion,
+                        expanded = selectedKey == item.key || previewExpandedKey == item.key,
+                        previewPressed = previewPressedKey == item.key,
+                        onOpen = { onOpen(item) },
+                        onToggleDone = { onToggleDone(item) },
+                        onTogglePin = { onTogglePin(item) },
+                    )
+                }
             }
         }
     }
 }
 
-/** 已过期分组头（可展开/收起；52dp 触控）。 */
+/** 已过期分组头（可展开/收起；52dp 触控；箭头旋转动画）。 */
 @Composable
 private fun ExpiredHeader(
     count: Int,
     expanded: Boolean,
     onToggle: () -> Unit,
+    reduceMotion: Boolean,
+    modifier: Modifier = Modifier,
 ) {
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.pressSpring,
+        label = "expiredArrow",
+    )
     Surface(
         onClick = onToggle,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp),
         shape = CtShapeTokens.listItem,
@@ -1061,10 +1215,12 @@ private fun ExpiredHeader(
                 color = MaterialTheme.colorScheme.primary,
             )
             Icon(
-                imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                imageVector = Icons.Rounded.ExpandMore,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier
+                    .size(20.dp)
+                    .graphicsLayer { rotationZ = arrowRotation },
             )
         }
     }
@@ -1080,18 +1236,40 @@ private fun NoticeCard(
     onOpen: () -> Unit,
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
+    reduceMotion: Boolean = false,
+    expanded: Boolean = false,
+    previewPressed: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val container = when {
+    val targetContainer = when {
         // 已处理：浅色下沉一档、深色降到最暗一档，弱化但不靠整体透明度（保证文字 AA）
         item.done -> if (LocalCtDarkTheme.current) scheme.surfaceContainerLowest else scheme.surfaceContainer
         item.pinned -> scheme.primaryContainer.copy(alpha = 0.32f)
         else -> scheme.surfaceContainerLow
     }
-    CtPressableCard(
+    // 已处理 / 置顶后卡片颜色平滑过渡（位置变化由 Lazy nimateItem 负责）
+    val container by animateColorAsState(
+        targetValue = targetContainer,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
+        label = "noticeCardContainer",
+    )
+    val doneProgress by animateFloatAsState(
+        targetValue = if (item.done) 1f else 0f,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.crossFade,
+        label = "noticeCardDone",
+    )
+    val titleColor by animateColorAsState(
+        targetValue = if (item.done) scheme.onSurfaceVariant else scheme.onSurface,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
+        label = "noticeCardTitle",
+    )
+    NoticePressableCard(
         onClick = onOpen,
         containerColor = container,
+        reduceMotion = reduceMotion,
         contentDescription = item.title.ifBlank { "通知" },
+        expanded = expanded,
+        previewPressed = previewPressed,
     ) {
         Column(
             modifier = Modifier
@@ -1123,8 +1301,8 @@ private fun NoticeCard(
                 text = item.title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = if (item.done) scheme.onSurfaceVariant else scheme.onSurface,
-                textDecoration = if (item.done) TextDecoration.LineThrough else null,
+                color = titleColor,
+                textDecoration = if (doneProgress > 0.45f) TextDecoration.LineThrough else null,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1148,9 +1326,9 @@ private fun NoticeCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (item.isAuto) {
-                    DonePill(done = item.done, onClick = onToggleDone)
+                    DonePill(done = item.done, reduceMotion = reduceMotion, onClick = onToggleDone)
                 } else {
-                    PinPill(pinned = item.pinned, onClick = onTogglePin)
+                    PinPill(pinned = item.pinned, reduceMotion = reduceMotion, onClick = onTogglePin)
                 }
                 Spacer(Modifier.weight(1f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1321,8 +1499,23 @@ private fun StatusDotLine(
 
 /** 「标记已处理」胶囊（≥48dp；已处理=次要容器底）。 */
 @Composable
-private fun DonePill(done: Boolean, onClick: () -> Unit) {
+private fun DonePill(done: Boolean, reduceMotion: Boolean, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
+    val pillContainer by animateColorAsState(
+        targetValue = if (done) scheme.primaryContainer else scheme.surfaceContainerHigh,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
+        label = "donePillContainer",
+    )
+    val pillContent by animateColorAsState(
+        targetValue = if (done) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
+        label = "donePillContent",
+    )
+    val iconScale by animateFloatAsState(
+        targetValue = if (done) 1f else 0.9f,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.pressSpring,
+        label = "donePillIcon",
+    )
     Surface(
         onClick = onClick,
         modifier = Modifier
@@ -1332,8 +1525,8 @@ private fun DonePill(done: Boolean, onClick: () -> Unit) {
                 stateDescription = if (done) "已处理" else "未处理"
             },
         shape = CtShapeTokens.pill,
-        color = if (done) scheme.primaryContainer else scheme.surfaceContainerHigh,
-        contentColor = if (done) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+        color = pillContainer,
+        contentColor = pillContent,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp),
@@ -1342,7 +1535,12 @@ private fun DonePill(done: Boolean, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Rounded.CheckCircle,
                 contentDescription = null,
-                modifier = Modifier.size(17.dp),
+                modifier = Modifier
+                    .size(17.dp)
+                    .graphicsLayer {
+                        scaleX = iconScale
+                        scaleY = iconScale
+                    },
             )
             Spacer(Modifier.width(6.dp))
             Text(
@@ -1358,9 +1556,25 @@ private fun DonePill(done: Boolean, onClick: () -> Unit) {
 @Composable
 private fun PinPill(
     pinned: Boolean,
+    reduceMotion: Boolean,
     onClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val pillContainer by animateColorAsState(
+        targetValue = if (pinned) scheme.primaryContainer else scheme.surfaceContainerHigh,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
+        label = "pinPillContainer",
+    )
+    val pillContent by animateColorAsState(
+        targetValue = if (pinned) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
+        label = "pinPillContent",
+    )
+    val iconScale by animateFloatAsState(
+        targetValue = if (pinned) 1f else 0.9f,
+        animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.pressSpring,
+        label = "pinPillIcon",
+    )
     Surface(
         onClick = onClick,
         modifier = Modifier
@@ -1370,8 +1584,8 @@ private fun PinPill(
                 stateDescription = if (pinned) "已置顶" else "未置顶"
             },
         shape = CtShapeTokens.pill,
-        color = if (pinned) scheme.primaryContainer else scheme.surfaceContainerHigh,
-        contentColor = if (pinned) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+        color = pillContainer,
+        contentColor = pillContent,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp),
@@ -1380,7 +1594,12 @@ private fun PinPill(
             Icon(
                 imageVector = Icons.Rounded.PushPin,
                 contentDescription = null,
-                modifier = Modifier.size(17.dp),
+                modifier = Modifier
+                    .size(17.dp)
+                    .graphicsLayer {
+                        scaleX = iconScale
+                        scaleY = iconScale
+                    },
             )
             Spacer(Modifier.width(6.dp))
             Text(

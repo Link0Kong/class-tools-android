@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.notices
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,8 +41,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -54,7 +63,9 @@ import com.furina.classtools.data.notices.NoticeStatusMachine
 import com.furina.classtools.data.ppt.PptImageLoader
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
+import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.rememberReduceMotion
 
 /**
  * 通知详情底部弹层（原生渲染）。
@@ -120,7 +131,24 @@ internal fun NoticeDetailSheetContent(
     /** 正文可滚动区最大高度（弹层按屏幕剩余空间传入；预览默认 460dp）。 */
     bodyMaxHeight: androidx.compose.ui.unit.Dp = 460.dp,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    // 弹层内容淡入 + 轻微上浮（与卡片「点开延伸」衔接；reduceMotion/静态预览下直接终态）
+    val systemReduceMotion = rememberReduceMotion()
+    val inspection = LocalInspectionMode.current
+    var entered by remember { mutableStateOf(systemReduceMotion || inspection) }
+    LaunchedEffect(Unit) { entered = true }
+    val enterProgress by animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = if (systemReduceMotion) snap() else CtMotion.spatial,
+        label = "noticeDetailEnter",
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                alpha = 0.72f + 0.28f * enterProgress
+                translationY = (1f - enterProgress) * 10.dp.toPx()
+            },
+    ) {
         // 头部：分类 + 状态 + 已处理 + 关闭
         Row(
             modifier = Modifier

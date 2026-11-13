@@ -1483,17 +1483,24 @@ Add-Step 'user_guide' 'PASS' ("card carousel: first card + next=" + $guideSectio
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     Go-Workbench
     $editorOpen = $false
-    for ($try = 1; $try -le 2; $try++) {
-        Tap-UiText -Label $L.Edit -Exact -TimeoutSec 15
-        if (Wait-UiText -Label $L.HomeEditHint -TimeoutSec 8) { $editorOpen = $true; break }
+    # v5 首页编辑态：先确认是否已在编辑态（「完成」只在编辑态出现），再决定是否点「编辑」；
+    # 只在确认「完成」节点存在时才点它，避免误点导致后续失败。
+    for ($try = 1; $try -le 3 -and -not $editorOpen; $try++) {
+        if (Wait-UiText -Label $L.Done -Exact -TimeoutSec 2) { $editorOpen = $true; break }
+        try { Tap-UiText -Label $L.Edit -Exact -TimeoutSec 15 } catch { Write-Line ("  tap edit failed: {0}" -f $_.Exception.Message) }
+        Start-Sleep -Milliseconds 1500
+        if (Wait-UiText -Label $L.Done -Exact -TimeoutSec 12) { $editorOpen = $true; break }
         Write-Line "  quick tools editor did not open (attempt $try), retrying"
     }
     if (-not $editorOpen) { throw "quick tools editor not visible ('$($L.HomeEditHint)' missing)" }
     Save-Shot '18_home_edit.png'
     $leftEditor = $false
-    for ($try = 1; $try -le 2; $try++) {
-        Tap-UiText -Label $L.Done -Exact -TimeoutSec 10
-        if (Wait-UiText -Label $L.QuickTools -TimeoutSec 8) { $leftEditor = $true; break }
+    for ($try = 1; $try -le 3 -and -not $leftEditor; $try++) {
+        if (Wait-UiText -Label $L.Edit -Exact -TimeoutSec 2) { $leftEditor = $true; break }
+        if (Wait-UiText -Label $L.Done -Exact -TimeoutSec 5) {
+            try { Tap-UiText -Label $L.Done -Exact -TimeoutSec 5 } catch { Write-Line ("  tap done failed: {0}" -f $_.Exception.Message) }
+            Start-Sleep -Milliseconds 1500
+        }
     }
     if (-not $leftEditor) { throw 'did not return to workbench from quick tools editor' }
     Add-Step 'home_quick_edit' 'PASS' '' $swStep.ElapsedMilliseconds
