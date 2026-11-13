@@ -26,7 +26,6 @@ import com.furina.classtools.ui.screens.diag.previewRepairs
 import com.furina.classtools.ui.screens.ppt.PptDownloadDetailContent
 import com.furina.classtools.ui.screens.ppt.PptListContent
 import com.furina.classtools.ui.screens.ppt.PptRowDownloadState
-import com.furina.classtools.ui.screens.ppt.PptUploadBar
 import com.furina.classtools.ui.theme.ClassToolsTheme
 
 /**
@@ -200,39 +199,8 @@ private fun PptListDarkPreview() {
     PptListPreview(dark = true)
 }
 
-@Preview(name = "232 演示 v6 · 上传中", showBackground = true, widthDp = 412, heightDp = 720)
-@Composable
-private fun PptUploadingPreview() {
-    ClassToolsTheme(darkTheme = false) {
-        PptListContent(
-            decks = previewDecks(),
-            agentOnline = false,
-            mySid = v6Session.sid,
-            imageLoader = V6PreviewImageLoader,
-            loading = false,
-            errorMessage = null,
-            offlineHint = false,
-            uploadBar = PptUploadBar(title = "班级活动策划 · 期末班会", percent = 61, deckId = "local-1"),
-            uploadFailedMessage = null,
-            onBack = {},
-            onUpload = {},
-            onOpenDetail = {},
-            onDelete = {},
-            onRetry = {},
-            onCancelUpload = {},
-            onDismissUploadError = {},
-            onRefresh = {},
-        )
-    }
-}
 
-@Preview(name = "233 演示 v6 · 平板列表", showBackground = true, widthDp = 800, heightDp = 1000)
-@Composable
-private fun PptListTabletPreview() {
-    PptListPreview(dark = false)
-}
-
-@Preview(name = "234 演示 v6 · 下载详情（文件 + 媒体）", showBackground = true, widthDp = 412, heightDp = 1300)
+@Preview(name = "232 演示 v6 · 下载详情（文件 + 媒体）", showBackground = true, widthDp = 412, heightDp = 1300)
 @Composable
 private fun PptDownloadDetailPreview() {
     ClassToolsTheme(darkTheme = false) {
@@ -263,9 +231,7 @@ private fun diagGroups() = DiagParser.groupServiceHealth(previewHealthRows(), V6
 
 @Composable
 private fun DiagV6Preview(
-    expandedIds: Set<String> = emptySet(),
     dark: Boolean = false,
-    othersExpanded: Boolean = false,
 ) {
     ClassToolsTheme(darkTheme = dark) {
         DiagScreen(
@@ -284,42 +250,28 @@ private fun DiagV6Preview(
             ),
             initialChecks = previewChecks(),
             initialMyReports = previewReports(),
-            initialExpandedIds = expandedIds,
-            initialOthersExpanded = othersExpanded,
+            initialExpandedIds = emptySet(),
+            initialOthersExpanded = false,
             nowMillis = { V6_NOW },
             pollConfig = DiagPollConfig(),
         )
     }
 }
 
-@Preview(name = "235 诊断 v6 · 折叠态（浅色）", showBackground = true, widthDp = 412, heightDp = 2200)
+@Preview(name = "233 诊断 v6 · 折叠态（浅色）", showBackground = true, widthDp = 412, heightDp = 2200)
 @Composable
 private fun DiagV6FoldedPreview() {
     DiagV6Preview()
 }
 
-@Preview(name = "236 诊断 v6 · 展开态（原因/建议/flow）", showBackground = true, widthDp = 412, heightDp = 2600)
-@Composable
-private fun DiagV6ExpandedPreview() {
-    DiagV6Preview(
-        expandedIds = setOf("an-sync", "an-gateway", "an-orphan"),
-        othersExpanded = true,
-    )
-}
 
-@Preview(name = "237 诊断 v6 · 深色", showBackground = true, widthDp = 412, heightDp = 2200)
+@Preview(name = "234 诊断 v6 · 深色", showBackground = true, widthDp = 412, heightDp = 2200)
 @Composable
 private fun DiagV6DarkPreview() {
     DiagV6Preview(dark = true)
 }
 
-@Preview(name = "238 诊断 v6 · 大字体 1.3x", showBackground = true, widthDp = 412, heightDp = 2400, fontScale = 1.3f)
-@Composable
-private fun DiagV6LargeFontPreview() {
-    DiagV6Preview(dark = false)
-}
-
-@Preview(name = "239 诊断 v6 · 平板 800dp", showBackground = true, widthDp = 800, heightDp = 1100)
+@Preview(name = "235 诊断 v6 · 平板 800dp", showBackground = true, widthDp = 800, heightDp = 1100)
 @Composable
 private fun DiagV6TabletPreview() {
     DiagV6Preview(dark = false)

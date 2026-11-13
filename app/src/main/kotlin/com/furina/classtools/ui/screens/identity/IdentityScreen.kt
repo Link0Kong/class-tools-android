@@ -284,7 +284,7 @@ fun IdentityScreen(
                     modifier = Modifier.size(14.dp),
                 )
                 Text(
-                    text = "身份信息仅用于班级名单核验，不上传通讯录、不收集定位。",
+                    text = "仅用于班级名单核验",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Start,

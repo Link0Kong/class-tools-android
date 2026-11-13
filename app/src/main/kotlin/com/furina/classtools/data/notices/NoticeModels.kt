@@ -270,7 +270,7 @@ data class NoticeManualAttachment(
     val url: String = "",
 )
 
-/** 一次通知加载的完整快照。 */
+/** 一次通知加载的完整快照（分页：只含已加载页的条目）。 */
 data class NoticesData(
     val auto: List<NoticeEntry>,
     val manual: List<ManualNotice>,
@@ -278,6 +278,12 @@ data class NoticesData(
     val hiddenCount: Int,
     val fetchedAt: Long,
     val fromCache: Boolean,
+    /** 是否还有更早的通知可「加载更多」（按 ts 倒序分页）。 */
+    val hasMore: Boolean = false,
+    /** 尚未加载的原始行数（用于「加载更多（还有 N 条）」；去重后实际条数可能更少）。 */
+    val remainingCount: Int = 0,
+    /** 已加载的原始行数（分页 offset 用；= 已拉取行数，含被 hidden 过滤的）。 */
+    val loadedRawCount: Int = 0,
 ) {
     val isEmpty: Boolean get() = auto.isEmpty() && manual.isEmpty()
 }

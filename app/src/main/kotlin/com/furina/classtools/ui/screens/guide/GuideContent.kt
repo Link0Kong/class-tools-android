@@ -4,7 +4,7 @@ package com.furina.classtools.ui.screens.guide
  * 使用说明「卡片化」内容数据（**纯 Kotlin，无 Compose / Android 依赖**，可直接单测）。
  *
  * 信息架构与三端共享契约 `web/使用说明_卡片化重构契约_20261112.md` 一致：
- * 5 个分类（入门 / 学习 / 生活 / 协作 / 更多）、20 张卡、一屏一张左右滑动。
+ * 5 个分类（入门 / 学习 / 生活 / 协作 / 更多）、21 张卡、一屏一张左右滑动。
  *
  * 文案硬规则（契约 §0）：
  * - 标题 ≤ 8 字；一句话作用 ≤ 20 字；每条步骤 ≤ 24 字；提示 ≤ 30 字；
@@ -18,7 +18,7 @@ package com.furina.classtools.ui.screens.guide
 object UserGuideContent {
 
     /** 内容版本（内容较上一版有实质变化时递增；供设置页/关于页展示）。 */
-    const val VERSION: String = "2026-11-12.1"
+    const val VERSION: String = "2026-11-13.2"
 
     /** 轮播顺序即本列表顺序（契约 §5.2）。 */
     val cards: List<GuideCard> = listOf(
@@ -147,6 +147,20 @@ object UserGuideContent {
             tip = "长跑按「分 : 秒」填写成绩",
             scene = GuideScene.CHART,
             tone = GuideTone.SAND,
+        ),
+        GuideCard(
+            id = "jw",
+            category = GuideCategory.STUDY,
+            title = "教务入口",
+            subtitle = "点卡片直达，自动登录",
+            steps = listOf(
+                "点「教务」卡片直接进教务系统",
+                "首次输入密码可加密存本机",
+                "验证码或失败时手动完成",
+            ),
+            tip = "密码只存本机；校外打不开先连学校 VPN",
+            scene = GuideScene.GRID,
+            tone = GuideTone.BLUE,
         ),
         GuideCard(
             id = "power",

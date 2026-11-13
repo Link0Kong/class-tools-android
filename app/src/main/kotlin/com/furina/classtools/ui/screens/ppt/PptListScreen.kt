@@ -98,7 +98,6 @@ import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
-import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.theme.CtShapeTokens
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -508,21 +507,6 @@ fun PptListContent(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        item(key = "v6-section") {
-                            Box(modifier = Modifier.semantics { heading() }) {
-                                CtToolSectionHeader(
-                                    title = "演示库",
-                                    subtitle = "全部班级成员可上传 · 点击卡片下载或预览",
-                                    trailing = {
-                                        Text(
-                                            text = "${visibleDecks.size} 个",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    },
-                                )
-                            }
-                        }
                         uploadBar?.let { bar ->
                             item(key = "local-upload") {
                                 PptDeckCard(
@@ -603,7 +587,7 @@ private fun PptDeckCard(
         modifier = Modifier
             .heightIn(min = 96.dp)
             .clickable { onOpen() },
-        contentPadding = PaddingValues(12.dp),
+        contentPadding = PaddingValues(16.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -893,7 +877,7 @@ private fun PptListEmpty(onUpload: () -> Unit) {
             EmptyState(
                 icon = Icons.Rounded.Slideshow,
                 title = PptStatusTexts.EMPTY_TITLE,
-                message = PptStatusTexts.EMPTY_HINT,
+                message = "支持 .ppt / .pptx",
             )
             Spacer(Modifier.height(8.dp))
             CtToolPrimaryButton(text = "上传 PPT", onClick = onUpload)
@@ -933,7 +917,7 @@ private fun PptTitleDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("上传演示") },
+        title = { Text("演示标题") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
@@ -944,10 +928,10 @@ private fun PptTitleDialog(
                     overflow = TextOverflow.Ellipsis,
                 )
                 CtToolField(
-                    label = "标题（≤80 字）",
+                    label = "演示标题",
                     value = title,
                     onValueChange = { onTitleChange(it.take(PptLimits.MAX_TITLE_CHARS)) },
-                    placeholder = "给演示起个名字",
+                    placeholder = "演示标题",
                     singleLine = true,
                 )
             }

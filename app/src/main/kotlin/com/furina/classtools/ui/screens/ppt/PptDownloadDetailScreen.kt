@@ -79,7 +79,6 @@ import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
-import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.theme.CtShapeTokens
 import java.io.File
 import kotlinx.coroutines.launch
@@ -324,21 +323,12 @@ fun PptDownloadDetailContent(
                 ) {
                     DetailHeader(detail = detail, imageLoader = imageLoader)
                     if (!detail.isReady) {
-                        CtToolSectionHeader(title = "处理状态", subtitle = "转换机处理完成后可下载")
                         NotReadyCard(
                             detail = detail,
                             reprocessing = reprocessing,
                             onReprocess = onReprocess,
                         )
                     } else {
-                        CtToolSectionHeader(
-                            title = "文件下载",
-                            subtitle = if (!PptDownloadLogic.isLegacyDeck(detail)) {
-                                "兼容版 PPTX / PDF / 原始文件"
-                            } else {
-                                "旧版演示：仅提供原始文件"
-                            },
-                        )
                         val warnings = PptDownloadLogic.warnings(detail)
                         if (warnings.isNotEmpty()) {
                             CompatWarningsCard(warnings = warnings)
@@ -386,19 +376,17 @@ fun PptDownloadDetailContent(
                             )
                         }
                         if (!PptDownloadLogic.isLegacyDeck(detail) && PptDownloadLogic.canPreview(detail)) {
-                            CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
-                                TextButton(
-                                    onClick = onOpenPreview,
-                                    modifier = Modifier.heightIn(min = 48.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.PlayArrow,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("在线预览")
-                                }
+                            TextButton(
+                                onClick = onOpenPreview,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) {
+                                Icon(
+                                    Icons.Rounded.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text("在线预览")
                             }
                         }
                     }
@@ -413,7 +401,7 @@ fun PptDownloadDetailContent(
 
 @Composable
 private fun DetailHeader(detail: PptDeckDetail, imageLoader: PptImageLoader) {
-    CtToolCard(contentPadding = PaddingValues(12.dp)) {
+    CtToolCard(contentPadding = PaddingValues(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -547,21 +535,13 @@ private fun CompatWarningsCard(warnings: List<String>) {
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            warnings.forEach { warning ->
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "·",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                    Text(
-                        text = warning,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
+            Text(
+                text = warnings.joinToString("；"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -610,7 +590,7 @@ private fun DownloadRowCard(
     onOpen: () -> Unit,
     onShare: () -> Unit,
 ) {
-    CtToolCard(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)) {
+    CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -724,10 +704,21 @@ private fun MediaDownloadGroup(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        CtToolSectionHeader(
-            title = PptMediaDownloadLogic.GROUP_TITLE,
-            subtitle = PptMediaDownloadLogic.summaryText(rows),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = PptMediaDownloadLogic.GROUP_TITLE,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = PptMediaDownloadLogic.summaryText(rows),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
         rows.forEach { row ->
             MediaDownloadRowCard(
                 row = row,
@@ -750,7 +741,7 @@ private fun MediaDownloadRowCard(
     onShare: () -> Unit,
 ) {
     val isAudio = row.kind == PptMediaKind.AUDIO
-    CtToolCard(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)) {
+    CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

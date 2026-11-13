@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.44.0**——参考 HFUT-Schedule / xiaoying 重做课表/工作台/全部工具/通知/我的，并新增工具卡→工具页「一镜到底」容器转场；单测 **1104/0**、快速 E2E **44/0**，签名 APK 已交付桌面。详见 [REPORT_ROUND55](docs/REPORT_ROUND55_20261113.md)。
+- 状态：**v4.47.0**——退出动画重做（工具页反向一镜到底）、工具界面简洁化向小程序看齐并删解释文字、通知大响应分页修复、删除设置工具、名单/通知/作业/投票/电费/水量左右滑动切换；单测 **1135/0**、快速 E2E **43/0**（导航 10/10），签名 APK 已交付桌面。详见 [REPORT_ROUND57](docs/REPORT_ROUND57_20261113.md)。
 
 ## 目录
 

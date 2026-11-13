@@ -80,30 +80,34 @@ fun ToolTransitionOverlay(
     startBounds: Rect?,
     onHalfway: () -> Unit,
     onDone: () -> Unit,
+    reverse: Boolean = false,
 ) {
     if (tool == null || startBounds == null) return
     val reduceMotion = rememberReduceMotion()
     if (reduceMotion) {
-        LaunchedEffect(tool) {
+        LaunchedEffect(tool, reverse) {
             onHalfway()
             onDone()
         }
         return
     }
-    val progress = remember(tool) { Animatable(0f) }
-    LaunchedEffect(tool) {
+    val progress = remember(tool, reverse) { Animatable(0f) }
+    LaunchedEffect(tool, reverse) {
         try {
             progress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 340, easing = FastOutSlowInEasing),
+                animationSpec = tween(
+                    durationMillis = if (reverse) 280 else 340,
+                    easing = FastOutSlowInEasing,
+                ),
             )
         } finally {
             onDone()
         }
     }
-    LaunchedEffect(tool) {
-        // 覆盖层先「铺开」一点再导航，让目标页在覆盖层后面完成 push，避免闪白。
-        kotlinx.coroutines.delay(120)
+    LaunchedEffect(tool, reverse) {
+        // 进入：覆盖层先「铺开」一点再导航；退出：先 pop 露出底层，再把覆盖层收回卡片。
+        kotlinx.coroutines.delay(if (reverse) 40 else 120)
         onHalfway()
     }
 
@@ -111,14 +115,21 @@ fun ToolTransitionOverlay(
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val fullWidthPx = constraints.maxWidth.toFloat()
         val fullHeightPx = constraints.maxHeight.toFloat()
-        val p = progress.value
+        val progressValue = progress.value
+        // 进入：0→1（卡片长成全屏）；退出：1→0（全屏收回卡片）。
+        val p = if (reverse) 1f - progressValue else progressValue
         val left = lerp(startBounds.left, 0f, p)
         val top = lerp(startBounds.top, 0f, p)
         val width = lerp(startBounds.width, fullWidthPx, p)
         val height = lerp(startBounds.height, fullHeightPx, p)
         val corner = (20f * (1f - p)).coerceAtLeast(0f)
-        // 最后 30% 淡出，露出已经完成 push 的目标页。
-        val fade = if (p <= 0.7f) 1f else (1f - (p - 0.7f) / 0.3f).coerceIn(0f, 1f)
+        val fade = if (reverse) {
+            // 退出：保持不透明收回到卡片大小，最后 18% 淡出，与底层卡片无缝衔接。
+            if (p >= 0.18f) 1f else (p / 0.18f).coerceIn(0f, 1f)
+        } else {
+            // 进入：最后 30% 淡出，露出已经完成 push 的目标页。
+            if (p <= 0.7f) 1f else (1f - (p - 0.7f) / 0.3f).coerceIn(0f, 1f)
+        }
         Box(
             modifier = Modifier
                 .offset {

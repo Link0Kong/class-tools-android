@@ -351,7 +351,7 @@ fun VoteCreateScreen(
             ) {
                 CtTopBar(
                     title = if (editing) "编辑投票" else "发起投票",
-                    subtitle = if (editing) "仅 0 票可编辑" else "标题与选项均可自定义",
+                    subtitle = if (editing) "仅 0 票可编辑" else null,
                     onBack = onBack,
                 )
 
@@ -433,16 +433,7 @@ fun VoteCreateScreen(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                Text(
-                                    text = if (editing) {
-                                        "编辑不会重置投票；已有投票时服务器会拒绝修改"
-                                    } else {
-                                        "发起后全班可在可见范围内投票"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 8.dp),
-                                )
+
                                 Button(
                                     onClick = { submit() },
                                     enabled = !submitting && !submittingImage,
@@ -1016,11 +1007,6 @@ private fun VoteAudienceSection(
             }
             VoteFieldError(audienceError)
         }
-        Text(
-            text = "范围外的人看不到这场投票；发起人与管理员始终可见可管理",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

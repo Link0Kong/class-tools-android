@@ -219,7 +219,6 @@ fun DrawScreen(
             ) {
                 CtTopBar(
                     title = "抽签",
-                    subtitle = "班级工具 · 三步抽签",
                     onBack = ::handleBack,
                     actions = {
                         val entryCount = workflow.result?.entries?.size ?: 0
@@ -348,20 +347,20 @@ private fun DrawReadyContent(
     var groupedResult by remember { mutableStateOf<DrawResult?>(null) }
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wide = maxWidth >= WIDE_BREAKPOINT
-        val horizontal = if (wide) 24.dp else 16.dp
+        val horizontal = if (wide) 20.dp else 12.dp
 
         if (wide) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = horizontal, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    .padding(horizontal = horizontal, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Column(
                     modifier = Modifier
                         .weight(0.56f)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     DrawStepIndicator(current = workflow.step, onSelect = onSelectStep)
                     if (workflow.step == DrawStep.CONFIG) {
@@ -381,7 +380,7 @@ private fun DrawReadyContent(
                     modifier = Modifier
                         .weight(0.44f)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     when (workflow.step) {
                         DrawStep.CONFIG -> DrawPoolPreviewCard(
@@ -419,7 +418,7 @@ private fun DrawReadyContent(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = horizontal),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 DrawStepIndicator(current = workflow.step, onSelect = onSelectStep)
 
@@ -467,7 +466,7 @@ private fun DrawReadyContent(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
             }
         }
     }

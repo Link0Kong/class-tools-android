@@ -191,49 +191,6 @@ private fun v6NoticeMarks(): MarksSnapshot = MarksSnapshot(
     ntPin = mapOf("manual_1" to true),
 )
 
-private fun v6NoticeDetailItem(): NoticeUiItem {
-    val items = buildUiItems(v6NoticesData(), v6NoticeMarks(), v6Now())
-    return items.first { it.title == "关于 11 月主题班会的通知" }
-}
-
-@Composable
-private fun V6NoticeDetailPreviewBody(item: NoticeUiItem) {
-    Surface(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(top = 24.dp),
-        shape = CtShapeTokens.sheet,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(32.dp)
-                        .height(4.dp)
-                        .background(
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                            CircleShape,
-                        ),
-                )
-            }
-            Box(modifier = Modifier.weight(1f)) {
-                NoticeDetailSheetContent(
-                    item = item,
-                    onAddToCalendar = {},
-                    onRemindNotice = {},
-                    onDismiss = {},
-                )
-            }
-        }
-    }
-}
-
 // -----------------------------------------------------------------------------
 // 名单 fixtures
 // -----------------------------------------------------------------------------
@@ -457,7 +414,7 @@ private fun ToolV6NoticesListLightPreview() {
             session = null,
             marksRepository = null,
             noticesRepository = null,
-            initialData = v6NoticesData(),
+            initialData = v6NoticesData().copy(hasMore = true, remainingCount = 18, loadedRawCount = 20),
             initialMarks = v6NoticeMarks(),
             initialFilter = NoticeFilter.ALL,
             skipLoad = true,
@@ -465,13 +422,21 @@ private fun ToolV6NoticesListLightPreview() {
     }
 }
 
-@Preview(name = "211 通知 v6 · 详情 浅色", showBackground = true, widthDp = 412, heightDp = 940)
+@Preview(name = "211 通知 v6 · 左右滑动中间态", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
-private fun ToolV6NoticesDetailLightPreview() {
+private fun ToolV6NoticesSwipeMidPreview() {
     ClassToolsTheme(darkTheme = false) {
-        ExpressiveBackground(modifier = Modifier.fillMaxSize()) {
-            V6NoticeDetailPreviewBody(item = v6NoticeDetailItem())
-        }
+        NoticesScreen(
+            onBack = {},
+            session = null,
+            marksRepository = null,
+            noticesRepository = null,
+            initialData = v6NoticesData().copy(hasMore = true, remainingCount = 18, loadedRawCount = 20),
+            initialMarks = v6NoticeMarks(),
+            initialFilter = NoticeFilter.ALL,
+            previewPagerOffset = 0.42f,
+            skipLoad = true,
+        )
     }
 }
 
@@ -515,7 +480,13 @@ private fun ToolV6RosterCommitteeLightPreview() {
     }
 }
 
-@Preview(name = "214 名单 v6 · 点名 深色", showBackground = true, widthDp = 412, heightDp = 1000)
+@Preview(
+    name = "214 名单 v6 · 点名 深色 大字体 1.3x",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 1100,
+    fontScale = 1.3f,
+)
 @Composable
 private fun ToolV6RosterRollDarkPreview() {
     ClassToolsTheme(darkTheme = true) {
@@ -535,35 +506,22 @@ private fun ToolV6RosterRollDarkPreview() {
     }
 }
 
-@Preview(
-    name = "215 名单 v6 · 名册 大字体 1.3x",
-    showBackground = true,
-    widthDp = 412,
-    heightDp = 1050,
-    fontScale = 1.3f,
-)
+// -----------------------------------------------------------------------------
+// 216–219 投票
+// -----------------------------------------------------------------------------
+
+@Preview(name = "215 投票 v6 · 列表 左右滑动中间态", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
-private fun ToolV6RosterLargeFontPreview() {
+private fun ToolV6VoteListSwipeMidPreview() {
     ClassToolsTheme(darkTheme = false) {
-        RosterScreen(
-            onBack = {},
-            session = null,
-            classMembersRepository = null,
-            userDataRepository = null,
-            initialMembers = v6RosterMembers(),
-            initialRoster = v6RosterState(),
-            initialTab = RosterTab.ROSTER,
-            initialCategory = MemberCategory.ALL,
-            initialLeagueMembers = v6RosterLeagueMembers(),
-            skipLeagueLoad = true,
+        VoteListScreen(
+            repository = v6PreviewVoteRepository,
+            initialPolls = v6PollList(),
+            previewPagerOffset = 0.42f,
             skipLoad = true,
         )
     }
 }
-
-// -----------------------------------------------------------------------------
-// 216–219 投票
-// -----------------------------------------------------------------------------
 
 @Preview(name = "216 投票 v6 · 列表 浅色", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
@@ -577,41 +535,9 @@ private fun ToolV6VoteListLightPreview() {
     }
 }
 
-@Preview(name = "217 投票 v6 · 详情 深色", showBackground = true, widthDp = 412, heightDp = 1000)
-@Composable
-private fun ToolV6VoteDetailDarkPreview() {
-    ClassToolsTheme(darkTheme = true) {
-        VoteDetailScreen(
-            pollId = "poll_meeting",
-            repository = v6PreviewVoteRepository,
-            initialDetail = v6PollDetail(),
-            skipLoad = true,
-        )
-    }
-}
-
-@Preview(name = "218 投票 v6 · 发起 平板 800dp", showBackground = true, widthDp = 800, heightDp = 1000)
+@Preview(name = "217 投票 v6 · 发起 平板 800dp", showBackground = true, widthDp = 800, heightDp = 1000)
 @Composable
 private fun ToolV6VoteCreateTabletPreview() {
-    ClassToolsTheme(darkTheme = false) {
-        VoteCreateScreen(
-            repository = v6PreviewVoteRepository,
-            memberSource = v6PreviewMemberSource,
-            initialDraft = v6PollDraft(),
-            skipLoad = true,
-        )
-    }
-}
-
-@Preview(
-    name = "219 投票 v6 · 发起 大字体 1.3x",
-    showBackground = true,
-    widthDp = 412,
-    heightDp = 1100,
-    fontScale = 1.3f,
-)
-@Composable
-private fun ToolV6VoteCreateLargeFontPreview() {
     ClassToolsTheme(darkTheme = false) {
         VoteCreateScreen(
             repository = v6PreviewVoteRepository,
@@ -626,18 +552,3 @@ private fun ToolV6VoteCreateLargeFontPreview() {
 // 220 通知 · 平板（两列列表 + v6 卡片）
 // -----------------------------------------------------------------------------
 
-@Preview(name = "220 通知 v6 · 平板 800dp", showBackground = true, widthDp = 800, heightDp = 1000)
-@Composable
-private fun ToolV6NoticesTabletPreview() {
-    ClassToolsTheme(darkTheme = false) {
-        NoticesScreen(
-            onBack = {},
-            session = null,
-            marksRepository = null,
-            noticesRepository = null,
-            initialData = v6NoticesData(),
-            initialMarks = v6NoticeMarks(),
-            skipLoad = true,
-        )
-    }
-}

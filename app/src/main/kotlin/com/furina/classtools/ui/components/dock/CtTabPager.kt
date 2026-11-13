@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
 import com.furina.classtools.ui.theme.CtMotion
 import kotlin.math.abs
 
@@ -165,35 +166,48 @@ data class CtDockPagerState(
  */
 object CtPageTransitions {
 
-    const val PUSH_SLIDE_FRACTION: Float = 0.08f
-    const val PUSH_FROM_SCALE: Float = 0.98f
-    const val PUSH_DURATION_MS: Int = 360
+    /** 进入页面从右侧滑入 10%（参考 HFUT 的推入/收回连续性，比旧版 8% 更有方向感）。 */
+    const val PUSH_SLIDE_FRACTION: Float = 0.10f
 
-    /** 空间 spring（d=0.8, k=380）+ 轻微 overshoot，用于 push/pop。 */
-    val spatial: SpringSpec<Float> = spring(dampingRatio = 0.8f, stiffness = 380f)
+    /** 返回时当前页向右滑出 12%，底层页从左侧轻推 7%。 */
+    const val POP_SLIDE_FRACTION: Float = 0.12f
+    const val POP_UNDER_SLIDE_FRACTION: Float = 0.07f
+    const val PUSH_FROM_SCALE: Float = 0.985f
+    const val PUSH_UNDER_SCALE: Float = 0.972f
+    const val POP_EXIT_SCALE: Float = 0.965f
 
-    /** 进入：右侧滑入 8% + 淡入 + 0.98→1 缩放。 */
+    /** 进入：轻 overshoot（d=0.82, k=360）。 */
+    val enterSpatial: SpringSpec<Float> = spring(dampingRatio = 0.82f, stiffness = 360f)
+
+    /** 退出：临界阻尼、稍快，让收起动作干净不晃（d=1, k=420）。 */
+    val exitSpatial: SpringSpec<Float> = spring(dampingRatio = 1f, stiffness = 420f)
+
+    private fun <T> enterSpec(): SpringSpec<T> = spring(dampingRatio = 0.82f, stiffness = 360f)
+    private fun <T> exitSpec(): SpringSpec<T> = spring(dampingRatio = 1f, stiffness = 420f)
+
+    /** 进入：右侧滑入 10% + 淡入 + 0.985→1 缩放。 */
     fun pushEnter(): EnterTransition =
-        slideInHorizontally(animationSpec = CtMotion.spatialSpec()) { full -> (full * PUSH_SLIDE_FRACTION).toInt() } +
+        slideInHorizontally(animationSpec = enterSpec<IntOffset>()) { full -> (full * PUSH_SLIDE_FRACTION).toInt() } +
             fadeIn(animationSpec = CtMotion.fadeIn) +
-            scaleIn(animationSpec = CtMotion.spatialSpec(), initialScale = PUSH_FROM_SCALE)
+            scaleIn(animationSpec = enterSpec<Float>(), initialScale = PUSH_FROM_SCALE)
 
-    /** 被覆盖页退出：轻微左移 4% + 淡出。 */
+    /** 被覆盖页退出：轻微左移 6% + 淡出 + 缩到 0.972（层叠后退感）。 */
     fun pushExit(): ExitTransition =
-        slideOutHorizontally(animationSpec = CtMotion.spatialSpec()) { full -> -(full * PUSH_SLIDE_FRACTION / 2).toInt() } +
-            fadeOut(animationSpec = CtMotion.fadeOut)
-
-    /** 返回时恢复页：从左侧滑入 4% + 淡入。 */
-    fun popEnter(): EnterTransition =
-        slideInHorizontally(animationSpec = CtMotion.spatialSpec()) { full -> -(full * PUSH_SLIDE_FRACTION / 2).toInt() } +
-            fadeIn(animationSpec = CtMotion.fadeIn)
-
-    /** 返回：当前页右滑 8% + 淡出 + 缩到 0.98。 */
-    fun popExit(): ExitTransition =
-        slideOutHorizontally(animationSpec = CtMotion.spatialSpec()) { full -> (full * PUSH_SLIDE_FRACTION).toInt() } +
+        slideOutHorizontally(animationSpec = exitSpec<IntOffset>()) { full -> -(full * PUSH_SLIDE_FRACTION * 0.6f).toInt() } +
             fadeOut(animationSpec = CtMotion.fadeOut) +
-            scaleOut(animationSpec = CtMotion.spatialSpec(), targetScale = PUSH_FROM_SCALE)
+            scaleOut(animationSpec = exitSpec<Float>(), targetScale = PUSH_UNDER_SCALE)
 
+    /** 返回时恢复页：从左侧轻推 7% + 淡入 + 0.985→1（先压暗再浮现）。 */
+    fun popEnter(): EnterTransition =
+        slideInHorizontally(animationSpec = enterSpec<IntOffset>()) { full -> -(full * POP_UNDER_SLIDE_FRACTION).toInt() } +
+            fadeIn(animationSpec = CtMotion.fadeIn) +
+            scaleIn(animationSpec = enterSpec<Float>(), initialScale = PUSH_FROM_SCALE)
+
+    /** 返回：当前页右滑 12% + 淡出 + 缩到 0.965，配合工具卡收回覆盖层形成「回到卡片」的连续感。 */
+    fun popExit(): ExitTransition =
+        slideOutHorizontally(animationSpec = exitSpec<IntOffset>()) { full -> (full * POP_SLIDE_FRACTION).toInt() } +
+            fadeOut(animationSpec = CtMotion.fadeOut) +
+            scaleOut(animationSpec = exitSpec<Float>(), targetScale = POP_EXIT_SCALE)
     /** 供预览/测试：给定滑动进度 (0..1) 的页面参数（与 pager 插值一致）。 */
     fun progressTransform(progress: Float): CtDockLogic.PageTransform =
         CtDockLogic.pageTransform(

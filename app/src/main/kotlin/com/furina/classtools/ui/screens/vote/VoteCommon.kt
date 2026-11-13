@@ -119,7 +119,7 @@ internal fun voteEffectiveNow(serverNow: Long, localAtFetch: Long, localNowClien
 internal fun VoteToolCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+    contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -256,11 +256,6 @@ internal fun VoteErrorContent(
             text = error.message,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = "下拉可重试，或稍后再试",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         CtToolPrimaryButton(
             text = "重试",

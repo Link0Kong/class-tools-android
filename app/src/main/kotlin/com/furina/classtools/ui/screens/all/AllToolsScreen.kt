@@ -442,14 +442,16 @@ private fun AllToolsHeader(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(5.dp))
-                Text(
-                    text = if (dragging) "拖动中 · 松手保存顺序" else "长按卡片拖动排序 · 松手自动保存",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = content.copy(alpha = 0.84f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (dragging) {
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Text(
+                        text = "松手保存",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = content.copy(alpha = 0.84f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

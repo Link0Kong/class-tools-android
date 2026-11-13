@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 全部域名默认禁止明文（含 WebView / OkHttp / DownloadManager 等本 App 网络栈）。 -->
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!-- 教务系统仅 HTTP（契约 §5.1）：只对教务主机放行 cleartext，不全局打开。 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">210.34.74.77</domain>
+    </domain-config>
+</network-security-config>

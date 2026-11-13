@@ -2,6 +2,7 @@ package com.furina.classtools.ui.preview
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import com.furina.classtools.data.homework.HomeworkFilter
 import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.data.marks.MarksSnapshot
 import com.furina.classtools.data.power.PowerHistoryResult
@@ -21,13 +22,15 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * 工具页 v6 迁移预览：作业 / 电费 / 水量（统一 CtToolCard / 统计 / 筛选 / 空态）。
+ * 工具简洁化 v1 预览（作业 / 电费 / 水量）。
  *
- * - 作业：列表、空态、深色、平板、大字体；
- * - 电费：有数据、深色、空态（未关注）、13 号楼日更（隐藏 24h）、平板；
- * - 水量：记录（4 人间）、6 人间深色、空态、大字体。
- *
- * 全部用注入状态（initial*），不读网络 / 不读 userdata。
+ * 共 6 张（≤6）：覆盖「滑动切换后的目标状态」+ 浅/深色：
+ * - 170 作业 · 全部页 · 浅色；
+ * - 171 作业 · 已完成页（左右滑动可达）· 深色；
+ * - 172 电费 · 24h · 浅色；
+ * - 173 电费 · 7 天（左右滑动切换后）· 深色；
+ * - 174 水量 · 当月 · 浅色；
+ * - 175 水量 · 上一月（左右滑动切换后）· 深色。
  */
 private val v6Session = Session(
     sid = "3260707024",
@@ -114,37 +117,20 @@ private fun v6PowerRow(
     updatedAt = "2026-11-06T02:00:00+00:00",
 )
 
-/** 近 24h 逐小时下降（末点 = 当前读数）。 */
 private fun v6Histories24h(endQ: Double = 86.42): List<PowerPoint> =
     (0..24).map { i ->
         PowerPoint(q = endQ + (24 - i) * 0.55, t = V6_PREVIEW_NOW - (24 - i) * 3_600_000L)
     }
 
-/** 近 7 天逐 3 小时下降。 */
 private fun v6Histories7d(endQ: Double = 86.42): List<PowerPoint> =
     (0..(7 * 8)).map { i ->
         PowerPoint(q = endQ + (7 * 8 - i) * 0.10, t = V6_PREVIEW_NOW - (7 * 8 - i) * 3L * 3_600_000L)
     }
 
-/** 近 30 天逐日下降。 */
 private fun v6Histories30d(endQ: Double = 86.42): List<PowerPoint> =
     (0..30).map { i ->
         PowerPoint(q = endQ + (30 - i) * 0.9, t = V6_PREVIEW_NOW - (30 - i) * 24L * 3_600_000L)
     }
-
-/** 13 号楼慢频（日更）：24h 基本无变化，30d 有几次真实下降。 */
-private fun v6SlowHistories24h(): List<PowerPoint> =
-    (0..23).map { i -> PowerPoint(q = 42.5, t = V6_PREVIEW_NOW - (23 - i) * 3_600_000L) }
-
-private fun v6SlowHistories7d(): List<PowerPoint> =
-    (0..27).map { i -> PowerPoint(q = 42.5, t = V6_PREVIEW_NOW - (27 - i) * 6L * 3_600_000L) }
-
-private fun v6SlowHistories30d(): List<PowerPoint> = listOf(
-    PowerPoint(q = 70.0, t = V6_PREVIEW_NOW - 29L * 24 * 3_600_000L),
-    PowerPoint(q = 62.0, t = V6_PREVIEW_NOW - 14L * 24 * 3_600_000L),
-    PowerPoint(q = 58.0, t = V6_PREVIEW_NOW - 7L * 24 * 3_600_000L),
-    PowerPoint(q = 42.5, t = V6_PREVIEW_NOW - 24L * 3_600_000L),
-)
 
 private object V6PreviewPowerRepository : PowerRepository {
     override suspend fun loadRow(rv: String, force: Boolean): PowerRowResult =
@@ -191,18 +177,19 @@ private fun v6WaterRooms(): Map<String, WaterRoomState> = mapOf(
 )
 
 // =============================================================================
-// 作业预览
+// 预览
 // =============================================================================
 
+@Preview(name = "170 作业 v1 · 全部页 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
-private fun HomeworkV6Preview(dark: Boolean, rows: List<HomeworkRow> = v6HomeworkRows()) {
-    ClassToolsTheme(darkTheme = dark) {
+private fun HomeworkV1AllLightPreview() {
+    ClassToolsTheme(darkTheme = false) {
         HomeworkScreen(
             onBack = {},
             session = v6Session,
             marksRepository = null,
             homeworkRepository = null,
-            initialRows = rows,
+            initialRows = v6HomeworkRows(),
             initialMarks = v6Marks,
             skipLoad = true,
             onRemindHomework = {},
@@ -210,169 +197,94 @@ private fun HomeworkV6Preview(dark: Boolean, rows: List<HomeworkRow> = v6Homewor
     }
 }
 
-@Preview(name = "170 作业 v6 · 列表 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "171 作业 v1 · 已完成页（滑动切换后）· 深色", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
-private fun HomeworkV6LightPreview() {
-    HomeworkV6Preview(dark = false)
+private fun HomeworkV1DoneDarkPreview() {
+    ClassToolsTheme(darkTheme = true) {
+        HomeworkScreen(
+            onBack = {},
+            session = v6Session,
+            marksRepository = null,
+            homeworkRepository = null,
+            initialRows = v6HomeworkRows(),
+            initialMarks = v6Marks,
+            skipLoad = true,
+            onRemindHomework = {},
+            initialFilter = HomeworkFilter.DONE,
+        )
+    }
 }
 
-@Preview(name = "171 作业 v6 · 空态 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "172 电费 v1 · 24h · 浅色", showBackground = true, widthDp = 412, heightDp = 1400)
 @Composable
-private fun HomeworkV6EmptyPreview() {
-    HomeworkV6Preview(dark = false, rows = emptyList())
-}
-
-@Preview(name = "172 作业 v6 · 列表 · 深色", showBackground = true, widthDp = 412, heightDp = 915)
-@Composable
-private fun HomeworkV6DarkPreview() {
-    HomeworkV6Preview(dark = true)
-}
-
-@Preview(name = "173 作业 v6 · 平板 1000dp", showBackground = true, widthDp = 1000, heightDp = 800)
-@Composable
-private fun HomeworkV6TabletPreview() {
-    HomeworkV6Preview(dark = false)
-}
-
-@Preview(name = "174 作业 v6 · 大字体 1.3x", showBackground = true, widthDp = 412, heightDp = 1200, fontScale = 1.3f)
-@Composable
-private fun HomeworkV6LargeFontPreview() {
-    HomeworkV6Preview(dark = false)
-}
-
-// =============================================================================
-// 电费预览
-// =============================================================================
-
-@Composable
-private fun PowerV6Preview(
-    dark: Boolean,
-    selectedRv: String? = "4-23A---321",
-    row: PowerRow? = v6PowerRow(),
-    histories: Map<PowerRange, List<PowerPoint>> = mapOf(
-        PowerRange.H24 to v6Histories24h(),
-        PowerRange.D7 to v6Histories7d(),
-        PowerRange.D30 to v6Histories30d(),
-    ),
-    slowRoom: Boolean = false,
-) {
-    ClassToolsTheme(darkTheme = dark) {
+private fun PowerV1LightPreview() {
+    ClassToolsTheme(darkTheme = false) {
         PowerScreen(
             onBack = {},
             repository = V6PreviewPowerRepository,
             clock = { V6_PREVIEW_NOW },
-            initialSelectedRv = selectedRv,
-            initialRow = row,
-            initialHistories = histories,
-            initialSlowRoom = slowRoom,
+            initialSelectedRv = "4-23A---321",
+            initialRow = v6PowerRow(),
+            initialHistories = mapOf(
+                PowerRange.H24 to v6Histories24h(),
+                PowerRange.D7 to v6Histories7d(),
+                PowerRange.D30 to v6Histories30d(),
+            ),
+            initialRange = PowerRange.H24,
             skipLoad = true,
         )
     }
 }
 
-@Preview(name = "175 电费 v6 · 有数据 · 浅色", showBackground = true, widthDp = 412, heightDp = 1400)
+@Preview(name = "173 电费 v1 · 7 天（滑动切换后）· 深色", showBackground = true, widthDp = 412, heightDp = 1400)
 @Composable
-private fun PowerV6LightPreview() {
-    PowerV6Preview(dark = false)
-}
-
-@Preview(name = "176 电费 v6 · 有数据 · 深色", showBackground = true, widthDp = 412, heightDp = 1400)
-@Composable
-private fun PowerV6DarkPreview() {
-    PowerV6Preview(dark = true)
-}
-
-@Preview(name = "177 电费 v6 · 空态（未关注）· 浅色", showBackground = true, widthDp = 412, heightDp = 915)
-@Composable
-private fun PowerV6EmptyPreview() {
-    PowerV6Preview(
-        dark = false,
-        selectedRv = "",
-        row = null,
-        histories = emptyMap(),
-    )
-}
-
-@Preview(name = "178 电费 v6 · 13 号楼日更（隐藏 24h）", showBackground = true, widthDp = 412, heightDp = 1400)
-@Composable
-private fun PowerV6SlowRoomPreview() {
-    PowerV6Preview(
-        dark = false,
-        selectedRv = "1-13---324",
-        row = v6PowerRow(q = 42.5, rv = "1-13---324", label = "13号楼324", building = "13号楼"),
-        histories = mapOf(
-            PowerRange.H24 to v6SlowHistories24h(),
-            PowerRange.D7 to v6SlowHistories7d(),
-            PowerRange.D30 to v6SlowHistories30d(),
-        ),
-        slowRoom = true,
-    )
-}
-
-@Preview(name = "179 电费 v6 · 平板 1000dp", showBackground = true, widthDp = 1000, heightDp = 1000)
-@Composable
-private fun PowerV6TabletPreview() {
-    PowerV6Preview(dark = false)
-}
-
-// =============================================================================
-// 水量预览
-// =============================================================================
-
-@Composable
-private fun WaterV6Preview(
-    dark: Boolean,
-    selectedRv: String = "1-13---324",
-    initialMonth: String = "2026-11",
-) {
-    ClassToolsTheme(darkTheme = dark) {
-        WaterScreen(
+private fun PowerV1SevenDaysDarkPreview() {
+    ClassToolsTheme(darkTheme = true) {
+        PowerScreen(
             onBack = {},
-            session = v6Session,
-            userDataRepository = null,
-            initialRooms = v6WaterRooms(),
-            initialSelectedRv = selectedRv,
-            initialMonth = initialMonth,
+            repository = V6PreviewPowerRepository,
+            clock = { V6_PREVIEW_NOW },
+            initialSelectedRv = "4-23A---321",
+            initialRow = v6PowerRow(),
+            initialHistories = mapOf(
+                PowerRange.H24 to v6Histories24h(),
+                PowerRange.D7 to v6Histories7d(),
+                PowerRange.D30 to v6Histories30d(),
+            ),
+            initialRange = PowerRange.D7,
             skipLoad = true,
         )
     }
 }
 
-@Preview(name = "180 水量 v6 · 记录 · 浅色", showBackground = true, widthDp = 412, heightDp = 1400)
+@Preview(name = "174 水量 v1 · 当月 · 浅色", showBackground = true, widthDp = 412, heightDp = 1400)
 @Composable
-private fun WaterV6LightPreview() {
-    WaterV6Preview(dark = false)
-}
-
-@Preview(name = "181 水量 v6 · 6 人间 · 深色", showBackground = true, widthDp = 412, heightDp = 1400)
-@Composable
-private fun WaterV6SixPersonsDarkPreview() {
-    WaterV6Preview(dark = true, selectedRv = "4-23A---321")
-}
-
-@Preview(name = "182 水量 v6 · 空态 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
-@Composable
-private fun WaterV6EmptyPreview() {
+private fun WaterV1CurrentLightPreview() {
     ClassToolsTheme(darkTheme = false) {
         WaterScreen(
             onBack = {},
             session = v6Session,
             userDataRepository = null,
-            initialRooms = emptyMap(),
-            initialSelectedRv = "",
+            initialRooms = v6WaterRooms(),
+            initialSelectedRv = "1-13---324",
+            initialMonth = "2026-11",
             skipLoad = true,
         )
     }
 }
 
-@Preview(name = "183 水量 v6 · 大字体 1.3x", showBackground = true, widthDp = 412, heightDp = 1600, fontScale = 1.3f)
+@Preview(name = "175 水量 v1 · 上一月（滑动切换后）· 深色", showBackground = true, widthDp = 412, heightDp = 1400)
 @Composable
-private fun WaterV6LargeFontPreview() {
-    WaterV6Preview(dark = false)
-}
-
-@Preview(name = "184 水量 v6 · 平板 1000dp", showBackground = true, widthDp = 1000, heightDp = 900)
-@Composable
-private fun WaterV6TabletPreview() {
-    WaterV6Preview(dark = false)
+private fun WaterV1PrevMonthDarkPreview() {
+    ClassToolsTheme(darkTheme = true) {
+        WaterScreen(
+            onBack = {},
+            session = v6Session,
+            userDataRepository = null,
+            initialRooms = v6WaterRooms(),
+            initialSelectedRv = "4-23A---321",
+            initialMonth = "2026-10",
+            skipLoad = true,
+        )
+    }
 }

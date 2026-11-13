@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -208,7 +209,7 @@ fun FitScreen(
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             CtTopBar(
                 title = "体测",
-                subtitle = "国标 2014 大学组",
+                subtitle = "国标 2014 · 未填项按 0 计",
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = { showTable = true }) {
@@ -228,26 +229,18 @@ fun FitScreen(
                 }
 
                 FitPhase.READY -> {
-                    androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                    androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.weight(1f)) {
                         val expanded = maxWidth >= 600.dp
-                        val padding = if (expanded) 24.dp else 16.dp
+                        val padding = if (expanded) 20.dp else 12.dp
                         val form: @Composable (Modifier) -> Unit = { m ->
                             Column(
                                 modifier = m.verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 InputCard(
                                     input = input,
                                     onInput = { input = it },
-                                )
-                                ActionRow(
-                                    canSave = calc.wtDone > 0,
-                                    onSave = { saveRecord() },
-                                    onClear = { showClearDialog = true },
-                                    onCopy = {
-                                        clipboard.setText(AnnotatedString(FitExportFactory.copyText(calc)))
-                                        toast = "已复制成绩"
-                                    },
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -255,7 +248,7 @@ fun FitScreen(
                         val side: @Composable (Modifier) -> Unit = { m ->
                             Column(
                                 modifier = m.verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 ScoreCard(calc = calc)
                                 HistoryCard(
@@ -272,7 +265,7 @@ fun FitScreen(
                         if (expanded) {
                             Row(
                                 modifier = Modifier.fillMaxSize().padding(horizontal = padding),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 Box(modifier = Modifier.weight(0.55f)) { form(Modifier.fillMaxSize()) }
                                 Box(modifier = Modifier.weight(0.45f)) { side(Modifier.fillMaxSize()) }
@@ -283,19 +276,10 @@ fun FitScreen(
                                     .fillMaxSize()
                                     .verticalScroll(rememberScrollState())
                                     .padding(horizontal = padding),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 InputCard(input = input, onInput = { input = it })
                                 ScoreCard(calc = calc)
-                                ActionRow(
-                                    canSave = calc.wtDone > 0,
-                                    onSave = { saveRecord() },
-                                    onClear = { showClearDialog = true },
-                                    onCopy = {
-                                        clipboard.setText(AnnotatedString(FitExportFactory.copyText(calc)))
-                                        toast = "已复制成绩"
-                                    },
-                                )
                                 HistoryCard(
                                     history = history,
                                     onRestore = { index ->
@@ -304,9 +288,21 @@ fun FitScreen(
                                     onRename = { renameIndex = it },
                                     onDelete = { deleteIndex = it },
                                 )
-                                Spacer(modifier = Modifier.navigationBarsPadding().height(16.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
                             }
                         }
+                    }
+                    ActionRow(
+                        canSave = calc.wtDone > 0,
+                        onSave = { saveRecord() },
+                        onClear = { showClearDialog = true },
+                        onCopy = {
+                            clipboard.setText(AnnotatedString(FitExportFactory.copyText(calc)))
+                            toast = "已复制成绩"
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                    Spacer(modifier = Modifier.navigationBarsPadding().height(6.dp))
                     }
                 }
             }
@@ -439,9 +435,67 @@ fun FitScreen(
 
 private enum class FitPhase { LOADING, READY, ERROR }
 
+
+/** v6 紧凑卡：标题 titleSmall + 14/12 内边距，密度对齐小程序。 */
+@Composable
+private fun FitCompactCard(
+    modifier: Modifier = Modifier,
+    title: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+    content: @Composable () -> Unit,
+) {
+    CtToolCard(modifier = modifier, contentPadding = contentPadding) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (title != null || trailing != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (title != null) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                    trailing?.invoke()
+                }
+            }
+            content()
+        }
+    }
+}
+
+/** 紧凑统计：数值 + 小标签（替代大 padding 的 CtToolStat）。 */
+@Composable
+private fun FitStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
 @Composable
 private fun InputCard(input: FitInput, onInput: (FitInput) -> Unit) {
-    CtToolCard(title = "填写成绩", subtitle = "实时计算，未填写项不计分") {
+    FitCompactCard(title = "填写成绩") {
         CtToolSegmented(
             options = listOf(FitSex.M.label, FitSex.F.label),
             selectedIndex = if (input.sex == FitSex.M) 0 else 1,
@@ -535,7 +589,7 @@ private fun NumberField(
 private fun ScoreCard(calc: FitCalc) {
     val gradePalette = com.furina.classtools.ui.theme.GradeColors.tokens()
     val gradeTone = if (calc.wtDone > 0) gradePalette.toneOf(calc.grade) else null
-    CtToolCard(
+    FitCompactCard(
         title = "实时评分",
         trailing = {
             CtPill(
@@ -558,11 +612,11 @@ private fun ScoreCard(calc: FitCalc) {
                 modifier = Modifier.padding(bottom = 6.dp),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            CtToolStat(value = calc.std.toString(), label = "标准分", modifier = Modifier.weight(1f))
-            CtToolStat(value = calc.plus.toString(), label = "加分", modifier = Modifier.weight(1f))
-            CtToolStat(value = calc.miss.toString(), label = "缺项", modifier = Modifier.weight(1f))
-            CtToolStat(value = "${calc.wtDone}%", label = "已填权重", modifier = Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FitStat("标准分", calc.std.toString(), Modifier.weight(1f))
+            FitStat("加分", calc.plus.toString(), Modifier.weight(1f))
+            FitStat("缺项", calc.miss.toString(), Modifier.weight(1f))
+            FitStat("已填权重", "${calc.wtDone}%", Modifier.weight(1f))
         }
         if (calc.miss > 0) {
             Text(
@@ -646,9 +700,10 @@ private fun ActionRow(
     onSave: () -> Unit,
     onClear: () -> Unit,
     onCopy: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -677,13 +732,13 @@ private fun HistoryCard(
     onRename: (Int) -> Unit,
     onDelete: (Int) -> Unit,
 ) {
-    CtToolCard(
+    FitCompactCard(
         title = "历史记录",
         trailing = { CtPill(text = "最多 2 条") },
     ) {
         if (history.isEmpty()) {
             Text(
-                text = "还没有历史记录 · 保存后最多保留最近 2 条",
+                text = "暂无记录",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -696,8 +751,8 @@ private fun HistoryCard(
                             MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
                             RoundedCornerShape(16.dp),
                         )
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(

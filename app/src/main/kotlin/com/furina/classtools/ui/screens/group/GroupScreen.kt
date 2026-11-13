@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -303,15 +304,15 @@ private fun GroupContent(
     Box(modifier = Modifier.fillMaxSize()) {
         androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val expanded = maxWidth >= 600.dp
-            val padding = if (expanded) 24.dp else 16.dp
+            val padding = if (expanded) 20.dp else 12.dp
             if (expanded) {
                 Row(
                     modifier = Modifier.fillMaxSize().padding(horizontal = padding),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Column(
                         modifier = Modifier.weight(0.42f).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         StepIndicator(state.step, onBackToConfig)
                         ConfigCard(
@@ -331,54 +332,118 @@ private fun GroupContent(
                             onExport = onExport,
                             onCopy = onCopy,
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                     Column(
                         modifier = Modifier.weight(0.58f).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ResultArea(state = state, onExport = onExport, onCopy = onCopy)
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
             } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = padding),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    StepIndicator(state.step, onBackToConfig)
-                    when (state.step) {
-                        GroupStep.CONFIG -> ConfigCard(
-                            config = state.config,
-                            memberCount = effectiveMembers.size,
-                            rosterCount = rosterMembers.size,
-                            inlineError = inlineError,
-                            onUpdate = onUpdateConfig,
-                            onOpenRosterPicker = onOpenRosterPicker,
-                        )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = padding),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        StepIndicator(state.step, onBackToConfig)
+                        when (state.step) {
+                            GroupStep.CONFIG -> ConfigCard(
+                                config = state.config,
+                                memberCount = effectiveMembers.size,
+                                rosterCount = rosterMembers.size,
+                                inlineError = inlineError,
+                                onUpdate = onUpdateConfig,
+                                onOpenRosterPicker = onOpenRosterPicker,
+                            )
 
-                        GroupStep.RESULT -> ResultArea(
-                            state = state,
+                            GroupStep.RESULT -> ResultArea(
+                                state = state,
+                                onExport = onExport,
+                                onCopy = onCopy,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = padding)) {
+                        PrimaryActions(
+                            step = state.step,
+                            result = state.result,
+                            onRun = onRunGrouping,
+                            onRegroup = onRegroup,
+                            onBackToConfig = onBackToConfig,
                             onExport = onExport,
                             onCopy = onCopy,
                         )
                     }
-                    PrimaryActions(
-                        step = state.step,
-                        result = state.result,
-                        onRun = onRunGrouping,
-                        onRegroup = onRegroup,
-                        onBackToConfig = onBackToConfig,
-                        onExport = onExport,
-                        onCopy = onCopy,
-                    )
-                    Spacer(modifier = Modifier.navigationBarsPadding().height(16.dp))
+                    Spacer(modifier = Modifier.navigationBarsPadding().height(6.dp))
                 }
             }
         }
+    }
+}
+
+
+/** v6 紧凑卡：标题 titleSmall + 14/12 内边距，密度对齐小程序。 */
+@Composable
+private fun GroupCompactCard(
+    modifier: Modifier = Modifier,
+    title: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+    content: @Composable () -> Unit,
+) {
+    CtToolCard(modifier = modifier, contentPadding = contentPadding) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (title != null || trailing != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (title != null) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                    trailing?.invoke()
+                }
+            }
+            content()
+        }
+    }
+}
+
+/** 卡片内紧凑说明行（只保留数据，不写解释段落）。 */
+@Composable
+private fun GroupCompactInfoRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -403,8 +468,8 @@ private fun ConfigCard(
     onUpdate: (GroupConfig) -> Unit,
     onOpenRosterPicker: () -> Unit,
 ) {
-    CtToolCard(title = "分组设置") {
-        CtToolSectionHeader(title = "成员来源")
+    GroupCompactCard(title = "分组设置") {
+        Text("成员来源", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         CtToolSegmented(
             options = listOf(GroupSource.PREV.label, GroupSource.NAMES.label),
             selectedIndex = if (config.source == GroupSource.PREV) 0 else 1,
@@ -436,7 +501,7 @@ private fun ConfigCard(
             }
         }
 
-        CtToolSectionHeader(title = "分组方式")
+        Text("分组方式", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         CtToolSegmented(
             options = listOf(GroupMode.GROUPS.label, GroupMode.PER_GROUP.label),
             selectedIndex = if (config.mode == GroupMode.GROUPS) 0 else 1,
@@ -463,11 +528,6 @@ private fun ConfigCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("打乱后再分组", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    text = "开启后成员顺序随机（Fisher-Yates）",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
             Switch(
                 checked = config.shuffle,
@@ -584,9 +644,9 @@ private fun ResultArea(
 ) {
     val result = state.result
     if (result == null) {
-        CtToolCard {
+        GroupCompactCard {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -596,8 +656,8 @@ private fun ResultArea(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "设置参数后点击「开始分组」",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "设置参数后开始分组",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -605,15 +665,13 @@ private fun ResultArea(
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        CtToolCard(
+        GroupCompactCard(
             title = "${result.snapshot.groupCount} 组 · ${result.totalMembers} 人",
-            subtitle = "${result.snapshot.sourceLabel} · ${result.snapshot.innerLabel}",
             trailing = { CtPill(text = result.snapshot.modeLabel) },
         ) {
-            Text(
-                text = "分组结果已生成；可复制、导出或重新分组。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            GroupCompactInfoRow(
+                label = "来源",
+                value = "${result.snapshot.sourceLabel} · ${result.snapshot.innerLabel}",
             )
         }
         result.groups.chunked(2).forEach { rowGroups ->
@@ -635,11 +693,11 @@ private fun GroupCard(
     group: com.furina.classtools.features.group.MemberGroup,
     modifier: Modifier = Modifier,
 ) {
-    CtToolCard(
+    GroupCompactCard(
         modifier = modifier,
         title = "第 ${group.index} 组",
         trailing = { CtPill(text = "${group.size} 人") },
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
     ) {
         group.members.forEach { member ->
             Row(
@@ -649,7 +707,7 @@ private fun GroupCard(
                         MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
                         RoundedCornerShape(10.dp),
                     )
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -715,7 +773,7 @@ private fun CenteredLoading(text: String) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
         Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -727,7 +785,7 @@ private fun CenteredError(message: String, onRetry: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("加载失败", style = MaterialTheme.typography.titleMedium)
         Text(

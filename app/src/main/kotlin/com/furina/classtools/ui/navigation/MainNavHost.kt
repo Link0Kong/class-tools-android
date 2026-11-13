@@ -2,6 +2,7 @@ package com.furina.classtools.ui.navigation
 
 import android.Manifest
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -96,6 +97,7 @@ import com.furina.classtools.ui.screens.group.GroupScreen
 import com.furina.classtools.ui.screens.feedback.FeedbackScreen
 import com.furina.classtools.ui.screens.guide.UserGuideScreen
 import com.furina.classtools.ui.screens.home.HomeScreen
+import com.furina.classtools.ui.screens.jw.JwEntryScreen
 import com.furina.classtools.ui.screens.me.MeStats
 import com.furina.classtools.ui.screens.me.MeStatsBuilder
 import com.furina.classtools.ui.screens.me.ReminderStatus
@@ -181,6 +183,9 @@ fun MainNavHost(
     var transitionTool by remember { mutableStateOf<AppTool?>(null) }
     var transitionStart by remember { mutableStateOf<Rect?>(null) }
     var transitionRoute by remember { mutableStateOf<String?>(null) }
+    // 返回：全屏页面收回工具卡（reverse），先 pop 再播覆盖层。
+    var transitionReverse by remember { mutableStateOf(false) }
+    var transitionPendingPop by remember { mutableStateOf(false) }
     val reduceMotion = rememberReduceMotion()
 
     // 通知点击带入的工具（hw/tt）：登录/进入主界面后消费一次。
@@ -200,14 +205,9 @@ fun MainNavHost(
         android.widget.Toast.makeText(target, message, android.widget.Toast.LENGTH_SHORT).show()
     }
 
-    /** 打开工具；「设置」落到「我的」Tab（与小程序一致，不设独立占位页）。 */
+    /** 打开工具；「设置」工具卡已移除，设置入口统一在「我的」页。 */
     fun openTool(tool: AppTool) {
         val route = when (tool.id) {
-            "settings" -> {
-                selectTab(2)
-                return
-            }
-
             "vote" -> Routes.VOTE
             else -> Routes.tool(tool.id)
         }
@@ -217,9 +217,29 @@ fun MainNavHost(
             transitionStart = anchor
             transitionTool = tool
             transitionRoute = route
+            transitionReverse = false
+            transitionPendingPop = false
         } else {
             navController.navigate(route)
         }
+    }
+
+    /**
+     * 工具页返回：有卡片锚点时播放「页面收回卡片」的一镜到底退出动画（参考 HFUT 连续性原则），
+     * 再 pop 回根页；无锚点/移除动画/已有转场进行中时直接 pop（仍使用新的 CtPageTransitions 退场）。
+     */
+    fun popTool(toolId: String) {
+        val tool = ToolCatalog.byId(toolId)
+        val anchor = toolTransitionAnchors.get(toolId)
+        if (reduceMotion || tool == null || anchor == null || transitionTool != null) {
+            navController.popBackStack()
+            return
+        }
+        transitionStart = anchor
+        transitionTool = tool
+        transitionRoute = null
+        transitionReverse = true
+        transitionPendingPop = true
     }
 
     // 统一导出：渲染 → 保存相册（Android 10+）/ 分享兜底，Toast 反馈。
@@ -368,9 +388,11 @@ fun MainNavHost(
         ) { entry ->
             val toolId = entry.arguments?.getString(Routes.TOOL_ARG).orEmpty()
             val pickInTool = entry.arguments?.getBoolean(Routes.TOOL_PICK_ARG) == true
+            // 工具页系统返回也播放「收回卡片」退场动画（屏幕内弹层自己的 BackHandler 后注册，优先处理）。
+            BackHandler { popTool(toolId) }
             when (toolId) {
                 "draw" -> DrawScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popTool(toolId) },
                     session = session,
                     userDataRepository = container.userDataRepository,
                     onExport = { payload -> launchExport(payload.toCardSpec()) },
@@ -385,7 +407,7 @@ fun MainNavHost(
                 )
 
                 "group" -> GroupScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popTool(toolId) },
                     session = session,
                     userDataRepository = container.userDataRepository,
                     prevMembers = drawGroupMembers,
@@ -402,7 +424,7 @@ fun MainNavHost(
                         runCatching { container.fitRecsRepository.flushPending() }
                     }
                     FitScreen(
-                        onBack = { navController.popBackStack() },
+                        onBack = { popTool(toolId) },
                         session = session,
                         userDataRepository = container.userDataRepository,
                         initialHistory = fitHistory,
@@ -461,7 +483,7 @@ fun MainNavHost(
                         mutableStateOf<com.furina.classtools.data.homework.HomeworkRow?>(null)
                     }
                     HomeworkScreen(
-                        onBack = { navController.popBackStack() },
+                        onBack = { popTool(toolId) },
                         session = session,
                         marksRepository = container.marksRepository,
                         homeworkRepository = container.homeworkRepository,
@@ -521,7 +543,7 @@ fun MainNavHost(
                         mutableStateOf<com.furina.classtools.data.notices.NoticeGroupDto?>(null)
                     }
                     NoticesScreen(
-                        onBack = { navController.popBackStack() },
+                        onBack = { popTool(toolId) },
                         session = session,
                         marksRepository = container.marksRepository,
                         noticesRepository = container.noticesRepository,
@@ -579,7 +601,7 @@ fun MainNavHost(
                 }
 
                 "tt" -> TimetableViewScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popTool(toolId) },
                     repository = container.timetableRepository,
                     loginRepository = container.timetableLoginRepository,
                     sessionSid = session.sid,
@@ -590,7 +612,7 @@ fun MainNavHost(
                 )
 
                 "power" -> PowerScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popTool(toolId) },
                     repository = container.powerRepository,
                     userDataRepository = container.userDataRepository,
                     session = session,
@@ -598,13 +620,13 @@ fun MainNavHost(
                 )
 
                 "water" -> WaterScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popTool(toolId) },
                     session = session,
                     userDataRepository = container.userDataRepository,
                 )
 
                 "roster" -> RosterScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popTool(toolId) },
                     session = session,
                     classMembersRepository = container.classMembersRepository,
                     userDataRepository = container.userDataRepository,
@@ -612,7 +634,7 @@ fun MainNavHost(
                 )
 
                 "diag" -> DiagScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popTool(toolId) },
                     session = session,
                     repository = container.diagRepository,
                     deviceProbe = container.deviceProbe,
@@ -621,7 +643,7 @@ fun MainNavHost(
                 )
 
                 "ppt" -> PptListScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popTool(toolId) },
                     onOpenDetail = { deck -> navController.navigate(Routes.pptDetail(deck.id)) },
                     repository = container.pptRepository,
                     imageLoader = container.pptImageLoader,
@@ -629,11 +651,16 @@ fun MainNavHost(
                     localStore = container.pptLocalStore,
                 )
 
+                "jw" -> JwEntryScreen(
+                    sid = session.sid,
+                    onBack = { popTool(toolId) },
+                )
+
                 else -> {
                     val tool = ToolCatalog.byId(toolId) ?: ToolCatalog.allEntry
                     ToolPlaceholderScreen(
                         tool = tool,
-                        onBack = { navController.popBackStack() },
+                        onBack = { popTool(toolId) },
                     )
                 }
             }
@@ -846,16 +873,24 @@ fun MainNavHost(
         ToolTransitionOverlay(
             tool = transitionTool,
             startBounds = transitionStart,
+            reverse = transitionReverse,
             onHalfway = {
-                transitionRoute?.let { route ->
-                    transitionRoute = null
-                    navController.navigate(route)
+                if (transitionPendingPop) {
+                    transitionPendingPop = false
+                    navController.popBackStack()
+                } else {
+                    transitionRoute?.let { route ->
+                        transitionRoute = null
+                        navController.navigate(route)
+                    }
                 }
             },
             onDone = {
                 transitionTool = null
                 transitionStart = null
                 transitionRoute = null
+                transitionReverse = false
+                transitionPendingPop = false
             },
         )
     }

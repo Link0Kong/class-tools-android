@@ -214,7 +214,7 @@ internal fun NoticePressableCard(
     expanded: Boolean = false,
     previewPressed: Boolean = false,
     pinned: Boolean = false,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+    contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }

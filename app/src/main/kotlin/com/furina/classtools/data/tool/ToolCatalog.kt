@@ -12,7 +12,7 @@ import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.HowToVote
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Slideshow
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.ui.graphics.Color
@@ -159,15 +159,6 @@ object ToolCatalog {
             features = listOf("班级名单与座位号", "点名到/假", "名单不导出、不外发"),
         ),
         AppTool(
-            id = "settings",
-            name = "设置",
-            subtitle = "账号 · 同步 · 关于",
-            icon = Icons.Rounded.Settings,
-            accent = Color(0xFF6F7A77),
-            category = ToolCategory.SYSTEM,
-            features = listOf("账号信息与退出", "同步开关与清除", "关于与备案信息"),
-        ),
-        AppTool(
             id = "diag",
             name = "诊断",
             subtitle = "服务健康 · 设备 · AI 修复",
@@ -178,6 +169,19 @@ object ToolCatalog {
                 "服务健康分组（脱敏展示）",
                 "设备诊断（本机检查 + 重新检测）",
                 "AI 分析原因/建议与修复流程时间线",
+            ),
+        ),
+        AppTool(
+            id = "jw",
+            name = "教务",
+            subtitle = "直达教务 · 自动登录",
+            icon = Icons.Rounded.School,
+            accent = BrandSlateBlue,
+            category = ToolCategory.STUDY,
+            features = listOf(
+                "点卡片直接进入内置教务网页",
+                "本机加密保存密码，自动登录",
+                "验证码或失败时手动完成；可一键清除",
             ),
         ),
     )

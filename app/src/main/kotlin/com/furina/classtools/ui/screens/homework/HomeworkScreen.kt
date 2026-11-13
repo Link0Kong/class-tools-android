@@ -1,9 +1,10 @@
 package com.furina.classtools.ui.screens.homework
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,12 +13,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -53,7 +58,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -81,22 +86,23 @@ import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSectionHeader
-import com.furina.classtools.ui.components.tool.CtToolStat
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * 作业页（原生、只读列表 + marks 勾选）· v6 设计语言。
+ * 作业页（原生、只读列表 + marks 勾选）· 简洁化 v1。
  *
  * 数据：`HomeworkRepository.load()`（`GET homework?select=*&order=ts.asc&archived=eq.false`，TTL 10min）
  * 完成状态：`MarksRepository`（`marks kind='hw'`，跨端唯一真源；乐观更新由 marks 仓库的 StateFlow 提供）。
  *
- * v6 迁移（只动视觉层级，业务逻辑/参数/文案关键字不变）：
- * - 顶栏统一 [CtTopBar]（标题「作业」+ 缓存标记），页内不再重复大标题；
- * - 摘要（[CtToolStat] 未完成/已完成/已截止）→ 筛选（[CtToolChip] 全部/未完成/已完成）→ 分组列表；
- * - 列表行统一 [CtToolCard]，分组标题 [CtToolSectionHeader]；加载 [CtLoading]、空/错误 [EmptyState]；
- * - 截止/完成状态/撤销（Snackbar）/提醒入口全部保留。
+ * 简洁化 + 左右滑动：
+ * - 顶栏统一 [CtTopBar]（标题「作业」+ 未完成/已完成计数 + 缓存标记），页内无重复标题；
+ * - 筛选「全部 / 未完成 / 已完成」用 [HorizontalPager] 左右滑动切换：跟手翻页、点击 chip 同步 pager；
+ *   指示条跟随 pager 偏移（跟手），`reduceMotion` 时点击/chip 直接切页无动画；
+ * - 列表行统一 [CtToolCard]（紧凑 padding），分组标题 [CtToolSectionHeader]；空/错误/加载一行提示；
+ * - 截止/完成状态/撤销（Snackbar）/提醒入口/详情弹层全部保留。
  *
  * 接线（Lead 负责 MainNavHost）：
  * ```kotlin
@@ -109,7 +115,8 @@ import kotlinx.coroutines.launch
  * ```
  *
  * 四态：正常列表 / 空（暂无作业） / 加载（首屏 + 下拉刷新） / 错误（加载失败且有缓存时仍显示列表 + 顶部提示）。
- * 本轮不做发布/删除（契约允许 POST/PATCH，但产品需求为后续增量）；不做附件大图预览（只显示元信息）。
+ *
+ * @param initialFilter 预览注入：初始筛选页（默认全部；不改变既有调用方）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,10 +132,13 @@ fun HomeworkScreen(
     skipLoad: Boolean = false,
     /** v3.2：单条作业提醒（Lead 弹提醒时间选项并排程）。 */
     onRemindHomework: ((com.furina.classtools.data.homework.HomeworkRow) -> Unit)? = null,
+    /** 预览注入：初始筛选（全部/未完成/已完成）。 */
+    initialFilter: HomeworkFilter = HomeworkFilter.ALL,
 ) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val haptics = LocalHapticFeedback.current
+    val reduceMotion = rememberReduceMotion()
     val fallbackMarks = remember { MutableStateFlow(initialMarks ?: MarksSnapshot()) }
     val marksFlow = remember(marksRepository, initialMarks) { marksRepository?.marks ?: fallbackMarks }
     val marks: MarksSnapshot by marksFlow.collectAsState()
@@ -141,7 +151,6 @@ fun HomeworkScreen(
     var fromCache by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     var reloadToken by remember { mutableIntStateOf(0) }
-    var filter by remember { mutableStateOf(HomeworkFilter.ALL) }
     var detail by remember { mutableStateOf<HomeworkItem?>(null) }
 
     fun notify(message: String) {
@@ -237,12 +246,25 @@ fun HomeworkScreen(
             rows.map { row -> HomeworkDueCalculator.toItem(row, marks.isDone(MarkKind.HW, row.id), nowMillis) },
         )
     }
-    val visibleItems = remember(allItems, filter) {
-        HomeworkDueCalculator.sort(HomeworkDueCalculator.filter(allItems, filter))
-    }
     val unfinishedCount = allItems.count { !it.done }
     val doneCount = allItems.count { it.done }
-    val overdueCount = allItems.count { !it.done && it.due?.tone == HomeworkDueTone.OVERDUE }
+    val filterPages = remember(allItems) {
+        HomeworkFilter.entries.map { filter ->
+            HomeworkDueCalculator.sort(HomeworkDueCalculator.filter(allItems, filter))
+        }
+    }
+    val pagerState = rememberPagerState(
+        initialPage = initialFilter.ordinal.coerceIn(0, HomeworkFilter.entries.size - 1),
+        pageCount = { HomeworkFilter.entries.size },
+    )
+
+    val subtitle = buildString {
+        if (allItems.isNotEmpty()) append("未完成 $unfinishedCount · 已完成 $doneCount")
+        if (fromCache) {
+            if (isNotEmpty()) append(" · ")
+            append("本机缓存")
+        }
+    }.trim()
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -253,13 +275,21 @@ fun HomeworkScreen(
             ) {
                 CtTopBar(
                     title = "作业",
-                    subtitle = if (fromCache) "本机缓存" else null,
+                    subtitle = subtitle.takeIf { it.isNotBlank() },
                     onBack = onBack,
                     actions = {
                         IconButton(onClick = { refresh() }) {
                             Icon(Icons.Rounded.Refresh, contentDescription = "刷新作业")
                         }
                     },
+                )
+
+                HomeworkFilterTabs(
+                    pagerState = pagerState,
+                    allCount = allItems.size,
+                    unfinishedCount = unfinishedCount,
+                    doneCount = doneCount,
+                    reduceMotion = reduceMotion,
                 )
 
                 Box(modifier = Modifier.weight(1f)) {
@@ -281,19 +311,20 @@ fun HomeworkScreen(
                             onRefresh = { refresh() },
                             modifier = contentModifier,
                         ) {
-                            HomeworkList(
-                                allItems = allItems,
-                                visibleItems = visibleItems,
-                                filter = filter,
-                                unfinishedCount = unfinishedCount,
-                                doneCount = doneCount,
-                                overdueCount = overdueCount,
-                                nowMillis = nowMillis,
-                                onFilter = { filter = it },
-                                onToggle = { item -> toggleDone(item) },
-                                onOpen = { item -> detail = item },
-                                onRemind = onRemindHomework?.let { cb -> { item -> cb(item.row) } },
-                            )
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier.fillMaxSize(),
+                                key = { page -> HomeworkFilter.entries[page].name },
+                            ) { page ->
+                                HomeworkFilterPage(
+                                    items = filterPages.getOrElse(page) { emptyList() },
+                                    allEmpty = allItems.isEmpty(),
+                                    nowMillis = nowMillis,
+                                    onToggle = { item -> toggleDone(item) },
+                                    onOpen = { item -> detail = item },
+                                    onRemind = onRemindHomework?.let { cb -> { item -> cb(item.row) } },
+                                )
+                            }
                         }
                     }
 
@@ -352,83 +383,91 @@ fun HomeworkScreen(
 }
 
 // -----------------------------------------------------------------------------
+// 筛选（pager + 跟手指示条）
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun HomeworkFilterTabs(
+    pagerState: PagerState,
+    allCount: Int,
+    unfinishedCount: Int,
+    doneCount: Int,
+    reduceMotion: Boolean,
+) {
+    val scope = rememberCoroutineScope()
+    val filters = HomeworkFilter.entries
+    val total = filters.size
+    val progress = pagerState.currentPage + pagerState.currentPageOffsetFraction
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 2.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            filters.forEachIndexed { index, filter ->
+                CtToolChip(
+                    text = when (filter) {
+                        HomeworkFilter.ALL -> "全部 $allCount"
+                        HomeworkFilter.UNFINISHED -> "未完成 $unfinishedCount"
+                        HomeworkFilter.DONE -> "已完成 $doneCount"
+                    },
+                    selected = pagerState.currentPage == index,
+                    onClick = {
+                        scope.launch {
+                            if (reduceMotion) pagerState.scrollToPage(index)
+                            else pagerState.animateScrollToPage(index)
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        if (total > 1) {
+            Spacer(Modifier.height(3.dp))
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(3.dp)) {
+                val slot = maxWidth * (1f / total)
+                Box(
+                    modifier = Modifier
+                        .offset(x = slot * progress)
+                        .width(slot)
+                        .height(3.dp)
+                        .clip(CtShapeTokens.pill)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)),
+                )
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
 // 列表 / 卡片 / 详情
 // -----------------------------------------------------------------------------
 
 @Composable
-private fun HomeworkList(
-    allItems: List<HomeworkItem>,
-    visibleItems: List<HomeworkItem>,
-    filter: HomeworkFilter,
-    unfinishedCount: Int,
-    doneCount: Int,
-    overdueCount: Int,
+private fun HomeworkFilterPage(
+    items: List<HomeworkItem>,
+    allEmpty: Boolean,
     nowMillis: Long,
-    onFilter: (HomeworkFilter) -> Unit,
     onToggle: (HomeworkItem) -> Unit,
     onOpen: (HomeworkItem) -> Unit,
     onRemind: ((HomeworkItem) -> Unit)? = null,
 ) {
     val grouped = LinkedHashMap<String, MutableList<HomeworkItem>>()
-    for (item in visibleItems) {
+    for (item in items) {
         val label = HomeworkDueCalculator.groupLabel(item, nowMillis)
         grouped.getOrPut(label) { mutableListOf() }.add(item)
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // 摘要：未完成 / 已完成 / 已截止（v6 CtToolStat）
-        item(key = "summary") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CtToolStat(
-                    value = unfinishedCount.toString(),
-                    label = "未完成",
-                    modifier = Modifier.weight(1f),
-                    valueColor = MaterialTheme.colorScheme.primary,
-                )
-                CtToolStat(
-                    value = doneCount.toString(),
-                    label = "已完成",
-                    modifier = Modifier.weight(1f),
-                )
-                CtToolStat(
-                    value = overdueCount.toString(),
-                    label = "已截止",
-                    modifier = Modifier.weight(1f),
-                    valueColor = if (overdueCount > 0) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-        // 筛选：统一 pill（全部 / 未完成 / 已完成）
-        item(key = "filters") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                HomeworkFilter.entries.forEach { option ->
-                    CtToolChip(
-                        text = when (option) {
-                            HomeworkFilter.ALL -> "全部 ${allItems.size}"
-                            HomeworkFilter.UNFINISHED -> "未完成 $unfinishedCount"
-                            HomeworkFilter.DONE -> "已完成 $doneCount"
-                        },
-                        selected = filter == option,
-                        onClick = { onFilter(option) },
-                    )
-                }
-            }
-        }
-        if (visibleItems.isEmpty()) {
+        if (items.isEmpty()) {
             item(key = "empty") {
                 EmptyState(
                     icon = Icons.AutoMirrored.Rounded.Assignment,
-                    title = if (allItems.isEmpty()) "暂无作业" else "没有符合条件的作业",
-                    message = if (allItems.isEmpty()) "老师发布后会出现在这里" else "切换筛选看看",
+                    title = if (allEmpty) "暂无作业" else "没有符合条件的作业",
+                    message = if (allEmpty) "老师发布后会出现在这里" else "试试其他筛选",
                 )
             }
         } else {
@@ -457,13 +496,13 @@ private fun HomeworkCard(
     onRemind: (() -> Unit)? = null,
 ) {
     CtToolCard(
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Checkbox(
                 checked = item.done,
                 onCheckedChange = { onToggle() },
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 2.dp),
             )
             Column(
                 modifier = Modifier
@@ -474,7 +513,7 @@ private fun HomeworkCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = item.title.ifBlank { "作业" },
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = if (item.done) {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -493,7 +532,7 @@ private fun HomeworkCard(
                 }
                 val body = item.row.content.trim()
                 if (body.isNotEmpty()) {
-                    Spacer(Modifier.height(3.dp))
+                    Spacer(Modifier.height(2.dp))
                     Text(
                         text = body,
                         style = MaterialTheme.typography.bodyMedium,
@@ -502,7 +541,7 @@ private fun HomeworkCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val shortDue = HomeworkDueCalculator.shortDueText(item.row)
                     if (shortDue.isNotBlank()) {

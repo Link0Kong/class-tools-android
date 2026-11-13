@@ -9,7 +9,10 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,10 +61,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.power.PowerRange
 import com.furina.classtools.data.power.PowerHistoryResult
@@ -88,13 +94,12 @@ import com.furina.classtools.ui.components.expressive.CtChipGroup
 import com.furina.classtools.ui.components.expressive.CtChipOption
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolField
-import com.furina.classtools.ui.components.tool.CtToolInfoRow
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
-import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtTokens
 import com.furina.classtools.ui.theme.ctEmphasized
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -151,6 +156,7 @@ fun PowerScreen(
     initialPickerOpen: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
+    val reduceMotion = rememberReduceMotion()
     val sectionsFlow: kotlinx.coroutines.flow.StateFlow<JsonObject> =
         userDataRepository?.currentSections ?: remember { MutableStateFlow(JsonObject(emptyMap())) }
     val sections by sectionsFlow.collectAsState()
@@ -346,7 +352,7 @@ fun PowerScreen(
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             CtTopBar(
                 title = "宿舍电费",
-                subtitle = if (sel.isBlank()) "关注宿舍 · 电量与趋势" else PowerRooms.labelOf(sel),
+                subtitle = PowerRooms.labelOf(sel).takeIf { it.isNotBlank() },
                 onBack = onBack,
                 actions = {
                     if (sel.isNotBlank()) {
@@ -378,8 +384,8 @@ fun PowerScreen(
                     low = low,
                     state = state,
                     ringArc = ringArc,
-                    estimateDaysText = PowerStats.daysMain(estimate),
                     slowRoom = slowRoom,
+                    reduceMotion = reduceMotion,
                     slowUpdateText = slowUpdate.text,
                     range = range,
                     cursorText = cursorText,
@@ -439,11 +445,6 @@ fun PowerScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
-                        Text(
-                            text = "仅统计工具记录的下降用电，不插值；历史数据不足时不显示比较。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
                 },
                 confirmButton = {
@@ -487,16 +488,9 @@ private fun IdleGuide(onPick: () -> Unit, modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                 )
-                Text(
-                    text = "选择保存在账号里，换设备登录会同步；未选择时不请求任何电量数据。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
             }
         }
         CtToolPrimaryButton(text = "选择宿舍", onClick = onPick)
-        PrivacyFooter()
     }
 }
 
@@ -551,8 +545,8 @@ private fun ReadyContent(
     low: Int,
     state: PowerState,
     ringArc: Float,
-    estimateDaysText: String,
     slowRoom: Boolean,
+    reduceMotion: Boolean,
     slowUpdateText: String,
     range: PowerRange,
     cursorText: String?,
@@ -578,14 +572,13 @@ private fun ReadyContent(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         PickRoomCard(sel = sel, onPick = onPickHouse)
         HeroCard(
             row = row,
             state = state,
             ringArc = ringArc,
-            estimateDaysText = estimateDaysText,
             slowRoom = slowRoom,
         )
         TrendSection(
@@ -600,11 +593,11 @@ private fun ReadyContent(
             noUpdateText = noUpdateText,
             historyError = historyError,
             ranges = visibleRanges,
+            reduceMotion = reduceMotion,
             onRangeChange = onRangeChange,
             onCursor = onCursor,
             onRetry = onRetryHistory,
         )
-        CtToolSectionHeader(title = "区间指标", subtitle = "用电、估算与计费参考")
         TilesSection(
             tiles = tiles,
             bill = rangeStatsForBill,
@@ -614,7 +607,6 @@ private fun ReadyContent(
                 if (tile.clickable) onLowClick()
             },
         )
-        PrivacyFooter()
         Spacer(modifier = Modifier.navigationBarsPadding().height(8.dp))
     }
 }
@@ -625,36 +617,35 @@ private fun PickRoomCard(sel: String, onPick: () -> Unit) {
         modifier = Modifier
             .clip(RoundedCornerShape(24.dp))
             .clickable(onClick = onPick),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(
                 imageVector = Icons.Rounded.Apartment,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(20.dp),
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "关注宿舍",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = if (sel.isBlank()) "未选择" else PowerRooms.labelOf(sel),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
             Text(
-                text = "更换 ›",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                text = "关注宿舍",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = if (sel.isBlank()) "未选择" else PowerRooms.labelOf(sel),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "›",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -665,7 +656,6 @@ private fun HeroCard(
     row: PowerRow?,
     state: PowerState,
     ringArc: Float,
-    estimateDaysText: String,
     slowRoom: Boolean,
 ) {
     val brand = com.furina.classtools.ui.theme.LocalCtBrandColors.current
@@ -684,6 +674,7 @@ private fun HeroCard(
             RingGauge(
                 progress = ringArc,
                 accent = stateColor,
+                diameter = 96.dp,
                 description = "剩余电量 ${PowerStats.fmtMain(row?.q)} ${row?.unit ?: "度"}，${PowerStats.stateText(state)}",
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -717,13 +708,8 @@ private fun HeroCard(
                 }
                 Text(
                     text = "剩余电量",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = "估算可用 $estimateDaysText 天",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = "更新 ${PowerStats.updText(row?.updatedAt).ifBlank { "—" }}",
@@ -740,12 +726,13 @@ private fun RingGauge(
     progress: Float,
     accent: Color,
     description: String? = null,
+    diameter: Dp = 104.dp,
     content: @Composable () -> Unit,
 ) {
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
     Box(
         modifier = Modifier
-            .size(104.dp)
+            .size(diameter)
             .semantics {
                 // 自定义 Canvas 环形图读屏播报（无障碍：图形信息不缺失）。
                 if (!description.isNullOrBlank()) contentDescription = description
@@ -784,6 +771,13 @@ private fun RingGauge(
     }
 }
 
+private data class PowerTrendFrame(
+    val range: PowerRange,
+    val trend: com.furina.classtools.data.power.TrendLine,
+    val changeDots: List<com.furina.classtools.data.power.TrendPoint>,
+    val rangeStats: com.furina.classtools.data.power.RangeStats,
+)
+
 @Composable
 private fun TrendSection(
     range: PowerRange,
@@ -797,18 +791,43 @@ private fun TrendSection(
     noUpdateText: String,
     historyError: String?,
     ranges: List<PowerRange>,
+    reduceMotion: Boolean,
     onRangeChange: (PowerRange) -> Unit,
     onCursor: (Int?) -> Unit,
     onRetry: () -> Unit,
 ) {
-    CtToolCard(
-        title = range.title,
-        subtitle = slowUpdateText.takeIf { it.isNotBlank() && !slowRoom },
-        trailing = {
+    fun step(delta: Int) {
+        val index = ranges.indexOf(range)
+        if (index < 0) return
+        ranges.getOrNull(index + delta)?.let(onRangeChange)
+    }
+
+    CtToolCard(contentPadding = PaddingValues(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = range.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val subtitle = slowUpdateText.takeIf { it.isNotBlank() && !slowRoom }
+                    if (subtitle != null) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
                 if (slowRoom) {
                     CtPill(text = "日更", containerColor = MaterialTheme.colorScheme.tertiaryContainer)
                 }
@@ -816,30 +835,31 @@ private fun TrendSection(
                     CtPill(text = "期间有充值", containerColor = MaterialTheme.colorScheme.secondaryContainer)
                 }
             }
-        },
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // 区间分段（v6 统一分段组件）；气泡/游标文案固定在图表上方右侧，不跟手。
-            CtToolSegmented(
-                options = ranges.map { it.label },
-                selectedIndex = ranges.indexOf(range).coerceAtLeast(0),
-                onSelect = { index -> ranges.getOrNull(index)?.let(onRangeChange) },
-            )
-            Text(
-                text = cursorText ?: "点按图表查看采样点",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (cursorText != null) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.End,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (ranges.size < PowerRange.entries.size) {
+            // 区间按钮行：左右滑动切换区间（趋势图内的 x 轴拖动仍只查看采样点，不切档）。
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalSwipe(
+                        enabled = ranges.size > 1,
+                        onSwipeLeft = { step(1) },
+                        onSwipeRight = { step(-1) },
+                    ),
+            ) {
+                CtToolSegmented(
+                    options = ranges.map { it.label },
+                    selectedIndex = ranges.indexOf(range).coerceAtLeast(0),
+                    onSelect = { index -> ranges.getOrNull(index)?.let(onRangeChange) },
+                )
+            }
+            if (cursorText != null) {
                 Text(
-                    text = "13/16 号楼为日更数据，不提供 24h 趋势",
+                    text = cursorText,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.End,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
 
@@ -854,26 +874,44 @@ private fun TrendSection(
                     TextButton(onClick = onRetry) { Text("重试") }
                 }
             } else {
-                // P-05：切档/刷新时图表淡入淡出，避免瞬时跳变。
-                AnimatedContent(
-                    targetState = trend,
-                    transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
-                    label = "powerTrend",
-                ) { shownTrend ->
-                    PowerTrendChart(
-                        trend = shownTrend,
-                        range = range,
-                        slow = slowRoom,
-                        changeDots = changeDots,
+                val frame = PowerTrendFrame(
+                    range = range,
+                    trend = trend,
+                    changeDots = changeDots,
+                    rangeStats = rangeStats,
+                )
+                if (reduceMotion) {
+                    TrendChartBody(
+                        frame = frame,
+                        slowRoom = slowRoom,
                         cursorIndex = cursorIndex,
                         onCursor = onCursor,
-                        yLabelHi = PowerStats.fmtQ(shownTrend.hi),
-                        yLabelMid = PowerStats.fmtQ(shownTrend.mid),
-                        yLabelLo = PowerStats.fmtQ(shownTrend.lo),
-                        legendStart = PowerStats.fmtQ(shownTrend.points.firstOrNull()?.q),
-                        legendCurrent = PowerStats.fmtQ(shownTrend.points.lastOrNull()?.q),
-                        legendDrop = PowerStats.fmtDrop(rangeStats.drop),
                     )
+                } else {
+                    var lastIndex by remember { mutableIntStateOf(ranges.indexOf(range)) }
+                    val forward = ranges.indexOf(range) >= lastIndex
+                    LaunchedEffect(range) { lastIndex = ranges.indexOf(range) }
+                    // 切档滑动 + 淡入淡出（260ms），方向随区间前后变化。
+                    AnimatedContent(
+                        targetState = frame,
+                        transitionSpec = {
+                            if (forward) {
+                                (slideInHorizontally(tween(260)) { it / 6 } + fadeIn(tween(260)))
+                                    .togetherWith(slideOutHorizontally(tween(220)) { -it / 6 } + fadeOut(tween(180)))
+                            } else {
+                                (slideInHorizontally(tween(260)) { -it / 6 } + fadeIn(tween(260)))
+                                    .togetherWith(slideOutHorizontally(tween(220)) { it / 6 } + fadeOut(tween(180)))
+                            }
+                        },
+                        label = "powerTrend",
+                    ) { shown ->
+                        TrendChartBody(
+                            frame = shown,
+                            slowRoom = slowRoom,
+                            cursorIndex = cursorIndex,
+                            onCursor = onCursor,
+                        )
+                    }
                 }
             }
 
@@ -893,6 +931,29 @@ private fun TrendSection(
             }
         }
     }
+}
+
+@Composable
+private fun TrendChartBody(
+    frame: PowerTrendFrame,
+    slowRoom: Boolean,
+    cursorIndex: Int?,
+    onCursor: (Int?) -> Unit,
+) {
+    PowerTrendChart(
+        trend = frame.trend,
+        range = frame.range,
+        slow = slowRoom,
+        changeDots = frame.changeDots,
+        cursorIndex = cursorIndex,
+        onCursor = onCursor,
+        yLabelHi = PowerStats.fmtQ(frame.trend.hi),
+        yLabelMid = PowerStats.fmtQ(frame.trend.mid),
+        yLabelLo = PowerStats.fmtQ(frame.trend.lo),
+        legendStart = PowerStats.fmtQ(frame.trend.points.firstOrNull()?.q),
+        legendCurrent = PowerStats.fmtQ(frame.trend.points.lastOrNull()?.q),
+        legendDrop = PowerStats.fmtDrop(frame.rangeStats.drop),
+    )
 }
 
 @Composable
@@ -1043,12 +1104,16 @@ private fun Tile(
 
 @Composable
 private fun BillCard(bill: com.furina.classtools.data.power.BillInfo) {
-    CtToolCard(title = "计费参考") {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            CtToolInfoRow(label = "电价", value = bill.elecText)
-            CtToolInfoRow(label = "区间电费", value = bill.feeText)
-            CtToolInfoRow(label = "免费额度", value = bill.freeText)
-            CtToolInfoRow(label = "水费", value = bill.waterText)
+    CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                BillCell(label = "电价", value = bill.elecText, modifier = Modifier.weight(1f))
+                BillCell(label = "区间电费", value = bill.feeText, modifier = Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                BillCell(label = "免费额度", value = bill.freeText, modifier = Modifier.weight(1f))
+                BillCell(label = "水费", value = bill.waterText, modifier = Modifier.weight(1f))
+            }
             if (bill.hasDeduct) {
                 Text(
                     text = bill.deductText,
@@ -1061,14 +1126,23 @@ private fun BillCard(bill: com.furina.classtools.data.power.BillInfo) {
 }
 
 @Composable
-private fun PrivacyFooter() {
-    Text(
-        text = "仅显示关注宿舍的楼栋与房间号 · 不显示姓名/学号 · 不导出、不分享",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-    )
+private fun BillCell(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -1084,10 +1158,7 @@ private fun HousePickerSheet(
     var building by remember { mutableStateOf(PowerRooms.buildingOf(selectedRv).ifBlank { PowerRooms.BUILDINGS.first() }) }
     var query by remember { mutableStateOf("") }
     CtBottomSheet(onDismissRequest = onDismiss) {
-        CtBottomSheetHeader(
-            title = "关注宿舍",
-            subtitle = "选择保存在账号里 · 只显示楼栋与房间号",
-        )
+        CtBottomSheetHeader(title = "关注宿舍")
         Column(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1308,7 +1379,32 @@ private fun JsonElement?.asPlainString(): String? {
     return if (primitive.isString) primitive.content else null
 }
 
-
-
-
-
+/**
+ * 工具页统一左右滑动：横向拖动超过 48dp 松手触发；只消费横向手势，不与页面纵向滚动冲突。
+ */
+private fun Modifier.horizontalSwipe(
+    enabled: Boolean,
+    onSwipeLeft: () -> Unit,
+    onSwipeRight: () -> Unit,
+): Modifier {
+    if (!enabled) return this
+    return pointerInput(enabled, onSwipeLeft, onSwipeRight) {
+        val threshold = 48.dp.toPx()
+        var total = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { total = 0f },
+            onHorizontalDrag = { change, dragAmount ->
+                change.consume()
+                total += dragAmount
+            },
+            onDragEnd = {
+                when {
+                    total <= -threshold -> onSwipeLeft()
+                    total >= threshold -> onSwipeRight()
+                }
+                total = 0f
+            },
+            onDragCancel = { total = 0f },
+        )
+    }
+}

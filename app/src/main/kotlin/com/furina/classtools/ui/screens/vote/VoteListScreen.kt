@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -39,6 +41,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,6 +105,8 @@ fun VoteListScreen(
     initialPolls: PollList? = null,
     initialError: VoteError? = null,
     skipLoad: Boolean = false,
+    /** 预览：左右滑动中间帧（0.5 = 停在两页之间；null = 正常渲染）。 */
+    previewPagerOffset: Float? = null,
 ) {
     val spec = rememberCtAdaptiveSpec()
     val scope = rememberCoroutineScope()
@@ -113,6 +119,22 @@ fun VoteListScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     var reloadToken by remember { mutableStateOf(0) }
     var showClosed by remember { mutableStateOf(false) }
+    // 左右滑动切「进行中 ↔ 已结束」（跟手 + spring；reduceMotion 时禁用拖拽、点击直接切）
+    val reduceMotion = rememberReduceMotion()
+    val votePagerState = rememberPagerState(
+        initialPage = if (showClosed) 1 else 0,
+        initialPageOffsetFraction = (previewPagerOffset ?: 0f).coerceIn(-0.5f, 0.5f),
+    ) { 2 }
+    LaunchedEffect(votePagerState) {
+        snapshotFlow { votePagerState.currentPage }.collect { page -> showClosed = page == 1 }
+    }
+    fun selectClosed(closed: Boolean) {
+        showClosed = closed
+        val index = if (closed) 1 else 0
+        scope.launch {
+            if (reduceMotion) votePagerState.scrollToPage(index) else votePagerState.animateScrollToPage(index)
+        }
+    }
     var mineOnly by remember { mutableStateOf(false) }
     var listFetchedLocalAt by remember { mutableLongStateOf(nowMillis) }
     var backgroundError by remember { mutableStateOf<String?>(null) }
@@ -212,18 +234,6 @@ fun VoteListScreen(
                     )
 
                     else -> {
-                        val visible = remember(current, showClosed, mineOnly) {
-                            val base = current
-                            if (base == null) {
-                                emptyList()
-                            } else {
-                                val filtered = VoteLogic.filterForTab(
-                                    polls = if (mineOnly) base.polls.filter { it.mine } else base.polls,
-                                    showClosed = showClosed,
-                                )
-                                filtered
-                            }
-                        }
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -236,7 +246,7 @@ fun VoteListScreen(
                                     "已结束 ${current?.closedCount ?: 0}",
                                 ),
                                 selectedIndex = if (showClosed) 1 else 0,
-                                onSelect = { index -> showClosed = index == 1 },
+                                onSelect = { index -> selectClosed(index == 1) },
                             )
                             if (current?.polls?.any { it.mine } == true) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -260,74 +270,97 @@ fun VoteListScreen(
                             }
                         }
 
-                        PullToRefreshBox(
-                            isRefreshing = isRefreshing,
-                            onRefresh = { refresh() },
+                        HorizontalPager(
+                            state = votePagerState,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
                                 .padding(top = 6.dp),
-                        ) {
-                            if (visible.isEmpty()) {
-                                Column(
-                                    modifier = Modifier.fillMaxSize(),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    Spacer(modifier = Modifier.height(40.dp))
-                                    EmptyState(
-                                        icon = Icons.Rounded.HowToVote,
-                                        title = if (current == null || current.polls.isEmpty()) {
-                                            "还没有投票"
-                                        } else {
-                                            "该筛选下没有投票"
-                                        },
-                                        message = if (current == null || current.polls.isEmpty()) {
-                                            "发起一次班会快投，或设置截止日期"
-                                        } else {
-                                            "换个筛选条件看看"
-                                        },
-                                    )
-                                    CtToolPrimaryButton(
-                                        text = if (current == null || current.polls.isEmpty()) "发起投票" else "查看全部",
-                                        onClick = {
-                                            if (current == null || current.polls.isEmpty()) {
-                                                onCreate()
-                                            } else {
-                                                mineOnly = false
-                                                showClosed = false
-                                            }
-                                        },
-                                        modifier = Modifier.widthIn(max = 260.dp),
+                            userScrollEnabled = !reduceMotion,
+                            key = { page -> if (page == 1) "closed" else "open" },
+                        ) { pageIndex ->
+                            val pageShowClosed = pageIndex == 1
+                            val visible = remember(current, pageShowClosed, mineOnly) {
+                                val base = current
+                                if (base == null) {
+                                    emptyList()
+                                } else {
+                                    VoteLogic.filterForTab(
+                                        polls = if (mineOnly) base.polls.filter { it.mine } else base.polls,
+                                        showClosed = pageShowClosed,
                                     )
                                 }
-                            } else if (spec.isExpanded) {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Fixed(2),
-                                    modifier = Modifier.fillMaxSize(),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
-                                ) {
-                                    items(items = visible, key = { it.id }) { summary ->
-                                        VoteCard(
-                                            summary = summary,
-                                            nowMillis = effectiveNow,
-                                            onClick = { onOpenDetail(summary.id) },
+                            }
+                            PullToRefreshBox(
+                                isRefreshing = isRefreshing,
+                                onRefresh = { refresh() },
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                if (visible.isEmpty()) {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        Spacer(modifier = Modifier.height(40.dp))
+                                        EmptyState(
+                                            icon = Icons.Rounded.HowToVote,
+                                            title = if (current == null || current.polls.isEmpty()) {
+                                                "还没有投票"
+                                            } else {
+                                                "该筛选下没有投票"
+                                            },
+                                            message = if (current == null || current.polls.isEmpty()) {
+                                                "点右上角 + 发起"
+                                            } else {
+                                                "点「全部」查看所有投票"
+                                            },
+                                        )
+                                        CtToolPrimaryButton(
+                                            text = if (current == null || current.polls.isEmpty()) {
+                                                "发起投票"
+                                            } else {
+                                                "查看全部"
+                                            },
+                                            onClick = {
+                                                if (current == null || current.polls.isEmpty()) {
+                                                    onCreate()
+                                                } else {
+                                                    mineOnly = false
+                                                    selectClosed(false)
+                                                }
+                                            },
+                                            modifier = Modifier.widthIn(max = 260.dp),
                                         )
                                     }
-                                }
-                            } else {
-                                LazyColumn(
-                                    modifier = Modifier.fillMaxSize(),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
-                                ) {
-                                    items(items = visible, key = { it.id }) { summary ->
-                                        VoteCard(
-                                            summary = summary,
-                                            nowMillis = effectiveNow,
-                                            onClick = { onOpenDetail(summary.id) },
-                                        )
+                                } else if (spec.isExpanded) {
+                                    LazyVerticalGrid(
+                                        columns = GridCells.Fixed(2),
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp),
+                                    ) {
+                                        items(items = visible, key = { it.id }) { summary ->
+                                            VoteCard(
+                                                summary = summary,
+                                                nowMillis = effectiveNow,
+                                                onClick = { onOpenDetail(summary.id) },
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp),
+                                    ) {
+                                        items(items = visible, key = { it.id }) { summary ->
+                                            VoteCard(
+                                                summary = summary,
+                                                nowMillis = effectiveNow,
+                                                onClick = { onOpenDetail(summary.id) },
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -362,7 +395,7 @@ private fun VoteCard(
             androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.Top) {
                 Text(
                     text = summary.title.ifBlank { "未命名投票" },
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,

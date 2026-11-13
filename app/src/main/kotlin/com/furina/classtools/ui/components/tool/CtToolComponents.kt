@@ -49,7 +49,7 @@ fun CtToolCard(
     subtitle: String? = null,
     trailing: (@Composable () -> Unit)? = null,
     contentPadding: androidx.compose.foundation.layout.PaddingValues =
-        androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+        androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 14.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
@@ -71,7 +71,7 @@ fun CtToolCard(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -105,7 +105,7 @@ fun CtToolSectionHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 8.dp),
+            .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -143,7 +143,7 @@ fun CtToolPrimaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp),
+            .heightIn(min = 48.dp),
         enabled = enabled,
         shape = CtShapeTokens.pill,
         colors = ButtonDefaults.buttonColors(

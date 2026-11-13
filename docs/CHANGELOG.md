@@ -1,5 +1,25 @@
 # 版本记录（Android 客户端）
 
+## v4.47.0 · 2026-11-13（退出动画 + 工具简洁化/滑动 + 通知分页修复 + 删除设置工具）
+
+- 退出动画：CtPageTransitions 重做（进入 10%/0.985、退出 12%/0.965、退场临界阻尼不晃）；工具页返回新增「页面收回工具卡」一镜到底反向覆盖层（返回键/顶栏返回均生效，reduceMotion 退化）。
+- 工具简洁化：抽签/分组/体测/作业/电费/水量/通知/名单/投票/演示/诊断向小程序紧凑密度看齐（卡片 padding 16、titleSmall、去冗余分组/统计块），删除解释性段落文案。
+- 左右滑动：作业筛选、电费区间、水量月份、通知筛选、名单 名册↔点名 + 分类、投票进行中/已结束 支持跟手滑动切换与 spring/fade 动画；reduceMotion 直接切。
+- 通知联网修复：根因 
+otices?select=* 全表 13.9MB 超 10s 超时；改为最新 20 条分页首屏 + 「加载更多」、每请求 30s 超时保护与重试，失败保留缓存；新增 11 项分页单测。
+- 删除「设置」工具卡（设置入口保留在「我的」）；全部工具/工作台/身份页解释文字精简。
+- 同时包含并行会话的「教务」WebView 自动登录改动（v4.46.1）。
+- 单测 **1135/0**；快速 E2E **43 步 0 FAIL**（导航 10/10，logcat 0 FATAL/ANR）；Release 3,141,833 B / SHA-256 `9E5BA5FB…52B1A`（vc64），稳定冷启动 662/668/638ms。
+
+
+## v4.46.1 · 2026-11-13（教务入口改「内置 WebView 直进 + 本机加密自动登录」）
+
+- 点「教务」卡 = 直接进入内置 WebView（`http://210.34.74.77/sso.jsp`）；跳到统一身份认证登录页后自动填充账号（当前身份学号）+ 密码并提交（复用页面自身 `encryptPassword`），去掉原「入口页 + 打开按钮」一步（替代 v4.45.0 旧入口页实现）。
+- 密码仅本机保存：Android Keystore AES-256/GCM + SharedPreferences（sid + 密文 + IV），不打日志/不上报/不参与同步；顶栏「清除登录」清密码 + Cookie + 缓存；身份 sid 变化或解密失败要求重输；无凭据时一次性密码输入（账号默认当前 sid、掩码展示，可「仅打开不保存」）。
+- 新增 `features/jw`（URL/跳转 allowlist、JS 注入生成与转义、密码校验/掩码/结果解析）+ `data/jw`（Keystore 凭据存储）+ WebView 页；`res/xml/network_security_config.xml` 仅对 `210.34.74.77` 放行 cleartext（manifest 引用，不全局开）；非校内/非 http(s) 跳转交给系统浏览器或阻止。
+- 注入：authserver `/authserver/login` 加载完成 → 300ms 填 `#username`/`#password`（input+change）→ 点 `#login_submit`；800ms 复核 `#showErrorTip`/`#captchaDiv` → 回退人工（提示「自动登录失败，可能需验证码，请手动完成」，最多尝试 2 次不死循环）；回到 `210.34.74.77` 视为成功。
+- 单测 **1135/0**（90 suites；新增 JwLoginLogicTest 20 项，UserGuideContentTest 21 卡/VERSION 断言更新）；Release 3,141,833 B / SHA-256 `9074038E…7ACCF`（vc63，v2 签名）；按任务口径**未做真机/真实教务账号验证**（红线；验证码登录/WebView 兼容性为已知限制）。
+
 ## v4.46.0 · 2026-11-13（工具内部界面 v6 + 背景修复）
 
 - 背景 v6：去除三团高 alpha 径向色块/色带；改为极轻纵向渐变+低 alpha 品牌柔光，深色近黑不发灰；移除噪点 shader 性能回退。
@@ -9,6 +29,13 @@
 - 单测 **1104/0**；快速 E2E **44 步 0 FAIL**（1084.5s，导航 10/10，logcat 0 FATAL/ANR）；Release 3,108,633 B / SHA-256 `442D5C7E…50F2`（vc62），稳定冷启动 385/394/394ms。
 - 说明：本轮只做 UI/背景；未包含并行会话的「教务」工具入口改动。
 
+
+## v4.45.0 · 2026-11-13（新增「教务」工具卡与入口页）
+
+- 全部工具新增「教务」（`Icons.Rounded.School`、BrandSlateBlue、学习分类）：卡片标题「教务管理系统」、短描述「成绩 · 选课 · 考试」；可拖入首页快捷。
+- 新增 `ui/screens/jw/JwEntryScreen.kt`：主按钮「打开教务系统」= `Intent(Intent.ACTION_VIEW, Uri.parse("http://210.34.74.77/sso.jsp"))`（`runCatching` 失败 toast「没有可打开浏览器的应用」）；「复制链接」= 剪贴板 + toast「链接已复制，请在手机浏览器打开」；URL 小字 + 提示行「统一身份认证登录 · 打不开时先连学校 VPN」；只做顶层导航，不内嵌、不采集账号密码。
+- `MainNavHost` 增加 `"jw"` 路由分支；使用说明新增「教务入口」卡（21 张，VERSION 2026-11-13.1）。
+- 单测 **1112/0**（89 suites；新增 JwEntryTest 8 项，UserGuideContentTest 21 卡断言更新）；Release 3,108,633 B / SHA-256 `39458E83…5CFA41`（vc61，v2 签名）；本轮按任务口径未跑 E2E/模拟器。
 
 ## v4.44.0 · 2026-11-13（工具卡 → 工具页「一镜到底」容器转场）
 

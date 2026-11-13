@@ -82,6 +82,65 @@ import com.furina.classtools.ui.theme.CtShapeTokens
 // 抽签三步 UI 组件（无状态，只接收数据 + 回调，便于预览与复用）
 // =============================================================================
 
+/** v6 紧凑卡：标题 titleSmall + 14/12 内边距，信息密度对齐小程序（说明文案只留必要提示）。 */
+@Composable
+private fun DrawCompactCard(
+    modifier: Modifier = Modifier,
+    title: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+    content: @Composable () -> Unit,
+) {
+    CtToolCard(modifier = modifier, contentPadding = contentPadding) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (title != null || trailing != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (title != null) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                    trailing?.invoke()
+                }
+            }
+            content()
+        }
+    }
+}
+
+/** 卡片内紧凑信息行（替代 44dp 的 CtToolInfoRow）。 */
+@Composable
+private fun DrawCompactInfoRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+
 /** 步骤条：已完成/当前步骤可点击回退（只允许向前回退，不允许跳过）。 */
 @Composable
 fun DrawStepIndicator(
@@ -118,7 +177,7 @@ fun DrawConfigCard(
     var countText by remember(config.count) { mutableStateOf(config.count.toString()) }
     var excludedText by remember(config.excludedText) { mutableStateOf(config.excludedText) }
 
-    CtToolCard(
+    DrawCompactCard(
         modifier = modifier,
         title = "抽签参数",
         trailing = { CtPill(text = "共 ${config.upperBound - config.lowerBound + 1} 个号") },
@@ -175,12 +234,6 @@ fun DrawConfigCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
-        } else {
-            Text(
-                text = "格式示例：3,7,10-12",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -204,7 +257,7 @@ fun DrawConfigCard(
             )
         }
 
-        CtToolSectionHeader(title = "候选来源")
+        Text("候选来源", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -222,15 +275,7 @@ fun DrawConfigCard(
                 )
             }
         }
-        if (rosterCount <= 0) {
-            Text(
-                text = "班级名单未获取，暂只支持号码范围",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        CtToolSectionHeader(title = "结果排序")
+        Text("结果排序", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -283,7 +328,7 @@ fun DrawPoolPreviewCard(
     error: DrawError?,
     modifier: Modifier = Modifier,
 ) {
-    CtToolCard(
+    DrawCompactCard(
         modifier = modifier,
         title = "候选池",
         trailing = { CtPill(text = if (numbers != null) "${numbers.size} 个" else "—") },
@@ -328,16 +373,11 @@ fun DrawPreviewCard(
     candidates: List<DrawEntry>,
     modifier: Modifier = Modifier,
 ) {
-    CtToolCard(
+    DrawCompactCard(
         modifier = modifier.animateContentSize(animationSpec = CtMotion.spatialSize),
         title = "候选名单",
         trailing = { CtPill(text = "${candidates.size} 人/号") },
     ) {
-        Text(
-            text = "确认候选无误后点「开始抽签」；结果页可剔除并重抽。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -383,7 +423,7 @@ fun DrawResultCard(
     } else {
         null
     }
-    CtToolCard(
+    DrawCompactCard(
         modifier = modifier.animateContentSize(animationSpec = CtMotion.spatialSize),
         title = "抽签结果",
         trailing = trailing,
@@ -394,7 +434,7 @@ fun DrawResultCard(
                 title = "还没有抽签结果",
                 message = "返回上一步设置参数后开始抽签",
             )
-            return@CtToolCard
+            return@DrawCompactCard
         }
 
         FlowRow(
@@ -412,11 +452,6 @@ fun DrawResultCard(
                     text = "剔除后自动重抽",
                     style = MaterialTheme.typography.bodyLarge,
                 )
-                Text(
-                    text = "剔除一项后立即从剩余池补抽",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
             Switch(
                 checked = autoRedraw,
@@ -425,7 +460,7 @@ fun DrawResultCard(
             )
         }
 
-        CtToolSectionHeader(title = "排序")
+        Text("排序", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -493,15 +528,15 @@ fun DrawConfigSummaryCard(
     config: DrawConfig,
     modifier: Modifier = Modifier,
 ) {
-    CtToolCard(
+    DrawCompactCard(
         modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        CtToolInfoRow(label = "范围", value = "${config.start}–${config.end}")
-        CtToolInfoRow(label = "个数", value = config.count.toString())
-        CtToolInfoRow(label = "重复", value = if (config.allowDuplicates) "允许" else "不重复")
-        CtToolInfoRow(label = "排序", value = config.sort.label)
-        CtToolInfoRow(label = "排除", value = config.excludedText.ifBlank { "无" })
+        DrawCompactInfoRow(label = "范围", value = "${config.start}–${config.end}")
+        DrawCompactInfoRow(label = "个数", value = config.count.toString())
+        DrawCompactInfoRow(label = "重复", value = if (config.allowDuplicates) "允许" else "不重复")
+        DrawCompactInfoRow(label = "排序", value = config.sort.label)
+        DrawCompactInfoRow(label = "排除", value = config.excludedText.ifBlank { "无" })
     }
 }
 
@@ -589,7 +624,7 @@ fun DrawBottomBar(
         tonalElevation = 2.dp,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -638,7 +673,7 @@ fun DrawErrorState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CtToolCard {
+        DrawCompactCard {
             EmptyState(
                 icon = Icons.Rounded.Inbox,
                 title = "暂时无法打开抽签",

@@ -92,8 +92,6 @@ import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
-import com.furina.classtools.ui.components.tool.CtToolSectionHeader
-import com.furina.classtools.ui.components.tool.CtToolStat
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.CtShapeTokens
 import java.text.SimpleDateFormat
@@ -373,7 +371,6 @@ fun DiagScreen(
             ) {
                 CtTopBar(
                     title = "诊断",
-                    subtitle = "服务健康 · 设备 · 进展",
                     onBack = onBack,
                     actions = {
                         if (agent?.online == true) {
@@ -436,7 +433,7 @@ fun DiagScreen(
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = spec.horizontalPadding),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     if (loading) {
                         LoadingRow()
@@ -520,43 +517,52 @@ private fun SummaryStrip(
     lastUpdated: String,
     horizontalPadding: androidx.compose.ui.unit.Dp,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding)) {
-        Box(modifier = Modifier.semantics { heading() }) {
-            CtToolSectionHeader(
-                title = "诊断摘要",
-                subtitle = "只展示异常 / 可自动修复项，点分组查看详情",
+    CtToolCard(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(
+                        if (anomalyCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        CircleShape,
+                    ),
             )
-        }
-        CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CtToolStat(
-                    value = "$anomalyCount",
-                    label = "项异常",
-                    valueColor = if (anomalyCount > 0) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                )
-                if (autoFixable > 0) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    CtToolStat(value = "$autoFixable", label = "可自动修复")
-                }
-                if (fixedCount > 0) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    CtToolStat(value = "$fixedCount", label = "已修复")
-                }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "$anomalyCount 项异常",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = if (anomalyCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            )
+            val extra = buildList {
+                if (autoFixable > 0) add("可自动修复 $autoFixable")
+                if (fixedCount > 0) add("已修复 $fixedCount")
             }
-            if (lastUpdated.isNotBlank()) {
+            if (extra.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "最后更新 $lastUpdated",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    text = extra.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
             }
+        }
+        if (lastUpdated.isNotBlank()) {
+            Text(
+                text = "最后更新 $lastUpdated",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
         }
     }
 }
@@ -586,28 +592,24 @@ private fun DiagCard(
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(modifier = Modifier.semantics { heading() }) {
-            CtToolSectionHeader(
-                title = title,
-                trailing = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        if (status != null) StatusPill(status)
-                        trailing?.invoke()
-                    }
-                },
+    CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { heading() },
             )
+            if (status != null) StatusPill(status)
+            trailing?.invoke()
         }
-        CtToolCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                content()
-            }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            content()
         }
     }
 }
@@ -909,7 +911,6 @@ private fun AgentCard(agent: DiagAgentInfo?, nowMillis: Long) {
                     if (agent.seenAt > 0) append(" · 心跳 ").append(relativeTime(agent.seenAt, nowMillis))
                     if (agent.host.isNotBlank()) append(" · ").append(agent.host)
                     if (agent.version.isNotBlank()) append(" · v").append(agent.version)
-                    append(" · 自动分析/修复中")
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -918,7 +919,6 @@ private fun AgentCard(agent: DiagAgentInfo?, nowMillis: Long) {
                 text = buildString {
                     append("离线")
                     if (agent.seenAt > 0) append(" · 最后心跳 ").append(relativeTime(agent.seenAt, nowMillis))
-                    append(" · 已留存异常，开机后自动分析/修复")
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1198,57 +1198,55 @@ private fun OthersSection(
     nowMillis: Long,
 ) {
     if (index.othersCount == 0) return
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Box(
+    CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp)
+                .heightIn(min = 44.dp)
                 .semantics { heading() }
                 .clickable(onClick = onToggleExpanded),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            CtToolSectionHeader(
-                title = "其它诊断",
-                subtitle = "无关联 AI 结论 / 历史修复，默认收起",
-                trailing = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CtPill(
-                            text = "${index.othersCount}",
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "›",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.rotate(if (expanded) 90f else 0f),
-                        )
-                    }
-                },
+            Text(
+                text = "其它诊断",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            CtPill(
+                text = "${index.othersCount}",
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "›",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.rotate(if (expanded) 90f else 0f),
             )
         }
         if (expanded) {
-            CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    index.others.forEach { analysis ->
-                        AiAnalysisRow(
-                            analysis = analysis,
-                            repair = index.repairFor(analysis),
-                            expanded = analysis.id in expandedIds,
-                            onToggle = { onToggleAnalysis(analysis.id) },
-                            nowMillis = nowMillis,
-                        )
-                    }
-                    index.orphanRepairs.forEach { repair ->
-                        RelatedRepairBlock(repair = repair, nowMillis = nowMillis)
-                    }
-                    if (index.others.isEmpty() && index.orphanRepairs.isNotEmpty() && !agentOnline) {
-                        Text(
-                            text = DiagUiText.pendingText(false),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        )
-                    }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                index.others.forEach { analysis ->
+                    AiAnalysisRow(
+                        analysis = analysis,
+                        repair = index.repairFor(analysis),
+                        expanded = analysis.id in expandedIds,
+                        onToggle = { onToggleAnalysis(analysis.id) },
+                        nowMillis = nowMillis,
+                    )
+                }
+                index.orphanRepairs.forEach { repair ->
+                    RelatedRepairBlock(repair = repair, nowMillis = nowMillis)
+                }
+                if (index.others.isEmpty() && index.orphanRepairs.isNotEmpty() && !agentOnline) {
+                    Text(
+                        text = DiagUiText.pendingText(false),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    )
                 }
             }
         }

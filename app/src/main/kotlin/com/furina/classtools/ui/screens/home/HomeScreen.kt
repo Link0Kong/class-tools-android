@@ -605,7 +605,7 @@ private fun HomeTodayCoursesCard(
             loading && plan == null -> HomeLoadingRow("读取课表…")
             plan == null || !plan.hasData -> HomeEmptyHint(
                 title = "课表未同步",
-                sub = "打开课表即可拉取本周课程",
+                sub = "点此同步",
                 actionText = "打开课表",
                 onAction = onOpen,
             )
@@ -750,8 +750,8 @@ private fun HomePowerCard(card: HomePowerCard?, loading: Boolean, onOpen: () -> 
     ) {
         when {
             card == null -> HomeEmptyHint(
-                title = "关注宿舍后显示剩余电量",
-                sub = "去选择关注宿舍 ›",
+                title = "宿舍电费",
+                sub = "未关注宿舍",
             )
 
             else -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -946,7 +946,7 @@ private fun HomeQuickToolsSection(
 
         if (editing) {
             Text(
-                text = "点工具加入或移出首页快捷（最多 ${HomeToolsEditor.MAX_QUICK_TOOLS} 个，当前 ${draft.size} 个）",
+                text = "首页快捷 ${draft.size}/${HomeToolsEditor.MAX_QUICK_TOOLS}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -973,7 +973,7 @@ private fun HomeQuickToolsSection(
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = "去工具页勾选想放在首页的工具（最多 4 个）",
+                            text = "首页快捷为空",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

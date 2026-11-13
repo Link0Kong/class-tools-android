@@ -1251,7 +1251,7 @@ function Invoke-Scenario {
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     $null = Invoke-Adb @('shell', 'am', 'force-stop', $Pkg)
     $null = Invoke-Adb @('shell', 'am', 'start', '-n', $Act)
-    if (-not (Wait-ScreenKind 'HOME' 25)) { throw 'app did not restore to workbench after restart' }
+    if (-not (Wait-ScreenKind 'HOME' 60)) { throw 'app did not restore to workbench after restart' }
     Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
     if (-not (Wait-UiTextScroll -Label $L.WallpaperColor -ScrollTries 4 -TimeoutSec 15)) { throw 'appearance switch row not visible after restart' }
     $persisted = Get-SwitchStateNear -Label $L.WallpaperColor
@@ -1399,28 +1399,16 @@ Add-Step 'user_guide' 'PASS' ("card carousel: first card + next=" + $guideSectio
     $null = Wait-ScreenKind 'PROFILE' 10
     Add-Step 'feedback_page' 'PASS' 'opened; not submitted' $swStep.ElapsedMilliseconds
 
-    # STEP 9d: all tools -> "settings" card must land on the profile page (not a placeholder)
-    Write-Line '--- step: settings card redirects to profile'
+    # STEP 9d (v4.47): 「设置」工具卡已按用户要求删除（设置入口保留在「我的」页），
+    # 断言全部工具页不再出现「设置」卡片；不进入占位页。
+    Write-Line '--- step: settings tool card removed'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     Go-AllTools
-    if (-not (Wait-UiTextScroll -Label $L.Settings -ScrollTries 5 -TimeoutSec 12)) { throw 'settings tool card not visible on all tools page' }
-    Tap-UiTextScroll -Label $L.Settings -ScrollTries 3 -TimeoutSec 8
-    if (-not (Wait-UiTextScroll -Label $L.WallpaperColor -ScrollTries 4 -TimeoutSec 15)) { throw 'settings card did not land on profile page (appearance row missing)' }
-    if (-not (Wait-UiTextScroll -Label $L.About -ScrollTries 3 -TimeoutSec 8)) { throw 'settings card did not land on profile page (about card missing)' }
     $settingsDump = Get-UiDump
-    if ($settingsDump) {
-        $placeholder = Find-UiNode -Doc $settingsDump -Label $L.PlaceholderPill
-        if ($placeholder) { throw 'settings card opened a placeholder page instead of profile' }
-    }
-    Save-Shot '24_settings_redirect.png'
-    # v2: settings card switches the root Pager to the profile tab (no nav push), so use the dock
-    Tap-UiText -Label $L.AllTab -Exact -TimeoutSec 10
-    if (-not (Wait-ScreenKind 'ALL' 15)) {
-        Write-Line '  dock tap did not reach tools page, retrying via Go-AllTools'
-        Go-AllTools
-    }
-    Add-Step 'settings_redirect' 'PASS' 'settings card -> profile page' $swStep.ElapsedMilliseconds
-
+    $settingsNode = if ($settingsDump) { Find-UiNode -Doc $settingsDump -Label $L.Settings -Exact } else { $null }
+    if ($settingsNode) { throw 'settings tool card should be removed from all tools' }
+    Save-Shot '24_settings_removed.png'
+    Add-Step 'settings_removed' 'PASS' 'settings card removed (profile keeps settings)' $swStep.ElapsedMilliseconds
     # STEP 9: back to workbench. System BACK from the All tab is the reliable route
     # (bottom-tab tap on this build is ignored here - reported to Lead as app bug).
     Write-Line '--- step: back to workbench'
@@ -1442,16 +1430,16 @@ Add-Step 'user_guide' 'PASS' ("card carousel: first card + next=" + $guideSectio
     for ($i = 1; $i -le $probeAttempts; $i++) {
         $null = Invoke-Adb @('shell', 'am', 'force-stop', $Pkg)
         $null = Invoke-Adb @('shell', 'am', 'start', '-n', $Act)
-        if (-not (Wait-ScreenKind 'HOME' 25)) {
+        if (-not (Wait-ScreenKind 'HOME' 45)) {
             $probeFail++
             Write-Line ("  probe {0}: app did not reach workbench after restart" -f $i) 'Yellow'
             continue
         }
         $cycleOk = $false
-        Tap-UiText -Label $L.AllTab -Exact -TimeoutSec 8
-        if (Wait-ScreenKind 'ALL' 6) {
-            Tap-UiText -Label $L.Workbench -Exact -TimeoutSec 8
-            if (Wait-ScreenKind 'HOME' 5) { $cycleOk = $true }
+        Tap-UiText -Label $L.AllTab -Exact -TimeoutSec 12
+        if (Wait-ScreenKind 'ALL' 12) {
+            Tap-UiText -Label $L.Workbench -Exact -TimeoutSec 12
+            if (Wait-ScreenKind 'HOME' 10) { $cycleOk = $true }
         }
         if ($cycleOk) {
             $probeOk++

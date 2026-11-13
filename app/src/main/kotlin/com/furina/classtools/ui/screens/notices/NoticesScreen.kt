@@ -37,6 +37,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -70,6 +72,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -88,6 +91,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -431,6 +435,8 @@ fun NoticesScreen(
     previewExpandedKey: String? = null,
     /** 预览：强制指定筛选 chip 处于弹性放大帧（NoticeFilter.name）。 */
     previewChipBounceKey: String? = null,
+    /** 预览：左右滑动中间帧（0.5 = 停在两页之间；null = 正常渲染）。 */
+    previewPagerOffset: Float? = null,
     forcedErrorMessage: String? = null,
     skipLoad: Boolean = false,
 ) {
@@ -466,9 +472,30 @@ fun NoticesScreen(
     var errorMessage by remember { mutableStateOf(forcedErrorMessage) }
     var isRefreshing by remember { mutableStateOf(false) }
     var reloadToken by remember { mutableIntStateOf(0) }
+    var isLoadingMore by remember { mutableStateOf(false) }
+    var loadMoreError by remember { mutableStateOf<String?>(null) }
     var filterKey by rememberSaveable { mutableStateOf(initialFilter.name) }
+    val noticeFilterOptions = NoticeFilter.entries
+    // 左右滑动切筛选（跟手 + spring 吸附；reduceMotion 时禁用拖拽并直接用总开关的瞬时切换）
+    val noticePagerState = rememberPagerState(
+        initialPage = noticeFilterOptions.indexOf(initialFilter).coerceAtLeast(0),
+        initialPageOffsetFraction = (previewPagerOffset ?: 0f).coerceIn(-0.5f, 0.5f),
+    ) { noticeFilterOptions.size }
+    LaunchedEffect(noticePagerState) {
+        snapshotFlow { noticePagerState.currentPage }.collect { page ->
+            noticeFilterOptions.getOrNull(page)?.let { filterKey = it.name }
+        }
+    }
     val filter = remember(filterKey) {
-        NoticeFilter.entries.firstOrNull { it.name == filterKey } ?: NoticeFilter.ALL
+        noticeFilterOptions.firstOrNull { it.name == filterKey } ?: NoticeFilter.ALL
+    }
+    fun selectFilter(target: NoticeFilter) {
+        filterKey = target.name
+        val index = noticeFilterOptions.indexOf(target).coerceAtLeast(0)
+        scope.launch {
+            // reduceMotion：直接切；正常：250–300ms spring 吸附
+            if (reduceMotion) noticePagerState.scrollToPage(index) else noticePagerState.animateScrollToPage(index)
+        }
     }
     var query by rememberSaveable { mutableStateOf(initialQuery) }
     var searchVisible by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
@@ -533,6 +560,28 @@ fun NoticesScreen(
         }
     }
 
+    /** 「加载更多」：按 ts 倒序追加下一页；失败时保留已加载内容并展示重试。 */
+    fun loadMore() {
+        if (skipLoad || isLoadingMore) return
+        val repository = noticesRepository ?: return
+        scope.launch {
+            isLoadingMore = true
+            loadMoreError = null
+            try {
+                when (val result = repository.loadMore()) {
+                    is NoticesLoadResult.Success -> {
+                        data = result.data
+                        errorMessage = null
+                    }
+
+                    is NoticesLoadResult.Failure -> loadMoreError = result.message
+                }
+            } finally {
+                isLoadingMore = false
+            }
+        }
+    }
+
     fun toggleDone(item: NoticeUiItem) {
         val repository = marksRepository ?: run {
             notify("未登录，无法同步处理状态")
@@ -570,29 +619,6 @@ fun NoticesScreen(
     }
 
     val allItems = remember(data, marks, nowMillis) { buildUiItems(data, marks, nowMillis) }
-    val visibleItems = remember(allItems, filter, query) {
-        val base = when (filter) {
-            NoticeFilter.ALL -> allItems
-            NoticeFilter.PENDING -> allItems.filter { it.isAuto && !it.done && !it.expired }
-            NoticeFilter.PINNED -> allItems.filter { it.pinned }
-        }
-        val q = query.trim()
-        if (q.isBlank()) {
-            base
-        } else {
-            base.filter {
-                it.title.contains(q, ignoreCase = true) || it.summary.contains(q, ignoreCase = true)
-            }
-        }
-    }
-    // 「已过期」独立折叠段（仅「全部」筛选且无搜索词时，对齐小程序已过期区）。
-    val expiredSection = filter == NoticeFilter.ALL && query.isBlank()
-    val primaryItems = remember(visibleItems, expiredSection) {
-        if (expiredSection) visibleItems.filter { !it.expired } else visibleItems
-    }
-    val expiredItems = remember(visibleItems, expiredSection) {
-        if (expiredSection) visibleItems.filter { it.expired } else emptyList()
-    }
 
     val pendingCount = allItems.count { it.isAuto && !it.done && !it.expired }
     val pinnedCount = allItems.count { it.pinned }
@@ -679,7 +705,7 @@ fun NoticesScreen(
                             ),
                             selectedKey = filter.name,
                             onSelect = { key ->
-                                NoticeFilter.entries.firstOrNull { it.name == key }?.let { filterKey = it.name }
+                                NoticeFilter.entries.firstOrNull { it.name == key }?.let { selectFilter(it) }
                             },
                             reduceMotion = reduceMotion,
                             modifier = Modifier.padding(top = 2.dp),
@@ -744,64 +770,117 @@ fun NoticesScreen(
                                     modifier = Modifier.fillMaxSize(),
                                 )
 
-                                else -> PullToRefreshBox(
-                                    isRefreshing = isRefreshing,
-                                    onRefresh = { refresh() },
+                                else -> HorizontalPager(
+                                    state = noticePagerState,
                                     modifier = Modifier.fillMaxSize(),
-                                ) {
-                                    val listEmpty = primaryItems.isEmpty() && expiredItems.isEmpty()
-                                    if (listEmpty) {
-                                        // 放进 LazyColumn 以保留下拉刷新（空态也能刷新）
-                                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                            item(key = "empty") {
-                                                NoticeEmptyState(
-                                                    filter = filter,
-                                                    query = query,
-                                                    hasAny = allItems.isNotEmpty(),
-                                                    onClear = {
-                                                        query = ""
-                                                        filterKey = NoticeFilter.ALL.name
-                                                    },
-                                                    modifier = Modifier.fillParentMaxSize(),
-                                                )
+                                    userScrollEnabled = !reduceMotion,
+                                    key = { page -> noticeFilterOptions[page].name },
+                                ) { pageIndex ->
+                                    val pageFilter = noticeFilterOptions[pageIndex]
+                                    val pageVisible = remember(allItems, pageFilter, query) {
+                                        val base = when (pageFilter) {
+                                            NoticeFilter.ALL -> allItems
+                                            NoticeFilter.PENDING -> allItems.filter { it.isAuto && !it.done && !it.expired }
+                                            NoticeFilter.PINNED -> allItems.filter { it.pinned }
+                                        }
+                                        val q = query.trim()
+                                        if (q.isBlank()) {
+                                            base
+                                        } else {
+                                            base.filter {
+                                                it.title.contains(q, ignoreCase = true) ||
+                                                    it.summary.contains(q, ignoreCase = true)
                                             }
                                         }
-                                    } else if (twoColumn) {
-                                        NoticeGrid(
-                                            items = primaryItems,
-                                            expiredItems = if (expiredExpanded) expiredItems else emptyList(),
-                                            expiredCount = expiredItems.size,
-                                            expiredExpanded = expiredExpanded,
-                                            onToggleExpired = { expiredExpanded = !expiredExpanded },
-                                            onOpen = { selectedKey = it.key },
-                                            onToggleDone = { toggleDone(it) },
-                                            onTogglePin = { togglePin(it) },
-                                            reduceMotion = reduceMotion,
-                                            appearedKeys = appearedKeys,
-                                            selectedKey = selectedKey,
-                                            previewEntranceProgress = previewEntranceProgress,
-                                            previewPressedKey = previewPressedKey,
-                                            previewExpandedKey = previewExpandedKey,
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
-                                    } else {
-                                        NoticeList(
-                                            items = primaryItems,
-                                            expiredItems = if (expiredExpanded) expiredItems else emptyList(),
-                                            expiredCount = expiredItems.size,
-                                            expiredExpanded = expiredExpanded,
-                                            onToggleExpired = { expiredExpanded = !expiredExpanded },
-                                            onOpen = { selectedKey = it.key },
-                                            onToggleDone = { toggleDone(it) },
-                                            onTogglePin = { togglePin(it) },
-                                            reduceMotion = reduceMotion,
-                                            appearedKeys = appearedKeys,
-                                            selectedKey = selectedKey,
-                                            previewEntranceProgress = previewEntranceProgress,
-                                            previewPressedKey = previewPressedKey,
-                                            previewExpandedKey = previewExpandedKey,
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
+                                    }
+                                    val pageExpiredSection = pageFilter == NoticeFilter.ALL && query.isBlank()
+                                    val pagePrimary = remember(pageVisible, pageExpiredSection) {
+                                        if (pageExpiredSection) pageVisible.filter { !it.expired } else pageVisible
+                                    }
+                                    val pageExpired = remember(pageVisible, pageExpiredSection) {
+                                        if (pageExpiredSection) pageVisible.filter { it.expired } else emptyList()
+                                    }
+                                    val hasMore = data?.hasMore == true
+                                    val remaining = data?.remainingCount ?: 0
+                                    PullToRefreshBox(
+                                        isRefreshing = isRefreshing,
+                                        onRefresh = { refresh() },
+                                        modifier = Modifier.fillMaxSize(),
+                                    ) {
+                                        val listEmpty = pagePrimary.isEmpty() && pageExpired.isEmpty()
+                                        if (listEmpty) {
+                                            // 放进 LazyColumn 以保留下拉刷新（空态也能刷新 / 加载更多）
+                                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                                item(key = "empty") {
+                                                    NoticeEmptyState(
+                                                        filter = pageFilter,
+                                                        query = query,
+                                                        hasAny = allItems.isNotEmpty(),
+                                                        onClear = {
+                                                            query = ""
+                                                            selectFilter(NoticeFilter.ALL)
+                                                        },
+                                                        modifier = Modifier.fillParentMaxSize(),
+                                                    )
+                                                }
+                                                if (hasMore || loadMoreError != null) {
+                                                    item(key = "load-more") {
+                                                        NoticeLoadMoreRow(
+                                                            remainingCount = remaining,
+                                                            loading = isLoadingMore,
+                                                            error = loadMoreError,
+                                                            onLoadMore = { loadMore() },
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        } else if (twoColumn) {
+                                            NoticeGrid(
+                                                items = pagePrimary,
+                                                expiredItems = if (expiredExpanded) pageExpired else emptyList(),
+                                                expiredCount = pageExpired.size,
+                                                expiredExpanded = expiredExpanded,
+                                                onToggleExpired = { expiredExpanded = !expiredExpanded },
+                                                onOpen = { selectedKey = it.key },
+                                                onToggleDone = { toggleDone(it) },
+                                                onTogglePin = { togglePin(it) },
+                                                reduceMotion = reduceMotion,
+                                                appearedKeys = appearedKeys,
+                                                selectedKey = selectedKey,
+                                                previewEntranceProgress = previewEntranceProgress,
+                                                previewPressedKey = previewPressedKey,
+                                                previewExpandedKey = previewExpandedKey,
+                                                hasMore = hasMore,
+                                                remainingCount = remaining,
+                                                loadingMore = isLoadingMore,
+                                                loadMoreError = loadMoreError,
+                                                onLoadMore = { loadMore() },
+                                                modifier = Modifier.fillMaxSize(),
+                                            )
+                                        } else {
+                                            NoticeList(
+                                                items = pagePrimary,
+                                                expiredItems = if (expiredExpanded) pageExpired else emptyList(),
+                                                expiredCount = pageExpired.size,
+                                                expiredExpanded = expiredExpanded,
+                                                onToggleExpired = { expiredExpanded = !expiredExpanded },
+                                                onOpen = { selectedKey = it.key },
+                                                onToggleDone = { toggleDone(it) },
+                                                onTogglePin = { togglePin(it) },
+                                                reduceMotion = reduceMotion,
+                                                appearedKeys = appearedKeys,
+                                                selectedKey = selectedKey,
+                                                previewEntranceProgress = previewEntranceProgress,
+                                                previewPressedKey = previewPressedKey,
+                                                previewExpandedKey = previewExpandedKey,
+                                                hasMore = hasMore,
+                                                remainingCount = remaining,
+                                                loadingMore = isLoadingMore,
+                                                loadMoreError = loadMoreError,
+                                                onLoadMore = { loadMore() },
+                                                modifier = Modifier.fillMaxSize(),
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1006,12 +1085,17 @@ private fun NoticeList(
     previewEntranceProgress: Float?,
     previewPressedKey: String?,
     previewExpandedKey: String?,
+    hasMore: Boolean = false,
+    remainingCount: Int = 0,
+    loadingMore: Boolean = false,
+    loadMoreError: String? = null,
+    onLoadMore: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(top = 6.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 88.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         itemsIndexed(items = items, key = { _, item -> "c-${item.key}" }) { index, item ->
             NoticeEntrance(
@@ -1066,6 +1150,16 @@ private fun NoticeList(
                 }
             }
         }
+        if (hasMore || loadMoreError != null) {
+            item(key = "load-more") {
+                NoticeLoadMoreRow(
+                    remainingCount = remainingCount,
+                    loading = loadingMore,
+                    error = loadMoreError,
+                    onLoadMore = onLoadMore,
+                )
+            }
+        }
     }
 }
 
@@ -1085,14 +1179,19 @@ private fun NoticeGrid(
     previewEntranceProgress: Float?,
     previewPressedKey: String?,
     previewExpandedKey: String?,
+    hasMore: Boolean = false,
+    remainingCount: Int = 0,
+    loadingMore: Boolean = false,
+    loadMoreError: String? = null,
+    onLoadMore: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = modifier,
-        contentPadding = PaddingValues(top = 6.dp, bottom = 96.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 88.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         itemsIndexed(items = items, key = { _, item -> "c-${item.key}" }) { index, item ->
             NoticeEntrance(
@@ -1145,6 +1244,74 @@ private fun NoticeGrid(
                         onTogglePin = { onTogglePin(item) },
                     )
                 }
+            }
+        }
+        if (hasMore || loadMoreError != null) {
+            item(key = "load-more", span = { GridItemSpan(maxLineSpan) }) {
+                NoticeLoadMoreRow(
+                    remainingCount = remainingCount,
+                    loading = loadingMore,
+                    error = loadMoreError,
+                    onLoadMore = onLoadMore,
+                )
+            }
+        }
+    }
+}
+
+/** 「加载更多」行（分页：最新 20 + 旧数据按 20 条/页追加）。触控 ≥48dp。 */
+@Composable
+private fun NoticeLoadMoreRow(
+    remainingCount: Int,
+    loading: Boolean,
+    error: String?,
+    onLoadMore: () -> Unit,
+) {
+    Surface(
+        onClick = { if (!loading) onLoadMore() },
+        enabled = !loading,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            when {
+                loading -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("加载中…", style = MaterialTheme.typography.labelLarge)
+                }
+
+                error != null -> Text(
+                    text = "$error（点此重试）",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+
+                remainingCount > 0 -> Text(
+                    text = "加载更多（还有 $remainingCount 条）",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                else -> Text(
+                    text = "加载更多",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }
@@ -1251,7 +1418,7 @@ private fun NoticeCard(
 
             Text(
                 text = item.title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = titleColor,
                 textDecoration = if (doneProgress > 0.45f) TextDecoration.LineThrough else null,

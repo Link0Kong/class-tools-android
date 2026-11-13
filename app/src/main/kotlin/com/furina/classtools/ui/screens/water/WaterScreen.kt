@@ -2,8 +2,16 @@
 
 package com.furina.classtools.ui.screens.water
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -54,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,6 +94,7 @@ import com.furina.classtools.ui.components.tool.CtToolInfoRow
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolStat
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -134,6 +144,7 @@ fun WaterScreen(
     forcedErrorMessage: String? = null,
 ) {
     val scope = rememberCoroutineScope()
+    val reduceMotion = rememberReduceMotion()
     val snackbar = remember { SnackbarHostState() }
     val waterRepository = remember(userDataRepository) {
         userDataRepository?.let { UserDataWaterRepository(it) }
@@ -287,10 +298,6 @@ fun WaterScreen(
                             if (isNotEmpty()) append(" · ")
                             append("$readings 条记录")
                         }
-                        if (waterState.rooms.isNotEmpty()) {
-                            if (isNotEmpty()) append(" · ")
-                            append("随账号同步")
-                        }
                     },
                     onBack = onBack,
                 )
@@ -328,7 +335,7 @@ fun WaterScreen(
                                         EmptyState(
                                             icon = Icons.Rounded.Apartment,
                                             title = "还没有关注宿舍",
-                                            message = "选择本人宿舍后可录入抄表；数据随账号同步，不导出",
+                                            message = "选择后每月录入一次读数",
                                         )
                                     }
                                     CtToolPrimaryButton(
@@ -337,7 +344,15 @@ fun WaterScreen(
                                     )
                                 }
                             } else {
-                                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                                BoxWithConstraints(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .horizontalSwipe(
+                                            enabled = true,
+                                            onSwipeLeft = { month = WaterMonth.shift(month, 1) },
+                                            onSwipeRight = { month = WaterMonth.shift(month, -1) },
+                                        ),
+                                ) {
                                     if (maxWidth >= 600.dp) {
                                         Row(
                                             modifier = Modifier
@@ -363,6 +378,7 @@ fun WaterScreen(
                                                 )
                                                 MonthSelector(
                                                     month = month,
+                                                    reduceMotion = reduceMotion,
                                                     onPrev = { month = WaterMonth.shift(month, -1) },
                                                     onNext = { month = WaterMonth.shift(month, 1) },
                                                     onPick = { showMonthPicker = true },
@@ -393,7 +409,7 @@ fun WaterScreen(
                                                     .padding(bottom = 24.dp),
                                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                             ) {
-                                                StatsCard(stats = stats)
+                                                AnimatedStatsCard(stats = stats, reduceMotion = reduceMotion)
                                                 HistoryCard(
                                                     records = room.records,
                                                     persons = room.persons,
@@ -421,6 +437,7 @@ fun WaterScreen(
                                             )
                                             MonthSelector(
                                                 month = month,
+                                                reduceMotion = reduceMotion,
                                                 onPrev = { month = WaterMonth.shift(month, -1) },
                                                 onNext = { month = WaterMonth.shift(month, 1) },
                                                 onPick = { showMonthPicker = true },
@@ -441,7 +458,7 @@ fun WaterScreen(
                                                 },
                                                 onSave = { submitReading() },
                                             )
-                                            StatsCard(stats = stats)
+                                            AnimatedStatsCard(stats = stats, reduceMotion = reduceMotion)
                                             HistoryCard(
                                                 records = room.records,
                                                 persons = room.persons,
@@ -590,12 +607,10 @@ private fun RoomCard(
     onPersons: (Int) -> Unit,
     onClearRoom: () -> Unit,
 ) {
-    CtToolCard(
-        title = "关注宿舍",
-        trailing = {
+    CtToolCard(contentPadding = PaddingValues(16.dp)) {
+        WaterCardHeader(title = "关注宿舍") {
             TextButton(onClick = onPickRoom) { Text(if (selectedRv.isBlank()) "选择" else "更换") }
-        },
-    ) {
+        }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = PowerRooms.labelOf(selectedRv).ifBlank { "未选择宿舍" },
@@ -603,7 +618,7 @@ private fun RoomCard(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "人数影响免费水量与水费（2 吨/人/月）",
+                text = "定额 2 吨/人/月",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -627,19 +642,39 @@ private fun RoomCard(
 @Composable
 private fun MonthSelector(
     month: String,
+    reduceMotion: Boolean,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onPick: () -> Unit,
     onCurrent: () -> Unit,
 ) {
-    CtToolCard(contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
+    CtToolCard(contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onPrev) { Icon(Icons.Rounded.ChevronLeft, contentDescription = "上个月") }
-            TextButton(onClick = onPick) {
-                Text(
-                    text = WaterMonth.label(month),
-                    style = MaterialTheme.typography.titleMedium,
-                )
+            val label: @Composable (String) -> Unit = { shown ->
+                TextButton(onClick = onPick) {
+                    Text(
+                        text = WaterMonth.label(shown),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+            if (reduceMotion) {
+                label(month)
+            } else {
+                AnimatedContent(
+                    targetState = month,
+                    transitionSpec = {
+                        if (targetState > initialState) {
+                            (slideInHorizontally(tween(240)) { it / 4 } + fadeIn(tween(240)))
+                                .togetherWith(slideOutHorizontally(tween(200)) { -it / 4 } + fadeOut(tween(160)))
+                        } else {
+                            (slideInHorizontally(tween(240)) { -it / 4 } + fadeIn(tween(240)))
+                                .togetherWith(slideOutHorizontally(tween(200)) { it / 4 } + fadeOut(tween(160)))
+                        }
+                    },
+                    label = "waterMonthLabel",
+                ) { shown -> label(shown) }
             }
             IconButton(onClick = onNext) { Icon(Icons.Rounded.ChevronRight, contentDescription = "下个月") }
             Spacer(Modifier.weight(1f))
@@ -661,7 +696,8 @@ private fun EntryCard(
     onInput: (String) -> Unit,
     onSave: () -> Unit,
 ) {
-    CtToolCard(title = "新增抄表") {
+    CtToolCard(contentPadding = PaddingValues(16.dp)) {
+        WaterCardHeader(title = "新增抄表")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = "月份 ${WaterMonth.label(month)}",
@@ -680,12 +716,6 @@ private fun EntryCard(
                     text = error,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
-                )
-            } else {
-                Text(
-                    text = "两位小数；不得小于上月读数",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (preview is WaterRecordReview.Valid) {
@@ -729,9 +759,53 @@ private fun PreviewLine(charge: WaterCharge) {
 }
 
 @Composable
+private fun WaterCardHeader(title: String, trailing: (@Composable () -> Unit)? = null) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        trailing?.invoke()
+    }
+}
+
+@Composable
+private fun AnimatedStatsCard(stats: WaterMonthStats, reduceMotion: Boolean) {
+    if (reduceMotion) {
+        StatsCard(stats = stats)
+        return
+    }
+    AnimatedContent(
+        targetState = stats,
+        transitionSpec = {
+            if (targetState.month > initialState.month) {
+                (slideInHorizontally(tween(240)) { it / 5 } + fadeIn(tween(240)))
+                    .togetherWith(slideOutHorizontally(tween(200)) { -it / 5 } + fadeOut(tween(160)))
+            } else {
+                (slideInHorizontally(tween(240)) { -it / 5 } + fadeIn(tween(240)))
+                    .togetherWith(slideOutHorizontally(tween(200)) { it / 5 } + fadeOut(tween(160)))
+            }
+        },
+        label = "waterStats",
+    ) { shown ->
+        StatsCard(stats = shown)
+    }
+}
+
+@Composable
 private fun StatsCard(stats: WaterMonthStats) {
     val charge = stats.charge
-    CtToolCard(title = "${WaterMonth.label(stats.month)} 统计") {
+    CtToolCard(contentPadding = PaddingValues(16.dp)) {
+        WaterCardHeader(title = "${WaterMonth.label(stats.month)} 统计")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CtToolStat(
@@ -785,11 +859,11 @@ private fun HistoryCard(
     room: WaterRoomState,
     onDelete: (String) -> Unit,
 ) {
-    CtToolCard(title = "抄表历史（${records.size}）") {
+    CtToolCard(contentPadding = PaddingValues(16.dp)) {
+        WaterCardHeader(title = "抄表历史（${records.size}）")
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (records.isEmpty()) {
-                Text(
-                    text = "还没有抄表记录 · 保存第一条后可对比用量",
+            if (records.isEmpty()) {                Text(
+                    text = "还没有抄表记录",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -836,7 +910,8 @@ private fun HistoryCard(
 
 @Composable
 private fun RuleCard(persons: Int) {
-    CtToolCard(title = "计费规则（只读）") {
+    CtToolCard(contentPadding = PaddingValues(16.dp)) {
+        WaterCardHeader(title = "水费规则")
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             WaterCalculator.ruleLines(persons).forEach { (label, value) ->
                 if (value.isBlank()) {
@@ -992,11 +1067,6 @@ private fun RoomPickerDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(
-                    text = "只显示楼栋+房间号，不含姓名/学号；不导出",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 CtToolField(
                     label = "搜索房间号 / 楼栋",
                     value = query,
@@ -1079,3 +1149,33 @@ private fun ErrorContent(message: String, onRetry: () -> Unit, modifier: Modifie
 
 /** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
 private enum class WaterPhase { LOADING, READY, ERROR }
+
+/**
+ * 工具页统一左右滑动：横向拖动超过 48dp 松手触发；只消费横向手势，不与页面纵向滚动冲突。
+ */
+private fun Modifier.horizontalSwipe(
+    enabled: Boolean,
+    onSwipeLeft: () -> Unit,
+    onSwipeRight: () -> Unit,
+): Modifier {
+    if (!enabled) return this
+    return pointerInput(enabled, onSwipeLeft, onSwipeRight) {
+        val threshold = 48.dp.toPx()
+        var total = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { total = 0f },
+            onHorizontalDrag = { change, dragAmount ->
+                change.consume()
+                total += dragAmount
+            },
+            onDragEnd = {
+                when {
+                    total <= -threshold -> onSwipeLeft()
+                    total >= threshold -> onSwipeRight()
+                }
+                total = 0f
+            },
+            onDragCancel = { total = 0f },
+        )
+    }
+}

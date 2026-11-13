@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -53,6 +55,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -135,6 +139,8 @@ fun RosterScreen(
     classLeagueRepository: ClassLeagueRepository? = null,
     skipLeagueLoad: Boolean = false,
     skipLoad: Boolean = false,
+    /** 预览：左右滑动中间帧（0.5 = 停在两页之间；null = 正常渲染）。 */
+    previewPagerOffset: Float? = null,
     forcedErrorMessage: String? = null,
 ) {
     val scope = rememberCoroutineScope()
@@ -156,6 +162,25 @@ fun RosterScreen(
     var members by remember(initialMembers) { mutableStateOf(initialMembers) }
     var fromCache by remember { mutableStateOf(false) }
     var tab by remember { mutableStateOf(initialTab) }
+    // 左右滑动切「名册 ↔ 点名」（跟手 + spring 吸附；reduceMotion 时禁用拖拽、点击直接切）
+    val rosterTabOptions = RosterTab.entries
+    val reduceMotion = rememberReduceMotion()
+    val rosterPagerState = rememberPagerState(
+        initialPage = rosterTabOptions.indexOf(initialTab).coerceAtLeast(0),
+        initialPageOffsetFraction = (previewPagerOffset ?: 0f).coerceIn(-0.5f, 0.5f),
+    ) { rosterTabOptions.size }
+    LaunchedEffect(rosterPagerState) {
+        snapshotFlow { rosterPagerState.currentPage }.collect { page ->
+            rosterTabOptions.getOrNull(page)?.let { tab = it }
+        }
+    }
+    fun selectTab(target: RosterTab) {
+        tab = target
+        val index = rosterTabOptions.indexOf(target).coerceAtLeast(0)
+        scope.launch {
+            if (reduceMotion) rosterPagerState.scrollToPage(index) else rosterPagerState.animateScrollToPage(index)
+        }
+    }
     var category by remember { mutableStateOf(initialCategory) }
     var leagueMembers by remember(initialLeagueMembers) { mutableStateOf(initialLeagueMembers) }
     var leagueLoading by remember { mutableStateOf(false) }
@@ -343,7 +368,7 @@ fun RosterScreen(
                         options = listOf("名册", "点名"),
                         selectedIndex = RosterTab.entries.indexOf(tab).coerceAtLeast(0),
                         onSelect = { index ->
-                            RosterTab.entries.getOrNull(index)?.let { tab = it }
+                            RosterTab.entries.getOrNull(index)?.let { selectTab(it) }
                         },
                         modifier = Modifier
                             .widthIn(max = 880.dp)
@@ -388,53 +413,58 @@ fun RosterScreen(
                             )
                         }
 
-                        RosterPhase.READY -> {
-                            // 名册 tab 即使班级名单为空也保留三分类/搜索等工具（空态由 RosterListContent 处理）；
-                            // 点名 tab 依赖名单行，空名单时直接给同步提示。
-                            if (members.isEmpty() && tab == RosterTab.ROLL) {
-                                EmptyState(
-                                    icon = Icons.Rounded.Groups,
-                                    title = "名单尚未同步",
-                                    message = "请检查身份验证或稍后重试",
-                                )
-                            } else {
-                                when (tab) {
-                                    RosterTab.ROSTER -> PullToRefreshBox(
-                                        isRefreshing = isRefreshing,
-                                        onRefresh = {
-                                            isRefreshing = true
-                                            reloadToken += 1
-                                            leagueReloadToken += 1
+                        RosterPhase.READY -> HorizontalPager(
+                            state = rosterPagerState,
+                            modifier = Modifier.fillMaxSize(),
+                            userScrollEnabled = !reduceMotion,
+                            key = { page -> rosterTabOptions[page].name },
+                        ) { pageIndex ->
+                            // 名册页即使班级名单为空也保留三分类/搜索等工具（空态由 RosterListContent 处理）；
+                            // 点名页依赖名单行，空名单时直接给同步提示。
+                            when (rosterTabOptions[pageIndex]) {
+                                RosterTab.ROSTER -> PullToRefreshBox(
+                                    isRefreshing = isRefreshing,
+                                    onRefresh = {
+                                        isRefreshing = true
+                                        reloadToken += 1
+                                        leagueReloadToken += 1
+                                    },
+                                    modifier = Modifier.fillMaxSize(),
+                                ) {
+                                    RosterListContent(
+                                        rows = rows,
+                                        category = category,
+                                        committeeCount = committeeCount,
+                                        leagueCount = leagueMembers.size,
+                                        allCount = members.size,
+                                        onCategory = { category = it },
+                                        query = query,
+                                        onQuery = { query = it },
+                                        showOnlyInRoll = showOnlyInRoll,
+                                        onToggleOnlyInRoll = { showOnlyInRoll = it },
+                                        leagueLoading = leagueLoading,
+                                        leagueError = leagueError,
+                                        onRetryLeague = { leagueReloadToken += 1 },
+                                        rosterState = rosterState,
+                                        onToggleRoll = { seat ->
+                                            writeRoster(RosterLogic.toggleMemberInRoll(rosterState, seat, members))
                                         },
-                                        modifier = Modifier.fillMaxSize(),
-                                    ) {
-                                        RosterListContent(
-                                            rows = rows,
-                                            category = category,
-                                            committeeCount = committeeCount,
-                                            leagueCount = leagueMembers.size,
-                                            allCount = members.size,
-                                            onCategory = { category = it },
-                                            query = query,
-                                            onQuery = { query = it },
-                                            showOnlyInRoll = showOnlyInRoll,
-                                            onToggleOnlyInRoll = { showOnlyInRoll = it },
-                                            leagueLoading = leagueLoading,
-                                            leagueError = leagueError,
-                                            onRetryLeague = { leagueReloadToken += 1 },
-                                            rosterState = rosterState,
-                                            onToggleRoll = { seat ->
-                                                writeRoster(RosterLogic.toggleMemberInRoll(rosterState, seat, members))
-                                            },
-                                            onSelectAll = {
-                                                writeRoster(RosterLogic.selectAll(rosterState, members))
-                                                notify("已全选加入点名名单")
-                                            },
-                                            onClear = { showClearConfirm = true },
-                                        )
-                                    }
+                                        onSelectAll = {
+                                            writeRoster(RosterLogic.selectAll(rosterState, members))
+                                            notify("已全选加入点名名单")
+                                        },
+                                        onClear = { showClearConfirm = true },
+                                    )
+                                }
 
-                                    RosterTab.ROLL -> RollContent(
+                                RosterTab.ROLL -> if (members.isEmpty()) {
+                                    EmptyState(
+                                        icon = Icons.Rounded.Groups,
+                                        title = "名单尚未同步",
+                                        message = "请稍后重试",
+                                    )
+                                } else {
+                                    RollContent(
                                         stats = stats,
                                         items = rollItems,
                                         hasRollList = rosterState.rollSel.isNotEmpty(),
