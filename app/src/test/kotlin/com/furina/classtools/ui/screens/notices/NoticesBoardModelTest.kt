@@ -223,10 +223,10 @@ class NoticesBoardModelTest {
         val items = sampleItems()
         val urgent = viewContentOf(items, NoticeFilter.ALL, NoticeCardFilter.URGENT, "", now)
         // urgent: deadline 20:00 (6.5h) + 期次 11-15 07:30 (18h)；7 天卡的 11-17 不算
-        assertEquals(setOf("urgent", "occ@occ:20261115"), urgent.primary.map { it.key }.toSet())
+        assertEquals(setOf("auto_urgent", "occ@occ:20261115"), urgent.primary.map { it.key }.toSet())
 
         val week = viewContentOf(items, NoticeFilter.ALL, NoticeCardFilter.WEEK, "", now)
-        assertEquals(setOf("normal", "urgent", "week", "occ@occ:20261115"), week.primary.map { it.key }.toSet())
+        assertEquals(setOf("auto_normal", "auto_urgent", "auto_week", "occ@occ:20261115"), week.primary.map { it.key }.toSet())
     }
 
     @Test
@@ -305,6 +305,47 @@ class NoticesBoardModelTest {
         val content = viewContentOf(items, NoticeFilter.ALL, null, "", now)
         val ids = content.primary.map { it.auto!!.id }
         assertEquals(listOf("alert", "urgent", "occ", "soon", "active", "done"), ids)
+    }
+
+    @Test
+    fun `分类筛选对所有视图生效`() {
+        val items = sampleItems()
+        // 人工通知分类 = 班级通知（自动通知夹具均为教务）
+        val manualOnly = viewContentOf(items, NoticeFilter.ALL, null, "", now, category = "班级通知")
+        assertEquals(listOf("m1"), manualOnly.primary.map { it.key })
+        assertTrue(manualOnly.material.isEmpty())
+        assertTrue(manualOnly.expired.isEmpty())
+
+        // 长期清单按分类过滤
+        val longterm = viewContentOf(
+            items,
+            NoticeFilter.ALL,
+            NoticeCardFilter.LONGTERM,
+            "",
+            now,
+            category = "教务",
+        )
+        assertEquals(2, longterm.longterm.size)
+        val noLongterm = viewContentOf(
+            items,
+            NoticeFilter.ALL,
+            NoticeCardFilter.LONGTERM,
+            "",
+            now,
+            category = "班级通知",
+        )
+        assertTrue(noLongterm.longterm.isEmpty())
+
+        // 最新发布按分类过滤
+        val latest = viewContentOf(
+            items,
+            NoticeFilter.ALL,
+            NoticeCardFilter.LATEST,
+            "",
+            now,
+            category = "班级通知",
+        )
+        assertEquals(listOf("m1"), latest.latest.map { it.key })
     }
 
     @Test

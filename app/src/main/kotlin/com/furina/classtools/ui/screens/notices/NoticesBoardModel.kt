@@ -114,6 +114,7 @@ internal fun buildUiItems(
             tone = NoticeTone.GREY,
             postedText = formatPosted(notice.ts, nowMillis, zone),
             attachmentCount = notice.attachments.size,
+            publishedMillis = notice.ts,
         )
     }
     return manualItems + autoItems
@@ -157,10 +158,11 @@ private fun autoUiItem(
 
         else -> rawStatus
     }
-    val anchor = NoticeStatusMachine.anchorOf(group, zone)
+    val anchor = NoticeStatusMachine.anchorOf(group, entry.items, zone)
     val summary = group.aiSummary.ifBlank {
         group.summary.ifBlank { NoticeBodyParser.firstTextOf(entry.items) }
     }
+    val hasTimeAnchor = NoticeStatusMachine.hasTimeAnchor(group, zone)
     return NoticeUiItem(
         key = occurrence?.key ?: entry.rowId,
         auto = entry,
@@ -187,9 +189,10 @@ private fun autoUiItem(
         hidden = entry.hidden,
         recurring = recurrence != null,
         actionable = group.actionable,
+        publishedMillis = publishedAtOf(entry, zone),
+        hasTimeAnchor = hasTimeAnchor,
         // §1.2 资料 / 无时间：非过期、无有效 recurrence、无任何时间锚点
-        material = recurrence == null && !rawStatus.expired &&
-            !NoticeStatusMachine.hasTimeAnchor(group, zone),
+        material = recurrence == null && !rawStatus.expired && !hasTimeAnchor,
         recurrence = recurrence,
         longtermEnded = longtermEnded,
         occurrenceMillis = occurrence?.nextMillis,
@@ -207,6 +210,17 @@ private fun autoUiItem(
             ""
         },
     )
+}
+
+/**
+ * 发布时间（对齐网页 `pubTsOf`）：行 `ts`、`group.updatedAt`、首条 item 消息时间取最大。
+ * 「最新发布」卡文案 / 排序与三端一致（合并/补充通知会更新 updatedAt / 追加 item 时间）。
+ */
+internal fun publishedAtOf(entry: NoticeEntry, zone: ZoneId = ZoneId.systemDefault()): Long {
+    var best = entry.ts
+    NoticeStatusMachine.parseTs(entry.group.updatedAt, zone)?.let { if (it > best) best = it }
+    NoticeStatusMachine.anchorOf(entry.group, entry.items, zone)?.let { if (it > best) best = it }
+    return best
 }
 
 // -----------------------------------------------------------------------------
@@ -227,7 +241,7 @@ internal fun buildOverview(
             NoticeDigest(
                 group = entry.group,
                 done = marks.isDone(MarkKind.NT_DONE, entry.id),
-                ts = entry.ts,
+                ts = publishedAtOf(entry, zone),
             )
         }
     return NoticeStatusMachine.statsOf(
@@ -251,7 +265,7 @@ internal fun isPendingItem(item: NoticeUiItem): Boolean {
         return item.occurrenceKey != null && !item.occurrenceDone
     }
     if (!item.actionable || item.done) return false
-    return item.whenMillis != null
+    return item.hasTimeAnchor
 }
 
 /** 是否主列表条目（§2.2：非过期、非长期定义、有时间锚点的普通通知 + 窗口内未处理的期次卡 + 人工通知）。 */
@@ -260,7 +274,7 @@ internal fun isPrimaryItem(item: NoticeUiItem): Boolean {
     if (item.recurrence != null) {
         return item.occurrenceKey != null && !item.occurrenceDone
     }
-    if (item.isAuto) return item.whenMillis != null
+    if (item.isAuto) return item.hasTimeAnchor
     return true
 }
 
@@ -273,21 +287,22 @@ internal fun noticeCardModeOf(item: NoticeUiItem): NoticeCardMode = when {
 }
 
 /**
- * 主列表档位（与小程序 `listRankOf` / 网页 orderRank 同口径）：
- * 置顶 -1 → alert 0 → urgent/today 1（期次按 next 参与，视作 24h 内档）→ extended 2 →
- * soon/active 3 → 其它 4 → 已处理 5 → 无时间 6。
+ * 主列表档位（与网页 `orderRank` / 小程序 `listRankOf` 同口径）：
+ * 置顶 -1（安卓人工通知置顶扩展）→ alert 0 → 期次卡 1（按 next 参与，视作 24h 内档）→
+ * urgent/today 1 → extended 2 → soon/active 3 → 其它/长期定义 5 → 无时间 4 → 已处理 9。
  */
 internal fun noticeRankOf(item: NoticeUiItem): Int {
     if (item.pinned) return -1
+    if (item.done) return 9
     if (item.occurrenceKey != null) return 1
-    if (item.done) return 5
+    if (item.recurrence != null) return 5
     return when (item.status?.key) {
         "alert" -> 0
         "urgent", "today" -> 1
         "extended" -> 2
         "soon", "active" -> 3
-        "none" -> 6
-        else -> 4
+        "none" -> 4
+        else -> 5
     }
 }
 
@@ -295,17 +310,18 @@ internal fun noticeRankOf(item: NoticeUiItem): Int {
 internal val noticePrimaryComparator: Comparator<NoticeUiItem> =
     compareBy<NoticeUiItem>({ noticeRankOf(it) })
         .thenBy { it.occurrenceMillis ?: it.whenMillis ?: Long.MAX_VALUE }
-        .thenByDescending { it.ts }
+        .thenByDescending { it.publishedMillis.takeIf { ts -> ts > 0L } ?: it.ts }
         .thenBy { it.key }
 
 /** 已过期 / 资料栏排序：发布时间倒序（稳定）。 */
 private val noticePostedDescComparator: Comparator<NoticeUiItem> =
-    compareByDescending<NoticeUiItem> { it.ts }.thenBy { it.key }
+    compareByDescending<NoticeUiItem> { it.publishedMillis.takeIf { ts -> ts > 0L } ?: it.ts }
+        .thenBy { it.key }
 
 /** 长期安排清单排序：下次发生时间升序（算不出最后），再按发布时间倒序。 */
 internal val noticeLongtermComparator: Comparator<NoticeUiItem> =
     compareBy<NoticeUiItem> { it.recurNextMillis ?: Long.MAX_VALUE }
-        .thenByDescending { it.ts }
+        .thenByDescending { it.publishedMillis.takeIf { ts -> ts > 0L } ?: it.ts }
         .thenBy { it.key }
 
 /**
@@ -325,12 +341,16 @@ internal fun viewContentOf(
     cardFilter: NoticeCardFilter? = null,
     query: String = "",
     nowMillis: Long = System.currentTimeMillis(),
+    /** 分类 chip 筛选（null/空 = 全部；契约 §2.2「分类（chip）筛选对所有视图生效」）。 */
+    category: String? = null,
 ): NoticesViewContent {
     val keyword = query.trim()
+    val activeCategory = category?.trim().orEmpty()
+    val base = if (activeCategory.isEmpty()) items else items.filter { it.cat == activeCategory }
     val matched = if (keyword.isEmpty()) {
-        items
+        base
     } else {
-        items.filter {
+        base.filter {
             it.title.contains(keyword, ignoreCase = true) ||
                 it.summary.contains(keyword, ignoreCase = true)
         }

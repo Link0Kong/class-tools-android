@@ -89,10 +89,10 @@ class OkHttpTransport(
          * `retryOnConnectionFailure(false)`：GET 的重试由 [ApiClient] 显式做一次，写请求绝不自动重试。
          */
         fun defaultClient(): okhttp3.OkHttpClient = okhttp3.OkHttpClient.Builder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .readTimeout(Duration.ofSeconds(10))
-            .writeTimeout(Duration.ofSeconds(10))
-            .callTimeout(Duration.ofSeconds(20))
+            .connectTimeout(Duration.ofSeconds(15))
+            .readTimeout(Duration.ofSeconds(30))
+            .writeTimeout(Duration.ofSeconds(30))
+            .callTimeout(Duration.ofSeconds(60))
             .retryOnConnectionFailure(false)
             .build()
     }

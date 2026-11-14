@@ -229,7 +229,7 @@ class NoticeOccurrenceTest {
         val nextOcc = NoticeStatusMachine.occurrenceOf(g, at(2026, 11, 26, 20, 0), zone)
         assertNotNull(nextOcc)
         assertEquals("gid@occ:20261127", nextOcc!!.key)
-        assertFalse(NoticeStatusMachine.isPending(g, at(2026, 11, 26, 20, 0), zone, doneRef = { it in done }))
+        assertTrue(NoticeStatusMachine.isPending(g, at(2026, 11, 26, 20, 0), zone, doneRef = { it in done }))
     }
 
     @Test
@@ -313,7 +313,7 @@ class NoticeOccurrenceTest {
     fun `最新发布相对文案 今天 昨天 更早 与空`() {
         assertEquals("今天 12:49", NoticeStatusMachine.latestPostedTextOf(at(2026, 11, 14, 12, 49), now, zone))
         assertEquals("昨天 09:05", NoticeStatusMachine.latestPostedTextOf(at(2026, 11, 13, 9, 5), now, zone))
-        assertEquals("11月8日（上周日）", NoticeStatusMachine.latestPostedTextOf(at(2026, 11, 8, 9, 5), now, zone))
+        assertEquals("11月8日（上周日） 09:05", NoticeStatusMachine.latestPostedTextOf(at(2026, 11, 8, 9, 5), now, zone))
         assertEquals("—", NoticeStatusMachine.latestPostedTextOf(0L, now, zone))
     }
 
@@ -348,12 +348,9 @@ class NoticeOccurrenceTest {
 
     @Test
     fun `时间格式 多日期与区间两端都替换`() {
+        assertEquals("11月13日（本周五） 11月14日（今天） 不上晚自习", fmtDate("11-13 11-14 不上晚自习"))
         assertEquals(
-            "11月13日（本周五） 11月14日（本周六）不上晚自习",
-            fmtDate("11-13 11-14 不上晚自习"),
-        )
-        assertEquals(
-            "11月13日（本周五）至11月14日（本周六）",
+            "11月13日（本周五）至11月14日（今天）",
             fmtDate("11-13至11-14"),
         )
         assertEquals("11月14日（今天）", fmtDate("2026-11-14"))
@@ -363,9 +360,20 @@ class NoticeOccurrenceTest {
 
     @Test
     fun `时间格式 已是括号相对标签时不重复加括号`() {
+        // 已是「M月D日（…）」整段保护，不重复加括号
         assertEquals("11月13日（本周五）", fmtDate("11月13日（本周五）"))
-        assertEquals("11月13日（周五）", fmtDate("11-13（周五）"))
-        assertEquals("今天（周五）开会", fmtDate("今天（周五）开会"))
+        assertEquals("11月14日（今天）开会", fmtDate("11月14日（今天）开会"))
+        // 显示管线：先做相对日期替换（absRelDates 去掉（周X）补充 / 今天→MM-DD），再统一 §3 格式
+        val anchor = at(2026, 11, 10, 9, 0)
+        assertEquals(
+            "11月13日（本周五）",
+            NoticeStatusMachine.displayText("11-13（周五）", anchor, now, zone),
+        )
+        // 相对词（今天）按**锚点消息时间**换算成绝对日期，再按渲染时 now 统一 §3 格式
+        assertEquals(
+            "11月10日（本周二）开会",
+            NoticeStatusMachine.displayText("今天开会", anchor, now, zone),
+        )
     }
 
     @Test
@@ -379,8 +387,8 @@ class NoticeOccurrenceTest {
         assertEquals("30 分钟后", NoticeStatusMachine.fmtWhen(now + 30 * 60_000, now, zone))
         assertEquals("2 小时后", NoticeStatusMachine.fmtWhen(now + 2 * 3_600_000, now, zone))
         assertEquals("3 天后", NoticeStatusMachine.fmtWhen(now + 3 * 86_400_000L, now, zone))
-        assertEquals("11月13日（昨天） 11:31", NoticeStatusMachine.fmtWhen(now - 26 * 3_600_000L, now, zone))
-        assertEquals("11月20日（下周五） 13:31", NoticeStatusMachine.fmtWhen(now + 6 * 86_400_000L, now, zone))
+        assertEquals("11月13日（本周五） 11:31", NoticeStatusMachine.fmtWhen(now - 26 * 3_600_000L, now, zone))
+        assertEquals("11月6日（上周五） 13:31", NoticeStatusMachine.fmtWhen(now - 8 * 86_400_000L, now, zone))
     }
 
     @Test
@@ -419,7 +427,7 @@ class NoticeOccurrenceTest {
             },
         )
         val g = group(items = items)
-        val anchorFromGroup = NoticeStatusMachine.anchorOf(g, zone)
+        val anchorFromGroup = NoticeStatusMachine.anchorOf(g, zone = zone)
         assertNotNull(anchorFromGroup)
         // 「明天」按消息时间 = 11-11，按渲染时 now=11-14 → 本周三
         assertEquals(

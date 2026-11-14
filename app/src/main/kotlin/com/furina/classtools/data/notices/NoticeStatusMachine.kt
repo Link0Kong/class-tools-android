@@ -8,6 +8,7 @@ import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import kotlinx.serialization.json.JsonPrimitive
@@ -240,10 +241,10 @@ object NoticeStatusMachine {
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
     ): NoticeStatus {
-        // 长期安排：有效 recurrence 且未到 until → 「长期安排」；until 到期 / 下一次超出 until → 已结束（§1.1）。
+        // 长期安排：有效 recurrence 且进行中 → 「长期安排」；until 到期 / 无下一次 → 已结束（§1.1/§1.3）。
         val recurrence = effectiveRecurrenceOf(group)
         if (recurrence != null) {
-            if (recurEndedOf(group, nowMillis, zone)) {
+            if (!recurOngoingOf(group, nowMillis, zone)) {
                 return NoticeStatus(
                     key = "recur_ended",
                     label = "长期安排已结束",
@@ -348,18 +349,19 @@ object NoticeStatusMachine {
 
     // ------------------------------------------------------------ 长期安排（recurrence）
 
+    /** 周期 label（数据无 `label` 时的兜底；对齐小程序 `recurLabelOf`：每周五 19:00 / 每天 07:30）。 */
     fun recurLabelOf(group: NoticeGroupDto): String {
         val recur = group.recurrence ?: return ""
         if (recur.label.isNotBlank()) return recur.label
         return buildString {
             when (recur.freq) {
                 "daily" -> append("每天")
-                "weekly" -> recur.weekday?.let { append("每周${weekdayZh(it)}") }
+                "weekly" -> recur.weekday?.let { append("每周${weekdayZh(it).removePrefix("周")}") }
                 "monthly_day" -> recur.day?.let { append("每月 $it 日") }
                 "monthly_weeks" -> {
                     val weeks = recur.weeks.joinToString("、")
-                    val weekday = recur.weekday?.let { weekdayZh(it) } ?: "周"
-                    append("每月第 $weeks 个$weekday")
+                    val weekday = recur.weekday?.let { weekdayZh(it).removePrefix("周") } ?: "周"
+                    append("每月第 $weeks 个周$weekday")
                 }
                 else -> append("长期安排")
             }
@@ -529,6 +531,20 @@ object NoticeStatusMachine {
     }
 
     /**
+     * 长期安排是否「进行中」（契约 §2.4；对齐网页 `recurOngoing`）：
+     * 有效 recurrence + 未到 until + 能算出下一次发生。
+     */
+    fun recurOngoingOf(
+        group: NoticeGroupDto,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Boolean {
+        if (effectiveRecurrenceOf(group) == null) return false
+        if (recurEndedOf(group, nowMillis, zone)) return false
+        return recurNextOf(group, nowMillis, zone) != null
+    }
+
+    /**
      * 期次（§1.3）：进行中的长期安排 + `next` 严格 > now + `now ∈ [next-24h, next)` → 返回期次；
      * 已到 until / 不在窗口内 → null（窗口开始前不可见；已处理期次由 marks 判定后由 UI 过滤）。
      */
@@ -537,8 +553,7 @@ object NoticeStatusMachine {
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
     ): NoticeOccurrence? {
-        if (effectiveRecurrenceOf(group) == null) return null
-        if (recurEndedOf(group, nowMillis, zone)) return null
+        if (!recurOngoingOf(group, nowMillis, zone)) return null
         val next = recurNextOf(group, nowMillis, zone) ?: return null
         val windowStart = next - OCCURRENCE_LEAD_MS
         if (nowMillis < windowStart || nowMillis >= next) return null
@@ -549,13 +564,13 @@ object NoticeStatusMachine {
         )
     }
 
-    /** 进行中的长期安排清单（未到 until；按下次发生时间升序，算不出下次的排最后；契约 §2.2）。 */
+    /** 进行中的长期安排清单（未到 until 且能算出下一次；按下次发生时间升序；契约 §2.2）。 */
     fun longtermDigests(
         digests: List<NoticeDigest>,
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
     ): List<NoticeDigest> = digests
-        .filter { effectiveRecurrenceOf(it.group) != null && !recurEndedOf(it.group, nowMillis, zone) }
+        .filter { recurOngoingOf(it.group, nowMillis, zone) }
         .sortedWith(
             compareBy<NoticeDigest> { recurNextOf(it.group, nowMillis, zone) ?: Long.MAX_VALUE }
                 .thenByDescending { it.ts },
@@ -575,13 +590,14 @@ object NoticeStatusMachine {
         doneRef: (String) -> Boolean = { false },
     ): Boolean {
         if (effectiveRecurrenceOf(group) != null) {
-            if (recurEndedOf(group, nowMillis, zone)) return false
+            if (!recurOngoingOf(group, nowMillis, zone)) return false
             val occurrence = occurrenceOf(group, nowMillis, zone) ?: return false
             return !doneRef(occurrence.key)
         }
         if (statusOf(group, nowMillis, zone).expired) return false
         if (!group.actionable || done) return false
-        return whenOf(group, nowMillis, zone) != null
+        // §2.4：必须有时间锚点（资料 / 无时间不计待处理；边界：只有报名开始且已过也算有时间锚点）
+        return hasTimeAnchor(group, zone)
     }
 
     // ------------------------------------------------------------ 简报统计（契约 §2.4）/ 最紧急
@@ -612,7 +628,7 @@ object NoticeStatusMachine {
             val group = digest.group
             if (digest.ts > latestPosted) latestPosted = digest.ts
             if (effectiveRecurrenceOf(group) != null) {
-                if (recurEndedOf(group, nowMillis, zone)) {
+                if (!recurOngoingOf(group, nowMillis, zone)) {
                     expired += 1
                     continue
                 }
@@ -630,8 +646,10 @@ object NoticeStatusMachine {
                 continue
             }
             if (digest.done || !group.actionable) continue
-            val whenAt = whenOf(group, nowMillis, zone) ?: continue // 资料 / 无时间不计待处理
+            // §2.4：有时间锚点才算待处理（资料 / 无时间不计）
+            if (!hasTimeAnchor(group, zone)) continue
             pending += 1
+            val whenAt = whenOf(group, nowMillis, zone) ?: continue
             val left = whenAt - nowMillis
             if (left in 0..DAY_MS) urgent += 1
             if (left in 0..WEEK_MS) week += 1
@@ -649,8 +667,8 @@ object NoticeStatusMachine {
     }
 
     /**
-     * 最新发布相对文案（契约 §2.1/§2.4）：今天/昨天 → `今天 HH:mm`；
-     * 更早（含跨年）→ `M月D日（相对周）`；无发布 → `—`。
+     * 最新发布相对文案（契约 §2.1/§2.4，对齐网页 `relPubText`）：
+     * 今天/昨天 → `今天 HH:mm`；更早（含跨年）→ `M月D日（相对周） HH:mm`；无发布 → `—`。
      */
     fun latestPostedTextOf(
         ts: Long,
@@ -664,7 +682,7 @@ object NoticeStatusMachine {
         return when (at.toLocalDate()) {
             today -> "今天 $clock"
             today.minusDays(1) -> "昨天 $clock"
-            else -> fmtDateWeek(ts, nowMillis, zone)
+            else -> "${fmtDateWeek(ts, nowMillis, zone)} $clock"
         }
     }
 
@@ -777,11 +795,28 @@ object NoticeStatusMachine {
         return out
     }
 
-    /** 锚点：同一卡片第一条带 `time` 的 item 的发送时间。 */
-    fun anchorOf(group: NoticeGroupDto, zone: ZoneId = ZoneId.systemDefault()): Long? {
+    /**
+     * 锚点：同一卡片第一条带 `time` 的 item 的发送时间。
+     *
+     * 数据层解析会把 `group.items` 清空（大 base64 不进 UI 模型），此时用已解析的 [items] 元信息
+     * （`NoticeItemMeta.Text.timeText` / 合并消息首条 timeText）兜底，保证「相对日期→绝对日期」替换仍生效。
+     */
+    fun anchorOf(
+        group: NoticeGroupDto,
+        items: List<NoticeItemMeta> = emptyList(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Long? {
         for (item in group.items) {
             val time = (item["time"] as? JsonPrimitive)?.contentOrNull.orEmpty()
             parseMsgTime(time, zone)?.let { return it }
+        }
+        for (item in items) {
+            val raw = when (item) {
+                is NoticeItemMeta.Text -> item.timeText
+                is NoticeItemMeta.Merged -> item.messages.firstOrNull()?.timeText.orEmpty()
+                else -> ""
+            }
+            parseMsgTime(raw, zone)?.let { return it }
         }
         return null
     }
@@ -807,87 +842,74 @@ object NoticeStatusMachine {
     }
 
     // ------------------------------------------------------------ 时间显示（契约 §3）：M月D日（相对周）
+    //
+    // 三端同构（对齐网页 `fmtDateText` / `_weekWordOf`）：今天/明天优先；**同一 ISO 周统一「本周X」**
+    // （例：now=11-14 周六时 11-13 显示「本周五」而不是「昨天」）；「昨天」只用于跨周的一天前
+    // （今天周一 → 昨天=上周日）；下一周「下周X」、上一周「上周X」、其它仅「周X」；年份非当年前缀 `YYYY年`；
+    // 已是 `M月D日（…）` 的文本整体保护、不重复加括号；只作用于显示层，不写回数据（§3.2）。
 
-    /** 日期 token（§3.1）：`YYYY年M月D日` / `YYYY-MM-DD` / `M月D日` / `MM-DD`（区间两端各自匹配）。 */
-    private val DATE_TOKEN = Regex(
-        "(\\d{4})年(\\d{1,2})月(\\d{1,2})日" +
-            "|(\\d{4})-(\\d{1,2})-(\\d{1,2})" +
-            "|(\\d{1,2})月(\\d{1,2})日" +
-            "|(?<![\\d\\-])(\\d{1,2})-(\\d{1,2})(?!\\d)",
+    /** 已带括号的中文日期（整体保护，避免二次加括号）：`(YYYY年)?M月D日（…）`。 */
+    private val PROTECTED_DATE_PAREN = Regex(
+        "(?:20\\d{2}\\s*年\\s*)?\\d{1,2}\\s*月\\s*\\d{1,2}\\s*[日号]\\s*[（(][^）)\\n]{1,14}[）)]",
     )
-
-    /** 已带括号的相对标签（§3.1.2：`M月D日（...）` 不重复加括号）。 */
-    private val REL_LABEL_PREFIX = Regex("^(今天|明天|昨天|后天|大后天|(?:本|下|上)?周[一二三四五六日天])")
+    private val DATE_YMD_CN = Regex("(20\\d{2})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*[日号]")
+    private val DATE_YMD_ISO = Regex("(20\\d{2})-(\\d{1,2})-(\\d{1,2})(?![0-9T])")
+    private val DATE_MD_CN = Regex("(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*[日号](?!\\s*[（(])")
+    private val DATE_MD_DASH = Regex("(\\d{1,2})-(\\d{1,2})")
+    private val DATE_PLACEHOLDER = Regex("\\u0001(\\d+)\\u0002")
 
     /**
      * 时间显示归一（契约 §3.1，三端同一函数）：把文本里的日期 token 统一格式化为 `M月D日（相对）`。
      *
-     * - 识别 `MM-DD`、`M月D日`、`YYYY-MM-DD`、`YYYY年M月D日`（区间两端各自格式化）；
-     * - `相对` 基于**渲染时** [nowMillis]：今天/明天/昨天 → 同一 ISO 周（周一起算）`本周X` →
-     *   `下周X`/`上周X` → 其他仅 `周X`；年份非当年时前缀 `YYYY年`；
-     * - 已是 `M月D日（相对）` 形式的文本不重复加括号；
-     * - 只作用于显示层，不写回数据/缓存/云端（§3.2）；倒计时类文案（`N 小时后`）不经过本函数。
+     * 识别 `MM-DD`、`M月D日`、`YYYY-MM-DD`、`YYYY年M月D日`（区间两端各自格式化）；
+     * 已是 `M月D日（…）` 的整段保护不动；无年份 token 按渲染时年份解释（§3.2 数据仍存 MM-DD）；
+     * 倒计时类文案（`N 小时后`）不经过本函数。
      */
     fun fmtDateText(text: String, nowMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
-        if (text.isBlank()) return text
+        if (text.isEmpty()) return text
         val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
-        return DATE_TOKEN.replace(text) { match ->
-            val g = match.groupValues
-            val hasYear: Boolean
-            val year: Int
-            val month: Int
-            val day: Int
-            when {
-                g[1].isNotEmpty() -> {
-                    hasYear = true
-                    year = g[1].toInt()
-                    month = g[2].toInt()
-                    day = g[3].toInt()
-                }
+        val slots = ArrayList<String>()
+        var out = text
 
-                g[4].isNotEmpty() -> {
-                    hasYear = true
-                    year = g[4].toInt()
-                    month = g[5].toInt()
-                    day = g[6].toInt()
-                }
-
-                g[7].isNotEmpty() -> {
-                    hasYear = false
-                    year = 0
-                    month = g[7].toInt()
-                    day = g[8].toInt()
-                }
-
-                else -> {
-                    hasYear = false
-                    year = 0
-                    month = g[9].toInt()
-                    day = g[10].toInt()
-                }
-            }
-            val date = runCatching {
-                if (hasYear) {
-                    LocalDate.of(year, month, day)
-                } else {
-                    var candidate = LocalDate.of(today.year, month, day)
-                    // 无年份：若落在很远未来（>183 天）→ 视为上一年（跨年 MM-DD）
-                    if (candidate.isAfter(today.plusDays(183))) candidate = candidate.minusYears(1)
-                    candidate
-                }
-            }.getOrNull() ?: return@replace match.value
-            // §3.1.2：已是 M月D日（相对）形式 → 原样保留，不重复加括号
-            val rest = text.substring(match.range.last + 1)
-            val open = rest.firstOrNull()
-            if (open == '（' || open == '(') {
-                val close = if (open == '（') "）" else ")"
-                val end = rest.indexOf(close)
-                if (end in 1..24 && REL_LABEL_PREFIX.containsMatchIn(rest.substring(1, end))) {
-                    return@replace match.value
-                }
-            }
-            formatDateLabel(date, today)
+        // 0) 已带括号的中文日期整体保护（不重复加括号）
+        out = PROTECTED_DATE_PAREN.replace(out) { match ->
+            slots.add(match.value)
+            "\u0001${slots.size - 1}\u0002"
         }
+        fun convertDate(match: MatchResult, year: Int?, month: Int, day: Int): String {
+            val date = runCatching {
+                if (year != null) LocalDate.of(year, month, day) else LocalDate.of(today.year, month, day)
+            }.getOrNull() ?: return match.value
+            return formatDateLabel(date, today)
+        }
+        // 1) YYYY年M月D日
+        out = DATE_YMD_CN.replace(out) { m ->
+            convertDate(m, m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt())
+        }
+        // 2) YYYY-MM-DD（后面紧跟数字/T 的不是日期 token，如 ISO datetime 的时间部分）
+        out = DATE_YMD_ISO.replace(out) { m ->
+            convertDate(m, m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt())
+        }
+        // 3) M月D日（后面紧跟括号的是已保护/已有说明的日期）
+        out = DATE_MD_CN.replace(out) { m ->
+            convertDate(m, null, m.groupValues[1].toInt(), m.groupValues[2].toInt())
+        }
+        // 4) MM-DD（前后是数字/时间/量词时视为非日期：如 11:30、第 5-6 节、5 号楼）
+        val snapshot = out
+        out = DATE_MD_DASH.replace(snapshot) { m ->
+            val before = snapshot.getOrNull(m.range.first - 1)
+            val after = snapshot.getOrNull(m.range.last + 1)
+            val guardBefore = before != null && (before.isDigit() || before in "：:节点号时分秒周月")
+            val guardAfter = after != null && after in "节点号时分秒周"
+            if (guardBefore || guardAfter) {
+                m.value
+            } else {
+                convertDate(m, null, m.groupValues[1].toInt(), m.groupValues[2].toInt())
+            }
+        }
+        // 5) 还原保护段
+        out = DATE_PLACEHOLDER.replace(out) { m -> slots.getOrElse(m.groupValues[1].toInt()) { m.value } }
+        return out
     }
 
     /** 单个时间戳 → `M月D日（相对周）`（跨年前缀 `YYYY年`；契约 §3）。 */
@@ -904,30 +926,39 @@ object NoticeStatusMachine {
     /** `M月D日（相对）`（当年无年前缀；跨年为 `YYYY年M月D日（周X）`）。 */
     fun formatDateLabel(date: LocalDate, today: LocalDate): String {
         val prefix = if (date.year != today.year) "${date.year}年" else ""
-        val rel = relativeDayLabel(date, today, allowWeek = date.year == today.year)
-        return "$prefix${date.monthValue}月${date.dayOfMonth}日（$rel）"
+        return "$prefix${date.monthValue}月${date.dayOfMonth}日（${relativeDayLabel(date, today)}）"
     }
 
     /**
-     * 相对日/周标签（契约 §3.1）：今天/明天/昨天 → 同一 ISO 周（周一起算）`本周X` →
-     * `下周X` / `上周X` → 其他仅 `周X`。跨年（[allowWeek] = false）只给周几，避免「2027年1月1日（本周五）」式歧义。
+     * 相对日/周标签（契约 §3.1 固定向量）：今天/明天 → 同一 ISO 周（周一起算）`本周X`（含昨天）→
+     * `下周X` →「昨天」（仅跨周的一天前，如周一昨天=上周日）→ `上周X` → 其他仅 `周X`。
      */
-    fun relativeDayLabel(date: LocalDate, today: LocalDate, allowWeek: Boolean = true): String {
-        when (date) {
-            today -> return "今天"
-            today.plusDays(1) -> return "明天"
-            today.minusDays(1) -> return "昨天"
+    fun relativeDayLabel(date: LocalDate, today: LocalDate): String {
+        val diff = ChronoUnit.DAYS.between(today, date)
+        val weekday = weekdayCharZh(date.dayOfWeek)
+        if (diff == 0L) return "今天"
+        if (diff == 1L) return "明天"
+        val thisMonday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val dateMonday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val weeks = ChronoUnit.WEEKS.between(thisMonday, dateMonday)
+        return when {
+            weeks == 0L -> "本周$weekday"
+            weeks == 1L -> "下周$weekday"
+            diff == -1L -> "昨天"
+            weeks == -1L -> "上周$weekday"
+            else -> "周$weekday"
         }
-        val weekday = weekdayZh(date.dayOfWeek)
-        if (!allowWeek) return weekday
-        val thisWeekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-        val dateWeekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-        return when (dateWeekStart) {
-            thisWeekStart -> "本$weekday"
-            thisWeekStart.plusWeeks(1) -> "下$weekday"
-            thisWeekStart.minusWeeks(1) -> "上$weekday"
-            else -> weekday
-        }
+    }
+
+    /** `周X` 的「X」（用于 `本周X` 拼接）。 */
+    private fun weekdayCharZh(dayOfWeek: DayOfWeek): String = when (dayOfWeek) {
+        DayOfWeek.MONDAY -> "一"
+        DayOfWeek.TUESDAY -> "二"
+        DayOfWeek.WEDNESDAY -> "三"
+        DayOfWeek.THURSDAY -> "四"
+        DayOfWeek.FRIDAY -> "五"
+        DayOfWeek.SATURDAY -> "六"
+        DayOfWeek.SUNDAY -> "日"
     }
 
     /** 显示层统一入口：先做相对→绝对日期替换（锚点 = 首条 item 发送时间），再按 §3 统一格式（幂等）。 */

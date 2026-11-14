@@ -294,8 +294,8 @@ private fun detailMetaText(item: NoticeUiItem, nowMillis: Long): String = buildL
 @Composable
 private fun DetailTagLine(item: NoticeUiItem, nowMillis: Long) {
     val auto = item.auto
-    // 长期安排：下次 `M月D日（周X）HH:mm`（§2.2/§3；已结束不显示下次）
-    val nextText = item.recurNextText.ifBlank { null }
+    // 长期安排定义卡：下次 `M月D日（周X）HH:mm`（§2.2/§3；期次卡状态胶囊已显示本次，不重复）
+    val nextText = if (item.occurrenceKey == null) item.recurNextText.ifBlank { null } else null
     val merged = auto?.group?.mergedSources.orEmpty()
     if (!item.hidden && !item.edited && merged.isEmpty() && nextText == null) return
     FlowRow(
@@ -371,7 +371,7 @@ private fun AutoNoticeDetail(
 ) {
     val entry = item.auto ?: return
     val group = entry.group
-    val anchor = NoticeStatusMachine.anchorOf(group)
+    val anchor = NoticeStatusMachine.anchorOf(group, entry.items)
 
     val aiSummary = detailText(group.aiSummary.ifBlank { group.summary }, anchor, nowMillis)
     val hasAi = aiSummary.isNotBlank() || group.aiPoints.isNotEmpty()

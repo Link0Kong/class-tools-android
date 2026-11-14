@@ -244,10 +244,11 @@ class NoticeStatusMachineTest {
             NoticeDigest(group(recurrence = NoticeRecurrenceDto(freq = "daily", time = "07:30")), done = false),
         )
         val stats = NoticeStatusMachine.statsOf(digests, now)
-        assertEquals(3, stats.pending)
-        assertEquals(2, stats.urgent) // 1h 内 + 6h 内都算 24h 内
-        // 契约 §2.4：7 天内包含 24h 内的（1h + 6h + 48h = 3），与 web/mp statOf 同口径
-        assertEquals(3, stats.week)
+        // 3 条普通待处理 + 1 张期次卡（daily 07:30，now=11-07 12:00 → 下次 11-08 07:30 在窗口内）
+        assertEquals(4, stats.pending)
+        assertEquals(3, stats.urgent) // 1h 内 + 6h 内 + 期次 19.5h 都算 24h 内
+        // 契约 §2.4：7 天内包含 24h 内的（1h + 6h + 48h + 期次），与 web/mp statOf 同口径
+        assertEquals(4, stats.week)
         assertEquals(1, stats.expired)
         assertEquals(1, stats.longterm) // daily 07:30 进行中（now 12:00，下次 明日 07:30）
     }

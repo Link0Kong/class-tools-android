@@ -32,10 +32,21 @@ class HomeWorkbenchLogicTest {
         ts: Long = now - 1_000L,
     ): HomeworkRow = HomeworkRow(id = id, subject = subject, due = due, date = due, time = time, ts = ts)
 
-    private fun autoEntry(id: String, title: String, cat: String = "教务", ts: Long = now): NoticeEntry =
+    private fun autoEntry(
+        id: String,
+        title: String,
+        cat: String = "教务",
+        ts: Long = now,
+        deadline: String = "",
+    ): NoticeEntry =
         NoticeEntry(
             row = NoticeRow(id = id, title = title, ts = ts),
-            group = NoticeGroupDto(id = id.removePrefix("auto_"), title = title, cat = cat),
+            group = NoticeGroupDto(
+                id = id.removePrefix("auto_"),
+                title = title,
+                cat = cat,
+                deadline = deadline,
+            ),
             items = emptyList(),
             hidden = false,
             edited = false,
@@ -98,9 +109,11 @@ class HomeWorkbenchLogicTest {
     @Test
     fun noticePending_filtersDoneAndSortsByTimeDesc() {
         val entries = listOf(
-            autoEntry("auto_1", "旧通知", ts = now - 10_000L),
-            autoEntry("auto_2", "新通知", ts = now),
-            autoEntry("auto_3", "已处理", ts = now - 5_000L),
+            // 契约 §2.4：待处理必须有时间锚点（无时间=资料/无时间，不计工作台待办）
+            autoEntry("auto_1", "旧通知", ts = now - 10_000L, deadline = "2026-11-07T20:00:00+08:00"),
+            autoEntry("auto_2", "新通知", ts = now, deadline = "2026-11-08T20:00:00+08:00"),
+            autoEntry("auto_3", "已处理", ts = now - 5_000L, deadline = "2026-11-08T20:00:00+08:00"),
+            autoEntry("auto_4", "无时间资料", ts = now - 3_000L),
         )
         // NoticeEntry.id = group.id（真实 marks 也按 group id 存），因此 auto_3 的 id 是 "3"
         val marks = MarksSnapshot(ntDone = mapOf("3" to true))
@@ -111,7 +124,7 @@ class HomeWorkbenchLogicTest {
     @Test
     fun noticeRotation_subContainsCategory() {
         val items = HomeWorkbenchLogic.noticeRotation(
-            listOf(autoEntry("auto_1", "期中教学检查", cat = "教务")),
+            listOf(autoEntry("auto_1", "期中教学检查", cat = "教务", deadline = "2026-11-08T20:00:00+08:00")),
             MarksSnapshot(),
             now,
         )

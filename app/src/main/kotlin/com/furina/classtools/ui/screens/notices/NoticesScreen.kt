@@ -133,9 +133,7 @@ import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
-import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolSectionHeader
-import com.furina.classtools.ui.components.tool.CtToolStat
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.rememberReduceMotion
@@ -203,6 +201,10 @@ internal data class NoticeUiItem(
     val recurring: Boolean = false,
     /** `actionable !== false`（§2.4：false = 仅告知，不计待处理）。 */
     val actionable: Boolean = true,
+    /** 发布时间（对齐网页 pubTsOf：ts / updatedAt / 首条 item 消息时间取最大；「最新发布」排序与文案用）。 */
+    val publishedMillis: Long = 0L,
+    /** 是否有任何时间锚点（§1.2 资料判定 / §2.4 待处理判定）。 */
+    val hasTimeAnchor: Boolean = false,
     /** 资料 / 无时间（§1.2）：非过期、无有效 recurrence、无任何时间锚点；不进长期通知、不计待处理。 */
     val material: Boolean = false,
     /** 有效的长期安排（recurrence；已结束由 [longtermEnded] 标记）。 */
@@ -423,11 +425,14 @@ fun NoticesScreen(
         initialPageOffsetFraction = (previewPagerOffset ?: 0f).coerceIn(-0.5f, 0.5f),
     ) { noticeFilterOptions.size }
     LaunchedEffect(noticePagerState) {
-        snapshotFlow { noticePagerState.currentPage }.collect { page ->
-            noticeFilterOptions.getOrNull(page)?.let { filterKey = it.name }
-            // 滑到非「全部」chips 页 → 顶部卡筛选取消（chips 与顶部卡互斥）
-            if (noticeFilterOptions.getOrNull(page) != NoticeFilter.ALL) cardFilterKey = null
-        }
+        snapshotFlow { noticePagerState.currentPage to noticePagerState.isScrollInProgress }
+            .collect { (page, scrolling) ->
+                noticeFilterOptions.getOrNull(page)?.let { filterKey = it.name }
+                // 滑动/程序化滚动停稳到非「全部」chips 页 → 顶部卡筛选取消（chips 与顶部卡互斥）
+                if (!scrolling && page != noticeFilterOptions.indexOf(NoticeFilter.ALL)) {
+                    cardFilterKey = null
+                }
+            }
     }
     val filter = remember(filterKey) {
         noticeFilterOptions.firstOrNull { it.name == filterKey } ?: NoticeFilter.ALL
@@ -455,6 +460,8 @@ fun NoticesScreen(
     }
     var query by rememberSaveable { mutableStateOf(initialQuery) }
     var searchVisible by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
+    // 分类 chip 筛选（null = 全部；契约 §2.2：对所有视图生效）
+    var categoryKey by rememberSaveable { mutableStateOf<String?>(null) }
     var expiredExpanded by rememberSaveable { mutableStateOf(initialExpiredExpanded) }
     // 「资料 / 无时间」栏常驻显示、默认展开（可折叠，契约 §2.2）
     var materialExpanded by rememberSaveable { mutableStateOf(true) }
@@ -518,7 +525,10 @@ fun NoticesScreen(
         }
     }
 
-    /** 「加载更多」：按 ts 倒序追加下一页；失败时保留已加载内容并展示重试。 */
+    /**
+     * 「加载更多」：连续按页追加直到全部加载完成（旧通知单页可能很大，仓库内部会自适应缩小页大小）。
+     * 每加载一页都更新 data（UI 逐页出现新内容）；任一步失败保留已加载内容并展示重试。
+     */
     fun loadMore() {
         if (skipLoad || isLoadingMore) return
         val repository = noticesRepository ?: return
@@ -526,13 +536,21 @@ fun NoticesScreen(
             isLoadingMore = true
             loadMoreError = null
             try {
-                when (val result = repository.loadMore()) {
-                    is NoticesLoadResult.Success -> {
-                        data = result.data
-                        errorMessage = null
-                    }
+                var guard = 0
+                while (guard < 60) {
+                    when (val result = repository.loadMore()) {
+                        is NoticesLoadResult.Success -> {
+                            data = result.data
+                            errorMessage = null
+                            if (!result.data.hasMore) break
+                        }
 
-                    is NoticesLoadResult.Failure -> loadMoreError = result.message
+                        is NoticesLoadResult.Failure -> {
+                            loadMoreError = result.message
+                            break
+                        }
+                    }
+                    guard += 1
                 }
             } finally {
                 isLoadingMore = false
@@ -587,6 +605,10 @@ fun NoticesScreen(
     }
 
     val allItems = remember(data, marks, nowMillis) { buildUiItems(data, marks, nowMillis) }
+    // 分类 chips（数据里出现过的分类，按加载顺序去重；≤1 类时不显示分类行）
+    val categories = remember(allItems) {
+        allItems.map { it.cat.trim() }.filter { it.isNotEmpty() }.distinct()
+    }
 
     val pinnedCount = allItems.count { it.pinned }
     // §2.4 统计口径（5 张数据卡 / 与工作台同口径）：复用数据层 statsOf（期次 / until / 资料无时间）
@@ -685,6 +707,18 @@ fun NoticesScreen(
                             previewBounceKey = previewChipBounceKey,
                         )
 
+                        // 分类筛选 chips（契约 §2.2：分类筛选对所有视图生效；null = 全部）
+                        if (categories.size > 1) {
+                            NoticeFilterChips(
+                                chips = listOf(NoticeChip("", "全部")) +
+                                    categories.map { NoticeChip(it, it) },
+                                selectedKey = categoryKey.orEmpty(),
+                                onSelect = { key -> categoryKey = key.ifBlank { null } },
+                                reduceMotion = reduceMotion,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+
                         AnimatedVisibility(
                             visible = searchVisible,
                             enter = if (reduceMotion) {
@@ -752,13 +786,14 @@ fun NoticesScreen(
                                     val pageFilter = noticeFilterOptions[pageIndex]
                                     // 顶部卡只作用于「全部」chips 页（chips 与顶部卡互斥，§2.1）
                                     val pageCardFilter = if (pageFilter == NoticeFilter.ALL) cardFilter else null
-                                    val content = remember(allItems, pageFilter, pageCardFilter, query, nowMillis) {
+                                    val content = remember(allItems, pageFilter, pageCardFilter, query, nowMillis, categoryKey) {
                                         viewContentOf(
                                             items = allItems,
                                             chipFilter = pageFilter,
                                             cardFilter = pageCardFilter,
                                             query = query,
                                             nowMillis = nowMillis,
+                                            category = categoryKey,
                                         )
                                     }
                                     val hasMore = data?.hasMore == true
@@ -776,10 +811,12 @@ fun NoticesScreen(
                                                         filter = pageFilter,
                                                         cardFilter = pageCardFilter,
                                                         query = query,
+                                                        category = categoryKey,
                                                         hasAny = allItems.isNotEmpty(),
                                                         onClear = {
                                                             query = ""
                                                             cardFilterKey = null
+                                                            categoryKey = null
                                                             selectFilter(NoticeFilter.ALL)
                                                         },
                                                         modifier = Modifier.fillParentMaxSize(),
@@ -1527,7 +1564,10 @@ private fun NoticeLoadMoreRow(
                         strokeWidth = 2.dp,
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("加载中…", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        text = if (remainingCount > 0) "正在加载全部…（剩余 $remainingCount 条）" else "正在加载全部…",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
                 }
 
                 error != null -> Text(
@@ -1539,13 +1579,13 @@ private fun NoticeLoadMoreRow(
                 )
 
                 remainingCount > 0 -> Text(
-                    text = "加载更多（还有 $remainingCount 条）",
+                    text = "加载全部（还有 $remainingCount 条）",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
 
                 else -> Text(
-                    text = "加载更多",
+                    text = "加载全部",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -1783,11 +1823,12 @@ private fun NoticeCardMeta(item: NoticeUiItem, mode: NoticeCardMode = NoticeCard
         if (item.recurring) {
             ItemFlag(text = "长期安排", tone = NoticeTone.BLUE)
         }
-        // 长期安排：周期 label + 下次时间（长期清单：标题 / 周期 / 下次 / 进行中）
+        // 长期安排：周期 label（期次卡 / 长期定义卡都显示）
         if (item.recurLabel.isNotBlank()) {
             ItemFlag(text = item.recurLabel, tone = NoticeTone.BLUE)
         }
-        if ((mode == NoticeCardMode.LONGTERM_DEF || item.occurrenceKey != null) && item.recurNextText.isNotBlank()) {
+        // 「下次 …」只在长期定义卡显示（期次卡状态胶囊已显示「本次 …」，避免重复）
+        if (mode == NoticeCardMode.LONGTERM_DEF && item.recurNextText.isNotBlank()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Rounded.Schedule,
@@ -2041,8 +2082,10 @@ private fun NoticeEmptyState(
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
     cardFilter: NoticeCardFilter? = null,
+    category: String? = null,
 ) {
-    val filtered = query.isNotBlank() || filter != NoticeFilter.ALL || cardFilter != null
+    val filtered = query.isNotBlank() || filter != NoticeFilter.ALL || cardFilter != null ||
+        !category.isNullOrBlank()
     // 页面背景不是 Surface，显式提供内容色（深色下默认黑色会不可读）
     CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
         Column(

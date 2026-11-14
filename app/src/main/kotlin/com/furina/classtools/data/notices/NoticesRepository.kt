@@ -146,7 +146,8 @@ class DefaultNoticesRepository(
             }
         }
 
-        val page = fetchPage(offset = loadedRawCount)
+        // 旧页体积差异极大（部分页 3–4MB）；超时时自动缩小 limit 重试，保证「全部加载」可继续推进。
+        val page = fetchPageAdaptive(offset = loadedRawCount)
             ?: return NoticesLoadResult.Failure(lastPageError ?: PAGE_PARSE_MESSAGE)
         if (page.isEmpty()) {
             totalRawCount = loadedRawCount
@@ -205,9 +206,12 @@ class DefaultNoticesRepository(
         }
     }
 
-    /** 拉一页正文；返回 null = 失败（具体错误已转成 UI 文案由调用方兜底）。 */
-    private suspend fun fetchPage(offset: Int): List<NoticeRow>? {
-        val path = pagePath(offset)
+    /**
+     * 拉一页正文；返回 null = 失败（具体错误已转成 UI 文案由调用方兜底）。
+     * @param limit 本页条数（首屏 20；加载更多自适应 5/3/1）
+     */
+    private suspend fun fetchPage(offset: Int, limit: Int = pageSize): List<NoticeRow>? {
+        val path = pagePath(offset, limit)
         return when (val page = fetchString(path)) {
             is ApiResult.Failure -> {
                 lastPageError = networkMessage(page.error)
@@ -221,12 +225,27 @@ class DefaultNoticesRepository(
         }
     }
 
+    /**
+     * 「加载更多」自适应分页：先试 5 条；若超时（旧通知正文单页可达 3–4MB），
+     * 依次降到 3 条、1 条重试，保证慢网/大响应下也能继续把全部通知加载完。
+     */
+    private suspend fun fetchPageAdaptive(offset: Int): List<NoticeRow>? {
+        // 测试/自定义 pageSize≤5 时保持原页大小（生产 20 时走 5/3/1 自适应）
+        val limits = if (pageSize <= 5) listOf(pageSize) else MORE_PAGE_LIMITS
+        for (limit in limits) {
+            val page = fetchPage(offset, limit)
+            if (page != null) return page
+            if (lastPageError != TIMEOUT_MESSAGE) return null
+        }
+        return null
+    }
+
     /** 最近一次分页失败文案（UI 用它展示「加载更多失败」）。 */
     var lastPageError: String? = null
         private set
 
-    private fun pagePath(offset: Int): String =
-        "notices?select=*&order=ts.desc,id.desc&archived=eq.false&limit=$pageSize&offset=$offset"
+    private fun pagePath(offset: Int, limit: Int = pageSize): String =
+        "notices?select=*&order=ts.desc,id.desc&archived=eq.false&limit=$limit&offset=$offset"
 
     private fun networkMessage(error: ApiError): String = when (error) {
         is ApiError.Network -> when (error.cause) {
@@ -273,11 +292,14 @@ class DefaultNoticesRepository(
         const val LITE_PATH: String =
             "notices?select=id,ts,hidden,edited_at&order=ts.asc,id.asc&archived=eq.false"
 
-        /** 每页条数：最新 20 条约 0.55MB（全表 13.9MB 会触发 10s 超时）。 */
+        /** 首屏每页条数：最新 20 条约 0.55MB（全表 13.9MB 会触发超时）。 */
         const val PAGE_SIZE: Int = 20
 
+        /** 「加载更多」自适应页大小：旧通知单页可达 3–4MB，超时后逐级缩小。 */
+        val MORE_PAGE_LIMITS: List<Int> = listOf(5, 3, 1)
+
         /** 单次请求超时保护（大于传输层 10s 读超时；仅兜底卡死场景）。 */
-        const val DEFAULT_REQUEST_TIMEOUT_MS: Long = 30_000L
+        const val DEFAULT_REQUEST_TIMEOUT_MS: Long = 40_000L
 
         const val DEFAULT_RETRY_DELAY_MS: Long = 350L
         const val DEFAULT_TTL_MS: Long = 10L * 60 * 1000
