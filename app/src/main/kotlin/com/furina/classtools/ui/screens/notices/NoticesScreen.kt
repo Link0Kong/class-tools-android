@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Button
@@ -103,6 +104,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -114,10 +116,13 @@ import com.furina.classtools.data.marks.MarkKind
 import com.furina.classtools.data.marks.MarksRepository
 import com.furina.classtools.data.marks.MarksSnapshot
 import com.furina.classtools.data.notices.ManualNotice
+import com.furina.classtools.data.notices.NoticeBucket
 import com.furina.classtools.data.notices.NoticeEntry
 import com.furina.classtools.data.notices.NoticeGroupDto
+import com.furina.classtools.data.notices.NoticeRecurrenceDto
 import com.furina.classtools.data.notices.NoticeStatus
 import com.furina.classtools.data.notices.NoticeStatusMachine
+import com.furina.classtools.data.notices.NoticeStats
 import com.furina.classtools.data.notices.NoticesData
 import com.furina.classtools.data.notices.NoticesLoadResult
 import com.furina.classtools.data.notices.NoticesRepository
@@ -196,96 +201,28 @@ internal data class NoticeUiItem(
     val edited: Boolean = false,
     val hidden: Boolean = false,
     val recurring: Boolean = false,
+    /** `actionable !== false`（§2.4：false = 仅告知，不计待处理）。 */
+    val actionable: Boolean = true,
+    /** 资料 / 无时间（§1.2）：非过期、无有效 recurrence、无任何时间锚点；不进长期通知、不计待处理。 */
+    val material: Boolean = false,
+    /** 有效的长期安排（recurrence；已结束由 [longtermEnded] 标记）。 */
+    val recurrence: NoticeRecurrenceDto? = null,
+    /** 长期安排已结束（until 到期 / 下一次超出 until）→ 已过期区。 */
+    val longtermEnded: Boolean = false,
+    /** 期次发生时间（处于期次窗口内时非空；期次卡按它参与主列表排序）。 */
+    val occurrenceMillis: Long? = null,
+    /** 期次 marks ref：`<gid>@occ:<yyyyMMdd>`（本次已处理写这个 key）。 */
+    val occurrenceKey: String? = null,
+    /** 本期是否已处理（marks ntdone，ref = 期次 key）。 */
+    val occurrenceDone: Boolean = false,
+    /** 长期安排周期 label（如「每周三 17:30」；长期清单/详情用）。 */
+    val recurLabel: String = "",
+    /** 下次发生时间（长期清单排序用）。 */
+    val recurNextMillis: Long? = null,
+    /** 下次发生文案（`下次 M月D日（周X）HH:mm`；长期清单/详情用）。 */
+    val recurNextText: String = "",
 ) {
     val isAuto: Boolean get() = auto != null
-}
-
-/** 简报统计（小程序 nt 页「待处理简报」同口径）。 */
-internal data class NoticeBriefStats(
-    val pending: Int,
-    val urgent: Int,
-    val week: Int,
-    val expired: Int,
-)
-
-private const val DAY_MS = 24L * 60L * 60L * 1000L
-
-/** 数据 → UI 列表（纯函数；只做排序，不做合并/去重）。 */
-internal fun buildUiItems(
-    data: NoticesData?,
-    marks: MarksSnapshot,
-    nowMillis: Long,
-): List<NoticeUiItem> {
-    if (data == null) return emptyList()
-    val autoItems = data.auto.map { entry ->
-        val status = NoticeStatusMachine.statusOf(entry.group, nowMillis)
-        val whenMillis = NoticeStatusMachine.whenInfo(entry.group, nowMillis)?.atMillis
-        val summary = entry.group.aiSummary.ifBlank {
-            entry.group.summary.ifBlank {
-                com.furina.classtools.data.notices.NoticeBodyParser.firstTextOf(entry.items)
-            }
-        }
-        NoticeUiItem(
-            key = entry.rowId,
-            auto = entry,
-            status = status,
-            done = marks.isDone(MarkKind.NT_DONE, entry.id),
-            pinned = false,
-            ts = entry.ts,
-            title = entry.title,
-            summary = summary.trim(),
-            cat = entry.cat,
-            tone = toneOfCat(entry.cat),
-            source = entry.group.source,
-            sourceKind = sourceKindOf(entry.group.source),
-            senderLine = listOf(entry.group.senderRole, entry.group.senderName)
-                .filter { it.isNotBlank() }
-                .joinToString(" · "),
-            timeLabel = entry.group.timeLabel,
-            postedText = formatPosted(entry.ts, nowMillis),
-            whenMillis = whenMillis,
-            expired = status.expired,
-            attachmentCount = com.furina.classtools.data.notices.NoticeBodyParser.attachmentCount(entry.items),
-            mergeCount = entry.group.mergedSources.size,
-            edited = entry.edited,
-            hidden = entry.hidden,
-            recurring = entry.group.recurrence != null,
-        )
-    }
-    val manualItems = data.manual.map { notice ->
-        val pinned = marks.isDone(MarkKind.NT, notice.id)
-        NoticeUiItem(
-            key = notice.id,
-            manual = notice,
-            pinned = pinned,
-            ts = notice.ts,
-            title = notice.row.title.ifBlank { "班级通知" },
-            summary = notice.row.body.trim(),
-            cat = "班级通知",
-            tone = NoticeTone.GREY,
-            postedText = formatPosted(notice.ts, nowMillis),
-            attachmentCount = notice.attachments.size,
-        )
-    }
-    // 置顶优先 → 未处理在前 → 时间倒序；人工/自动统一按时间交错（与小程序列表一致）。
-    return (manualItems + autoItems).sortedWith(
-        compareBy<NoticeUiItem> { if (it.pinned) 0 else 1 }
-            .thenBy { if (it.done) 1 else 0 }
-            .thenByDescending { it.ts },
-    )
-}
-
-internal fun buildBriefStats(items: List<NoticeUiItem>, nowMillis: Long): NoticeBriefStats {
-    val in24h = nowMillis + DAY_MS
-    val in7d = nowMillis + 7 * DAY_MS
-    val pending = items.filter { it.isAuto && !it.done && !it.expired }
-    val pendingWhen = pending.mapNotNull { it.whenMillis }.filter { it > nowMillis }
-    return NoticeBriefStats(
-        pending = pending.size,
-        urgent = pendingWhen.count { it <= in24h },
-        week = pendingWhen.count { it <= in7d },
-        expired = items.count { it.isAuto && it.expired },
-    )
 }
 
 /** 分类 → 语义色（与小程序 nt 页「教务雾蓝 / 团务睡莲青 / 考试暖沙 / 缴费灰粉 / 其它灰」同口径）。 */
@@ -349,10 +286,13 @@ internal fun formatTs(ts: Long): String {
         .format(Instant.ofEpochMilli(ts).atZone(ZoneId.systemDefault()))
 }
 
-/** 列表卡片上的「什么时候发的」：今天 → HH:mm；昨天 → 昨天 HH:mm；今年 → MM-dd；更早 → yyyy-MM-dd。 */
-internal fun formatPosted(ts: Long, nowMillis: Long = System.currentTimeMillis()): String {
+/** 列表卡片上的「什么时候发的」：今天 → HH:mm；昨天 → 昨天 HH:mm；更早 → `M月D日（相对周）`（§3）。 */
+internal fun formatPosted(
+    ts: Long,
+    nowMillis: Long = System.currentTimeMillis(),
+    zone: ZoneId = ZoneId.systemDefault(),
+): String {
     if (ts <= 0) return ""
-    val zone = ZoneId.systemDefault()
     val date = Instant.ofEpochMilli(ts).atZone(zone).toLocalDate()
     val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
     val clock = DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA)
@@ -360,8 +300,7 @@ internal fun formatPosted(ts: Long, nowMillis: Long = System.currentTimeMillis()
     return when {
         date == today -> clock.format(at)
         date == today.minusDays(1) -> "昨天 ${clock.format(at)}"
-        date.year == today.year -> DateTimeFormatter.ofPattern("MM-dd", Locale.CHINA).format(at)
-        else -> DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.CHINA).format(at)
+        else -> NoticeStatusMachine.fmtDateWeek(ts, nowMillis, zone)
     }
 }
 
@@ -475,6 +414,8 @@ fun NoticesScreen(
     var isLoadingMore by remember { mutableStateOf(false) }
     var loadMoreError by remember { mutableStateOf<String?>(null) }
     var filterKey by rememberSaveable { mutableStateOf(initialFilter.name) }
+    // 顶部 5 张可点数据卡的筛选口径（null = 未激活；与 chips 互斥，契约 §2.1）
+    var cardFilterKey by rememberSaveable { mutableStateOf<String?>(null) }
     val noticeFilterOptions = NoticeFilter.entries
     // 左右滑动切筛选（跟手 + spring 吸附；reduceMotion 时禁用拖拽并直接用总开关的瞬时切换）
     val noticePagerState = rememberPagerState(
@@ -484,12 +425,18 @@ fun NoticesScreen(
     LaunchedEffect(noticePagerState) {
         snapshotFlow { noticePagerState.currentPage }.collect { page ->
             noticeFilterOptions.getOrNull(page)?.let { filterKey = it.name }
+            // 滑到非「全部」chips 页 → 顶部卡筛选取消（chips 与顶部卡互斥）
+            if (noticeFilterOptions.getOrNull(page) != NoticeFilter.ALL) cardFilterKey = null
         }
     }
     val filter = remember(filterKey) {
         noticeFilterOptions.firstOrNull { it.name == filterKey } ?: NoticeFilter.ALL
     }
+    val cardFilter = remember(cardFilterKey) {
+        cardFilterKey?.let { key -> NoticeCardFilter.entries.firstOrNull { it.name == key } }
+    }
     fun selectFilter(target: NoticeFilter) {
+        cardFilterKey = null
         filterKey = target.name
         val index = noticeFilterOptions.indexOf(target).coerceAtLeast(0)
         scope.launch {
@@ -497,9 +444,20 @@ fun NoticesScreen(
             if (reduceMotion) noticePagerState.scrollToPage(index) else noticePagerState.animateScrollToPage(index)
         }
     }
+
+    /** 点顶部数据卡：激活该口径；再点同一张 → 取消恢复「全部」。 */
+    fun selectCardFilter(target: NoticeCardFilter) {
+        cardFilterKey = if (cardFilter == target) null else target.name
+        filterKey = NoticeFilter.ALL.name
+        scope.launch {
+            if (reduceMotion) noticePagerState.scrollToPage(0) else noticePagerState.animateScrollToPage(0)
+        }
+    }
     var query by rememberSaveable { mutableStateOf(initialQuery) }
     var searchVisible by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
     var expiredExpanded by rememberSaveable { mutableStateOf(initialExpiredExpanded) }
+    // 「资料 / 无时间」栏常驻显示、默认展开（可折叠，契约 §2.2）
+    var materialExpanded by rememberSaveable { mutableStateOf(true) }
     var selectedKey by rememberSaveable { mutableStateOf<String?>(null) }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
@@ -582,17 +540,27 @@ fun NoticesScreen(
         }
     }
 
+    /** 标记已处理：普通通知 ref = 组 id；期次卡 ref = 期次 key（`<gid>@occ:<yyyyMMdd>`，§2.5）。 */
     fun toggleDone(item: NoticeUiItem) {
         val repository = marksRepository ?: run {
             notify("未登录，无法同步处理状态")
             return
         }
         val entry = item.auto ?: return
+        val occurrenceKey = item.occurrenceKey
+        val ref = occurrenceKey ?: entry.id
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        val nextDone = !item.done
         scope.launch {
-            when (repository.setMark(MarkKind.NT_DONE, entry.id, !item.done)) {
-                is com.furina.classtools.data.marks.MarksUpdateResult.Success ->
-                    notify(if (!item.done) "已标记处理" else "已恢复未处理")
+            when (repository.setMark(MarkKind.NT_DONE, ref, nextDone)) {
+                is com.furina.classtools.data.marks.MarksUpdateResult.Success -> notify(
+                    when {
+                        occurrenceKey != null && nextDone -> "本期已处理"
+                        occurrenceKey != null -> "本期已恢复未处理"
+                        nextDone -> "已标记处理"
+                        else -> "已恢复未处理"
+                    },
+                )
 
                 is com.furina.classtools.data.marks.MarksUpdateResult.Failure ->
                     notify("同步失败，稍后自动重试")
@@ -620,9 +588,10 @@ fun NoticesScreen(
 
     val allItems = remember(data, marks, nowMillis) { buildUiItems(data, marks, nowMillis) }
 
-    val pendingCount = allItems.count { it.isAuto && !it.done && !it.expired }
     val pinnedCount = allItems.count { it.pinned }
-    val briefStats = remember(allItems, nowMillis) { buildBriefStats(allItems, nowMillis) }
+    // §2.4 统计口径（5 张数据卡 / 与工作台同口径）：复用数据层 statsOf（期次 / until / 资料无时间）
+    val overview = remember(data, marks, nowMillis) { buildOverview(data, marks, nowMillis) }
+    val pendingCount = overview.pending
     val selectedItem = remember(allItems, selectedKey) {
         selectedKey?.let { key -> allItems.firstOrNull { it.key == key } }
     }
@@ -680,9 +649,12 @@ fun NoticesScreen(
                             .fillMaxSize()
                             .padding(horizontal = spec.horizontalPadding),
                     ) {
+                        // 顶部 5 张可点数据卡（契约 §2.1）：待处理 / 24h 截止 / 7 天内 / 长期通知 / 最新发布
                         if (phase != Phase.FAILED && allItems.isNotEmpty()) {
-                            NoticeBriefing(
-                                stats = briefStats,
+                            NoticeOverviewCards(
+                                stats = overview,
+                                active = cardFilter,
+                                onPick = { selectCardFilter(it) },
                                 reduceMotion = reduceMotion,
                                 modifier = Modifier.padding(top = 4.dp),
                             )
@@ -703,7 +675,8 @@ fun NoticesScreen(
                                     "置顶 " + animatedStatText(pinnedCount, reduceMotion),
                                 ),
                             ),
-                            selectedKey = filter.name,
+                            // 顶部卡激活时 chips 取消选中（与 chips 互斥，§2.1）
+                            selectedKey = if (cardFilter != null) "" else filter.name,
                             onSelect = { key ->
                                 NoticeFilter.entries.firstOrNull { it.name == key }?.let { selectFilter(it) }
                             },
@@ -777,28 +750,16 @@ fun NoticesScreen(
                                     key = { page -> noticeFilterOptions[page].name },
                                 ) { pageIndex ->
                                     val pageFilter = noticeFilterOptions[pageIndex]
-                                    val pageVisible = remember(allItems, pageFilter, query) {
-                                        val base = when (pageFilter) {
-                                            NoticeFilter.ALL -> allItems
-                                            NoticeFilter.PENDING -> allItems.filter { it.isAuto && !it.done && !it.expired }
-                                            NoticeFilter.PINNED -> allItems.filter { it.pinned }
-                                        }
-                                        val q = query.trim()
-                                        if (q.isBlank()) {
-                                            base
-                                        } else {
-                                            base.filter {
-                                                it.title.contains(q, ignoreCase = true) ||
-                                                    it.summary.contains(q, ignoreCase = true)
-                                            }
-                                        }
-                                    }
-                                    val pageExpiredSection = pageFilter == NoticeFilter.ALL && query.isBlank()
-                                    val pagePrimary = remember(pageVisible, pageExpiredSection) {
-                                        if (pageExpiredSection) pageVisible.filter { !it.expired } else pageVisible
-                                    }
-                                    val pageExpired = remember(pageVisible, pageExpiredSection) {
-                                        if (pageExpiredSection) pageVisible.filter { it.expired } else emptyList()
+                                    // 顶部卡只作用于「全部」chips 页（chips 与顶部卡互斥，§2.1）
+                                    val pageCardFilter = if (pageFilter == NoticeFilter.ALL) cardFilter else null
+                                    val content = remember(allItems, pageFilter, pageCardFilter, query, nowMillis) {
+                                        viewContentOf(
+                                            items = allItems,
+                                            chipFilter = pageFilter,
+                                            cardFilter = pageCardFilter,
+                                            query = query,
+                                            nowMillis = nowMillis,
+                                        )
                                     }
                                     val hasMore = data?.hasMore == true
                                     val remaining = data?.remainingCount ?: 0
@@ -807,17 +768,18 @@ fun NoticesScreen(
                                         onRefresh = { refresh() },
                                         modifier = Modifier.fillMaxSize(),
                                     ) {
-                                        val listEmpty = pagePrimary.isEmpty() && pageExpired.isEmpty()
-                                        if (listEmpty) {
+                                        if (content.isEmpty) {
                                             // 放进 LazyColumn 以保留下拉刷新（空态也能刷新 / 加载更多）
                                             LazyColumn(modifier = Modifier.fillMaxSize()) {
                                                 item(key = "empty") {
                                                     NoticeEmptyState(
                                                         filter = pageFilter,
+                                                        cardFilter = pageCardFilter,
                                                         query = query,
                                                         hasAny = allItems.isNotEmpty(),
                                                         onClear = {
                                                             query = ""
+                                                            cardFilterKey = null
                                                             selectFilter(NoticeFilter.ALL)
                                                         },
                                                         modifier = Modifier.fillParentMaxSize(),
@@ -836,9 +798,9 @@ fun NoticesScreen(
                                             }
                                         } else if (twoColumn) {
                                             NoticeGrid(
-                                                items = pagePrimary,
-                                                expiredItems = if (expiredExpanded) pageExpired else emptyList(),
-                                                expiredCount = pageExpired.size,
+                                                content = content,
+                                                materialExpanded = materialExpanded,
+                                                onToggleMaterial = { materialExpanded = !materialExpanded },
                                                 expiredExpanded = expiredExpanded,
                                                 onToggleExpired = { expiredExpanded = !expiredExpanded },
                                                 onOpen = { selectedKey = it.key },
@@ -859,9 +821,9 @@ fun NoticesScreen(
                                             )
                                         } else {
                                             NoticeList(
-                                                items = pagePrimary,
-                                                expiredItems = if (expiredExpanded) pageExpired else emptyList(),
-                                                expiredCount = pageExpired.size,
+                                                content = content,
+                                                materialExpanded = materialExpanded,
+                                                onToggleMaterial = { materialExpanded = !materialExpanded },
                                                 expiredExpanded = expiredExpanded,
                                                 onToggleExpired = { expiredExpanded = !expiredExpanded },
                                                 onOpen = { selectedKey = it.key },
@@ -909,6 +871,7 @@ fun NoticesScreen(
             onDismiss = { selectedKey = null },
             onToggleDone = { toggleDone(item) },
             onTogglePin = { togglePin(item) },
+            nowMillis = nowMillis,
         )
     }
 }
@@ -932,44 +895,132 @@ private fun buildSubtitle(
 }
 
 // -----------------------------------------------------------------------------
-// 顶部：简报 / 搜索
+// 顶部：5 张可点数据卡（待处理 / 24h 截止 / 7 天内 / 长期通知 / 最新发布）
 // -----------------------------------------------------------------------------
 
-/** 待处理简报（v6：CtToolCard + CtToolStat；数字保留逐帧滚动，移除旧玻璃卡）。 */
+/**
+ * 顶部 5 张可点数据卡（契约 §2.1，与小程序/web 同构）：
+ *
+ * - 信息顺序固定：待处理 → 24h 截止 → 7 天内 → 长期通知 → 最新发布；数字口径见 §2.4；
+ * - 手机 360dp 下 3 + 2 两行，无横向溢出；每张卡点按区 ≥ 64dp（> 40dp 红线）；
+ * - 点卡 = 列表筛选到该口径；再点同一张 = 取消恢复「全部」；激活态 = primaryContainer 底 + 主色描边；
+ * - 与下方筛选 chips 互斥（由页面状态机保证：激活卡片时 chips 全部取消）。
+ */
 @Composable
-private fun NoticeBriefing(
-    stats: NoticeBriefStats,
+private fun NoticeOverviewCards(
+    stats: NoticeStats,
+    active: NoticeCardFilter?,
+    onPick: (NoticeCardFilter) -> Unit,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    CtToolCard(modifier = modifier, title = "待处理简报") {
+    val firstRow = listOf(
+        NoticeCardFilter.PENDING to animatedStatText(stats.pending, reduceMotion),
+        NoticeCardFilter.URGENT to animatedStatText(stats.urgent, reduceMotion),
+        NoticeCardFilter.WEEK to animatedStatText(stats.week, reduceMotion),
+    )
+    val secondRow = listOf(
+        NoticeCardFilter.LONGTERM to animatedStatText(stats.longterm, reduceMotion),
+        NoticeCardFilter.LATEST to stats.latestPostedText.ifBlank { "—" },
+    )
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            CtToolStat(
-                value = animatedStatText(stats.pending, reduceMotion),
-                label = "待处理",
-                valueColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f),
+            firstRow.forEach { (filter, value) ->
+                NoticeStatCard(
+                    filter = filter,
+                    value = value,
+                    active = active == filter,
+                    onClick = { onPick(filter) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            secondRow.forEach { (filter, value) ->
+                NoticeStatCard(
+                    filter = filter,
+                    value = value,
+                    active = active == filter,
+                    onClick = { onPick(filter) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+/** 单张可点数据卡（激活态 + 语义；点按区 ≥64dp）。 */
+@Composable
+private fun NoticeStatCard(
+    filter: NoticeCardFilter,
+    value: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val labelColor = if (active) scheme.onPrimaryContainer.copy(alpha = 0.72f) else scheme.onSurfaceVariant
+    val valueColor = when {
+        active -> scheme.onPrimaryContainer
+        filter == NoticeCardFilter.URGENT -> scheme.error
+        filter == NoticeCardFilter.LONGTERM -> scheme.secondary
+        filter == NoticeCardFilter.LATEST -> scheme.tertiary
+        else -> scheme.onSurface
+    }
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .heightIn(min = 64.dp)
+            .semantics {
+                role = Role.Button
+                selected = active
+                stateDescription = if (active) "已筛选" else "未筛选"
+            },
+        shape = RoundedCornerShape(20.dp),
+        color = if (active) scheme.primaryContainer else scheme.surfaceContainerLow,
+        contentColor = if (active) scheme.onPrimaryContainer else scheme.onSurface,
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = if (active) {
+                scheme.primary.copy(alpha = 0.6f)
+            } else {
+                scheme.outlineVariant.copy(alpha = 0.28f)
+            },
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = value,
+                style = if (value.length > 5) {
+                    MaterialTheme.typography.labelLarge
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
+                fontWeight = FontWeight.Bold,
+                color = valueColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            CtToolStat(
-                value = animatedStatText(stats.urgent, reduceMotion),
-                label = "24h 截止",
-                valueColor = MaterialTheme.colorScheme.error,
-                modifier = Modifier.weight(1f),
-            )
-            CtToolStat(
-                value = animatedStatText(stats.week, reduceMotion),
-                label = "7 天内",
-                valueColor = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.weight(1f),
-            )
-            CtToolStat(
-                value = animatedStatText(stats.expired, reduceMotion),
-                label = "已过期",
-                valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
+            Text(
+                text = filter.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = labelColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -1069,11 +1120,57 @@ private fun NoticeOfflineBanner(
 // 列表 / 空态 / 错误态 / 骨架
 // -----------------------------------------------------------------------------
 
+/**
+ * 列表中的一张通知卡（错峰入场 + 按压动效包装；[mode] 决定状态胶囊 / 操作区，见契约 §2.2/§2.3）。
+ */
+@Composable
+private fun NoticeCardEntry(
+    item: NoticeUiItem,
+    mode: NoticeCardMode,
+    index: Int,
+    itemKey: String,
+    reduceMotion: Boolean,
+    appearedKeys: SnapshotStateMap<String, Boolean>,
+    previewEntranceProgress: Float?,
+    previewPressedKey: String?,
+    previewExpandedKey: String?,
+    selectedKey: String?,
+    onOpen: (NoticeUiItem) -> Unit,
+    onToggleDone: (NoticeUiItem) -> Unit,
+    onTogglePin: (NoticeUiItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    NoticeEntrance(
+        itemKey = itemKey,
+        index = index,
+        reduceMotion = reduceMotion,
+        appearedKeys = appearedKeys,
+        previewBaseProgress = previewEntranceProgress,
+        modifier = modifier,
+    ) {
+        NoticeCard(
+            item = item,
+            mode = mode,
+            reduceMotion = reduceMotion,
+            expanded = selectedKey == item.key || previewExpandedKey == item.key,
+            previewPressed = previewPressedKey == item.key,
+            onOpen = { onOpen(item) },
+            onToggleDone = { onToggleDone(item) },
+            onTogglePin = { onTogglePin(item) },
+        )
+    }
+}
+
+/**
+ * 通知列表（分区渲染；契约 §2.2）：
+ * 主列表（含期次卡）→「资料 / 无时间」栏（默认展开）→「已过期」区（默认折叠）→ 底部「共 N 组」；
+ * 「长期通知」筛选 = 长期安排清单；「最新发布」= 按发布时间倒序（过期卡样式仍按过期显示）。
+ */
 @Composable
 private fun NoticeList(
-    items: List<NoticeUiItem>,
-    expiredItems: List<NoticeUiItem>,
-    expiredCount: Int,
+    content: NoticesViewContent,
+    materialExpanded: Boolean,
+    onToggleMaterial: () -> Unit,
     expiredExpanded: Boolean,
     onToggleExpired: () -> Unit,
     onOpen: (NoticeUiItem) -> Unit,
@@ -1097,57 +1194,118 @@ private fun NoticeList(
         contentPadding = PaddingValues(top = 4.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        itemsIndexed(items = items, key = { _, item -> "c-${item.key}" }) { index, item ->
-            NoticeEntrance(
-                itemKey = item.key,
-                index = index,
-                reduceMotion = reduceMotion,
-                appearedKeys = appearedKeys,
-                previewBaseProgress = previewEntranceProgress,
-                modifier = this.noticeAnimateItem(reduceMotion),
-            ) {
-                NoticeCard(
+        if (content.longtermOnly || content.latestOnly) {
+            val list = if (content.longtermOnly) content.longterm else content.latest
+            itemsIndexed(items = list, key = { _, item -> "x-${item.key}" }) { index, item ->
+                val mode = if (content.longtermOnly) {
+                    NoticeCardMode.LONGTERM_DEF
+                } else {
+                    noticeLatestModeOf(item)
+                }
+                NoticeCardEntry(
                     item = item,
-                    reduceMotion = reduceMotion,
-                    expanded = selectedKey == item.key || previewExpandedKey == item.key,
-                    previewPressed = previewPressedKey == item.key,
-                    onOpen = { onOpen(item) },
-                    onToggleDone = { onToggleDone(item) },
-                    onTogglePin = { onTogglePin(item) },
-                )
-            }
-        }
-        if (expiredCount > 0) {
-            item(key = "expired-header") {
-                ExpiredHeader(
-                    count = expiredCount,
-                    expanded = expiredExpanded,
-                    onToggle = onToggleExpired,
-                    reduceMotion = reduceMotion,
-                    modifier = this.noticeAnimateItem(reduceMotion),
-                )
-            }
-        }
-        if (expiredExpanded) {
-            itemsIndexed(items = expiredItems, key = { _, item -> "e-${item.key}" }) { index, item ->
-                NoticeEntrance(
-                    itemKey = "e-${item.key}",
-                    index = items.size + 1 + index,
+                    mode = mode,
+                    index = index,
+                    itemKey = "x-${item.key}",
                     reduceMotion = reduceMotion,
                     appearedKeys = appearedKeys,
-                    previewBaseProgress = previewEntranceProgress,
+                    previewEntranceProgress = previewEntranceProgress,
+                    previewPressedKey = previewPressedKey,
+                    previewExpandedKey = previewExpandedKey,
+                    selectedKey = selectedKey,
+                    onOpen = onOpen,
+                    onToggleDone = onToggleDone,
+                    onTogglePin = onTogglePin,
                     modifier = this.noticeAnimateItem(reduceMotion),
-                ) {
-                    NoticeCard(
-                        item = item,
+                )
+            }
+        } else {
+            itemsIndexed(items = content.primary, key = { _, item -> "c-${item.key}" }) { index, item ->
+                NoticeCardEntry(
+                    item = item,
+                    mode = noticeCardModeOf(item),
+                    index = index,
+                    itemKey = "c-${item.key}",
+                    reduceMotion = reduceMotion,
+                    appearedKeys = appearedKeys,
+                    previewEntranceProgress = previewEntranceProgress,
+                    previewPressedKey = previewPressedKey,
+                    previewExpandedKey = previewExpandedKey,
+                    selectedKey = selectedKey,
+                    onOpen = onOpen,
+                    onToggleDone = onToggleDone,
+                    onTogglePin = onTogglePin,
+                    modifier = this.noticeAnimateItem(reduceMotion),
+                )
+            }
+            if (content.showMaterial && content.material.isNotEmpty()) {
+                item(key = "material-header") {
+                    NoticeGroupHeader(
+                        title = "资料 / 无时间",
+                        subtitle = "${content.material.size} 条",
+                        expanded = materialExpanded,
+                        onToggle = onToggleMaterial,
                         reduceMotion = reduceMotion,
-                        expanded = selectedKey == item.key || previewExpandedKey == item.key,
-                        previewPressed = previewPressedKey == item.key,
-                        onOpen = { onOpen(item) },
-                        onToggleDone = { onToggleDone(item) },
-                        onTogglePin = { onTogglePin(item) },
+                        modifier = this.noticeAnimateItem(reduceMotion),
                     )
                 }
+                if (materialExpanded) {
+                    itemsIndexed(items = content.material, key = { _, item -> "m-${item.key}" }) { index, item ->
+                        NoticeCardEntry(
+                            item = item,
+                            mode = NoticeCardMode.NORMAL,
+                            index = content.primary.size + 1 + index,
+                            itemKey = "m-${item.key}",
+                            reduceMotion = reduceMotion,
+                            appearedKeys = appearedKeys,
+                            previewEntranceProgress = previewEntranceProgress,
+                            previewPressedKey = previewPressedKey,
+                            previewExpandedKey = previewExpandedKey,
+                            selectedKey = selectedKey,
+                            onOpen = onOpen,
+                            onToggleDone = onToggleDone,
+                            onTogglePin = onTogglePin,
+                            modifier = this.noticeAnimateItem(reduceMotion),
+                        )
+                    }
+                }
+            }
+            if (content.showExpiredSection && content.expired.isNotEmpty()) {
+                item(key = "expired-header") {
+                    NoticeGroupHeader(
+                        title = "已过期",
+                        subtitle = "${content.expired.size} 组",
+                        expanded = expiredExpanded,
+                        onToggle = onToggleExpired,
+                        reduceMotion = reduceMotion,
+                        modifier = this.noticeAnimateItem(reduceMotion),
+                    )
+                }
+                if (expiredExpanded) {
+                    itemsIndexed(items = content.expired, key = { _, item -> "e-${item.key}" }) { index, item ->
+                        NoticeCardEntry(
+                            item = item,
+                            mode = NoticeCardMode.EXPIRED,
+                            index = content.primary.size + 1 + index,
+                            itemKey = "e-${item.key}",
+                            reduceMotion = reduceMotion,
+                            appearedKeys = appearedKeys,
+                            previewEntranceProgress = previewEntranceProgress,
+                            previewPressedKey = previewPressedKey,
+                            previewExpandedKey = previewExpandedKey,
+                            selectedKey = selectedKey,
+                            onOpen = onOpen,
+                            onToggleDone = onToggleDone,
+                            onTogglePin = onTogglePin,
+                            modifier = this.noticeAnimateItem(reduceMotion),
+                        )
+                    }
+                }
+            }
+        }
+        if (content.totalCount > 0) {
+            item(key = "total-count") {
+                NoticeTotalCountRow(count = content.totalCount)
             }
         }
         if (hasMore || loadMoreError != null) {
@@ -1163,11 +1321,12 @@ private fun NoticeList(
     }
 }
 
+/** 宽屏双列同 [NoticeList]（分区头/底部统计跨列）。 */
 @Composable
 private fun NoticeGrid(
-    items: List<NoticeUiItem>,
-    expiredItems: List<NoticeUiItem>,
-    expiredCount: Int,
+    content: NoticesViewContent,
+    materialExpanded: Boolean,
+    onToggleMaterial: () -> Unit,
     expiredExpanded: Boolean,
     onToggleExpired: () -> Unit,
     onOpen: (NoticeUiItem) -> Unit,
@@ -1193,57 +1352,114 @@ private fun NoticeGrid(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        itemsIndexed(items = items, key = { _, item -> "c-${item.key}" }) { index, item ->
-            NoticeEntrance(
-                itemKey = item.key,
-                index = index,
-                reduceMotion = reduceMotion,
-                appearedKeys = appearedKeys,
-                previewBaseProgress = previewEntranceProgress,
-                modifier = this.noticeAnimateItem(reduceMotion),
-            ) {
-                NoticeCard(
+        if (content.longtermOnly || content.latestOnly) {
+            val list = if (content.longtermOnly) content.longterm else content.latest
+            itemsIndexed(items = list, key = { _, item -> "x-${item.key}" }) { index, item ->
+                val mode = if (content.longtermOnly) NoticeCardMode.LONGTERM_DEF else noticeLatestModeOf(item)
+                NoticeCardEntry(
                     item = item,
-                    reduceMotion = reduceMotion,
-                    expanded = selectedKey == item.key || previewExpandedKey == item.key,
-                    previewPressed = previewPressedKey == item.key,
-                    onOpen = { onOpen(item) },
-                    onToggleDone = { onToggleDone(item) },
-                    onTogglePin = { onTogglePin(item) },
-                )
-            }
-        }
-        if (expiredCount > 0) {
-            item(key = "expired-header", span = { GridItemSpan(maxLineSpan) }) {
-                ExpiredHeader(
-                    count = expiredCount,
-                    expanded = expiredExpanded,
-                    onToggle = onToggleExpired,
-                    reduceMotion = reduceMotion,
-                    modifier = this.noticeAnimateItem(reduceMotion),
-                )
-            }
-        }
-        if (expiredExpanded) {
-            itemsIndexed(items = expiredItems, key = { _, item -> "e-${item.key}" }) { index, item ->
-                NoticeEntrance(
-                    itemKey = "e-${item.key}",
-                    index = items.size + 1 + index,
+                    mode = mode,
+                    index = index,
+                    itemKey = "x-${item.key}",
                     reduceMotion = reduceMotion,
                     appearedKeys = appearedKeys,
-                    previewBaseProgress = previewEntranceProgress,
+                    previewEntranceProgress = previewEntranceProgress,
+                    previewPressedKey = previewPressedKey,
+                    previewExpandedKey = previewExpandedKey,
+                    selectedKey = selectedKey,
+                    onOpen = onOpen,
+                    onToggleDone = onToggleDone,
+                    onTogglePin = onTogglePin,
                     modifier = this.noticeAnimateItem(reduceMotion),
-                ) {
-                    NoticeCard(
-                        item = item,
+                )
+            }
+        } else {
+            itemsIndexed(items = content.primary, key = { _, item -> "c-${item.key}" }) { index, item ->
+                NoticeCardEntry(
+                    item = item,
+                    mode = noticeCardModeOf(item),
+                    index = index,
+                    itemKey = "c-${item.key}",
+                    reduceMotion = reduceMotion,
+                    appearedKeys = appearedKeys,
+                    previewEntranceProgress = previewEntranceProgress,
+                    previewPressedKey = previewPressedKey,
+                    previewExpandedKey = previewExpandedKey,
+                    selectedKey = selectedKey,
+                    onOpen = onOpen,
+                    onToggleDone = onToggleDone,
+                    onTogglePin = onTogglePin,
+                    modifier = this.noticeAnimateItem(reduceMotion),
+                )
+            }
+            if (content.showMaterial && content.material.isNotEmpty()) {
+                item(key = "material-header", span = { GridItemSpan(maxLineSpan) }) {
+                    NoticeGroupHeader(
+                        title = "资料 / 无时间",
+                        subtitle = "${content.material.size} 条",
+                        expanded = materialExpanded,
+                        onToggle = onToggleMaterial,
                         reduceMotion = reduceMotion,
-                        expanded = selectedKey == item.key || previewExpandedKey == item.key,
-                        previewPressed = previewPressedKey == item.key,
-                        onOpen = { onOpen(item) },
-                        onToggleDone = { onToggleDone(item) },
-                        onTogglePin = { onTogglePin(item) },
+                        modifier = this.noticeAnimateItem(reduceMotion),
                     )
                 }
+                if (materialExpanded) {
+                    itemsIndexed(items = content.material, key = { _, item -> "m-${item.key}" }) { index, item ->
+                        NoticeCardEntry(
+                            item = item,
+                            mode = NoticeCardMode.NORMAL,
+                            index = content.primary.size + 1 + index,
+                            itemKey = "m-${item.key}",
+                            reduceMotion = reduceMotion,
+                            appearedKeys = appearedKeys,
+                            previewEntranceProgress = previewEntranceProgress,
+                            previewPressedKey = previewPressedKey,
+                            previewExpandedKey = previewExpandedKey,
+                            selectedKey = selectedKey,
+                            onOpen = onOpen,
+                            onToggleDone = onToggleDone,
+                            onTogglePin = onTogglePin,
+                            modifier = this.noticeAnimateItem(reduceMotion),
+                        )
+                    }
+                }
+            }
+            if (content.showExpiredSection && content.expired.isNotEmpty()) {
+                item(key = "expired-header", span = { GridItemSpan(maxLineSpan) }) {
+                    NoticeGroupHeader(
+                        title = "已过期",
+                        subtitle = "${content.expired.size} 组",
+                        expanded = expiredExpanded,
+                        onToggle = onToggleExpired,
+                        reduceMotion = reduceMotion,
+                        modifier = this.noticeAnimateItem(reduceMotion),
+                    )
+                }
+                if (expiredExpanded) {
+                    itemsIndexed(items = content.expired, key = { _, item -> "e-${item.key}" }) { index, item ->
+                        NoticeCardEntry(
+                            item = item,
+                            mode = NoticeCardMode.EXPIRED,
+                            index = content.primary.size + 1 + index,
+                            itemKey = "e-${item.key}",
+                            reduceMotion = reduceMotion,
+                            appearedKeys = appearedKeys,
+                            previewEntranceProgress = previewEntranceProgress,
+                            previewPressedKey = previewPressedKey,
+                            previewExpandedKey = previewExpandedKey,
+                            selectedKey = selectedKey,
+                            onOpen = onOpen,
+                            onToggleDone = onToggleDone,
+                            onTogglePin = onTogglePin,
+                            modifier = this.noticeAnimateItem(reduceMotion),
+                        )
+                    }
+                }
+            }
+        }
+        if (content.totalCount > 0) {
+            item(key = "total-count", span = { GridItemSpan(maxLineSpan) }) {
+                NoticeTotalCountRow(count = content.totalCount)
             }
         }
         if (hasMore || loadMoreError != null) {
@@ -1257,6 +1473,27 @@ private fun NoticeGrid(
             }
         }
     }
+}
+
+/** 最新发布视图的卡片模式：过期卡仍按过期显示；长期安排定义卡不显示「本次已处理」。 */
+internal fun noticeLatestModeOf(item: NoticeUiItem): NoticeCardMode = when {
+    item.expired -> NoticeCardMode.EXPIRED
+    item.recurrence != null -> NoticeCardMode.LONGTERM_DEF
+    else -> NoticeCardMode.NORMAL
+}
+
+/** 列表底部统计「共 N 组」（§2.2：主列表条目数；期次计 1 条；长期清单视图计长期条数）。 */
+@Composable
+private fun NoticeTotalCountRow(count: Int) {
+    Text(
+        text = "共 $count 组",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+    )
 }
 
 /** 「加载更多」行（分页：最新 20 + 旧数据按 20 条/页追加）。触控 ≥48dp。 */
@@ -1317,10 +1554,11 @@ private fun NoticeLoadMoreRow(
     }
 }
 
-/** 已过期分组头（v6：CtToolSectionHeader + 整行可点；箭头旋转动画保留）。 */
+/** 分区头（「资料 / 无时间」「已过期」）：整行可点折叠/展开，箭头旋转动画（v6 CtToolSectionHeader）。 */
 @Composable
-private fun ExpiredHeader(
-    count: Int,
+private fun NoticeGroupHeader(
+    title: String,
+    subtitle: String,
     expanded: Boolean,
     onToggle: () -> Unit,
     reduceMotion: Boolean,
@@ -1329,11 +1567,11 @@ private fun ExpiredHeader(
     val arrowRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
         animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.pressSpring,
-        label = "expiredArrow",
+        label = "noticeSectionArrow",
     )
     CtToolSectionHeader(
-        title = "已过期",
-        subtitle = "$count 组",
+        title = title,
+        subtitle = subtitle,
         modifier = modifier
             .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onToggle)
@@ -1362,12 +1600,21 @@ private fun ExpiredHeader(
 // 卡片
 // -----------------------------------------------------------------------------
 
+/**
+ * 通知卡片（契约 §2.2/§2.3）：[mode] 决定状态胶囊与操作区。
+ *
+ * - 普通：标记已处理 / 置顶；已过期普通通知保留「标记已处理」（已过期区保持现状）；
+ * - 期次：状态胶囊 `本次 M月D日（周X）HH:mm` + 操作「本次已处理」（写 marks ref = 期次 key）；
+ * - 长期定义（长期清单）：状态「进行中」+ 周期 / 下次，**无已处理**；
+ * - 长期安排已结束：状态「长期安排已结束」，无已处理。
+ */
 @Composable
 private fun NoticeCard(
     item: NoticeUiItem,
     onOpen: () -> Unit,
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
+    mode: NoticeCardMode = NoticeCardMode.NORMAL,
     reduceMotion: Boolean = false,
     expanded: Boolean = false,
     previewPressed: Boolean = false,
@@ -1384,6 +1631,12 @@ private fun NoticeCard(
         animationSpec = if (reduceMotion) snap() else NoticeMotionTokens.colorSpec,
         label = "noticeCardTitle",
     )
+    // 长期清单视图：状态胶囊固定「进行中」（即使该安排当前处于期次窗口，见 §2.2）
+    val displayStatus = if (mode == NoticeCardMode.LONGTERM_DEF) {
+        NoticeStatus("recurring", "进行中", "recurring", false, NoticeBucket.RECURRING)
+    } else {
+        item.status
+    }
     NoticePressableCard(
         onClick = onOpen,
         reduceMotion = reduceMotion,
@@ -1398,10 +1651,10 @@ private fun NoticeCard(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 NoticeCatPill(cat = item.cat, tone = item.tone)
-                if (item.status != null) {
+                if (displayStatus != null) {
                     Spacer(Modifier.width(8.dp))
                     StatusDotLine(
-                        status = item.status,
+                        status = displayStatus,
                         modifier = Modifier.weight(1f),
                     )
                 } else {
@@ -1436,7 +1689,7 @@ private fun NoticeCard(
                 )
             }
 
-            NoticeCardMeta(item = item)
+            NoticeCardMeta(item = item, mode = mode)
 
             Row(
                 modifier = Modifier
@@ -1444,10 +1697,27 @@ private fun NoticeCard(
                     .padding(top = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (item.isAuto) {
-                    DonePill(done = item.done, reduceMotion = reduceMotion, onClick = onToggleDone)
-                } else {
-                    PinPill(pinned = item.pinned, reduceMotion = reduceMotion, onClick = onTogglePin)
+                when {
+                    // 期次卡：本期单独已处理（marks ref = 期次 key，§2.3）
+                    item.occurrenceKey != null -> DonePill(
+                        done = item.done,
+                        reduceMotion = reduceMotion,
+                        onClick = onToggleDone,
+                        doneText = "本期已处理",
+                        undoneText = "本次已处理",
+                    )
+
+                    // 普通通知（含已过期普通通知）：沿用既有「标记已处理」
+                    item.isAuto && item.recurrence == null -> DonePill(
+                        done = item.done,
+                        reduceMotion = reduceMotion,
+                        onClick = onToggleDone,
+                    )
+
+                    // 长期安排定义卡 / 长期安排已结束：无已处理按钮（§2.3）
+                    item.isAuto -> Unit
+
+                    else -> PinPill(pinned = item.pinned, reduceMotion = reduceMotion, onClick = onTogglePin)
                 }
                 Spacer(Modifier.weight(1f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1468,9 +1738,9 @@ private fun NoticeCard(
     }
 }
 
-/** 卡片第三行：来源 / 发送者 / 附件数 / 多源合并 / 长期安排 / 已更新 / 已隐藏（可换行，大字体不截断）。 */
+/** 卡片第三行：来源 / 发送者 / 长期安排（周期 + 下次）/ 附件数 / 多源合并 / 已更新 / 已隐藏（FlowRow 可换行）。 */
 @Composable
-private fun NoticeCardMeta(item: NoticeUiItem) {
+private fun NoticeCardMeta(item: NoticeUiItem, mode: NoticeCardMode = NoticeCardMode.NORMAL) {
     val scheme = MaterialTheme.colorScheme
     val sourceColors = toneColors(
         when (item.sourceKind) {
@@ -1509,8 +1779,31 @@ private fun NoticeCardMeta(item: NoticeUiItem) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        // 「长期安排」徽标（期次卡 / 长期定义卡；§2.3）
         if (item.recurring) {
             ItemFlag(text = "长期安排", tone = NoticeTone.BLUE)
+        }
+        // 长期安排：周期 label + 下次时间（长期清单：标题 / 周期 / 下次 / 进行中）
+        if (item.recurLabel.isNotBlank()) {
+            ItemFlag(text = item.recurLabel, tone = NoticeTone.BLUE)
+        }
+        if ((mode == NoticeCardMode.LONGTERM_DEF || item.occurrenceKey != null) && item.recurNextText.isNotBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Schedule,
+                    contentDescription = null,
+                    tint = scheme.secondary,
+                    modifier = Modifier.size(13.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = item.recurNextText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         if (item.attachmentCount > 0) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1616,9 +1909,15 @@ private fun StatusDotLine(
     }
 }
 
-/** 「标记已处理」胶囊（≥48dp；已处理=次要容器底）。 */
+/** 「标记已处理」胶囊（≥48dp；已处理=次要容器底）。期次卡文案为「本次已处理 / 本期已处理」。 */
 @Composable
-private fun DonePill(done: Boolean, reduceMotion: Boolean, onClick: () -> Unit) {
+private fun DonePill(
+    done: Boolean,
+    reduceMotion: Boolean,
+    onClick: () -> Unit,
+    doneText: String = "已处理",
+    undoneText: String = "标记已处理",
+) {
     val scheme = MaterialTheme.colorScheme
     val pillContainer by animateColorAsState(
         targetValue = if (done) scheme.primaryContainer else scheme.surfaceContainerHigh,
@@ -1663,7 +1962,7 @@ private fun DonePill(done: Boolean, reduceMotion: Boolean, onClick: () -> Unit) 
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                text = if (done) "已处理" else "标记已处理",
+                text = if (done) doneText else undoneText,
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
             )
@@ -1741,8 +2040,9 @@ private fun NoticeEmptyState(
     hasAny: Boolean,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
+    cardFilter: NoticeCardFilter? = null,
 ) {
-    val filtered = query.isNotBlank() || filter != NoticeFilter.ALL
+    val filtered = query.isNotBlank() || filter != NoticeFilter.ALL || cardFilter != null
     // 页面背景不是 Surface，显式提供内容色（深色下默认黑色会不可读）
     CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
         Column(
@@ -1753,12 +2053,18 @@ private fun NoticeEmptyState(
             EmptyState(
                 icon = when {
                     query.isNotBlank() -> Icons.Rounded.Search
+                    cardFilter == NoticeCardFilter.LONGTERM -> Icons.Rounded.Schedule
                     filter == NoticeFilter.PENDING -> Icons.Rounded.CheckCircle
                     filter == NoticeFilter.PINNED -> Icons.Rounded.PushPin
                     else -> Icons.Rounded.Notifications
                 },
                 title = when {
                     query.isNotBlank() -> "没有匹配的通知"
+                    cardFilter == NoticeCardFilter.LONGTERM -> "暂无长期安排"
+                    cardFilter == NoticeCardFilter.LATEST -> "暂无通知"
+                    cardFilter == NoticeCardFilter.PENDING -> "没有待处理通知"
+                    cardFilter == NoticeCardFilter.URGENT -> "24h 内没有截止"
+                    cardFilter == NoticeCardFilter.WEEK -> "7 天内没有截止"
                     filter == NoticeFilter.PENDING -> "没有未处理通知"
                     filter == NoticeFilter.PINNED -> "没有置顶通知"
                     !hasAny -> "暂无通知"
@@ -1766,6 +2072,8 @@ private fun NoticeEmptyState(
                 },
                 message = when {
                     query.isNotBlank() -> "换个关键词试试"
+                    cardFilter == NoticeCardFilter.LONGTERM -> "长期安排会显示在这里"
+                    cardFilter != null -> "再点一次顶部卡片可取消筛选"
                     filter == NoticeFilter.PENDING -> "全部通知都处理完了"
                     filter == NoticeFilter.PINNED -> "在人工通知卡片上点「置顶」"
                     !hasAny -> "班级通知会显示在这里"

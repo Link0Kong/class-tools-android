@@ -10,6 +10,7 @@ import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HealthAndSafety
+import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.HowToVote
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.School
@@ -152,11 +153,20 @@ object ToolCatalog {
         AppTool(
             id = "roster",
             name = "名单",
-            subtitle = "班委/团员/全班 · 点名",
+            subtitle = "班委 · 团员 · 全班",
             icon = Icons.Rounded.Badge,
             accent = plum,
             category = ToolCategory.CLASS,
-            features = listOf("班级名单与座位号", "点名到/假", "名单不导出、不外发"),
+            features = listOf("班级名单与座位号", "班委/团员/全班三类人群", "名单不导出、不外发"),
+        ),
+        AppTool(
+            id = "roll",
+            name = "点名",
+            subtitle = "到 · 假 · 一键点名",
+            icon = Icons.Rounded.HowToReg,
+            accent = clay,
+            category = ToolCategory.CLASS,
+            features = listOf("点名名单与到/假", "沿用抽签名单", "已处理沉底 / 重置本轮"),
         ),
         AppTool(
             id = "diag",
@@ -174,14 +184,14 @@ object ToolCatalog {
         AppTool(
             id = "jw",
             name = "教务",
-            subtitle = "直达教务 · 自动登录",
+            subtitle = "卡片速览 · 自动登录",
             icon = Icons.Rounded.School,
             accent = BrandSlateBlue,
             category = ToolCategory.STUDY,
             features = listOf(
-                "点卡片直接进入内置教务网页",
-                "本机加密保存密码，自动登录",
-                "验证码或失败时手动完成；可一键清除",
+                "成绩 · 考试 · 选课 · 公告速览",
+                "8 个官方工具入口，App 内打开",
+                "自动登录；数据只在本机内存展示",
             ),
         ),
     )

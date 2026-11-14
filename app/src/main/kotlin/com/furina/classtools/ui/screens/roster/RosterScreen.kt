@@ -2,10 +2,10 @@
 
 package com.furina.classtools.ui.screens.roster
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,72 +14,56 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Cancel
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import com.furina.classtools.ui.theme.rememberReduceMotion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.member.ClassLeagueRepository
 import com.furina.classtools.data.member.ClassLeagueResult
 import com.furina.classtools.data.member.ClassMembersRepository
 import com.furina.classtools.data.member.MemberCategory
-import com.furina.classtools.data.member.ClassMembersResult
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
-import com.furina.classtools.features.roster.RollStats
-import com.furina.classtools.features.roster.RollStatus
-import com.furina.classtools.features.roster.RosterCodec
 import com.furina.classtools.features.roster.RosterFilter
 import com.furina.classtools.features.roster.RosterLogic
 import com.furina.classtools.features.roster.RosterMember
+import com.furina.classtools.features.roster.RosterRow
 import com.furina.classtools.features.roster.RosterState
 import com.furina.classtools.features.roster.RosterTab
 import com.furina.classtools.ui.components.CtLoading
@@ -90,39 +74,46 @@ import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolField
-import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
-import com.furina.classtools.ui.components.tool.CtToolSegmented
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
+import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 
 /**
- * 名册 / 点名页（原生）。
+ * 名单页（原生，2026-11-14 task-54 起只剩「名册」）。
  *
  * 契约：`docs/api/USERDATA_V6.md` 的 `roster` section + `docs/BACKEND_CONTRACT.md` §7.7：
  * - 名单来源 `class_members`（`ClassMembersRepository`，6h 缓存），只显示姓名/座号/职务/徽章，**不显示学号**；
- * - 点名状态写 `userdata.roster`（`rollSel` + `rollSt` in/ab + 派生 `rollNames`），整段随账号同步；
- * - 名单变化时按**姓名**迁移状态（对齐 mp `roster.js writeRoll`），避免座号重排错位；
- * - 名册勾选加入点名名单；点名页「到/假」切换、已处理沉底、重置本轮、沿用抽签名单；
+ * - 「班委 / 团员 / 全班」三分类 = [HorizontalPager]：左右滑动跟手 + spring 吸附，
+ *   顶部分类 pill 与 pager 双向联动（点击 `animateScrollToPage`；`currentPage/currentPageOffsetFraction`
+ *   驱动选中与指示条跟手）；reduceMotion 时禁用拖拽、点击瞬时切；
+ * - 每页保留搜索（跨分类共享）、只看点名名单筛选、勾选加入点名名单、全选点名、下拉刷新、
+ *   空/加载/错误/刷新错误条；
+ * - 勾选写 `userdata.roster`（`rosterSel/rollSel/rollSt/rollNames` 全部由 [RosterLogic]/[RosterCodec] 复用，
+ *   与点名页 [RollCallScreen] 共用 [rememberRosterSync]），同步/姓名迁移语义不变；
  * - 隐私：不导出名单、不显示学号；搜索仅本机。
  *
  * 接线（Lead 负责 MainNavHost）：
  * ```kotlin
  * "roster" -> RosterScreen(
- *     onBack = { navController.popBackStack() },
+ *     onBack = { popTool(toolId) },
  *     session = session,
  *     classMembersRepository = container.classMembersRepository,
  *     userDataRepository = container.userDataRepository,
+ *     classLeagueRepository = container.classLeagueRepository,
  * )
  * ```
+ * 点名页见同包 [RollCallScreen]（`"roll"` 路由）。
  *
  * @param initialMembers 预览注入：班级名单
  * @param initialRoster 预览注入：roster section 内存态
- * @param initialTab 预览注入：默认页签
- * @param skipLoad 预览/测试：跳过仓库请求
+ * @param initialCategory 预览注入：默认分类（= 初始 pager 页）
+ * @param initialLeagueMembers 预览注入：团员名单
+ * @param skipLeagueLoad 预览/测试：跳过团员名单请求
+ * @param skipLoad 预览/测试：跳过班级名单请求
+ * @param previewCategoryOffset 预览：三分类左右滑动的中间帧（0.42 = 停在「班委/团员」之间；null = 正常渲染）
  * @param forcedErrorMessage 预览注入：错误态
+ * @param initialTab 兼容参数：拆分前的「名册 ↔ 点名」页签；点名已独立成 [RollCallScreen]，
+ *   名册页不再切页，此参数不生效（仅为既有预览调用保持源码兼容）
  */
 @Composable
 fun RosterScreen(
@@ -133,129 +124,55 @@ fun RosterScreen(
     modifier: Modifier = Modifier,
     initialMembers: List<RosterMember> = emptyList(),
     initialRoster: RosterState? = null,
-    initialTab: RosterTab = RosterTab.ROSTER,
     initialCategory: MemberCategory = MemberCategory.ALL,
     initialLeagueMembers: List<RosterMember> = emptyList(),
     classLeagueRepository: ClassLeagueRepository? = null,
     skipLeagueLoad: Boolean = false,
     skipLoad: Boolean = false,
-    /** 预览：左右滑动中间帧（0.5 = 停在两页之间；null = 正常渲染）。 */
-    previewPagerOffset: Float? = null,
+    previewCategoryOffset: Float? = null,
     forcedErrorMessage: String? = null,
+    initialTab: RosterTab = RosterTab.ROSTER,
 ) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    val haptics = LocalHapticFeedback.current
-    val fallbackSections = remember { MutableStateFlow(JsonObject(emptyMap())) }
-    val sectionsFlow = userDataRepository?.currentSections ?: fallbackSections
-    val sections by sectionsFlow.collectAsState()
+    val (rosterState, writeRoster) = rememberRosterSync(
+        userDataRepository = userDataRepository,
+        initialRoster = initialRoster,
+    )
+    val membersState = rememberRosterMembersState(
+        session = session,
+        repository = classMembersRepository,
+        userDataRepository = userDataRepository,
+        initialMembers = initialMembers,
+        skipLoad = skipLoad,
+        forcedErrorMessage = forcedErrorMessage,
+        unauthenticatedMessage = "请先完成身份验证后再查看名册",
+    )
+    val members = membersState.members
 
-    var rosterState by remember(initialRoster) {
-        mutableStateOf(initialRoster ?: RosterCodec.fromJson(sections["roster"]))
-    }
-    LaunchedEffect(sections) {
-        val remote = RosterCodec.fromJson(sections["roster"])
-        val emptyLocal = rosterState == RosterState() && rosterState.rollNamesText.isBlank()
-        if (emptyLocal && remote != RosterState()) rosterState = remote
-    }
-
-    var members by remember(initialMembers) { mutableStateOf(initialMembers) }
-    var fromCache by remember { mutableStateOf(false) }
-    var tab by remember { mutableStateOf(initialTab) }
-    // 左右滑动切「名册 ↔ 点名」（跟手 + spring 吸附；reduceMotion 时禁用拖拽、点击直接切）
-    val rosterTabOptions = RosterTab.entries
-    val reduceMotion = rememberReduceMotion()
-    val rosterPagerState = rememberPagerState(
-        initialPage = rosterTabOptions.indexOf(initialTab).coerceAtLeast(0),
-        initialPageOffsetFraction = (previewPagerOffset ?: 0f).coerceIn(-0.5f, 0.5f),
-    ) { rosterTabOptions.size }
-    LaunchedEffect(rosterPagerState) {
-        snapshotFlow { rosterPagerState.currentPage }.collect { page ->
-            rosterTabOptions.getOrNull(page)?.let { tab = it }
-        }
-    }
-    fun selectTab(target: RosterTab) {
-        tab = target
-        val index = rosterTabOptions.indexOf(target).coerceAtLeast(0)
-        scope.launch {
-            if (reduceMotion) rosterPagerState.scrollToPage(index) else rosterPagerState.animateScrollToPage(index)
-        }
-    }
-    var category by remember { mutableStateOf(initialCategory) }
     var leagueMembers by remember(initialLeagueMembers) { mutableStateOf(initialLeagueMembers) }
     var leagueLoading by remember { mutableStateOf(false) }
     var leagueError by remember { mutableStateOf<String?>(null) }
     var leagueReloadToken by remember { mutableIntStateOf(0) }
+
     var showOnlyInRoll by remember { mutableStateOf(false) }
-    var isRefreshing by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    var showResetConfirm by remember { mutableStateOf(false) }
-    var showClearConfirm by remember { mutableStateOf(false) }
-    var reloadToken by remember { mutableIntStateOf(0) }
-    var phase by remember {
-        mutableStateOf(
-            when {
-                forcedErrorMessage != null -> RosterPhase.ERROR
-                skipLoad -> RosterPhase.READY
-                else -> RosterPhase.LOADING
-            },
-        )
-    }
-    var errorMessage by remember { mutableStateOf(forcedErrorMessage) }
+
+    val categories = MemberCategory.entries
+    // 动效：系统「移除动画」时禁用 pager 拖拽并改成瞬时切页；预览注入滑动中间帧时不看系统开关。
+    val systemReduceMotion = rememberReduceMotion()
+    val reduceMotion = systemReduceMotion && previewCategoryOffset == null
+    val categoryPagerState = rememberPagerState(
+        initialPage = categories.indexOf(initialCategory).coerceAtLeast(0),
+        initialPageOffsetFraction = (previewCategoryOffset ?: 0f).coerceIn(-0.5f, 0.5f),
+    ) { categories.size }
+    val category = categories.getOrNull(categoryPagerState.currentPage) ?: initialCategory
 
     fun notify(message: String) {
         scope.launch { snackbar.showSnackbar(message) }
     }
 
-    /** v4.1 撤销：5s 内可撤销的本地危险操作（名单重置/清空）。 */
-    fun notifyUndo(message: String, undo: () -> Unit) {
-        scope.launch {
-            val result = snackbar.showSnackbar(
-                message = message,
-                actionLabel = "撤销",
-                duration = SnackbarDuration.Short,
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                undo()
-                snackbar.showSnackbar("已撤销")
-            }
-        }
-    }
-
-    LaunchedEffect(reloadToken) {
-        if (skipLoad || forcedErrorMessage != null) {
-            phase = RosterPhase.READY
-            return@LaunchedEffect
-        }
-        if (session == null) {
-            errorMessage = "请先完成身份验证后再查看名册"
-            phase = RosterPhase.ERROR
-            return@LaunchedEffect
-        }
-        val repository = classMembersRepository
-        if (repository == null) {
-            phase = RosterPhase.READY
-            return@LaunchedEffect
-        }
-        if (members.isEmpty()) phase = RosterPhase.LOADING
-        when (val result = repository.load(force = reloadToken > 0)) {
-            is ClassMembersResult.Success -> {
-                members = RosterLogic.membersOf(result.members)
-                fromCache = result.fromCache
-                errorMessage = null
-                phase = RosterPhase.READY
-            }
-
-            is ClassMembersResult.Failure -> {
-                errorMessage = result.message
-                phase = if (members.isEmpty()) RosterPhase.ERROR else RosterPhase.READY
-            }
-        }
-        runCatching { userDataRepository?.pull(force = false) }
-        isRefreshing = false
-    }
-
-    // 团员名单：切到「团员」分类时懒加载（失败降级缓存并提示；无 sid）。
+    // 团员名单：滑到「团员」分类时懒加载（失败降级缓存并提示；无 sid）。
     LaunchedEffect(category, leagueReloadToken, skipLeagueLoad) {
         if (skipLeagueLoad || category != MemberCategory.LEAGUE) return@LaunchedEffect
         val repository = classLeagueRepository
@@ -288,42 +205,7 @@ fun RosterScreen(
         leagueLoading = false
     }
 
-    fun writeRoster(next: RosterState) {
-        rosterState = next
-        scope.launch {
-            runCatching {
-                val repository = userDataRepository ?: return@runCatching
-                val current = repository.currentSections.first()
-                val sectionsNext = LinkedHashMap<String, JsonElement>(current)
-                sectionsNext["roster"] = RosterCodec.toJson(next)
-                repository.updateCurrent(JsonObject(sectionsNext))
-            }
-        }
-    }
-
-    fun setRollSel(seats: List<Int>) {
-        val next = RosterLogic.withRollSel(rosterState, seats, members)
-        writeRoster(next)
-    }
-
-    fun toggleStatus(index: Int) {
-        writeRoster(RosterLogic.toggleStatus(rosterState, index))
-    }
-
-    val stats = remember(rosterState) { RosterLogic.stats(rosterState) }
     val committeeCount = remember(members) { members.count { it.isCommittee } }
-    val rows = remember(members, leagueMembers, category, query, showOnlyInRoll, rosterState) {
-        val base = when (category) {
-            MemberCategory.COMMITTEE -> members.filter { it.isCommittee }
-            MemberCategory.LEAGUE -> leagueMembers
-            MemberCategory.ALL -> members
-        }
-        val filtered = RosterLogic.filterRows(base, query, RosterFilter.ALL, rosterState)
-        if (showOnlyInRoll) filtered.filter { it.inRoll } else filtered
-    }
-    val rollItems = remember(rosterState, members) {
-        RosterLogic.rollItems(rosterState, members, handledLast = true)
-    }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -333,14 +215,14 @@ fun RosterScreen(
                     .statusBarsPadding(),
             ) {
                 CtTopBar(
-                    title = "名单 · 点名",
+                    title = "名单 · 名册",
                     subtitle = buildString {
                         if (members.isNotEmpty()) {
                             append("${members.size} 人")
                             if (committeeCount > 0) append(" · 班委 $committeeCount")
                             if (leagueMembers.isNotEmpty()) append(" · 团员 ${leagueMembers.size}")
                         }
-                        if (fromCache) {
+                        if (membersState.fromCache) {
                             if (isNotEmpty()) append(" · ")
                             append("本机缓存")
                         }
@@ -352,174 +234,121 @@ fun RosterScreen(
                     },
                     onBack = onBack,
                     actions = {
-                        IconButton(onClick = { reloadToken += 1 }) {
+                        IconButton(
+                            onClick = {
+                                membersState.reload()
+                                leagueReloadToken += 1
+                            },
+                        ) {
                             Icon(Icons.Rounded.Refresh, contentDescription = "刷新名册")
                         }
                     },
                 )
 
-                Row(
+                RosterCategoryTabs(
+                    pagerState = categoryPagerState,
+                    counts = listOf(committeeCount, leagueMembers.size, members.size),
+                    reduceMotion = reduceMotion,
+                )
+
+                CtToolField(
+                    label = "搜索",
+                    value = query,
+                    onValueChange = { query = it },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.Center,
+                    placeholder = "搜索姓名 / 座号",
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    CtToolSegmented(
-                        options = listOf("名册", "点名"),
-                        selectedIndex = RosterTab.entries.indexOf(tab).coerceAtLeast(0),
-                        onSelect = { index ->
-                            RosterTab.entries.getOrNull(index)?.let { selectTab(it) }
-                        },
-                        modifier = Modifier
-                            .widthIn(max = 880.dp)
-                            .fillMaxWidth(),
+                    CtToolChip(
+                        text = "已加入点名 ${rosterState.rollSel.size}",
+                        selected = showOnlyInRoll,
+                        onClick = { showOnlyInRoll = !showOnlyInRoll },
                     )
+                    Spacer(Modifier.weight(1f))
+                    TextButton(
+                        onClick = {
+                            writeRoster(RosterLogic.selectAll(rosterState, members))
+                            notify("已全选加入点名名单")
+                        },
+                    ) { Text("全选点名") }
                 }
 
                 Box(modifier = Modifier.weight(1f)) {
-                    when (phase) {
+                    when (membersState.phase) {
                         RosterPhase.LOADING -> CtLoading(
                             modifier = Modifier.align(Alignment.Center),
                             text = "加载班级名单…",
                         )
 
-                        RosterPhase.ERROR -> if (tab == RosterTab.ROSTER) {
-                            // 加载失败时名册 tab 仍展示三分类/搜索（团员可单独重试；顶部刷新可整体重试），
-                            // 不让一次网络失败吞掉全部名单工具。
-                            RosterListContent(
-                                rows = emptyList(),
-                                category = category,
-                                committeeCount = 0,
-                                leagueCount = leagueMembers.size,
-                                allCount = 0,
-                                onCategory = { category = it },
-                                query = query,
-                                onQuery = { query = it },
-                                showOnlyInRoll = showOnlyInRoll,
-                                onToggleOnlyInRoll = { showOnlyInRoll = it },
-                                leagueLoading = leagueLoading,
-                                leagueError = errorMessage ?: leagueError,
-                                onRetryLeague = { reloadToken += 1 },
-                                rosterState = rosterState,
-                                onToggleRoll = {},
-                                onSelectAll = {},
-                                onClear = { showClearConfirm = true },
-                            )
-                        } else {
-                            ErrorContent(
-                                message = errorMessage ?: "名单加载失败",
-                                onRetry = { reloadToken += 1 },
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-
-                        RosterPhase.READY -> HorizontalPager(
-                            state = rosterPagerState,
+                        RosterPhase.ERROR -> RosterErrorContent(
+                            message = membersState.errorMessage ?: "名单加载失败",
+                            onRetry = { membersState.reload() },
                             modifier = Modifier.fillMaxSize(),
-                            userScrollEnabled = !reduceMotion,
-                            key = { page -> rosterTabOptions[page].name },
-                        ) { pageIndex ->
-                            // 名册页即使班级名单为空也保留三分类/搜索等工具（空态由 RosterListContent 处理）；
-                            // 点名页依赖名单行，空名单时直接给同步提示。
-                            when (rosterTabOptions[pageIndex]) {
-                                RosterTab.ROSTER -> PullToRefreshBox(
-                                    isRefreshing = isRefreshing,
-                                    onRefresh = {
-                                        isRefreshing = true
-                                        reloadToken += 1
-                                        leagueReloadToken += 1
-                                    },
-                                    modifier = Modifier.fillMaxSize(),
-                                ) {
-                                    RosterListContent(
-                                        rows = rows,
-                                        category = category,
-                                        committeeCount = committeeCount,
-                                        leagueCount = leagueMembers.size,
-                                        allCount = members.size,
-                                        onCategory = { category = it },
-                                        query = query,
-                                        onQuery = { query = it },
-                                        showOnlyInRoll = showOnlyInRoll,
-                                        onToggleOnlyInRoll = { showOnlyInRoll = it },
-                                        leagueLoading = leagueLoading,
-                                        leagueError = leagueError,
-                                        onRetryLeague = { leagueReloadToken += 1 },
-                                        rosterState = rosterState,
-                                        onToggleRoll = { seat ->
-                                            writeRoster(RosterLogic.toggleMemberInRoll(rosterState, seat, members))
-                                        },
-                                        onSelectAll = {
-                                            writeRoster(RosterLogic.selectAll(rosterState, members))
-                                            notify("已全选加入点名名单")
-                                        },
-                                        onClear = { showClearConfirm = true },
-                                    )
-                                }
+                        )
 
-                                RosterTab.ROLL -> if (members.isEmpty()) {
-                                    EmptyState(
-                                        icon = Icons.Rounded.Groups,
-                                        title = "名单尚未同步",
-                                        message = "请稍后重试",
-                                    )
-                                } else {
-                                    RollContent(
-                                        stats = stats,
-                                        items = rollItems,
-                                        hasRollList = rosterState.rollSel.isNotEmpty(),
-                                        onToggle = { index -> toggleStatus(index) },
-                                        onSetStatus = { index, status ->
-                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            writeRoster(RosterLogic.setStatus(rosterState, index, status))
-                                        },
-                                        onUseRosterSel = {
-                                            if (rosterState.rosterSel.isEmpty()) {
-                                                notify("抽签名单为空，请先在抽签页选择名单")
-                                            } else {
-                                                setRollSel(rosterState.rosterSel)
-                                                notify("已沿用抽签名单 ${rosterState.rosterSel.size} 人")
-                                            }
-                                        },
-                                        onSelectAll = {
-                                            writeRoster(RosterLogic.selectAll(rosterState, members))
-                                            notify("已全选加入点名名单")
-                                        },
-                                        onClear = { showClearConfirm = true },
-                                        onReset = { showResetConfirm = true },
-                                    )
+                        RosterPhase.READY -> PullToRefreshBox(
+                            isRefreshing = membersState.isRefreshing,
+                            onRefresh = {
+                                membersState.refresh()
+                                leagueReloadToken += 1
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            HorizontalPager(
+                                state = categoryPagerState,
+                                modifier = Modifier.fillMaxSize(),
+                                userScrollEnabled = !reduceMotion,
+                                key = { page -> categories[page].name },
+                            ) { pageIndex ->
+                                val pageCategory = categories[pageIndex]
+                                val rows = remember(
+                                    pageCategory,
+                                    members,
+                                    leagueMembers,
+                                    query,
+                                    showOnlyInRoll,
+                                    rosterState,
+                                ) {
+                                    val base = when (pageCategory) {
+                                        MemberCategory.COMMITTEE -> members.filter { it.isCommittee }
+                                        MemberCategory.LEAGUE -> leagueMembers
+                                        MemberCategory.ALL -> members
+                                    }
+                                    val filtered = RosterLogic.filterRows(base, query, RosterFilter.ALL, rosterState)
+                                    if (showOnlyInRoll) filtered.filter { it.inRoll } else filtered
                                 }
+                                RosterCategoryPage(
+                                    category = pageCategory,
+                                    rows = rows,
+                                    query = query,
+                                    showOnlyInRoll = showOnlyInRoll,
+                                    leagueLoading = leagueLoading,
+                                    leagueError = leagueError,
+                                    onRetryLeague = { leagueReloadToken += 1 },
+                                    onToggleRoll = { seat ->
+                                        writeRoster(RosterLogic.toggleMemberInRoll(rosterState, seat, members))
+                                    },
+                                )
                             }
                         }
                     }
 
-                    if (phase == RosterPhase.READY && errorMessage != null) {
-                        Surface(
+                    if (membersState.phase == RosterPhase.READY && membersState.errorMessage != null) {
+                        RosterRefreshErrorBanner(
+                            message = membersState.errorMessage.orEmpty(),
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
-                                .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 6.dp),
-                            shape = RoundedCornerShape(18.dp),
-                            color = MaterialTheme.colorScheme.errorContainer,
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    Icons.Rounded.ErrorOutline,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = "刷新失败：$errorMessage（显示本机缓存）",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                            }
-                        }
+                        )
                     }
                 }
             }
@@ -533,208 +362,178 @@ fun RosterScreen(
             )
         }
     }
+}
 
-    if (showResetConfirm) {
-        AlertDialog(
-            onDismissRequest = { showResetConfirm = false },
-            title = { Text("重置本轮点名") },
-            text = { Text("清空全部「到/假」状态，保留点名名单。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    val before = rosterState
-                    writeRoster(RosterLogic.resetRoll(rosterState))
-                    showResetConfirm = false
-                    notifyUndo("已重置本轮") { writeRoster(before) }
-                }) { Text("重置") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetConfirm = false }) { Text("取消") }
-            },
-        )
-    }
+// -----------------------------------------------------------------------------
+// 分类 pill（班委 / 团员 / 全班）+ 跟手指示条（与 pager 双向联动）
+// -----------------------------------------------------------------------------
 
-    if (showClearConfirm) {
-        AlertDialog(
-            onDismissRequest = { showClearConfirm = false },
-            title = { Text("清空点名名单") },
-            text = { Text("清空点名名单与本轮到/假状态（不影响抽签名单）。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    val before = rosterState
-                    writeRoster(RosterLogic.clearRoll(rosterState))
-                    showClearConfirm = false
-                    notifyUndo("已清空点名名单") { writeRoster(before) }
-                }) { Text("清空") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }) { Text("取消") }
-            },
-        )
+@Composable
+private fun RosterCategoryTabs(
+    pagerState: PagerState,
+    counts: List<Int>,
+    reduceMotion: Boolean,
+) {
+    val scope = rememberCoroutineScope()
+    val categories = MemberCategory.entries
+    val total = categories.size
+    // pager 的「连续页位置」：跟手拖动/spring 吸附期间指示条一起走。
+    val progress = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
+        .coerceIn(0f, (total - 1).toFloat())
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            categories.forEachIndexed { index, option ->
+                CtToolChip(
+                    text = "${option.label} ${counts.getOrElse(index) { 0 }}",
+                    selected = pagerState.currentPage == index,
+                    onClick = {
+                        scope.launch {
+                            // reduceMotion：立即切；正常：spring 吸附约 300ms。
+                            if (reduceMotion) pagerState.scrollToPage(index) else pagerState.animateScrollToPage(index)
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        if (total > 1) {
+            Spacer(Modifier.height(3.dp))
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp),
+            ) {
+                val slot = maxWidth * (1f / total)
+                Box(
+                    modifier = Modifier
+                        .offset(x = slot * progress)
+                        .width(slot)
+                        .height(3.dp)
+                        .clip(CtShapeTokens.pill)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)),
+                )
+            }
+        }
     }
 }
 
 // -----------------------------------------------------------------------------
-// 名册页签
+// 单个分类页（列表 / 空态 / 团员加载与错误）
 // -----------------------------------------------------------------------------
 
 @Composable
-private fun RosterListContent(
-    rows: List<com.furina.classtools.features.roster.RosterRow>,
+private fun RosterCategoryPage(
     category: MemberCategory,
-    committeeCount: Int,
-    leagueCount: Int,
-    allCount: Int,
-    onCategory: (MemberCategory) -> Unit,
+    rows: List<RosterRow>,
     query: String,
-    onQuery: (String) -> Unit,
     showOnlyInRoll: Boolean,
-    onToggleOnlyInRoll: (Boolean) -> Unit,
     leagueLoading: Boolean,
     leagueError: String?,
     onRetryLeague: () -> Unit,
-    rosterState: RosterState,
     onToggleRoll: (Int) -> Unit,
-    onSelectAll: () -> Unit,
-    onClear: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-    Column(
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .widthIn(max = 880.dp)
-            .fillMaxWidth(),
-    ) {
-        // 名册内三分类（班委 / 团员 / 全班；学员无学号）。
-        CtToolSegmented(
-            options = MemberCategory.entries.map { option ->
-                val count = when (option) {
-                    MemberCategory.COMMITTEE -> committeeCount
-                    MemberCategory.LEAGUE -> leagueCount
-                    MemberCategory.ALL -> allCount
-                }
-                "${option.label} $count"
-            },
-            selectedIndex = MemberCategory.entries.indexOf(category).coerceAtLeast(0),
-            onSelect = { index ->
-                MemberCategory.entries.getOrNull(index)?.let(onCategory)
-            },
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-        )
-        CtToolField(
-            label = "搜索",
-            value = query,
-            onValueChange = onQuery,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            placeholder = "搜索姓名 / 座号",
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                .align(Alignment.TopCenter)
+                .widthIn(max = 880.dp)
+                .fillMaxWidth(),
         ) {
-            CtToolChip(
-                text = "已加入点名 ${rows.count { it.inRoll }}",
-                selected = showOnlyInRoll,
-                onClick = { onToggleOnlyInRoll(!showOnlyInRoll) },
-            )
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onSelectAll) { Text("全选点名") }
-            TextButton(onClick = onClear) { Text("清空") }
-        }
-        when {
-            category == MemberCategory.LEAGUE && leagueLoading -> Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                CtLoading(text = "加载团员名单…")
-            }
+            when {
+                category == MemberCategory.LEAGUE && leagueLoading -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CtLoading(text = "加载团员名单…")
+                }
 
-            category == MemberCategory.LEAGUE && leagueError != null && rows.isEmpty() -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.ErrorOutline,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(32.dp),
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "团员名单加载失败",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = leagueError,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-                TextButton(onClick = onRetryLeague) { Text("重试") }
-            }
+                category == MemberCategory.LEAGUE && leagueError != null && rows.isEmpty() -> Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.ErrorOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(32.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "团员名单加载失败",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = leagueError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                    TextButton(onClick = onRetryLeague) { Text("重试") }
+                }
 
-            rows.isEmpty() -> Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                EmptyState(
-                    icon = Icons.Rounded.Groups,
-                    title = when {
-                        query.isNotBlank() -> "未找到匹配成员"
-                        category == MemberCategory.LEAGUE -> "团员名单为空"
-                        category == MemberCategory.COMMITTEE -> "暂无班委"
-                        showOnlyInRoll -> "暂无点名成员"
-                        else -> "名单为空"
-                    },
-                    message = when {
-                        query.isNotBlank() -> "换个姓名/座号试试"
-                        category == MemberCategory.LEAGUE -> "团员名单同步后自动出现"
-                        category == MemberCategory.COMMITTEE -> "班委角色来自班级名单"
-                        showOnlyInRoll -> "取消筛选查看全部成员"
-                        else -> "请检查身份验证或稍后重试"
-                    },
-                )
-            }
+                rows.isEmpty() -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    EmptyState(
+                        icon = Icons.Rounded.Groups,
+                        title = when {
+                            query.isNotBlank() -> "未找到匹配成员"
+                            category == MemberCategory.LEAGUE -> "团员名单为空"
+                            category == MemberCategory.COMMITTEE -> "暂无班委"
+                            showOnlyInRoll -> "暂无点名成员"
+                            else -> "名单为空"
+                        },
+                        message = when {
+                            query.isNotBlank() -> "换个姓名/座号试试"
+                            category == MemberCategory.LEAGUE -> "团员名单同步后自动出现"
+                            category == MemberCategory.COMMITTEE -> "班委角色来自班级名单"
+                            showOnlyInRoll -> "取消筛选查看全部成员"
+                            else -> "请检查身份验证或稍后重试"
+                        },
+                    )
+                }
 
-            else -> LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .widthIn(max = 720.dp),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (category == MemberCategory.LEAGUE && leagueError != null) {
-                    item(key = "league-warning") {
-                        Text(
-                            text = leagueError,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.padding(vertical = 4.dp),
-                        )
+                else -> LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .widthIn(max = 720.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (category == MemberCategory.LEAGUE && leagueError != null) {
+                        item(key = "league-warning") {
+                            Text(
+                                text = leagueError,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.padding(vertical = 4.dp),
+                            )
+                        }
+                    }
+                    items(rows, key = { it.member.seat }) { row ->
+                        MemberRow(row = row, onToggleRoll = { onToggleRoll(row.member.seat) })
                     }
                 }
-                items(rows, key = { it.member.seat }) { row ->
-                    MemberRow(row = row, onToggleRoll = { onToggleRoll(row.member.seat) })
-                }
             }
         }
-    }
     }
 }
 
 @Composable
 private fun MemberRow(
-    row: com.furina.classtools.features.roster.RosterRow,
+    row: RosterRow,
     onToggleRoll: () -> Unit,
 ) {
     // v6：统一卡片外壳 + 两行布局（姓名行 + 职务/状态胶囊行，避免大字体/窄屏胶囊换行挤压）
@@ -795,218 +594,3 @@ private fun MemberRow(
         }
     }
 }
-// -----------------------------------------------------------------------------
-// 点名页签
-// -----------------------------------------------------------------------------
-
-@Composable
-private fun RollContent(
-    stats: RollStats,
-    items: List<com.furina.classtools.features.roster.RollItem>,
-    hasRollList: Boolean,
-    onToggle: (Int) -> Unit,
-    onSetStatus: (Int, RollStatus?) -> Unit,
-    onUseRosterSel: () -> Unit,
-    onSelectAll: () -> Unit,
-    onClear: () -> Unit,
-    onReset: () -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        RollStatsCard(stats = stats)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CtToolChip(text = "沿用抽签名单", selected = false, onClick = onUseRosterSel)
-            CtToolChip(text = "全选", selected = false, onClick = onSelectAll)
-            CtToolChip(text = "清空", selected = false, onClick = onClear)
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onReset, enabled = hasRollList) { Text("重置本轮") }
-        }
-        if (items.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                EmptyState(
-                    icon = Icons.Rounded.HowToReg,
-                    title = "还没有点名名单",
-                    message = "可在名册页勾选成员，或沿用抽签名单",
-                )
-            }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 150.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .widthIn(max = 900.dp),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(items, key = { "${it.index}-${it.seat}" }) { item ->
-                    RollBubble(
-                        name = item.name,
-                        seat = item.seat,
-                        status = item.status,
-                        onToggle = { onToggle(item.index) },
-                        onSetStatus = { status -> onSetStatus(item.index, status) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RollStatsCard(stats: RollStats) {
-    CtToolCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                StatItem("应到", stats.total.toString())
-                StatItem("已处理", stats.handled.toString())
-                StatItem("到", stats.present.toString(), MaterialTheme.colorScheme.primary)
-                StatItem("假", stats.absent.toString(), MaterialTheme.colorScheme.tertiary)
-                StatItem("未点", stats.pending.toString(), MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (stats.completed) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "本轮完成 · 到 ${stats.present} / 假 ${stats.absent}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatItem(label: String, value: String, color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = color,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun RollBubble(
-    name: String,
-    seat: Int,
-    status: RollStatus?,
-    onToggle: () -> Unit,
-    onSetStatus: (RollStatus?) -> Unit,
-) {
-    val statusText = when (status) {
-        RollStatus.IN -> "到"
-        RollStatus.AB -> "假"
-        null -> "未点"
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .clickable(onClick = onToggle),
-    ) {
-        CtToolCard(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "座号 $seat",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    CtPill(
-                        text = statusText,
-                        containerColor = when (status) {
-                            RollStatus.IN -> MaterialTheme.colorScheme.primaryContainer
-                            RollStatus.AB -> MaterialTheme.colorScheme.tertiaryContainer
-                            null -> MaterialTheme.colorScheme.surfaceContainerHigh
-                        },
-                        contentColor = when (status) {
-                            RollStatus.IN -> MaterialTheme.colorScheme.onPrimaryContainer
-                            RollStatus.AB -> MaterialTheme.colorScheme.onTertiaryContainer
-                            null -> MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    IconButton(onClick = { onSetStatus(RollStatus.IN) }) {
-                        Icon(
-                            Icons.Rounded.CheckCircle,
-                            contentDescription = "到",
-                            tint = if (status == RollStatus.IN) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        )
-                    }
-                    IconButton(onClick = { onSetStatus(RollStatus.AB) }) {
-                        Icon(
-                            Icons.Rounded.Cancel,
-                            contentDescription = "假",
-                            tint = if (status == RollStatus.AB) {
-                                MaterialTheme.colorScheme.tertiary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-@Composable
-private fun ErrorContent(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        EmptyState(icon = Icons.Rounded.ErrorOutline, title = "名单加载失败", message = message)
-        CtToolPrimaryButton(
-            text = "重试",
-            onClick = onRetry,
-            modifier = Modifier.widthIn(max = 220.dp),
-        )
-    }
-}
-
-/** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
-private enum class RosterPhase { LOADING, READY, ERROR }

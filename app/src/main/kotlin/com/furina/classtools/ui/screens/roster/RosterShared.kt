@@ -1,0 +1,251 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
+package com.furina.classtools.ui.screens.roster
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.furina.classtools.data.member.ClassMembersRepository
+import com.furina.classtools.data.member.ClassMembersResult
+import com.furina.classtools.data.session.Session
+import com.furina.classtools.data.sync.UserDataRepository
+import com.furina.classtools.features.roster.RosterCodec
+import com.furina.classtools.features.roster.RosterLogic
+import com.furina.classtools.features.roster.RosterMember
+import com.furina.classtools.features.roster.RosterState
+import com.furina.classtools.ui.components.EmptyState
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+
+// =============================================================================
+// 名单 / 点名共用状态与错误 UI
+//
+// 2026-11-14（task-54）：点名从「名单 · 点名」双页拆成独立页面（RollCallScreen），
+// 名单页只剩三分类名册（RosterScreen）。两个页面必须复用同一套：
+// - `userdata.roster` 读写语义（rollSel/rollSt/rollNames，RosterCodec 键序不变）；
+// - `class_members` 加载（6h 缓存 / 失败降级旧缓存 / 下拉刷新）；
+// - 空-加载-错误四态与「刷新失败但显示本机缓存」错误条文案。
+// 拆分只移动 UI 结构，不改同步/姓名迁移/隐私语义。
+// =============================================================================
+
+/** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
+internal enum class RosterPhase { LOADING, READY, ERROR }
+
+/**
+ * `userdata.roster` 的内存态 + 写回句柄（名单页 / 点名页共用）。
+ *
+ * 语义与拆分前 [`RosterScreen`] 内部实现完全一致：
+ * - 内存态优先；仅当本机为空（且 `rollNames` 也为空）时才用云端 `roster` section 回填；
+ * - 写回时以最新 `currentSections` 为底，只覆盖 `roster` 一个 section
+ *   （`rollSel`/`rollSt`/`rollNames` 的生成与容错仍由 [RosterCodec] 负责）。
+ */
+internal data class RosterSync(
+    val state: RosterState,
+    val write: (RosterState) -> Unit,
+)
+
+@Composable
+internal fun rememberRosterSync(
+    userDataRepository: UserDataRepository?,
+    initialRoster: RosterState?,
+): RosterSync {
+    val fallbackSections = remember { MutableStateFlow(JsonObject(emptyMap())) }
+    val sectionsFlow = userDataRepository?.currentSections ?: fallbackSections
+    val sections by sectionsFlow.collectAsState()
+    var rosterState by remember(initialRoster) {
+        mutableStateOf(initialRoster ?: RosterCodec.fromJson(sections["roster"]))
+    }
+    LaunchedEffect(sections) {
+        val remote = RosterCodec.fromJson(sections["roster"])
+        val emptyLocal = rosterState == RosterState() && rosterState.rollNamesText.isBlank()
+        if (emptyLocal && remote != RosterState()) rosterState = remote
+    }
+    val scope = rememberCoroutineScope()
+    val write: (RosterState) -> Unit = { next ->
+        rosterState = next
+        scope.launch {
+            runCatching {
+                val repository = userDataRepository ?: return@runCatching
+                val current = repository.currentSections.first()
+                val sectionsNext = LinkedHashMap<String, JsonElement>(current)
+                sectionsNext["roster"] = RosterCodec.toJson(next)
+                repository.updateCurrent(JsonObject(sectionsNext))
+            }
+        }
+    }
+    return RosterSync(state = rosterState, write = write)
+}
+
+/**
+ * `class_members` 加载状态（名单页 / 点名页共用，语义与拆分前一致）：
+ * - 6h 缓存；失败时若已有名单则保留并置 [errorMessage]（顶部刷新错误条），否则进入错误态；
+ * - [reload] = 顶栏刷新 / 错误态重试（`force = true`，不亮下拉指示）；
+ * - [refresh] = 下拉刷新（`force = true` + 亮起刷新指示）。
+ *
+ * @param unauthenticatedMessage 未完成身份验证时的错误文案（两页措辞不同）。
+ */
+internal data class RosterMembersState(
+    val members: List<RosterMember>,
+    val fromCache: Boolean,
+    val phase: RosterPhase,
+    val errorMessage: String?,
+    val isRefreshing: Boolean,
+    val reload: () -> Unit,
+    val refresh: () -> Unit,
+)
+
+@Composable
+internal fun rememberRosterMembersState(
+    session: Session?,
+    repository: ClassMembersRepository?,
+    userDataRepository: UserDataRepository?,
+    initialMembers: List<RosterMember>,
+    skipLoad: Boolean,
+    forcedErrorMessage: String?,
+    unauthenticatedMessage: String,
+): RosterMembersState {
+    var members by remember(initialMembers) { mutableStateOf(initialMembers) }
+    var fromCache by remember { mutableStateOf(false) }
+    var reloadToken by remember { mutableIntStateOf(0) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var phase by remember {
+        mutableStateOf(
+            when {
+                forcedErrorMessage != null -> RosterPhase.ERROR
+                skipLoad -> RosterPhase.READY
+                else -> RosterPhase.LOADING
+            },
+        )
+    }
+    var errorMessage by remember { mutableStateOf(forcedErrorMessage) }
+
+    LaunchedEffect(reloadToken) {
+        if (skipLoad || forcedErrorMessage != null) {
+            phase = RosterPhase.READY
+            isRefreshing = false
+            return@LaunchedEffect
+        }
+        if (session == null) {
+            errorMessage = unauthenticatedMessage
+            phase = RosterPhase.ERROR
+            isRefreshing = false
+            return@LaunchedEffect
+        }
+        val classMembersRepository = repository
+        if (classMembersRepository == null) {
+            phase = RosterPhase.READY
+            isRefreshing = false
+            return@LaunchedEffect
+        }
+        if (members.isEmpty()) phase = RosterPhase.LOADING
+        when (val result = classMembersRepository.load(force = reloadToken > 0)) {
+            is ClassMembersResult.Success -> {
+                members = RosterLogic.membersOf(result.members)
+                fromCache = result.fromCache
+                errorMessage = null
+                phase = RosterPhase.READY
+            }
+
+            is ClassMembersResult.Failure -> {
+                errorMessage = result.message
+                phase = if (members.isEmpty()) RosterPhase.ERROR else RosterPhase.READY
+            }
+        }
+        runCatching { userDataRepository?.pull(force = false) }
+        isRefreshing = false
+    }
+
+    return RosterMembersState(
+        members = members,
+        fromCache = fromCache,
+        phase = phase,
+        errorMessage = errorMessage,
+        isRefreshing = isRefreshing,
+        reload = { reloadToken += 1 },
+        refresh = {
+            isRefreshing = true
+            reloadToken += 1
+        },
+    )
+}
+
+/** 名单页 / 点名页共用：加载失败态（说明 + 重试）。 */
+@Composable
+internal fun RosterErrorContent(
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        EmptyState(icon = Icons.Rounded.ErrorOutline, title = "名单加载失败", message = message)
+        CtToolPrimaryButton(
+            text = "重试",
+            onClick = onRetry,
+            modifier = Modifier.widthIn(max = 220.dp),
+        )
+    }
+}
+
+/** 名单页 / 点名页共用：刷新失败但保留本机缓存时的顶部错误条。 */
+@Composable
+internal fun RosterRefreshErrorBanner(
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Rounded.ErrorOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "刷新失败：$message（显示本机缓存）",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+        }
+    }
+}

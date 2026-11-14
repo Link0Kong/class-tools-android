@@ -20,6 +20,7 @@ import com.furina.classtools.features.roster.RosterTab
 import com.furina.classtools.features.water.WaterRecord
 import com.furina.classtools.features.water.WaterRoomState
 import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.screens.roster.RollCallScreen
 import com.furina.classtools.ui.screens.roster.RosterScreen
 import com.furina.classtools.ui.screens.water.WaterMonthGrid
 import com.furina.classtools.ui.screens.water.WaterScreen
@@ -204,14 +205,13 @@ private fun RosterListDarkPreview() {
 @Composable
 private fun RollLightPreview() {
     ClassToolsTheme(darkTheme = false) {
-        RosterScreen(
+        RollCallScreen(
             onBack = {},
             session = previewSession,
             classMembersRepository = null,
             userDataRepository = null,
             initialMembers = rosterMembers(),
             initialRoster = previewRosterState(),
-            initialTab = RosterTab.ROLL,
             skipLoad = true,
         )
     }
@@ -221,14 +221,13 @@ private fun RollLightPreview() {
 @Composable
 private fun RollEmptyDarkPreview() {
     ClassToolsTheme(darkTheme = true) {
-        RosterScreen(
+        RollCallScreen(
             onBack = {},
             session = previewSession,
             classMembersRepository = null,
             userDataRepository = null,
             initialMembers = rosterMembers(),
             initialRoster = RosterState(),
-            initialTab = RosterTab.ROLL,
             skipLoad = true,
         )
     }

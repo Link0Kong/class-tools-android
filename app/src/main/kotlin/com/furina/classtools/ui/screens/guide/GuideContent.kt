@@ -18,7 +18,7 @@ package com.furina.classtools.ui.screens.guide
 object UserGuideContent {
 
     /** 内容版本（内容较上一版有实质变化时递增；供设置页/关于页展示）。 */
-    const val VERSION: String = "2026-11-13.2"
+    const val VERSION: String = "2026-11-14.1"
 
     /** 轮播顺序即本列表顺序（契约 §5.2）。 */
     val cards: List<GuideCard> = listOf(
@@ -152,11 +152,11 @@ object UserGuideContent {
             id = "jw",
             category = GuideCategory.STUDY,
             title = "教务入口",
-            subtitle = "点卡片直达，自动登录",
+            subtitle = "卡片速览，官方数据",
             steps = listOf(
-                "点「教务」卡片直接进教务系统",
-                "首次输入密码可加密存本机",
-                "验证码或失败时手动完成",
+                "点「教务」卡片看成绩/考试/选课/公告",
+                "8 个官方工具入口 App 内打开",
+                "登录后自动拉取，数据只在内存",
             ),
             tip = "密码只存本机；校外打不开先连学校 VPN",
             scene = GuideScene.GRID,

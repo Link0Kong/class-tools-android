@@ -137,7 +137,8 @@ $L = @{
     WaterLoading   = U8 '5Yqg6L295rC06YeP5pWw5o2u'                   # loading water data
     WaterError     = U8 '5rC06YeP5pWw5o2u5LiN5Y+v55So'               # water data unavailable
     Roster         = U8 '5ZCN5Y2V'                                   # roster tool card
-    RosterTitle    = U8 '5ZCN5Y2VIMK3IOeCueWQjQ=='                   # roster page top bar: roster / roll call
+    Roll           = U8 '54K55ZCN'                                   # roll call tool card
+    RosterTitle    = U8 '5ZCN5Y2VIMK3IOWQjeWGjA=='                   # roster page top bar: 名单 · 名册
     RosterTabRoll  = U8 '54K55ZCN'                                   # roster tab: roll call
     RosterLoading  = U8 '5Yqg6L2954+t57qn5ZCN5Y2V'                   # loading class roster
     RosterEmpty    = U8 '5ZCN5Y2V5bCa5pyq5ZCM5q2l'                   # roster not synced yet
@@ -145,6 +146,9 @@ $L = @{
     RosterNameEmpty = U8 '5ZCN5Y2V5Li656m6'                           # roster name tab empty state
     RollEmpty      = U8 '6L+Y5rKh5pyJ54K55ZCN5ZCN5Y2V'               # no roll-call list yet
     RollDone       = U8 '5pys6L2u5a6M5oiQ'                           # roll call round done
+    RollSyncTitle  = U8 '5ZCN5Y2V5bCa5pyq5ZCM5q2l'                   # roll page: roster not synced
+    RollLoading    = U8 '5Yqg6L2954+t57qn5ZCN5Y2V4oCm'               # roll page: loading class roster
+    RollAction     = U8 '5rK/55So5oq9562+5ZCN5Y2V'                   # roll page: use draw list
     ProfileMark    = U8 '5LqR5ZCM5q2l'                               # profile page marker: cloud sync row
     Consent        = U8 '5oiR5bey6ZiF6K+75bm25ZCM5oSP'               # identity: consent text
     SidField       = U8 '5a2m5Y+3'                                   # identity: student id field label
@@ -1030,8 +1034,9 @@ function Invoke-Scenario {
         @{ step = 'tool_group'; card = $L.Group; title = $L.Group;      shot = '16_group.png'; states = @($L.GroupStep1, $L.AuthError, $L.PlaceholderPill) },
         @{ step = 'tool_fit';   card = $L.Fit;   title = $L.Fit;        shot = '17_fit.png';   states = @($L.FitTerms, $L.FitHistory, $L.AuthError, $L.PlaceholderPill) },
         @{ step = 'tool_roster'; card = $L.Roster; title = $L.RosterTitle; shot = '19_roster.png';
-           states = @($L.RosterLoading, $L.RosterEmpty, $L.RosterNameEmpty, $L.RosterError, $L.RollEmpty);
-           tabLabel = $L.RosterTabRoll; tabStates = @($L.RollEmpty, $L.RollDone, $L.RosterEmpty, $L.RosterError); tabShot = '20_roster_roll.png' }
+           states = @($L.RosterLoading, $L.RosterEmpty, $L.RosterNameEmpty, $L.RosterError, $L.RosterCatC, $L.RosterCatL, $L.RosterCatA) },
+        @{ step = 'tool_roll'; card = $L.Roll; title = $L.Roll; shot = '33_roll.png';
+           states = @($L.RollEmpty, $L.RollSyncTitle, $L.RollLoading, $L.RollAction, $L.RosterError) }
     )
     foreach ($pg in $pages) {
         if ($SkipWater -and $pg.step -eq 'tool_water') { Write-Line '  tool_water skipped (-SkipWater)'; continue }
@@ -1150,7 +1155,7 @@ function Invoke-Scenario {
     Go-AllTools
     if (-not (Wait-UiTextScroll -Label $L.Roster -ScrollTries 4 -TimeoutSec 12)) { throw 'roster card not visible' }
     Tap-UiTextScroll -Label $L.Roster -ScrollTries 2 -TimeoutSec 8
-    if (-not (Wait-UiAny -Labels @($L.RosterCatA, $L.RosterTabRoll, $L.RosterEmpty, $L.RosterError) -TimeoutSec 20)) { throw 'roster page not visible' }
+    if (-not (Wait-UiAny -Labels @($L.RosterCatA, $L.RosterCatC, $L.RosterEmpty, $L.RosterError) -TimeoutSec 20)) { throw 'roster page not visible' }
     $catC = Wait-UiTextScroll -Label $L.RosterCatC -ScrollTries 2 -TimeoutSec 6
     $catL = Wait-UiTextScroll -Label $L.RosterCatL -ScrollTries 2 -TimeoutSec 6
     $catA = Wait-UiTextScroll -Label $L.RosterCatA -ScrollTries 2 -TimeoutSec 6

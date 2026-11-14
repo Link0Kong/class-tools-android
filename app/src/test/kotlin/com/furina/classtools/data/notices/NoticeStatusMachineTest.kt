@@ -87,7 +87,8 @@ class NoticeStatusMachineTest {
         assertEquals("expired", s.key)
         assertTrue(s.expired)
         assertTrue(s.label.contains("报名截止"))
-        assertTrue(s.label.contains("11-07"))
+        // 契约 §3：绝对时间统一为 `M月D日（相对周） HH:mm`
+        assertTrue(s.label.contains("11月7日"))
     }
 
     @Test
@@ -200,7 +201,8 @@ class NoticeStatusMachineTest {
         assertEquals("30 分钟后", NoticeStatusMachine.fmtWhen(now + 30 * 60_000, now))
         assertEquals("2 小时后", NoticeStatusMachine.fmtWhen(now + 2 * 3_600_000, now))
         assertEquals("3 天后", NoticeStatusMachine.fmtWhen(now + 3 * 86_400_000L, now))
-        assertTrue(NoticeStatusMachine.fmtWhen(now - 3_600_000, now).contains("11-07"))
+        // 绝对日期按 §3 统一格式（过期分支）
+        assertTrue(NoticeStatusMachine.fmtWhen(now - 3_600_000, now).contains("11月7日"))
     }
 
     @Test
@@ -239,13 +241,15 @@ class NoticeStatusMachineTest {
             NoticeDigest(group(deadline = at(48)), done = false),
             NoticeDigest(group(deadline = at(-5)), done = false),
             NoticeDigest(group(deadline = at(10)), done = true),
-            NoticeDigest(group(recurrence = NoticeRecurrenceDto(freq = "daily")), done = false),
+            NoticeDigest(group(recurrence = NoticeRecurrenceDto(freq = "daily", time = "07:30")), done = false),
         )
         val stats = NoticeStatusMachine.statsOf(digests, now)
         assertEquals(3, stats.pending)
         assertEquals(2, stats.urgent) // 1h 内 + 6h 内都算 24h 内
-        assertEquals(1, stats.week)
+        // 契约 §2.4：7 天内包含 24h 内的（1h + 6h + 48h = 3），与 web/mp statOf 同口径
+        assertEquals(3, stats.week)
         assertEquals(1, stats.expired)
+        assertEquals(1, stats.longterm) // daily 07:30 进行中（now 12:00，下次 明日 07:30）
     }
 
     @Test

@@ -47,13 +47,13 @@ import com.furina.classtools.data.vote.VoteResult
 import com.furina.classtools.features.roster.RollStatus
 import com.furina.classtools.features.roster.RosterMember
 import com.furina.classtools.features.roster.RosterState
-import com.furina.classtools.features.roster.RosterTab
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.screens.notices.NoticeDetailSheetContent
 import com.furina.classtools.ui.screens.notices.NoticeFilter
 import com.furina.classtools.ui.screens.notices.NoticeUiItem
 import com.furina.classtools.ui.screens.notices.NoticesScreen
 import com.furina.classtools.ui.screens.notices.buildUiItems
+import com.furina.classtools.ui.screens.roster.RollCallScreen
 import com.furina.classtools.ui.screens.roster.RosterScreen
 import com.furina.classtools.ui.screens.vote.VoteCreateScreen
 import com.furina.classtools.ui.screens.vote.VoteDetailScreen
@@ -65,12 +65,12 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 
 // =============================================================================
-// 工具页 v6 统一设计语言预览（task-47：通知 / 名单 / 投票）
+// 工具页 v6 统一设计语言预览（task-47：通知 / 名单 / 投票；task-54：点名拆页）
 //
-// 210 通知列表 · 浅色 / 211 通知详情 · 浅色 / 212 通知列表 · 深色
-// 213 名册三分类 · 浅色 / 214 点名 · 深色 / 215 名册 · 大字体 1.3x
-// 216 投票列表 · 浅色 / 217 投票详情 · 深色 / 218 投票发起 · 平板 800dp
-// 219 投票发起 · 大字体 1.3x / 220 通知列表 · 平板 800dp
+// 210 通知列表 · 浅色 / 211 通知列表 · 左右滑动中间态 / 212 通知列表 · 深色
+// 213 名单 · 名册三分类 · 浅色 / 214 名单 · 分类左右滑动中间态
+// 215 点名 · 进行中 · 浅色 / 216 点名 · 进行中 · 深色 大字体 1.3x / 217 点名 · 空名单 · 浅色
+// 218 投票列表 · 浅色 / 219 投票发起 · 平板 800dp
 //
 // 全部注入数据 + skipLoad：不发网络请求、不读真实账号；只验证 v6 视觉/自适应。
 // =============================================================================
@@ -457,7 +457,7 @@ private fun ToolV6NoticesListDarkPreview() {
 }
 
 // -----------------------------------------------------------------------------
-// 213–215 名单
+// 213–214 名单（仅名册；三分类左右滑动）
 // -----------------------------------------------------------------------------
 
 @Preview(name = "213 名单 v6 · 名册三分类 浅色", showBackground = true, widthDp = 412, heightDp = 1000)
@@ -471,7 +471,6 @@ private fun ToolV6RosterCommitteeLightPreview() {
             userDataRepository = null,
             initialMembers = v6RosterMembers(),
             initialRoster = v6RosterState(),
-            initialTab = RosterTab.ROSTER,
             initialCategory = MemberCategory.COMMITTEE,
             initialLeagueMembers = v6RosterLeagueMembers(),
             skipLeagueLoad = true,
@@ -480,16 +479,10 @@ private fun ToolV6RosterCommitteeLightPreview() {
     }
 }
 
-@Preview(
-    name = "214 名单 v6 · 点名 深色 大字体 1.3x",
-    showBackground = true,
-    widthDp = 412,
-    heightDp = 1100,
-    fontScale = 1.3f,
-)
+@Preview(name = "214 名单 v6 · 分类左右滑动中间态", showBackground = true, widthDp = 412, heightDp = 1000)
 @Composable
-private fun ToolV6RosterRollDarkPreview() {
-    ClassToolsTheme(darkTheme = true) {
+private fun ToolV6RosterCategorySwipeMidPreview() {
+    ClassToolsTheme(darkTheme = false) {
         RosterScreen(
             onBack = {},
             session = null,
@@ -497,33 +490,78 @@ private fun ToolV6RosterRollDarkPreview() {
             userDataRepository = null,
             initialMembers = v6RosterMembers(),
             initialRoster = v6RosterState(),
-            initialTab = RosterTab.ROLL,
-            initialCategory = MemberCategory.ALL,
+            initialCategory = MemberCategory.COMMITTEE,
             initialLeagueMembers = v6RosterLeagueMembers(),
             skipLeagueLoad = true,
             skipLoad = true,
+            previewCategoryOffset = 0.42f,
         )
     }
 }
 
 // -----------------------------------------------------------------------------
-// 216–219 投票
+// 215–217 点名（独立页）
 // -----------------------------------------------------------------------------
 
-@Preview(name = "215 投票 v6 · 列表 左右滑动中间态", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "215 点名 v6 · 进行中 浅色", showBackground = true, widthDp = 412, heightDp = 1000)
 @Composable
-private fun ToolV6VoteListSwipeMidPreview() {
+private fun ToolV6RollCallLightPreview() {
     ClassToolsTheme(darkTheme = false) {
-        VoteListScreen(
-            repository = v6PreviewVoteRepository,
-            initialPolls = v6PollList(),
-            previewPagerOffset = 0.42f,
+        RollCallScreen(
+            onBack = {},
+            session = null,
+            classMembersRepository = null,
+            userDataRepository = null,
+            initialMembers = v6RosterMembers(),
+            initialRoster = v6RosterState(),
             skipLoad = true,
         )
     }
 }
 
-@Preview(name = "216 投票 v6 · 列表 浅色", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(
+    name = "216 点名 v6 · 进行中 深色 大字体 1.3x",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 1100,
+    fontScale = 1.3f,
+)
+@Composable
+private fun ToolV6RollCallDarkPreview() {
+    ClassToolsTheme(darkTheme = true) {
+        RollCallScreen(
+            onBack = {},
+            session = null,
+            classMembersRepository = null,
+            userDataRepository = null,
+            initialMembers = v6RosterMembers(),
+            initialRoster = v6RosterState(),
+            skipLoad = true,
+        )
+    }
+}
+
+@Preview(name = "217 点名 v6 · 空名单 浅色", showBackground = true, widthDp = 412, heightDp = 1000)
+@Composable
+private fun ToolV6RollCallEmptyPreview() {
+    ClassToolsTheme(darkTheme = false) {
+        RollCallScreen(
+            onBack = {},
+            session = null,
+            classMembersRepository = null,
+            userDataRepository = null,
+            initialMembers = v6RosterMembers(),
+            initialRoster = RosterState(),
+            skipLoad = true,
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 218–219 投票
+// -----------------------------------------------------------------------------
+
+@Preview(name = "218 投票 v6 · 列表 浅色", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
 private fun ToolV6VoteListLightPreview() {
     ClassToolsTheme(darkTheme = false) {
@@ -535,7 +573,7 @@ private fun ToolV6VoteListLightPreview() {
     }
 }
 
-@Preview(name = "217 投票 v6 · 发起 平板 800dp", showBackground = true, widthDp = 800, heightDp = 1000)
+@Preview(name = "219 投票 v6 · 发起 平板 800dp", showBackground = true, widthDp = 800, heightDp = 1000)
 @Composable
 private fun ToolV6VoteCreateTabletPreview() {
     ClassToolsTheme(darkTheme = false) {

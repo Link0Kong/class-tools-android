@@ -109,6 +109,7 @@ import com.furina.classtools.ui.screens.ppt.PptDownloadDetailScreen
 import com.furina.classtools.ui.screens.ppt.PptListScreen
 import com.furina.classtools.ui.screens.ppt.PptPlayerScreen
 import com.furina.classtools.ui.screens.profile.ProfileScreen
+import com.furina.classtools.ui.screens.roster.RollCallScreen
 import com.furina.classtools.ui.screens.roster.RosterScreen
 import com.furina.classtools.ui.screens.settings.PermissionSettingsScreen
 import com.furina.classtools.ui.screens.settings.ReminderSettingsScreen
@@ -631,6 +632,13 @@ fun MainNavHost(
                     classMembersRepository = container.classMembersRepository,
                     userDataRepository = container.userDataRepository,
                     classLeagueRepository = container.classLeagueRepository,
+                )
+
+                "roll" -> RollCallScreen(
+                    onBack = { popTool(toolId) },
+                    session = session,
+                    classMembersRepository = container.classMembersRepository,
+                    userDataRepository = container.userDataRepository,
                 )
 
                 "diag" -> DiagScreen(

@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.47.1**——全部工具卡片尺寸/结构与微信小程序 `pages/all` 对齐（76dp 横向卡、两列、40dp 图标 chip），保留长按拖动排序；单测 **1135/0**、快速 E2E **44/0**（导航 10/10），签名 APK 已交付桌面。详见 [REPORT_ROUND58](docs/REPORT_ROUND58_20261114.md)。
+- 状态：**v4.49.0**——「点名」拆为独立工具卡/页面，名单页只保留名册并支持「班委/团员/全班」左右滑动切换；单测 **1177/0**、快速 E2E **45/0**（导航 10/10），签名 APK 已交付桌面。详见 [REPORT_ROUND59](docs/REPORT_ROUND59_20261114.md)。
 
 ## 目录
 

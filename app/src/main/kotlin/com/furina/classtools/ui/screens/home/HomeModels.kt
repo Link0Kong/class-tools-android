@@ -142,27 +142,39 @@ object HomeWorkbenchLogic {
 
     // ---- 通知 ---------------------------------------------------------------
 
-    /** 待处理通知：未 mark ntdone；按时间倒序。 */
+    /** 待处理通知（§2.4 口径：普通通知需有时间锚点；长期安排仅期次窗口内且该期未处理；资料/无时间不计）。 */
     fun noticePendingEntries(
         entries: List<NoticeEntry>,
         marks: MarksSnapshot,
         nowMillis: Long,
     ): List<NoticeEntry> = entries
-        .filter { entry -> !marks.isDone(MarkKind.NT_DONE, entry.id) }
-        .filter { entry -> !NoticeStatusMachine.statusOf(entry.group, nowMillis).expired }
+        .filter { entry ->
+            NoticeStatusMachine.isPending(
+                group = entry.group,
+                nowMillis = nowMillis,
+                done = marks.isDone(MarkKind.NT_DONE, entry.id),
+                doneRef = { ref -> marks.isDone(MarkKind.NT_DONE, ref) },
+            )
+        }
         .sortedWith(compareByDescending { it.ts })
 
-    /** 通知轮换条目：标题 = 通知标题；副标 = 分类 + 状态（如 `教务 · 今天截止`）。 */
+    /** 通知轮换条目：标题 = 通知标题；副标 = 分类 + 状态（期次显示「本次 …」，长期定义显示「长期安排」）。 */
     fun noticeRotation(
         entries: List<NoticeEntry>,
         marks: MarksSnapshot,
         nowMillis: Long,
     ): List<HomeRotationItem> = noticePendingEntries(entries, marks, nowMillis).map { entry ->
-        val status = NoticeStatusMachine.statusOf(entry.group, nowMillis)
+        val occurrence = if (NoticeStatusMachine.isLongterm(entry.group)) {
+            NoticeStatusMachine.occurrenceOf(entry.group, nowMillis)
+        } else {
+            null
+        }
+        val statusText = occurrence?.let { NoticeStatusMachine.occurrenceLabelOf(it, nowMillis) }
+            ?: NoticeStatusMachine.statusOf(entry.group, nowMillis).label
         HomeRotationItem(
             id = entry.id,
             title = entry.title,
-            sub = listOf(entry.cat, status.label).filter { it.isNotBlank() }.joinToString(" · "),
+            sub = listOf(entry.cat, statusText).filter { it.isNotBlank() }.joinToString(" · "),
         )
     }
 

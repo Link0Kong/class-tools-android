@@ -89,6 +89,8 @@ internal fun NoticeDetailSheet(
     onDismiss: () -> Unit,
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
+    /** 渲染时 now（§3 时间显示按渲染时算相对周；由页面每分钟刷新）。 */
+    nowMillis: Long = System.currentTimeMillis(),
 ) {
     CtBottomSheet(onDismissRequest = onDismiss) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -109,6 +111,7 @@ internal fun NoticeDetailSheet(
                 onToggleDone = onToggleDone,
                 onTogglePin = onTogglePin,
                 bodyMaxHeight = bodyMaxHeight,
+                nowMillis = nowMillis,
             )
         }
     }
@@ -131,6 +134,8 @@ internal fun NoticeDetailSheetContent(
     onTogglePin: () -> Unit = {},
     /** 正文可滚动区最大高度（弹层按屏幕剩余空间传入；预览默认 460dp）。 */
     bodyMaxHeight: androidx.compose.ui.unit.Dp = 460.dp,
+    /** 渲染时 now（§3 时间显示：所有日期 token → `M月D日（相对周）`）。 */
+    nowMillis: Long = System.currentTimeMillis(),
 ) {
     // 弹层内容淡入 + 轻微上浮（与卡片「点开延伸」衔接；reduceMotion/静态预览下直接终态）
     val systemReduceMotion = rememberReduceMotion()
@@ -191,13 +196,13 @@ internal fun NoticeDetailSheetContent(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = detailMetaText(item),
+                text = detailMetaText(item, nowMillis),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            DetailTagLine(item = item)
+            DetailTagLine(item = item, nowMillis = nowMillis)
         }
 
         Spacer(Modifier.height(12.dp))
@@ -221,12 +226,14 @@ internal fun NoticeDetailSheetContent(
                         item = item,
                         rawAttachmentLoader = rawAttachmentLoader,
                         imageLoader = imageLoader,
+                        nowMillis = nowMillis,
                     )
 
                     item.manual != null -> ManualNoticeDetail(
                         item = item,
                         rawAttachmentLoader = rawAttachmentLoader,
                         imageLoader = imageLoader,
+                        nowMillis = nowMillis,
                     )
                 }
             }
@@ -275,27 +282,20 @@ private fun DetailStatusLine(
     }
 }
 
-/** 来源 / 发送者 / 发布时间（详情头部第二行）。 */
-private fun detailMetaText(item: NoticeUiItem): String = buildList {
+/** 来源 / 发送者 / 发布时间（详情头部第二行；§3：绝对时间为 `M月D日（相对周） HH:mm`）。 */
+private fun detailMetaText(item: NoticeUiItem, nowMillis: Long): String = buildList {
     if (item.timeLabel.isNotBlank() && item.timeLabel != item.status?.label) add(item.timeLabel)
     if (item.source.isNotBlank()) add(item.source)
     if (item.senderLine.isNotBlank()) add(item.senderLine)
-    if (item.ts > 0) add("发布于 ${formatTs(item.ts)}")
+    if (item.ts > 0) add("发布于 ${NoticeStatusMachine.absoluteWhenText(item.ts, nowMillis)}")
 }.joinToString(" · ")
 
-/** 已隐藏 / 已更新 / 多源合并 / 长期安排下次时间（详情头部第三行，有才显示）。 */
+/** 长期安排下次 / 已隐藏 / 已更新 / 多源合并（详情头部第三行，有才显示）。 */
 @Composable
-private fun DetailTagLine(item: NoticeUiItem) {
+private fun DetailTagLine(item: NoticeUiItem, nowMillis: Long) {
     val auto = item.auto
-    val recurring = auto?.group?.recurrence != null
-    val nextText = if (auto != null && recurring) {
-        NoticeStatusMachine.recurNextOf(
-            auto.group,
-            System.currentTimeMillis(),
-        )?.let { next -> NoticeStatusMachine.fmtWhen(next) }
-    } else {
-        null
-    }
+    // 长期安排：下次 `M月D日（周X）HH:mm`（§2.2/§3；已结束不显示下次）
+    val nextText = item.recurNextText.ifBlank { null }
     val merged = auto?.group?.mergedSources.orEmpty()
     if (!item.hidden && !item.edited && merged.isEmpty() && nextText == null) return
     FlowRow(
@@ -315,7 +315,7 @@ private fun DetailTagLine(item: NoticeUiItem) {
                     modifier = Modifier.size(14.dp),
                 )
                 Text(
-                    text = "下次 $nextText",
+                    text = nextText.orEmpty(),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.secondary,
                 )
@@ -358,16 +358,22 @@ private fun DetailTagLine(item: NoticeUiItem) {
 // 自动通知详情
 // -----------------------------------------------------------------------------
 
+/** 详情正文统一格式化（契约 §3）：相对→绝对日期替换 + 日期 token → `M月D日（相对周）`。 */
+private fun detailText(text: String, anchorMillis: Long?, nowMillis: Long): String =
+    NoticeStatusMachine.displayText(text, anchorMillis, nowMillis)
+
 @Composable
 private fun AutoNoticeDetail(
     item: NoticeUiItem,
     rawAttachmentLoader: NoticeRawAttachmentLoader?,
     imageLoader: PptImageLoader?,
+    nowMillis: Long,
 ) {
     val entry = item.auto ?: return
     val group = entry.group
+    val anchor = NoticeStatusMachine.anchorOf(group)
 
-    val aiSummary = group.aiSummary.ifBlank { group.summary }
+    val aiSummary = detailText(group.aiSummary.ifBlank { group.summary }, anchor, nowMillis)
     val hasAi = aiSummary.isNotBlank() || group.aiPoints.isNotEmpty()
     if (hasAi) {
         Surface(
@@ -420,7 +426,7 @@ private fun AutoNoticeDetail(
                                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             ) {
                                 Text(
-                                    text = point,
+                                    text = detailText(point, anchor, nowMillis),
                                     style = MaterialTheme.typography.labelMedium,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 )
@@ -433,7 +439,7 @@ private fun AutoNoticeDetail(
     }
 
     val segments = group.aiSegments.filter { it.text.isNotBlank() }
-    segments.forEach { segment -> DetailSegmentRow(segment) }
+    segments.forEach { segment -> DetailSegmentRow(segment = segment, anchorMillis = anchor, nowMillis = nowMillis) }
 
     val images = entry.items.filterIsInstance<NoticeItemMeta.Image>()
     val others = entry.items.filterNot { it is NoticeItemMeta.Image }
@@ -451,6 +457,8 @@ private fun AutoNoticeDetail(
             rowId = entry.rowId,
             rawAttachmentLoader = rawAttachmentLoader,
             imageLoader = imageLoader,
+            anchorMillis = anchor,
+            nowMillis = nowMillis,
         )
     }
 
@@ -465,7 +473,7 @@ private fun AutoNoticeDetail(
 
 /** 字段分段（时间 / 地点 / 要求 …）：左侧类型 chip + 右侧内容，大字体自动换行。 */
 @Composable
-private fun DetailSegmentRow(segment: NoticeSegment) {
+private fun DetailSegmentRow(segment: NoticeSegment, anchorMillis: Long?, nowMillis: Long) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -483,7 +491,7 @@ private fun DetailSegmentRow(segment: NoticeSegment) {
             )
         }
         Text(
-            text = segment.text,
+            text = detailText(segment.text, anchorMillis, nowMillis),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
@@ -551,18 +559,24 @@ private fun DetailItemRow(
     rowId: String,
     rawAttachmentLoader: NoticeRawAttachmentLoader?,
     imageLoader: PptImageLoader?,
+    anchorMillis: Long?,
+    nowMillis: Long,
 ) {
     when (meta) {
-        is NoticeItemMeta.Text -> DetailTextItem(meta)
+        is NoticeItemMeta.Text -> DetailTextItem(meta = meta, anchorMillis = anchorMillis, nowMillis = nowMillis)
 
         is NoticeItemMeta.File -> NoticeFileAttachmentRow(meta = meta)
 
         is NoticeItemMeta.Form -> DetailInfoRow(
             iconText = "表",
-            title = meta.name,
-            detail = listOf(meta.statusText, meta.note, "请在网页/微信中打开")
-                .filter { it.isNotBlank() }
-                .joinToString(" · "),
+            title = detailText(meta.name, anchorMillis, nowMillis),
+            detail = detailText(
+                listOf(meta.statusText, meta.note, "请在网页/微信中打开")
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · "),
+                anchorMillis,
+                nowMillis,
+            ),
         )
 
         is NoticeItemMeta.Link -> DetailInfoRow(
@@ -571,13 +585,21 @@ private fun DetailItemRow(
                 "article" -> "公"
                 else -> "链"
             },
-            title = meta.name.ifBlank { meta.title },
-            detail = listOf(meta.host, meta.account, "无法在 App 内打开")
-                .filter { it.isNotBlank() }
-                .joinToString(" · "),
+            title = detailText(meta.name.ifBlank { meta.title }, anchorMillis, nowMillis),
+            detail = detailText(
+                listOf(meta.host, meta.account, "无法在 App 内打开")
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · "),
+                anchorMillis,
+                nowMillis,
+            ),
         )
 
-        is NoticeItemMeta.Merged -> DetailMergedBlock(meta)
+        is NoticeItemMeta.Merged -> DetailMergedBlock(
+            meta = meta,
+            anchorMillis = anchorMillis,
+            nowMillis = nowMillis,
+        )
 
         is NoticeItemMeta.Image -> NoticeAttachmentThumb(
             loader = rawAttachmentLoader,
@@ -599,7 +621,7 @@ private fun DetailItemRow(
 }
 
 @Composable
-private fun DetailTextItem(meta: NoticeItemMeta.Text) {
+private fun DetailTextItem(meta: NoticeItemMeta.Text, anchorMillis: Long?, nowMillis: Long) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -624,9 +646,13 @@ private fun DetailTextItem(meta: NoticeItemMeta.Text) {
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                 )
             }
-            val metaText = listOf(meta.fromRole, meta.fromName, meta.timeText)
-                .filter { it.isNotBlank() }
-                .joinToString(" · ")
+            val metaText = detailText(
+                listOf(meta.fromRole, meta.fromName, meta.timeText)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · "),
+                anchorMillis,
+                nowMillis,
+            )
             if (metaText.isNotBlank()) {
                 Text(
                     text = metaText,
@@ -639,7 +665,7 @@ private fun DetailTextItem(meta: NoticeItemMeta.Text) {
             }
         }
         Text(
-            text = meta.text.ifBlank { "（空）" },
+            text = detailText(meta.text.ifBlank { "（空）" }, anchorMillis, nowMillis),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -698,7 +724,7 @@ private fun DetailInfoRow(
 
 /** 合并转发的聊天记录块。 */
 @Composable
-private fun DetailMergedBlock(meta: NoticeItemMeta.Merged) {
+private fun DetailMergedBlock(meta: NoticeItemMeta.Merged, anchorMillis: Long?, nowMillis: Long) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -727,9 +753,13 @@ private fun DetailMergedBlock(meta: NoticeItemMeta.Merged) {
             }
             meta.messages.forEach { message: MergedMessage ->
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    val head = listOf(message.fromBadge, message.fromName, message.timeText)
-                        .filter { it.isNotBlank() }
-                        .joinToString(" · ")
+                    val head = detailText(
+                        listOf(message.fromBadge, message.fromName, message.timeText)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" · "),
+                        anchorMillis,
+                        nowMillis,
+                    )
                     if (head.isNotBlank()) {
                         Text(
                             text = head,
@@ -738,7 +768,7 @@ private fun DetailMergedBlock(meta: NoticeItemMeta.Merged) {
                         )
                     }
                     Text(
-                        text = message.text,
+                        text = detailText(message.text, anchorMillis, nowMillis),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -757,10 +787,15 @@ private fun ManualNoticeDetail(
     item: NoticeUiItem,
     rawAttachmentLoader: NoticeRawAttachmentLoader?,
     imageLoader: PptImageLoader?,
+    nowMillis: Long,
 ) {
     val notice = item.manual ?: return
     Text(
-        text = notice.row.body.ifBlank { "（无正文）" },
+        text = detailText(
+            notice.row.body.ifBlank { "（无正文）" },
+            notice.ts.takeIf { it > 0L },
+            nowMillis,
+        ),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurface,
     )
@@ -872,18 +907,29 @@ private fun DetailActions(
                     Text("提醒我")
                 }
             }
-            Button(
-                onClick = onToggleDone,
-                modifier = Modifier.heightIn(min = 48.dp),
-                shape = CtShapeTokens.pill,
-            ) {
-                Icon(
-                    imageVector = if (item.done) Icons.Rounded.Replay else Icons.Rounded.CheckCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(if (item.done) "恢复未处理" else "标记已处理")
+            // 期次卡：本期单独已处理（marks ref = 期次 key，§2.3）；长期安排定义卡/已结束无 done
+            val showDone = item.occurrenceKey != null || item.recurrence == null
+            if (showDone) {
+                Button(
+                    onClick = onToggleDone,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    shape = CtShapeTokens.pill,
+                ) {
+                    Icon(
+                        imageVector = if (item.done) Icons.Rounded.Replay else Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        when {
+                            item.occurrenceKey != null && item.done -> "本期已恢复未处理"
+                            item.occurrenceKey != null -> "本次已处理"
+                            item.done -> "恢复未处理"
+                            else -> "标记已处理"
+                        },
+                    )
+                }
             }
         } else {
             Button(

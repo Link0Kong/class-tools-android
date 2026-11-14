@@ -142,7 +142,7 @@ class UserGuideContentTest {
 
     @Test
     fun `内容版本已更新`() {
-        assertEquals("2026-11-13.2", UserGuideContent.VERSION)
+        assertEquals("2026-11-14.1", UserGuideContent.VERSION)
         assertFalse(
             "VERSION 仍是旧值",
             UserGuideContent.VERSION == "2026-11-12.1",

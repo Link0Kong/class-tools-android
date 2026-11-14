@@ -54,7 +54,13 @@ data class NoticeExtension(
     val deadline: String = "",
 )
 
-/** 长期安排（recurrence；存在时永不按 deadline 判过期）。 */
+/**
+ * 长期安排（recurrence；有效时永不按 deadline 判过期）。
+ *
+ * 有效性（契约 `web/通知三端_长期通知与时间显示_契约_20261114.md` §1.1）：
+ * `freq` ∈ daily/weekly/monthly_weeks/monthly_day 且 `time` 为 `HH:MM`；**无时间的通知不得有 recurrence**。
+ * [until] 为可选有效期末：`YYYY-MM-DD`（含当天有效）或 ISO datetime（+08:00）；空 = 无期限。
+ */
 @Serializable
 data class NoticeRecurrenceDto(
     val freq: String = "",
@@ -64,7 +70,36 @@ data class NoticeRecurrenceDto(
     val time: String = "",
     val startAt: String = "",
     val label: String = "",
+    val until: String = "",
 )
+
+/**
+ * 长期安排的一次「期次」（契约 §1.3，三端同一算法）。
+ *
+ * 每个进行中的长期安排，在 `[next - 24h, next)` 窗口内产生一张期次卡：
+ * `next` = 严格 > now 的下一次发生时间；`key` = `"<gid>@occ:<yyyyMMdd>"`（next 的本地日期），
+ * 已处理状态写既有 `marks kind='ntdone'`（ref = key，与普通通知共用同一映射）。
+ */
+data class NoticeOccurrence(
+    /** 该期次发生时间（下一次发生；期次卡按它参与主列表排序）。 */
+    val nextMillis: Long,
+    /** 提前展示窗口起点（`next - 24h`）。 */
+    val windowStartMillis: Long,
+    /** 已处理 marks ref：`<gid>@occ:<yyyyMMdd>`。 */
+    val key: String,
+)
+
+/** 列表分区（契约 §2.2；「长期通知」筛选是独立清单视图，不在此枚举）。 */
+enum class NoticeSection {
+    /** 主列表：非过期、非长期定义、有时间锚点的普通通知 + 期次卡。 */
+    PRIMARY,
+
+    /** 资料 / 无时间（§1.2；不参与待处理统计、不进长期通知）。 */
+    MATERIAL,
+
+    /** 已过期区（含「长期安排已结束」）。 */
+    EXPIRED,
+}
 
 /**
  * 自动通知组（body 前缀后的 JSON，`[[CLASS_NOTICE_V1]]{...}`）。
@@ -122,12 +157,24 @@ data class NoticeWhen(
     val action: String,
 )
 
-/** 简报统计（全部/未处理 tab 顶部或桌面侧栏用）。 */
+/**
+ * 简报统计（契约 §2.4；顶部 5 张可点数据卡 / 工作台同口径）。
+ *
+ * - [pending]：未过期、非长期定义、非资料/无时间、未已处理、`actionable !== false` 且有时间锚点的通知数
+ *   （期次卡也计入，已处理的期次不计）；
+ * - [urgent]/[week]：上述待处理中主显示时间剩余 ≤24h / ≤7 天的数量；
+ * - [expired]：已过期条数（仅「已过期」区标题使用）；
+ * - [longterm]：进行中的长期安排条数（`until` 已过 / 下次超出 until → 不计）；
+ * - [latestPostedMillis]/[latestPostedText]：全部未隐藏通知（含已过期/资料/长期定义/人工）中发布时间最新者。
+ */
 data class NoticeStats(
     val pending: Int,
     val urgent: Int,
     val week: Int,
     val expired: Int,
+    val longterm: Int = 0,
+    val latestPostedMillis: Long = 0L,
+    val latestPostedText: String = "",
 )
 
 /** 通知附件/条目元信息（`items[]`；不保留 base64 原文，只给渲染必需字段）。 */

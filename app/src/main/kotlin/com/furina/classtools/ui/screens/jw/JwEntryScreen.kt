@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.furina.classtools.data.jw.JwCardsRepository
 import com.furina.classtools.data.jw.JwCredentialStore
 import com.furina.classtools.features.jw.JwLoginLogic
 import com.furina.classtools.ui.components.CtTopBar
@@ -60,22 +61,26 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
+/** 页面模式：登录（WebView 自动/手动）→ 卡片页；点卡片进入全屏 WebView 浏览官方页面。 */
+private enum class JwMode {
+    LOGIN,
+    CARDS,
+    WEB,
+}
+
 /**
- * 教务入口 v2（契约增量 55 §5.0/§5.1/§5.3，2026-11-13 用户新要求）。
+ * 教务工具页 v3（规格 `_audit/jw_entry_20261113/JW_CARDS_V1_SPEC.md`，2026-11-14 用户新需求）。
  *
- * 点「教务」卡 = **直接进入内置 WebView** 打开 `http://210.34.74.77/sso.jsp`；
- * 跳转到学校统一身份认证登录页后，自动填充账号（当前身份学号）+ 密码并点击提交。
- *
- * - 密码只在**本机**保存：Android Keystore AES/GCM + SharedPreferences（见 [JwCredentialStore]），
- *   不写日志/不上报/不参与同步；顶栏「清除登录」清密码 + Cookie + 缓存；
- * - 无匹配凭据（首次 / 身份切换 / 已清除）先弹一次性密码输入，可「仅打开不保存」；
- * - 注入：onPageFinished 且 URL 为 authserver `/authserver/login` → 300ms 后填表提交 →
- *   800ms 复核 `#showErrorTip` / `#captchaDiv`，失败回退人工，不循环重试；
- * - WebView：JS / DOM storage / Cookie 开，禁 file access，仅允许 http(s)，校外 http(s) 交给系统浏览器；
- * - 仅支持 http(s) 且校内域（教务 IP / 统一认证 / *.fjtcm.edu.cn）在内置页加载。
+ * - 点「教务」卡 = 直接进入**卡片页**（与班级工具站卡片同风格）：
+ *   4 张官方接口数据卡（成绩/考试/选课/公告）+ 8 张官方工具入口卡 + 「打开完整教务官网」；
+ * - 登录沿用 v4.46.1：WebView 打开 `sso.jsp` → authserver 自动填充账号密码并提交（验证码/失败回退人工）；
+ *   登录成功后从 `CookieManager` 取同域 cookie，由 [JwCardsRepository] 原生 GET 官方 JSON 接口；
+ * - 点任意卡片 = App 内置 WebView 全屏打开官方页面，返回回卡片页（写操作只在官方页面内完成）；
+ * - cookie/密码只在调用瞬间使用，不落盘、不打日志、不上传；卡片数据只内存展示；
+ * - 会话失效（接口返回 HTML/登录页）→ 自动重登 1 次，仍失败显示「登录失效，请重试」。
  *
  * @param sid 当前班级身份学号（默认登录账号；与已存凭据绑定，变化时要求重输）
- * @param onBack 顶栏返回（回到工具页）
+ * @param onBack 顶栏返回（卡片页 → 退出工具页；WebView 模式 → 回卡片页）
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -87,13 +92,14 @@ fun JwEntryScreen(
     val context = LocalContext.current
     val state = remember { JwScreenState() }
     val store = remember { JwCredentialStore(context) }
+    val repository = remember { JwCardsRepository() }
 
     val pageClient = remember {
         object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
                 if (JwLoginLogic.isAllowedNavigation(url)) return false
-                // 校外 http(s)（如教务处外链）：交给系统浏览器，不把内置登录页带出校内域。
+                // 校外 http(s)（如教务处外链）：交给系统浏览器，不把内置页带出校内域。
                 if (JwLoginLogic.isHttpUrl(url)) {
                     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
                 }
@@ -111,13 +117,22 @@ fun JwEntryScreen(
                 val current = url.orEmpty().ifBlank { view.url.orEmpty() }
                 state.pageUrl = current
                 when (JwLoginLogic.pageKind(current)) {
-                    // 统一身份认证登录页：触发自动填充/提交。
+                    // 统一身份认证登录页：触发自动填充/提交（卡片页/官方页内会话过期也适用）。
                     JwLoginLogic.PageKind.AUTH_LOGIN -> state.authPageSeq.value += 1
-                    // 回到 210.34.74.77 = 已登录进入教务系统：清提示、结束自动流程。
+                    // 回到 210.34.74.77 = 已登录进入教务系统。
                     JwLoginLogic.PageKind.JW_ENTERED -> {
+                        state.cookie = CookieManager.getInstance()
+                            .getCookie(JwCardCatalog.BASE_URL)
+                        state.userAgent = view.settings.userAgentString.orEmpty()
                         state.statusText.value = null
                         state.manualRequired.value = false
                         state.injectAttempts = 0
+                        if (state.mode.value == JwMode.LOGIN) {
+                            // 登录完成：切到卡片页并拉取官方接口数据。
+                            state.mode.value = JwMode.CARDS
+                            state.lastUpdated.value = null
+                            state.refreshSeq.value += 1
+                        }
                     }
                     JwLoginLogic.PageKind.JW_ENTRY, JwLoginLogic.PageKind.OTHER -> Unit
                 }
@@ -165,7 +180,7 @@ fun JwEntryScreen(
             state.password.value = saved.password
             state.statusText.value = JwLoginLogic.MSG_AUTO_LOGIN
         } else {
-            // 旧身份残留凭据：sid 不匹配时清掉，要求重输（契约 §5.3-2）。
+            // 旧身份残留凭据：sid 不匹配时清掉，要求重输（凭据契约 §5.3-2）。
             if (!store.savedSid().isNullOrBlank()) runCatching { store.clear() }
             state.password.value = null
             state.promptVisible.value = true
@@ -216,6 +231,48 @@ fun JwEntryScreen(
         }
     }
 
+    // 拉取 4 个官方接口数据（登录成功后 / 刷新 / 单卡重试）。
+    val refreshSeq = state.refreshSeq.value
+    LaunchedEffect(refreshSeq) {
+        if (refreshSeq <= 0) return@LaunchedEffect
+        state.cardsLoading.value = true
+        state.cardsError.value = null
+        val cookie = CookieManager.getInstance().getCookie(JwCardCatalog.BASE_URL)
+            ?: state.cookie
+        if (cookie.isNullOrBlank()) {
+            // 登录动作已完成但拿不到同域 cookie：按会话失效处理（重登一次后仍失败则提示）。
+            state.cardsLoading.value = false
+            state.cardsError.value = JwCardTexts.MSG_LOGIN_EXPIRED
+            state.mode.value = JwMode.CARDS
+            return@LaunchedEffect
+        }
+        state.cookie = cookie
+        val userAgent = webView.settings.userAgentString.orEmpty()
+        state.userAgent = userAgent
+        val snapshot = repository.loadAll(cookie, userAgent)
+        state.cardsLoading.value = false
+        if (snapshot.sessionExpired) {
+            if (state.reloginAttempts < JwCardConfig.MAX_RELOGIN_ATTEMPTS) {
+                // 规格 §1：会话失效 → 自动重登 1 次（由 WebView 自动登录流程完成）。
+                state.reloginAttempts += 1
+                state.mode.value = JwMode.LOGIN
+                state.statusText.value = JwCardTexts.MSG_RELOGIN
+                state.manualRequired.value = false
+                state.injectAttempts = 0
+                state.loading.value = true
+                webView.loadUrl(JwLoginLogic.ENTRY_URL)
+            } else {
+                state.cardsError.value = JwCardTexts.MSG_LOGIN_EXPIRED
+                state.mode.value = JwMode.CARDS
+            }
+            return@LaunchedEffect
+        }
+        state.reloginAttempts = 0
+        state.cards.value = JwCardMapper.cards(snapshot)
+        state.lastUpdated.value = jwUpdatedTimeText()
+        state.mode.value = JwMode.CARDS
+    }
+
     fun submitPassword(rawPassword: String, saveToDevice: Boolean) {
         if (JwLoginLogic.validatePassword(rawPassword) != null) return
         if (saveToDevice && sid.isNotBlank()) {
@@ -227,8 +284,17 @@ fun JwEntryScreen(
         state.manualRequired.value = false
         state.promptVisible.value = false
         state.statusText.value = JwLoginLogic.MSG_AUTO_LOGIN
+        state.reloginAttempts = 0
+        state.mode.value = JwMode.LOGIN
         // 登录页若已经加载完成（不再触发 onPageFinished），手动补一次注入触发。
         if (JwLoginLogic.isAuthServerLoginUrl(state.pageUrl)) state.authPageSeq.value += 1
+    }
+
+    fun openOfficialPage(url: String, title: String) {
+        state.webTitle.value = title
+        state.mode.value = JwMode.WEB
+        state.loading.value = true
+        webView.loadUrl(url)
     }
 
     fun clearLogin() {
@@ -238,6 +304,14 @@ fun JwEntryScreen(
         state.manualRequired.value = false
         state.statusText.value = null
         state.clearConfirmVisible.value = false
+        state.reloginAttempts = 0
+        state.cookie = null
+        state.userAgent = ""
+        state.cards.value = JwCardMapper.loadingCards()
+        state.cardsError.value = null
+        state.cardsLoading.value = false
+        state.lastUpdated.value = null
+        state.mode.value = JwMode.LOGIN
         runCatching { CookieManager.getInstance().removeAllCookies(null) }
         runCatching { CookieManager.getInstance().flush() }
         runCatching { WebStorage.getInstance().deleteAllData() }
@@ -267,7 +341,7 @@ fun JwEntryScreen(
         when {
             state.clearConfirmVisible.value -> state.clearConfirmVisible.value = false
             state.promptVisible.value -> state.promptVisible.value = false
-            webView.canGoBack() -> webView.goBack()
+            state.mode.value == JwMode.WEB -> state.mode.value = JwMode.CARDS
             else -> onBack()
         }
     }
@@ -279,39 +353,71 @@ fun JwEntryScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
+            val mode = state.mode.value
             CtTopBar(
-                title = JwLoginLogic.PAGE_TITLE,
-                onBack = onBack,
+                title = if (mode == JwMode.WEB) {
+                    state.webTitle.value ?: JwLoginLogic.PAGE_TITLE
+                } else {
+                    JwLoginLogic.PAGE_TITLE
+                },
+                onBack = if (mode == JwMode.WEB) {
+                    { state.mode.value = JwMode.CARDS }
+                } else {
+                    onBack
+                },
                 actions = {
-                    TextButton(onClick = { state.clearConfirmVisible.value = true }) {
-                        Text(JwLoginLogic.BTN_CLEAR)
+                    if (mode == JwMode.CARDS) {
+                        TextButton(
+                            onClick = { state.refreshSeq.value += 1 },
+                            enabled = !state.cardsLoading.value,
+                        ) { Text(JwCardTexts.BTN_REFRESH) }
+                    }
+                    if (mode != JwMode.WEB) {
+                        TextButton(onClick = { state.clearConfirmVisible.value = true }) {
+                            Text(JwLoginLogic.BTN_CLEAR)
+                        }
                     }
                 },
             )
 
-            state.statusText.value?.let { text ->
-                JwStatusBanner(
-                    text = text,
-                    manual = state.manualRequired.value,
+            if (mode == JwMode.CARDS) {
+                JwCardsSection(
+                    cards = state.cards.value,
+                    refreshing = state.cardsLoading.value,
+                    lastUpdated = state.lastUpdated.value,
+                    globalError = state.cardsError.value,
+                    onRefresh = { state.refreshSeq.value += 1 },
+                    onOpenDataCard = { card -> openOfficialPage(card.targetUrl, card.kind.title) },
+                    onOpenTool = { tool -> openOfficialPage(JwCardCatalog.url(tool.path), tool.title) },
+                    onOpenSite = {
+                        openOfficialPage(JwCardCatalog.SITE_URL, JwCardTexts.BTN_OPEN_SITE)
+                    },
+                    modifier = Modifier.weight(1f),
                 )
-            }
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) {
-                AndroidView(
-                    factory = { webView },
-                    modifier = Modifier.fillMaxSize(),
-                )
-                if (state.loading.value) {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .height(2.dp),
+            } else {
+                state.statusText.value?.let { text ->
+                    JwStatusBanner(
+                        text = text,
+                        manual = state.manualRequired.value,
                     )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                ) {
+                    AndroidView(
+                        factory = { webView },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    if (state.loading.value) {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .height(2.dp),
+                        )
+                    }
                 }
             }
         }
@@ -342,14 +448,15 @@ fun JwEntryScreen(
     }
 }
 
-/** 页面运行态（集中放 Compose State，供 WebViewClient 回调与注入协程读写）。 */
+/** 页面运行态（集中放 Compose State，供 WebViewClient 回调与数据拉取协程读写）。 */
 private class JwScreenState {
+    // ---- 登录（沿用 v4.46.1）----
     val promptVisible = mutableStateOf(false)
     val clearConfirmVisible = mutableStateOf(false)
     val password = mutableStateOf<String?>(null)
     val statusText = mutableStateOf<String?>(null)
     val manualRequired = mutableStateOf(false)
-    val loading = mutableStateOf(true)
+    val loading = mutableStateOf(false)
 
     /** 每次 authserver 登录页加载完成 +1，用于触发一次注入。 */
     val authPageSeq = mutableStateOf(0)
@@ -359,6 +466,26 @@ private class JwScreenState {
 
     /** 本次进入页面已尝试注入次数（防失败页面反复刷新导致死循环）。 */
     var injectAttempts: Int = 0
+
+    // ---- 模式 / 卡片数据 ----
+    val mode = mutableStateOf(JwMode.LOGIN)
+    val webTitle = mutableStateOf<String?>(null)
+    val cards = mutableStateOf(JwCardMapper.loadingCards())
+    val cardsLoading = mutableStateOf(false)
+
+    /** 页级错误（登录失效/拿不到 cookie）；单卡错误在卡片内体现。 */
+    val cardsError = mutableStateOf<String?>(null)
+    val lastUpdated = mutableStateOf<String?>(null)
+
+    /** 每次 +1 触发一次官方接口拉取（登录成功/刷新/重试共用）。 */
+    val refreshSeq = mutableStateOf(0)
+
+    /** 本次进入页面已自动重登次数（规格 §1：最多 1 次）。 */
+    var reloginAttempts: Int = 0
+
+    /** 登录成功时缓存的同域 cookie / UA（下次拉取优先从 CookieManager 现取）。 */
+    var cookie: String? = null
+    var userAgent: String = ""
 }
 
 /** 一次性密码输入弹层：账号默认当前身份学号（掩码展示），可保存到本机或仅本次打开。 */

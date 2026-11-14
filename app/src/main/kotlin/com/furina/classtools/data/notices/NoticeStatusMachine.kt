@@ -26,11 +26,15 @@ data class SignupWindow(val start: Long?, val end: Long?)
 /**
  * 通知状态机（纯函数，Android 移植版）。
  *
- * 唯一真源：`docs/api/NOTICES.md` §3（网页 `anStatus` 简化版 + 小程序 `notice.js` 完整版口径）：
+ * 唯一真源：`docs/api/NOTICES.md` §3（网页 `anStatus` 简化版 + 小程序 `notice.js` 完整版口径）
+ * + `web/通知三端_长期通知与时间显示_契约_20261114.md`（长期通知期次 / 时间显示 §3 / 统计 §2.4）：
  * - **时间优先级**：报名窗口 > 真实截止（extensions 最后一次延期优先）> 活动/事件 > 无时间；
  * - `expireAt` 只用于「活动类自动归档」，**绝不当截止时间展示**；
- * - `recurrence`（长期安排）存在时**永不判过期**；
- * - 时间展示 `fmtWhen`：过期→`MM-dd HH:mm`；<1h→`N 分钟后`；<24h→`N 小时后`；<7d→`N 天后`；否则 `MM-dd HH:mm`；
+ * - 有效的 `recurrence`（长期安排）存在时**永不按 deadline 判过期**；`recurrence.until` 到期（或下一次发生
+ *   时间已超出 until）→ 状态归「长期安排已结束」（已过期区），不再产生期次（§1.1/§1.3）；
+ * - 期次：`next`（严格 > now）在 `[next-24h, next)` 窗口内 → [occurrenceOf] 返回期次（key=`<gid>@occ:<yyyyMMdd>`）；
+ * - 时间展示 `fmtWhen`：过期/远期 → `M月D日（相对周） HH:mm`；<1h→`N 分钟后`；<24h→`N 小时后`；
+ *   <7d→`N 天后`（倒计时保持相对；绝对日期按 §3 统一格式）；
  * - 动作文案精简（≤6 字，`报名已截止→报名截止` 等映射）。
  */
 object NoticeStatusMachine {
@@ -40,8 +44,19 @@ object NoticeStatusMachine {
     private const val DAY_MS = 24 * HOUR_MS
     private const val WEEK_MS = 7 * DAY_MS
 
+    /** 期次提前展示窗口（契约 §1.3：发生前 24h 进入主列表）。 */
+    private const val OCCURRENCE_LEAD_MS = DAY_MS
+
+    /** recurrence 合法 freq（契约 §1.1）。 */
+    private val RECUR_FREQS = setOf("daily", "weekly", "monthly_day", "monthly_weeks")
+
+    /** recurrence.time 合法形式 `HH:MM`（24h）。 */
+    private val RECUR_TIME = Regex("^([01]?\\d|2[0-3]):[0-5]\\d$")
+
     private val mmdd: DateTimeFormatter = DateTimeFormatter.ofPattern("MM-dd", Locale.CHINA)
     private val mmddhhmm: DateTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.CHINA)
+    private val hhmm: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA)
+    private val isoDate: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-M-d", Locale.CHINA)
 
     private val ACTION_MAP = mapOf(
         "报送姓名截止" to "报送截止",
@@ -111,23 +126,34 @@ object NoticeStatusMachine {
     fun fmt(ts: Long, zone: ZoneId = ZoneId.systemDefault()): String =
         mmddhhmm.format(Instant.ofEpochMilli(ts).atZone(zone))
 
-    /** 状态机/卡片 chip 用的人类可读时间。 */
+    /**
+     * 状态机/卡片 chip 用的人类可读时间（契约 §3）：
+     * - 剩余 <1h / <24h / <7d → 相对倒计时（`N 分钟后`/`N 小时后`/`N 天后`，保持相对）；
+     * - 其余（含已过期）→ 绝对 `M月D日（相对周） HH:mm`。
+     */
     fun fmtWhen(ts: Long, nowMillis: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()): String {
         val left = ts - nowMillis
-        if (left < 0) return fmt(ts, zone)
-        if (left < HOUR_MS) {
-            val minutes = maxOf(1L, (left + MINUTE_MS - 1) / MINUTE_MS)
-            return "$minutes 分钟后"
+        if (left >= 0) {
+            if (left < HOUR_MS) {
+                val minutes = maxOf(1L, (left + MINUTE_MS - 1) / MINUTE_MS)
+                return "$minutes 分钟后"
+            }
+            if (left < DAY_MS) {
+                val hours = maxOf(1L, (left + HOUR_MS - 1) / HOUR_MS)
+                return "$hours 小时后"
+            }
+            if (left < WEEK_MS) {
+                val days = maxOf(1L, (left + DAY_MS - 1) / DAY_MS)
+                return "$days 天后"
+            }
         }
-        if (left < DAY_MS) {
-            val hours = maxOf(1L, (left + HOUR_MS - 1) / HOUR_MS)
-            return "$hours 小时后"
-        }
-        if (left < WEEK_MS) {
-            val days = maxOf(1L, (left + DAY_MS - 1) / DAY_MS)
-            return "$days 天后"
-        }
-        return fmt(ts, zone)
+        return absoluteWhenText(ts, nowMillis, zone)
+    }
+
+    /** 绝对时间文案：`M月D日（相对周） HH:mm`（§3 统一格式）。 */
+    fun absoluteWhenText(ts: Long, nowMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+        val zoned = Instant.ofEpochMilli(ts).atZone(zone)
+        return "${fmtDateWeek(ts, nowMillis, zone)} ${hhmm.format(zoned)}"
     }
 
     /** 动作精简（≤6 字；长文案映射/截断）。 */
@@ -169,6 +195,16 @@ object NoticeStatusMachine {
     fun archiveAtOf(group: NoticeGroupDto, zone: ZoneId = ZoneId.systemDefault()): Long? =
         parseTs(group.expireAt, zone)
 
+    /**
+     * 是否有任何时间锚点（`deadline`/`extensions` 最后一条/`eventAt`/`signupStart`/`signupEnd`）；
+     * 无时间锚点且非过期、无 recurrence → 「资料 / 无时间」（契约 §1.2），不参与待处理统计。
+     */
+    fun hasTimeAnchor(group: NoticeGroupDto, zone: ZoneId = ZoneId.systemDefault()): Boolean =
+        deadlineOf(group, zone) != null ||
+            parseTs(group.eventAt, zone) != null ||
+            parseTs(group.signupStart, zone) != null ||
+            parseTs(group.signupEnd, zone) != null
+
     // ------------------------------------------------------------ 主显示时间 / 状态
 
     fun whenInfo(
@@ -204,7 +240,18 @@ object NoticeStatusMachine {
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
     ): NoticeStatus {
-        if (group.recurrence != null) {
+        // 长期安排：有效 recurrence 且未到 until → 「长期安排」；until 到期 / 下一次超出 until → 已结束（§1.1）。
+        val recurrence = effectiveRecurrenceOf(group)
+        if (recurrence != null) {
+            if (recurEndedOf(group, nowMillis, zone)) {
+                return NoticeStatus(
+                    key = "recur_ended",
+                    label = "长期安排已结束",
+                    cls = "expired",
+                    expired = true,
+                    bucket = NoticeBucket.EXPIRED,
+                )
+            }
             val label = recurLabelOf(group).ifBlank { "长期安排" }
             return NoticeStatus("recurring", "长期安排 · $label", "recurring", false, NoticeBucket.RECURRING)
         }
@@ -283,11 +330,12 @@ object NoticeStatusMachine {
         zone: ZoneId = ZoneId.systemDefault(),
     ): Boolean = statusOf(group, nowMillis, zone).expired
 
+    /** 是否「可处理」的通知（长期安排定义卡不算；契约 §2.4）。 */
     fun isActionable(group: NoticeGroupDto): Boolean =
-        group.actionable && group.recurrence == null
+        group.actionable && effectiveRecurrenceOf(group) == null
 
-    private fun bucketStatus(ts: Long, action: String, nowMillis: Long, extension: Boolean): NoticeStatus {
-        val label = "${fmtWhen(ts, nowMillis)} $action"
+    private fun bucketStatus(ts: Long, action: String, nowMillis: Long, extension: Boolean, zone: ZoneId = ZoneId.systemDefault()): NoticeStatus {
+        val label = "${fmtWhen(ts, nowMillis, zone)} $action"
         if (extension) return NoticeStatus("extended", label, "extended", false, NoticeBucket.EXTENDED)
         val left = ts - nowMillis
         return when {
@@ -322,13 +370,14 @@ object NoticeStatusMachine {
     /**
      * 下一次发生时间（本地计算；支持 daily / weekly / monthly_day / monthly_weeks）。
      * JS `weekday` 口径 0=周日 … 6=周六；monthly_day 只支持 1..28。
+     * 非法 recurrence（freq/time 不合法，§1.1）→ null。
      */
     fun recurNextOf(
         group: NoticeGroupDto,
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
     ): Long? {
-        val recur = group.recurrence ?: return null
+        val recur = effectiveRecurrenceOf(group) ?: return null
         val startAt = parseTs(recur.startAt, zone)
         val reference = maxOf(nowMillis, startAt ?: nowMillis)
         val now = Instant.ofEpochMilli(reference).atZone(zone)
@@ -405,75 +454,243 @@ object NoticeStatusMachine {
         }
     }
 
-    /** `下次 MM-dd 周X HH:mm`；无则空串。 */
+    /** `下次 M月D日（周X）HH:mm`（契约 §3 时间格式）；无下次/非法 recurrence 则空串。 */
     fun recurNextTextOf(
         group: NoticeGroupDto,
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
     ): String {
-        val recur = group.recurrence ?: return ""
         val next = recurNextOf(group, nowMillis, zone) ?: return ""
-        val zoned = Instant.ofEpochMilli(next).atZone(zone)
-        return buildString {
-            append("下次 ")
-            append(mmdd.format(zoned))
-            append(' ')
-            append(weekdayZh(zoned.dayOfWeek))
-            if (recur.time.isNotBlank()) {
-                append(' ')
-                append(recur.time)
-            }
-        }
+        return "下次 ${fmtDateWeek(next, nowMillis, zone)}${timeSuffixOf(next, zone)}"
     }
 
-    // ------------------------------------------------------------ 简报统计 / 最紧急
+    /** 期次状态胶囊文案：`本次 M月D日（周X）HH:mm`（契约 §2.3）。 */
+    fun occurrenceLabelOf(
+        occurrence: NoticeOccurrence,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): String = "本次 ${fmtDateWeek(occurrence.nextMillis, nowMillis, zone)}${timeSuffixOf(occurrence.nextMillis, zone)}"
 
+    private fun timeSuffixOf(ts: Long, zone: ZoneId): String =
+        " " + hhmm.format(Instant.ofEpochMilli(ts).atZone(zone))
+
+    // ------------------------------------------------------------ 长期安排：until / 期次（契约 §1.1/§1.3）
+
+    /** 有效 recurrence（freq 合法 + `time` 为 `HH:MM`；无时间的通知不得有 recurrence，§1.1）；非法 → null。 */
+    fun effectiveRecurrenceOf(group: NoticeGroupDto): NoticeRecurrenceDto? {
+        val recur = group.recurrence ?: return null
+        if (recur.freq.trim().lowercase(Locale.ROOT) !in RECUR_FREQS) return null
+        if (!RECUR_TIME.matches(recur.time.trim())) return null
+        return recur
+    }
+
+    /** 是否长期安排（有效 recurrence；已结束状态由 [recurEndedOf] 判定）。 */
+    fun isLongterm(group: NoticeGroupDto): Boolean = effectiveRecurrenceOf(group) != null
+
+    /**
+     * `recurrence.until` 解析（契约 §1.1）：
+     * - `YYYY-MM-DD` → 当天 23:59:59.999（**含当天有效**）；
+     * - ISO datetime（`...+08:00` / `Z` / 本地日期时间）→ 该瞬时；
+     * - 空/非法 → null（= 无期限）。
+     */
+    fun recurUntilOf(group: NoticeGroupDto, zone: ZoneId = ZoneId.systemDefault()): Long? {
+        val raw = effectiveRecurrenceOf(group)?.until?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        // 先按纯日期解析（含当天有效；不能走 parseTs：那会得到当天 00:00）
+        runCatching {
+            val date = LocalDate.parse(raw)
+            return date.atTime(23, 59, 59, 999_000_000).atZone(zone).toInstant().toEpochMilli()
+        }
+        return parseTs(raw, zone)
+    }
+
+    /**
+     * 长期安排是否已结束（契约 §1.1/§1.3）：
+     * - `now > until`（日期口径 = 当天 23:59:59.999）→ 结束；
+     * - 下一次发生时间已超出 `until` → 结束（不再产生期次，含 until 当天之后的下一次）。
+     */
+    fun recurEndedOf(
+        group: NoticeGroupDto,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Boolean {
+        if (effectiveRecurrenceOf(group) == null) return false
+        val until = recurUntilOf(group, zone) ?: return false
+        if (nowMillis > until) return true
+        val next = recurNextOf(group, nowMillis, zone) ?: return nowMillis > until
+        return next > until
+    }
+
+    /** 期次 key：`<gid>@occ:<yyyyMMdd>`（next 的本地日期，§1.3）。 */
+    fun occurrenceKeyOf(groupId: String, nextMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+        val date = Instant.ofEpochMilli(nextMillis).atZone(zone).toLocalDate()
+        val ymd = String.format(Locale.ROOT, "%04d%02d%02d", date.year, date.monthValue, date.dayOfMonth)
+        return "$groupId@occ:$ymd"
+    }
+
+    /**
+     * 期次（§1.3）：进行中的长期安排 + `next` 严格 > now + `now ∈ [next-24h, next)` → 返回期次；
+     * 已到 until / 不在窗口内 → null（窗口开始前不可见；已处理期次由 marks 判定后由 UI 过滤）。
+     */
+    fun occurrenceOf(
+        group: NoticeGroupDto,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): NoticeOccurrence? {
+        if (effectiveRecurrenceOf(group) == null) return null
+        if (recurEndedOf(group, nowMillis, zone)) return null
+        val next = recurNextOf(group, nowMillis, zone) ?: return null
+        val windowStart = next - OCCURRENCE_LEAD_MS
+        if (nowMillis < windowStart || nowMillis >= next) return null
+        return NoticeOccurrence(
+            nextMillis = next,
+            windowStartMillis = windowStart,
+            key = occurrenceKeyOf(group.id, next, zone),
+        )
+    }
+
+    /** 进行中的长期安排清单（未到 until；按下次发生时间升序，算不出下次的排最后；契约 §2.2）。 */
+    fun longtermDigests(
+        digests: List<NoticeDigest>,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<NoticeDigest> = digests
+        .filter { effectiveRecurrenceOf(it.group) != null && !recurEndedOf(it.group, nowMillis, zone) }
+        .sortedWith(
+            compareBy<NoticeDigest> { recurNextOf(it.group, nowMillis, zone) ?: Long.MAX_VALUE }
+                .thenByDescending { it.ts },
+        )
+
+    /**
+     * 是否计入「待处理」（契约 §2.4；工作台/统计共用）：
+     * 未过期、`actionable !== false`、未已处理（普通通知按组 id、期次按期次 key），且
+     * - 普通通知必须**有时间锚点**（资料 / 无时间不计）；
+     * - 长期安排只有**处于期次窗口内且该期未处理**时计入（长期定义本身不计）。
+     */
+    fun isPending(
+        group: NoticeGroupDto,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+        done: Boolean = false,
+        doneRef: (String) -> Boolean = { false },
+    ): Boolean {
+        if (effectiveRecurrenceOf(group) != null) {
+            if (recurEndedOf(group, nowMillis, zone)) return false
+            val occurrence = occurrenceOf(group, nowMillis, zone) ?: return false
+            return !doneRef(occurrence.key)
+        }
+        if (statusOf(group, nowMillis, zone).expired) return false
+        if (!group.actionable || done) return false
+        return whenOf(group, nowMillis, zone) != null
+    }
+
+    // ------------------------------------------------------------ 简报统计（契约 §2.4）/ 最紧急
+
+    /**
+     * §2.4 统计口径（顶部 5 卡 / 工作台同口径）：
+     * - 待处理：未过期、非长期定义、非资料/无时间、未已处理、`actionable !== false`、且有时间锚点；
+     *   期次卡也计入（已处理的期次不计；[doneRef] 同时用于普通通知 `gid` 与期次 key）；
+     * - 24h / 7 天：上述待处理中主显示时间（期次按 next）剩余 ≤24h / ≤7 天；
+     * - 已过期：`status.expired`（含「长期安排已结束」）；
+     * - 长期通知：进行中的长期安排条数（until 已过 → 不计）；
+     * - 最新发布：[extraPostedMillis]（人工通知等）+ 组发布时间（[NoticeDigest.ts]）中最新的。
+     */
     fun statsOf(
         digests: List<NoticeDigest>,
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
+        doneRef: (String) -> Boolean = { false },
+        extraPostedMillis: List<Long> = emptyList(),
     ): NoticeStats {
         var pending = 0
         var urgent = 0
         var week = 0
         var expired = 0
+        var longterm = 0
+        var latestPosted = 0L
         for (digest in digests) {
             val group = digest.group
-            if (group.recurrence != null) continue
-            if (!group.actionable) continue
-            val status = statusOf(group, nowMillis, zone)
-            if (status.expired) {
+            if (digest.ts > latestPosted) latestPosted = digest.ts
+            if (effectiveRecurrenceOf(group) != null) {
+                if (recurEndedOf(group, nowMillis, zone)) {
+                    expired += 1
+                    continue
+                }
+                longterm += 1
+                val occurrence = occurrenceOf(group, nowMillis, zone) ?: continue
+                if (doneRef(occurrence.key)) continue
+                pending += 1
+                val left = occurrence.nextMillis - nowMillis
+                if (left in 0..DAY_MS) urgent += 1
+                if (left in 0..WEEK_MS) week += 1
+                continue
+            }
+            if (statusOf(group, nowMillis, zone).expired) {
                 expired += 1
                 continue
             }
-            if (digest.done) continue
+            if (digest.done || !group.actionable) continue
+            val whenAt = whenOf(group, nowMillis, zone) ?: continue // 资料 / 无时间不计待处理
             pending += 1
-            val whenAt = whenOf(group, nowMillis, zone) ?: continue
             val left = whenAt - nowMillis
-            if (left in 0..DAY_MS) urgent += 1 else if (left in 0..WEEK_MS) week += 1
+            if (left in 0..DAY_MS) urgent += 1
+            if (left in 0..WEEK_MS) week += 1
         }
-        return NoticeStats(pending = pending, urgent = urgent, week = week, expired = expired)
+        for (ts in extraPostedMillis) if (ts > latestPosted) latestPosted = ts
+        return NoticeStats(
+            pending = pending,
+            urgent = urgent,
+            week = week,
+            expired = expired,
+            longterm = longterm,
+            latestPostedMillis = latestPosted,
+            latestPostedText = latestPostedTextOf(latestPosted, nowMillis, zone),
+        )
     }
 
-    /** 最紧急一条：alert 优先 → 主显示时间升序（无时间最后）→ ts 降序。 */
+    /**
+     * 最新发布相对文案（契约 §2.1/§2.4）：今天/昨天 → `今天 HH:mm`；
+     * 更早（含跨年）→ `M月D日（相对周）`；无发布 → `—`。
+     */
+    fun latestPostedTextOf(
+        ts: Long,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): String {
+        if (ts <= 0L) return "—"
+        val at = Instant.ofEpochMilli(ts).atZone(zone)
+        val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+        val clock = hhmm.format(at)
+        return when (at.toLocalDate()) {
+            today -> "今天 $clock"
+            today.minusDays(1) -> "昨天 $clock"
+            else -> fmtDateWeek(ts, nowMillis, zone)
+        }
+    }
+
+    /** 最紧急一条（待处理口径；期次按 next 参与）：alert 优先 → 主显示时间升序（无时间最后）→ ts 降序。 */
     fun mostUrgent(
         digests: List<NoticeDigest>,
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
+        doneRef: (String) -> Boolean = { false },
     ): NoticeDigest? {
+        fun effectiveWhen(digest: NoticeDigest): Long? =
+            if (effectiveRecurrenceOf(digest.group) != null) {
+                occurrenceOf(digest.group, nowMillis, zone)?.nextMillis
+            } else {
+                whenOf(digest.group, nowMillis, zone)
+            }
         val candidates = digests.filter { digest ->
-            val group = digest.group
-            if (group.recurrence != null) return@filter false
-            if (!group.actionable) return@filter false
-            if (digest.done) return@filter false
-            !statusOf(group, nowMillis, zone).expired
+            isPending(digest.group, nowMillis, zone, digest.done, doneRef) &&
+                statusOf(digest.group, nowMillis, zone).bucket != NoticeBucket.EXPIRED
         }
         if (candidates.isEmpty()) return null
         return candidates.sortedWith(
             compareBy<NoticeDigest> { digest ->
                 if (statusOf(digest.group, nowMillis, zone).bucket == NoticeBucket.ALERT) 0 else 1
             }.thenBy { digest ->
-                whenOf(digest.group, nowMillis, zone) ?: Long.MAX_VALUE
+                effectiveWhen(digest) ?: Long.MAX_VALUE
             }.thenByDescending { it.ts },
         ).first()
     }
@@ -587,6 +804,141 @@ object NoticeStatusMachine {
             return parsed.atZone(zone).toInstant().toEpochMilli()
         }
         return null
+    }
+
+    // ------------------------------------------------------------ 时间显示（契约 §3）：M月D日（相对周）
+
+    /** 日期 token（§3.1）：`YYYY年M月D日` / `YYYY-MM-DD` / `M月D日` / `MM-DD`（区间两端各自匹配）。 */
+    private val DATE_TOKEN = Regex(
+        "(\\d{4})年(\\d{1,2})月(\\d{1,2})日" +
+            "|(\\d{4})-(\\d{1,2})-(\\d{1,2})" +
+            "|(\\d{1,2})月(\\d{1,2})日" +
+            "|(?<![\\d\\-])(\\d{1,2})-(\\d{1,2})(?!\\d)",
+    )
+
+    /** 已带括号的相对标签（§3.1.2：`M月D日（...）` 不重复加括号）。 */
+    private val REL_LABEL_PREFIX = Regex("^(今天|明天|昨天|后天|大后天|(?:本|下|上)?周[一二三四五六日天])")
+
+    /**
+     * 时间显示归一（契约 §3.1，三端同一函数）：把文本里的日期 token 统一格式化为 `M月D日（相对）`。
+     *
+     * - 识别 `MM-DD`、`M月D日`、`YYYY-MM-DD`、`YYYY年M月D日`（区间两端各自格式化）；
+     * - `相对` 基于**渲染时** [nowMillis]：今天/明天/昨天 → 同一 ISO 周（周一起算）`本周X` →
+     *   `下周X`/`上周X` → 其他仅 `周X`；年份非当年时前缀 `YYYY年`；
+     * - 已是 `M月D日（相对）` 形式的文本不重复加括号；
+     * - 只作用于显示层，不写回数据/缓存/云端（§3.2）；倒计时类文案（`N 小时后`）不经过本函数。
+     */
+    fun fmtDateText(text: String, nowMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+        if (text.isBlank()) return text
+        val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+        return DATE_TOKEN.replace(text) { match ->
+            val g = match.groupValues
+            val hasYear: Boolean
+            val year: Int
+            val month: Int
+            val day: Int
+            when {
+                g[1].isNotEmpty() -> {
+                    hasYear = true
+                    year = g[1].toInt()
+                    month = g[2].toInt()
+                    day = g[3].toInt()
+                }
+
+                g[4].isNotEmpty() -> {
+                    hasYear = true
+                    year = g[4].toInt()
+                    month = g[5].toInt()
+                    day = g[6].toInt()
+                }
+
+                g[7].isNotEmpty() -> {
+                    hasYear = false
+                    year = 0
+                    month = g[7].toInt()
+                    day = g[8].toInt()
+                }
+
+                else -> {
+                    hasYear = false
+                    year = 0
+                    month = g[9].toInt()
+                    day = g[10].toInt()
+                }
+            }
+            val date = runCatching {
+                if (hasYear) {
+                    LocalDate.of(year, month, day)
+                } else {
+                    var candidate = LocalDate.of(today.year, month, day)
+                    // 无年份：若落在很远未来（>183 天）→ 视为上一年（跨年 MM-DD）
+                    if (candidate.isAfter(today.plusDays(183))) candidate = candidate.minusYears(1)
+                    candidate
+                }
+            }.getOrNull() ?: return@replace match.value
+            // §3.1.2：已是 M月D日（相对）形式 → 原样保留，不重复加括号
+            val rest = text.substring(match.range.last + 1)
+            val open = rest.firstOrNull()
+            if (open == '（' || open == '(') {
+                val close = if (open == '（') "）" else ")"
+                val end = rest.indexOf(close)
+                if (end in 1..24 && REL_LABEL_PREFIX.containsMatchIn(rest.substring(1, end))) {
+                    return@replace match.value
+                }
+            }
+            formatDateLabel(date, today)
+        }
+    }
+
+    /** 单个时间戳 → `M月D日（相对周）`（跨年前缀 `YYYY年`；契约 §3）。 */
+    fun fmtDateWeek(
+        ts: Long,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): String {
+        val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+        val date = Instant.ofEpochMilli(ts).atZone(zone).toLocalDate()
+        return formatDateLabel(date, today)
+    }
+
+    /** `M月D日（相对）`（当年无年前缀；跨年为 `YYYY年M月D日（周X）`）。 */
+    fun formatDateLabel(date: LocalDate, today: LocalDate): String {
+        val prefix = if (date.year != today.year) "${date.year}年" else ""
+        val rel = relativeDayLabel(date, today, allowWeek = date.year == today.year)
+        return "$prefix${date.monthValue}月${date.dayOfMonth}日（$rel）"
+    }
+
+    /**
+     * 相对日/周标签（契约 §3.1）：今天/明天/昨天 → 同一 ISO 周（周一起算）`本周X` →
+     * `下周X` / `上周X` → 其他仅 `周X`。跨年（[allowWeek] = false）只给周几，避免「2027年1月1日（本周五）」式歧义。
+     */
+    fun relativeDayLabel(date: LocalDate, today: LocalDate, allowWeek: Boolean = true): String {
+        when (date) {
+            today -> return "今天"
+            today.plusDays(1) -> return "明天"
+            today.minusDays(1) -> return "昨天"
+        }
+        val weekday = weekdayZh(date.dayOfWeek)
+        if (!allowWeek) return weekday
+        val thisWeekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val dateWeekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        return when (dateWeekStart) {
+            thisWeekStart -> "本$weekday"
+            thisWeekStart.plusWeeks(1) -> "下$weekday"
+            thisWeekStart.minusWeeks(1) -> "上$weekday"
+            else -> weekday
+        }
+    }
+
+    /** 显示层统一入口：先做相对→绝对日期替换（锚点 = 首条 item 发送时间），再按 §3 统一格式（幂等）。 */
+    fun displayText(
+        text: String,
+        anchorTs: Long? = null,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): String {
+        val absolute = absRelDates(text, anchorTs, zone)
+        return fmtDateText(absolute, nowMillis, zone)
     }
 
     // ------------------------------------------------------------ 内部工具
