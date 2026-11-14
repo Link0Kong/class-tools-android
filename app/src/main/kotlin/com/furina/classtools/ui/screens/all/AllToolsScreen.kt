@@ -146,9 +146,9 @@ fun AllToolsScreen(
     var containerHeightPx by remember { mutableFloatStateOf(0f) }
     val scrollState = rememberScrollState()
 
-    // v5 卡片更高（图标气泡 + 分类标签 + 两行文字）；拖动几何随 itemHeight 参数自动一致。
-    val itemHeightDp = 148.dp
-    val spacingDp = 12.dp
+    // v6：与微信小程序 pages/all 同尺寸（mp 132rpx ≈ 72dp 卡高、48.6% 两列、16rpx 间距）。
+    val itemHeightDp = 76.dp
+    val spacingDp = 10.dp
     val itemHeightPx = with(density) { itemHeightDp.toPx() }
     val spacingPx = with(density) { spacingDp.toPx() }
 
@@ -348,14 +348,7 @@ fun AllToolsScreen(
                     }
                 }
 
-                Text(
-                    text = "全部工具均为原生页面 · 数据随账号同步",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = spec.horizontalPadding, end = spec.horizontalPadding, top = 16.dp, bottom = 124.dp),
-                )
+                Spacer(modifier = Modifier.height(124.dp))
             }
 
             // 跟手 ghost（拖动中 / 预览注入）

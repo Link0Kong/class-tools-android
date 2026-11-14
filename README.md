@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.47.0**——退出动画重做（工具页反向一镜到底）、工具界面简洁化向小程序看齐并删解释文字、通知大响应分页修复、删除设置工具、名单/通知/作业/投票/电费/水量左右滑动切换；单测 **1135/0**、快速 E2E **43/0**（导航 10/10），签名 APK 已交付桌面。详见 [REPORT_ROUND57](docs/REPORT_ROUND57_20261113.md)。
+- 状态：**v4.47.1**——全部工具卡片尺寸/结构与微信小程序 `pages/all` 对齐（76dp 横向卡、两列、40dp 图标 chip），保留长按拖动排序；单测 **1135/0**、快速 E2E **44/0**（导航 10/10），签名 APK 已交付桌面。详见 [REPORT_ROUND58](docs/REPORT_ROUND58_20261114.md)。
 
 ## 目录
 
