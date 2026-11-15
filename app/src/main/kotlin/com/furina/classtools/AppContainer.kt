@@ -1,6 +1,7 @@
 package com.furina.classtools
 
 import android.content.Context
+import com.furina.classtools.data.activity.ActivityRepository
 import com.furina.classtools.data.auth.ApiAuthRepository
 import com.furina.classtools.data.auth.AuthRepository
 import com.furina.classtools.data.diag.AndroidDeviceProbe
@@ -42,6 +43,12 @@ import com.furina.classtools.data.ppt.PptUploadPhase
 import com.furina.classtools.data.ppt.PptLocalStore
 import com.furina.classtools.data.ppt.PptNetworkQualityProvider
 import com.furina.classtools.data.ppt.PptRepository
+import com.furina.classtools.data.push.ApiPushTokenUploader
+import com.furina.classtools.data.push.HeytapOppoPushSdk
+import com.furina.classtools.data.push.OppoPushConfig
+import com.furina.classtools.data.push.OppoPushManager
+import com.furina.classtools.data.push.PrefsOppoPushStore
+import com.furina.classtools.data.push.PushChannels
 import com.furina.classtools.data.vote.DefaultVoteRepository
 import com.furina.classtools.data.vote.VoteRepository
 import com.furina.classtools.data.permission.AndroidPermissionController
@@ -104,6 +111,11 @@ class AppContainer(context: Context) {
         // 启动/登录后在线时补报本机待发的崩溃/诊断队列（契约 §2：启动后补报）。
         if (session != null && !session.debug && previousSid != session.sid) {
             appScope.launch { runCatching { clientDiagReporter.drainPending() } }
+        }
+        // OPPO PUSH：登录 / 切换账号 / token 恢复后，用缓存 RegistrationID 重新上传到当前账号
+        // （未登录时 manager 内部跳过，等下次 onSessionChanged；重复上传由幂等门跳过）。
+        if (previousSid != session?.sid) {
+            runCatching { oppoPushManager.onSessionChanged() }
         }
     }
 
@@ -220,6 +232,10 @@ class AppContainer(context: Context) {
         currentSid = { activeSession?.sid },
     ) }
 
+    /** 第二课堂活动：本机 token + 请求签名直连学校接口（不经过任何自建服务器）。 */
+    /** 懒加载：启动首帧不需要活动仓库。 */
+    val activityRepository: ActivityRepository by lazy { ActivityRepository(appContext) }
+
     /** 团员名单仓库（RPC class_league；仅姓名/座号，无 sid）。 */
     /** 懒加载：启动首帧不需要团员名单仓库。 */
     val classLeagueRepository: ClassLeagueRepository by lazy { DefaultClassLeagueRepository(
@@ -322,6 +338,39 @@ class AppContainer(context: Context) {
 
     /** 本地通知提醒调度（WorkManager 15min 周期，幂等）。 */
     val reminderScheduler: ReminderScheduler by lazy { WorkManagerReminderScheduler(appContext) }
+
+    /**
+     * OPPO PUSH（官方 SDK V4.0.0）：
+     * - 密钥来自 `app/oppo.properties`（构建期注入 BuildConfig；空 = 未配置 → 安全跳过）；
+     * - [ClassToolsApp] 在 onCreate 调 [OppoPushManager.onAppCreated]（创建全部渠道 + init/register）；
+     * - 注册成功后 token 上传云端 `push_tokens`；登录/切号时 [OppoPushManager.onSessionChanged] 补传。
+     * 懒加载：未进入「我的」页/未注册时不额外创建对象（Application.onCreate 会首次触发）。
+     */
+    val oppoPushManager: OppoPushManager by lazy {
+        OppoPushManager(
+            config = OppoPushConfig.of(
+                appKey = BuildConfig.OPPO_PUSH_APP_KEY,
+                appSecret = BuildConfig.OPPO_PUSH_APP_SECRET,
+            ),
+            sdk = HeytapOppoPushSdk(appContext),
+            store = PrefsOppoPushStore(appContext),
+            uploader = ApiPushTokenUploader(apiClient),
+            scope = appScope,
+            sessionProvider = { activeSession },
+            deviceLabel = { deviceLabel() },
+            appVersion = BuildConfig.VERSION_NAME,
+            debug = BuildConfig.DEBUG,
+            ensureNotificationChannel = { PushChannels.ensureClassNoticeChannel(appContext) },
+        )
+    }
+
+    /** 上报云端 token 时展示的设备标签（只含厂商/型号，不含任何个人隐私；与网页/小程序无关）。 */
+    private fun deviceLabel(): String {
+        val parts = listOf(android.os.Build.MANUFACTURER, android.os.Build.MODEL)
+            .map { it?.trim().orEmpty() }
+            .filter { it.isNotEmpty() && !it.equals("unknown", ignoreCase = true) }
+        return parts.joinToString(" ").ifBlank { "Android" }
+    }
 
     init {
         // 启动不阻塞主线程：WorkManager 初始化与 ensureScheduled 放到后台作用域。

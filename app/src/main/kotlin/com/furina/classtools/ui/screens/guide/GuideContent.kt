@@ -4,7 +4,7 @@ package com.furina.classtools.ui.screens.guide
  * 使用说明「卡片化」内容数据（**纯 Kotlin，无 Compose / Android 依赖**，可直接单测）。
  *
  * 信息架构与三端共享契约 `web/使用说明_卡片化重构契约_20261112.md` 一致：
- * 5 个分类（入门 / 学习 / 生活 / 协作 / 更多）、21 张卡、一屏一张左右滑动。
+ * 5 个分类（入门 / 学习 / 生活 / 协作 / 更多）、24 张卡、一屏一张左右滑动。
  *
  * 文案硬规则（契约 §0）：
  * - 标题 ≤ 8 字；一句话作用 ≤ 20 字；每条步骤 ≤ 24 字；提示 ≤ 30 字；
@@ -18,7 +18,7 @@ package com.furina.classtools.ui.screens.guide
 object UserGuideContent {
 
     /** 内容版本（内容较上一版有实质变化时递增；供设置页/关于页展示）。 */
-    const val VERSION: String = "2026-11-14.1"
+    const val VERSION: String = "2026-11-15.2"
 
     /** 轮播顺序即本列表顺序（契约 §5.2）。 */
     val cards: List<GuideCard> = listOf(
@@ -163,6 +163,34 @@ object UserGuideContent {
             tone = GuideTone.BLUE,
         ),
         GuideCard(
+            id = "chsi",
+            category = GuideCategory.STUDY,
+            title = "学信网入口",
+            subtitle = "学籍 · 学历 · 学位官方入口",
+            steps = listOf(
+                "点「学信网」卡片看官方数据速览",
+                "学信网需本人手动登录，App 不保存密码",
+                "10 个官方入口 App 内打开",
+            ),
+            tip = "数据仅本机内存展示；证件号已掩码",
+            scene = GuideScene.SHIELD,
+            tone = GuideTone.MINT,
+        ),
+        GuideCard(
+            id = "map",
+            category = GuideCategory.STUDY,
+            title = "校园地图",
+            subtitle = "2.5D 楼栋 · 楼层 · 道路导航",
+            steps = listOf(
+                "点「地图」看 2.5D 校园全貌",
+                "点楼栋看楼层与道路导航",
+                "课表页可跳到下一节位置",
+            ),
+            tip = "需定位权限；双指可缩放地图",
+            scene = GuideScene.GRID,
+            tone = GuideTone.BLUE,
+        ),
+        GuideCard(
             id = "power",
             category = GuideCategory.LIFE,
             title = "宿舍电费",
@@ -203,6 +231,20 @@ object UserGuideContent {
             tip = "一人一票；发起人和管理员可管理",
             scene = GuideScene.BALLOT,
             tone = GuideTone.MINT,
+        ),
+        GuideCard(
+            id = "activity",
+            category = GuideCategory.TEAM,
+            title = "活动报名",
+            subtitle = "第二课堂名额 · 本机登录",
+            steps = listOf(
+                "点「活动」看可报名活动",
+                "按角色看剩余名额并报名",
+                "登录信息只存本机不上云",
+            ),
+            tip = "学校账号仅本机；报名以学校为准",
+            scene = GuideScene.PEOPLE,
+            tone = GuideTone.SAND,
         ),
         GuideCard(
             id = "ppt",

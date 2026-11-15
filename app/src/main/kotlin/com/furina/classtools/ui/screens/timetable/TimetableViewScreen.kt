@@ -161,6 +161,7 @@ enum class TimetableViewMode { WEEK, DAY }
 @Composable
 fun TimetableViewScreen(
     onBack: () -> Unit,
+    onOpenMap: (() -> Unit)? = null,
     repository: TimetableRepository,
     modifier: Modifier = Modifier,
     initialSnapshot: TtSnapshot? = null,
@@ -383,6 +384,9 @@ fun TimetableViewScreen(
                     subtitle = sourceLabel,
                     onBack = onBack,
                     actions = {
+                        if (onOpenMap != null) {
+                            TextButton(onClick = onOpenMap) { Text("地图") }
+                        }
                         if (source == TtSource.PERSONAL) {
                             CtPill(
                                 text = "个人",

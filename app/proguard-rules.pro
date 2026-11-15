@@ -32,3 +32,14 @@
 
 # 提醒 Worker 由 WorkManager 按类名反射创建，保留其构造器与类名。
 -keep class com.furina.classtools.data.reminder.ReminderWorker { *; }
+
+# -----------------------------------------------------------------------------
+# OPPO PUSH（Heytap MCS SDK V4.0.0）
+# - Manifest 声明的回调服务由系统/推送通道按类名拉起（不能混淆/裁剪）；
+# - SDK 内部使用反射与 AIDL（com.mcs.aidl.*），R8 需要整包保留。
+# -----------------------------------------------------------------------------
+-keep class com.heytap.msp.** { *; }
+-keep class com.heytap.mcssdk.** { *; }
+-keep class com.mcs.aidl.** { *; }
+-dontwarn com.heytap.**
+-dontwarn com.mcs.**

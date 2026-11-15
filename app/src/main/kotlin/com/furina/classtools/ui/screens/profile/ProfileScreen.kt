@@ -85,6 +85,8 @@ import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.screens.me.MeStats
 import com.furina.classtools.ui.screens.me.MeStatsBuilder
+import com.furina.classtools.data.push.OppoPushState
+import com.furina.classtools.data.push.OppoPushStatus
 import com.furina.classtools.ui.screens.me.ReminderStatus
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
@@ -133,6 +135,9 @@ fun ProfileScreen(
     adaptiveSpec: CtAdaptiveSpec? = null,
     meStats: MeStats = MeStats(),
     reminderStatus: ReminderStatus = ReminderStatus(),
+    /** OPPO PUSH 状态（未配置/不支持/注册中/已注册掩码/失败）；点击重新注册。 */
+    oppoPushStatus: OppoPushStatus = OppoPushStatus(OppoPushState.NOT_CONFIGURED),
+    onRetryOppoPush: () -> Unit = {},
     onOpenFeedback: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     initialShowSignOutConfirm: Boolean = false,
@@ -197,8 +202,10 @@ fun ProfileScreen(
                         ) {
                             NotifySection(
                                 reminderStatus = reminderStatus,
+                                oppoPushStatus = oppoPushStatus,
                                 onOpenPermissions = onOpenPermissions,
                                 onOpenReminderSettings = onOpenReminderSettings,
+                                onRetryOppoPush = onRetryOppoPush,
                             )
                             AppearanceSection(
                                 dynamicColorEnabled = dynamicColorEnabled,
@@ -239,8 +246,10 @@ fun ProfileScreen(
                         )
                         NotifySection(
                             reminderStatus = reminderStatus,
+                            oppoPushStatus = oppoPushStatus,
                             onOpenPermissions = onOpenPermissions,
                             onOpenReminderSettings = onOpenReminderSettings,
+                            onRetryOppoPush = onRetryOppoPush,
                         )
                         AppearanceSection(
                             dynamicColorEnabled = dynamicColorEnabled,
@@ -580,8 +589,10 @@ private fun MetricCell(label: String, value: String, modifier: Modifier = Modifi
 @Composable
 private fun NotifySection(
     reminderStatus: ReminderStatus,
+    oppoPushStatus: OppoPushStatus,
     onOpenPermissions: () -> Unit,
     onOpenReminderSettings: () -> Unit,
+    onRetryOppoPush: () -> Unit,
 ) {
     SectionTitle("通知与权限")
     GroupCard {
@@ -598,6 +609,15 @@ private fun NotifySection(
             subtitle = reminderStatus.label,
             subtitleHighlight = reminderStatus.isWarning,
             onClick = onOpenReminderSettings,
+        )
+        RowDivider()
+        // OPPO PUSH（服务端推送；未配置密钥时显示「未配置」，点击重试不产生副作用）
+        ActionRow(
+            icon = Icons.Rounded.NotificationsActive,
+            title = "OPPO 推送",
+            subtitle = oppoPushStatus.label,
+            subtitleHighlight = oppoPushStatus.state == OppoPushState.FAILED,
+            onClick = onRetryOppoPush,
         )
     }
 }

@@ -6,5 +6,7 @@
     <!-- 教务系统仅 HTTP（契约 §5.1）：只对教务主机放行 cleartext，不全局打开。 -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">210.34.74.77</domain>
+        <!-- 校园地图 H5：域名备案前仅 IP 调试入口 -->
+        <domain includeSubdomains="false">121.196.47.2</domain>
     </domain-config>
 </network-security-config>

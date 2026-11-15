@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- v2 通知提醒（Android 13+ 运行时申请；拒绝时静默降级） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -47,6 +49,32 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!--
+          OPPO PUSH（Heytap MCS SDK V4.0.0）官方快速接入：直连声明 SDK 自带回调服务，
+          由系统推送通道（ColorOS/Heytap MCS）拉起；不继承重写透传消息，通知栏消息由 SDK 处理。
+          - heytap 通道：permission com.heytap.mcs.permission.SEND_PUSH_MESSAGE
+          - coloros 通道：permission com.coloros.mcs.permission.SEND_MCS_MESSAGE
+          （AAR 自身已合并 DataMessageReceivingService 与 sdkVersion meta-data，无需重复声明）
+        -->
+        <service
+            android:name="com.heytap.msp.push.service.DataMessageCallbackService"
+            android:exported="true"
+            android:permission="com.heytap.mcs.permission.SEND_PUSH_MESSAGE">
+            <intent-filter>
+                <action android:name="com.heytap.mcs.action.RECEIVE_MCS_MESSAGE" />
+                <action android:name="com.heytap.msp.push.RECEIVE_MCS_MESSAGE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name="com.heytap.msp.push.service.CompatibleDataMessageCallbackService"
+            android:exported="true"
+            android:permission="com.coloros.mcs.permission.SEND_MCS_MESSAGE">
+            <intent-filter>
+                <action android:name="com.coloros.mcs.action.RECEIVE_MCS_MESSAGE" />
+            </intent-filter>
+        </service>
 
         <provider            android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

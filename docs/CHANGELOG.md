@@ -1,5 +1,35 @@
 # 版本记录（Android 客户端）
 
+## v4.54.0 · 2026-11-15（底部导航黑条修复 + 并行功能整合交付）
+
+- **底部导航栏黑条修复**：nableEdgeToEdge 显式使用全透明系统栏 + isNavigationBarContrastEnforced=false；底部工具栏下方增加与页面底色一致的导航栏安全区背景。3 键导航（ColorOS 等）不再出现系统对比度黑色横条。
+- **整合并行会话的「活动」工具**（第二课堂）：活动列表/详情/各角色剩余名额/报名与取消；学校账号在 App 内 WebView 手动登录，token 只存本机 DataStore，不上云/不打日志；无登录时引导登录，不显示假数据。
+- **整合并行会话的「地图」工具**：内置 H5 2.5D 校园地图（约 231KB，ECS 121.196.47.2/map/campus_final_25d.html），楼栋/楼层/道路导航与定位权限；课表页可跳地图；网络安全配置仅对该 IP 放行 cleartext。
+- **整合「学信网」工具**（v4.53 并行会话）：数据卡 + 10 个官方入口；修复未登录误判——学信档案域未登录时返回的是营销首页（不是登录页 URL），新增页面内容强信号判定（「注册学信网账号/立即登录」= 未登录，「退出登录/个人中心」= 已登录），未登录自动跳官方账号登录页，不再展示「已登录」空数据卡；新增 3 项单测。
+- **整合 OPPO PUSH**（v4.51 并行会话）：官方 SDK AAR + Manifest 回调服务 + push_tokens upsert（未配置密钥时完全跳过）；设置页「我的 → 通知与权限」显示推送状态。
+- 使用说明新增「活动报名」「校园地图」2 张卡（22 → 24 张，VERSION 2026-11-15.2）；工具目录 17 项。
+- 单测 **1279 / 0 failures / 0 errors**（100 suites）；快速 E2E **44 步 PASS / 0 WARN / 0 FAIL（1048.1s，导航 10/10，logcat 0 FATAL/ANR）**；Release **3,301,273 B / SHA-256 `B02FDDCE3EE71EDA901059519014A42F5A7C865877A1D39581EF351C4BCCD858`**（vc72 / 4.54.0，v2 签名），冷启动 599/404ms、稳定 395/417/416ms。并行功能均为源码整合 + 构建/单测/冒烟验证；活动学校账号、学信网真实账号、OPPO 真实推送因红线/无密钥未做真实账号验证。
+
+## v4.53.0 · 2026-11-15（新增「学信网」卡片页：数据卡 + 10 个官方工具入口）
+
+- 新增「学信网」工具（`Icons.Rounded.Verified`、BrandSlateBlue、学习分类）：点卡片进入 App 内卡片页。
+- 学信网有短信/验证码/实人核验，**无法自动登录**：进入即加载 `https://my.chsi.com.cn/archive/wap/index.jsp`，未登录时全屏显示**官方登录页由本人手动登录**（App 不预填/不保存/不上传学信网账号密码）；登录成功后从官方页面**只读提取**学籍/学历/学位/在线验证报告文本摘要。
+- 卡片页：状态条（已登录 · 数据更新 HH:mm / 未登录或会话过期，去登录/刷新）+『数据』4 卡（提取不到显示「已登录 · 打开官方页面查看」空态）+『官方工具』10 卡（学期学籍/学历查询/学位查询/在线验证报告/报告在线验证/学历认证/照片校对/研招网/学职平台/帮助中心，内置 WebView 打开）+「打开完整学信档案」+「退出学信网登录」（清 Cookie/WebStorage/缓存）；WebView 顶栏「桌面版/手机版」UA 切换。
+- 手机适配：LazyColumn；窄屏 2 列 / ≥600dp 3 列；状态栏/导航栏安全区；点按 ≥48dp；文字最多 3 行省略；深浅色 token。
+- 安全：提取数据仅内存展示，不落盘/不上传/不打日志；展示前掩码 18 位身份证（保留前 6 后 4）与 11 位手机号（前 3 后 4）；WebView 禁 file/content access、仅 http(s)；不调用任何写接口。
+- 单测 **1276/0**（100 suites；新增 ChsiExtractLogicTest 26 项，全合成夹具；UserGuideContentTest 22 卡断言更新）；Release 3,284,845 B / SHA-256 `DA22AC20…9E14BC`（vc71，v2 签名）；**未用真实学信网账号验证、未做真机验证**（如实）。
+
+## v4.51.0 · 2026-11-14（OPPO PUSH 官方 SDK V4.0.0 接入：注册/上传 token/通知点击跳转）
+
+- 接入 OPPO PUSH 官方 SDK V4.0.0（本地 AAR `app/libs/com.heytap.msp_V4.0.0.aar`，164,111 B / sha256 `8A542A78…1C41`；SDK 自包含，无新增 maven 依赖/gson）；Manifest 按官方快速接入声明 `DataMessageCallbackService`（heytap permission/action）+ `CompatibleDataMessageCallbackService`（coloros action）；proguard keep `com.heytap.msp.** / com.heytap.mcssdk.** / com.mcs.aidl.**`（release R8 后 dex 已核对 SDK 类保留）。
+- 密钥配置：`app/oppo.properties`（**已加入 .gitignore，不入库**）+ 入库模板 `app/oppo.properties.example`；Gradle 读取生成 `BuildConfig.OPPO_PUSH_APP_KEY/OPPO_PUSH_APP_SECRET`（缺失/空 → 空串）。**当前无真实密钥**：未配置时客户端不 init / 不 register / 不上传，设置页「OPPO 推送」显示「未配置」，其余功能无影响（真实注册/到达/点击待密钥后真机验证）。
+- 推送逻辑：`ClassToolsApp.onCreate` → 创建「班级通知」渠道 `class_notice`（IMPORTANCE_HIGH，服务端 channel_id 对齐）→ 配置非空才 `HeytapPushManager.init(context, DEBUG)` → `isSupportPush` → `register(appKey, appSecret, callback)`；RegistrationID/状态缓存本机（SharedPreferences）；设置页「我的 → 通知与权限」新增「OPPO 推送」行（未配置/不支持/注册中/已注册掩码/失败 + 点击重试）。
+- token 上传（云端 `public.push_tokens`，契约由 Lead 定义）：`POST push_tokens?on_conflict=provider,token` + `Prefer: resolution=merge-duplicates,return=minimal`，body `{provider:"oppo",token,device,app_version}`；未登录跳过、登录/切换账号后自动补传；同一会话+regId+版本幂等只传一次，失败可重试，失败只日志不阻塞。
+- 通知点击：服务端 `clickActionType=4` + `clickActionActivity=MainActivity` + `actionParameters={"noticeId":"<gid>"}` + `channel_id=class_notice`；MainActivity 冷启动/onNewIntent 双路径解析（intent extra `noticeId` 或 actionParameters JSON）→ 进通知工具页并展开对应通知详情（最多多加载一页旧通知，找不到则停留通知页）。
+- 安全：不打印/不提交真实 AppKey/AppSecret/完整 RegistrationID（设置页仅掩码末 4 位；日志只输出错误码/状态）；`_oppo_sdk_tmp/`（官方 demo 解压参考）已 gitignore、不入交付。
+- 单测 **1246/0**（98 suites；新增 OPPO 推送 33 项：配置空跳过/状态文案与掩码/回调状态映射/渠道常量/点击参数解析与路由/payload 与 URL·headers 构造/幂等门/编排器状态机与登录补传，全部假 SDK/假上传器，不依赖真机与真实密钥）；`assembleRelease` 成功：APK **3,252,045 B / SHA-256 `5BD44F09…EDA1A5`**（vc69 / 4.51.0，v2 签名，aapt2+apksigner 复核；Manifest 两个回调服务与 AAR 的 DataMessageReceivingService 均已合并）。
+- 文档 `docs/OPPO_PUSH.md`（改动清单/填密钥/构建/真机验证步骤/错误码排查/运行时各状态/回滚/未验证项）。**未验证**：真实 AppKey 注册、服务端真实推送到达、点击跳转真实链路、ColorOS 真机行为（无密钥/未开推送服务）。
+
 ## v4.50.0 · 2026-11-14（通知页：长期通知按期次 + 顶部 5 张可点数据卡 + 资料栏 + 时间显示归一）
 
 - 三端同构改造（契约 `web/通知三端_长期通知与时间显示_契约_20261114.md` §1/§2/§3）：长期安排（`recurrence`）新增 `until` 有效期末，到期/下一次超出 until → 状态「长期安排已结束」归已过期区且不再产生期次；非法 recurrence（无 freq/时间）按普通通知兜底。

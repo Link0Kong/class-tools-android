@@ -15,6 +15,22 @@ val keystoreProps = Properties().apply {
     }
 }
 
+// OPPO PUSH（官方 SDK V4.0.0）密钥：app/oppo.properties（已加入 .gitignore，不入库）。
+// 复制 app/oppo.properties.example → app/oppo.properties 后填写；缺失/空值 → BuildConfig 为空串，
+// 客户端运行时安全跳过 init/register（设置页显示「未配置」，不崩溃）。
+val oppoPropsFile = file("oppo.properties")
+val oppoProps = Properties().apply {
+    if (oppoPropsFile.isFile) {
+        oppoPropsFile.inputStream().use { load(it) }
+    }
+}
+val oppoAppKey = (oppoProps.getProperty("oppo.appKey") ?: "").trim()
+val oppoAppSecret = (oppoProps.getProperty("oppo.appSecret") ?: "").trim()
+
+/** 生成 BuildConfig String 字面量（转义反斜杠/引号；密钥含特殊字符也不会破坏构建脚本）。 */
+fun buildConfigString(value: String): String =
+    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
 android {
     namespace = "com.furina.classtools"
     compileSdk = 37
@@ -23,8 +39,8 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 68
-        versionName = "4.50.0"
+        versionCode = 72
+        versionName = "4.54.0"
 
         // CloudBase REST 根地址与公开 Publishable Key（role=anon，设计上公开）。
         // 值来自 gradle.properties（ct.restBaseUrl / ct.publishableKey），便于部署时替换。
@@ -33,6 +49,10 @@ android {
         val publishableKey = (project.findProperty("ct.publishableKey") as String?).orEmpty()
         buildConfigField("String", "REST_BASE_URL", "\"$restBaseUrl\"")
         buildConfigField("String", "PUBLISHABLE_KEY", "\"$publishableKey\"")
+
+        // OPPO PUSH 密钥（app/oppo.properties；空串 = 未配置 → 客户端跳过注册/上传）。
+        buildConfigField("String", "OPPO_PUSH_APP_KEY", buildConfigString(oppoAppKey))
+        buildConfigField("String", "OPPO_PUSH_APP_SECRET", buildConfigString(oppoAppSecret))
     }
 
     signingConfigs {
@@ -67,6 +87,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests {
+            // JVM 单测不 mock android.jar：未 stub 的 Android 方法（如 android.util.Log.w）
+            // 返回默认值而不是抛 "not mocked"；纯逻辑单测（OPPO 推送状态机等）可直接覆盖含日志的代码路径。
+            isReturnDefaultValues = true
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -92,6 +120,11 @@ baselineProfile {
 
 dependencies {
     baselineProfile(project(":baseline-profile"))
+
+    // OPPO PUSH 官方 SDK V4.0.0（本地 AAR，来自 OPPO 官方 openfs 发布；sha256 见 docs/OPPO_PUSH.md）。
+    // 纯本地依赖：SDK 自包含（无 gson/okhttp/commons-codec 传递依赖，已用 javap 核对）。
+    implementation(files("libs/com.heytap.msp_V4.0.0.aar"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

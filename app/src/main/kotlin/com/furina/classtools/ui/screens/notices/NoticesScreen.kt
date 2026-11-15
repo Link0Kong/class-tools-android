@@ -368,6 +368,12 @@ fun NoticesScreen(
     initialQuery: String = "",
     initialExpiredExpanded: Boolean = false,
     initialLoading: Boolean = false,
+    /**
+     * OPPO PUSH 通知点击定位：组 id / rowId / 期次 key。
+     * 数据加载完成后展开对应通知详情并消费一次（找不到时多加载一页再试，仍找不到则放弃）。
+     */
+    initialFocusNoticeId: String? = null,
+    onFocusConsumed: () -> Unit = {},
     /** 预览：列表错峰入场帧（0..1；null = 正常动画）。 */
     previewEntranceProgress: Float? = null,
     /** 预览：强制指定通知卡处于按压态（NoticeUiItem.key）。 */
@@ -618,6 +624,32 @@ fun NoticesScreen(
         selectedKey?.let { key -> allItems.firstOrNull { it.key == key } }
     }
     val twoColumn = spec.widthDp >= 600
+
+    // OPPO PUSH 点击定位：数据就绪后按组 id / rowId / 期次 key 找卡片 → 打开详情；
+    // 首页未命中且还有更多旧通知时额外加载一页再试一次，仍找不到则静默放弃（停留在通知页）。
+    var focusLoadMoreTried by remember(initialFocusNoticeId) { mutableStateOf(false) }
+    LaunchedEffect(initialFocusNoticeId, phase, allItems, data?.hasMore) {
+        val target = initialFocusNoticeId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        if (phase != Phase.READY) return@LaunchedEffect
+        val match = allItems.firstOrNull { item ->
+            item.key == target ||
+                item.occurrenceKey == target ||
+                item.auto?.id == target ||
+                item.auto?.rowId == target ||
+                item.manual?.id == target
+        }
+        if (match != null) {
+            selectedKey = match.key
+            onFocusConsumed()
+            return@LaunchedEffect
+        }
+        if (!focusLoadMoreTried && data?.hasMore == true) {
+            focusLoadMoreTried = true
+            loadMore()
+        } else {
+            onFocusConsumed()
+        }
+    }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {

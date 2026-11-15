@@ -7,14 +7,17 @@ import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Casino
+import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.HowToVote
+import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Slideshow
+import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -111,6 +114,19 @@ object ToolCatalog {
             features = listOf("限时/截止/不限时", "单选/多选/匿名/可见范围", "实时结果与管理"),
         ),
         AppTool(
+            id = "activity",
+            name = "活动",
+            subtitle = "第二课堂 · 名额 · 报名",
+            icon = Icons.Rounded.Event,
+            accent = plum,
+            category = ToolCategory.CLASS,
+            features = listOf(
+                "活动列表与报名时间",
+                "各角色剩余名额",
+                "一键报名 / 取消（本机登录，不上传账号）",
+            ),
+        ),
+        AppTool(
             id = "tt",
             name = "课表",
             subtitle = "周/日视图 · 下一节",
@@ -127,6 +143,15 @@ object ToolCatalog {
             accent = Color(0xFFC29A3B),
             category = ToolCategory.CLASS,
             features = listOf("关注宿舍剩余电量", "24h / 7d / 30d 趋势（点击查看采样点）", "低电量提醒"),
+        ),
+        AppTool(
+            id = "map",
+            name = "地图",
+            subtitle = "2.5D · 楼层 · 道路导航",
+            icon = Icons.Rounded.Map,
+            accent = teal,
+            category = ToolCategory.STUDY,
+            features = listOf("校园 2.5D 地图与楼栋楼层", "按道路步行导航", "与课表下一节联动"),
         ),
         AppTool(
             id = "ppt",
@@ -192,6 +217,19 @@ object ToolCatalog {
                 "成绩 · 考试 · 选课 · 公告速览",
                 "8 个官方工具入口，App 内打开",
                 "自动登录；数据只在本机内存展示",
+            ),
+        ),
+        AppTool(
+            id = "chsi",
+            name = "学信网",
+            subtitle = "学籍 · 学历 · 学位 · 官方入口",
+            icon = Icons.Rounded.Verified,
+            accent = BrandSlateBlue,
+            category = ToolCategory.STUDY,
+            features = listOf(
+                "学籍 · 学历 · 学位摘要",
+                "10 个官方工具入口，App 内打开",
+                "本人在官方页面手动登录；数据仅内存",
             ),
         ),
     )

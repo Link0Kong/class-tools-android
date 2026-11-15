@@ -32,12 +32,17 @@ import kotlinx.coroutines.launch
 /**
  * App 根：根据本地会话状态在「启动页 / 身份门禁 / 主界面」之间切换。
  * 身份门禁是唯一入口（对齐站点红线：先学号+姓名，后加载班级数据）。
+ *
+ * @param pendingToolId 通知点击带入的工具 id（hw/tt；登录后跳转一次）
+ * @param pendingNoticeId OPPO PUSH 通知点击带入的通知 id（登录后进通知页并定位）
  */
 @Composable
 fun ClassToolsRoot(
     container: AppContainer,
     pendingToolId: String? = null,
     onPendingToolConsumed: () -> Unit = {},
+    pendingNoticeId: String? = null,
+    onPendingNoticeConsumed: () -> Unit = {},
 ) {
     val sessionState by container.sessionStore.state.collectAsStateWithLifecycle(
         initialValue = SessionState.Loading,
@@ -90,6 +95,8 @@ fun ClassToolsRoot(
             session = state.session,
             initialToolId = pendingToolId,
             onInitialToolConsumed = onPendingToolConsumed,
+            initialNoticeId = pendingNoticeId,
+            onInitialNoticeConsumed = onPendingNoticeConsumed,
             onSignOut = {
                 scope.launch {
                     container.authRepository.logout()

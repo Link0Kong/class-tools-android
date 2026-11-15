@@ -5,6 +5,10 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -67,6 +71,9 @@ import com.furina.classtools.data.reminder.OneShotScheduleResult
 import com.furina.classtools.data.reminder.ReminderOneShot
 import com.furina.classtools.data.reminder.ReminderOneShotFactory
 import com.furina.classtools.data.reminder.ReminderSettings
+import com.furina.classtools.data.push.OppPushClick
+import com.furina.classtools.data.push.OppoPushState
+import com.furina.classtools.data.push.OppoPushStatus
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
@@ -89,6 +96,8 @@ import com.furina.classtools.ui.components.dock.CtPageTransitions
 import com.furina.classtools.ui.components.dock.CtTabPager
 import com.furina.classtools.ui.components.dock.rememberCtTabPagerState
 import com.furina.classtools.ui.screens.all.AllToolsScreen
+import com.furina.classtools.ui.screens.activity.ActivityScreen
+import com.furina.classtools.ui.screens.chsi.ChsiEntryScreen
 import com.furina.classtools.ui.screens.data.DataPrivacyScreen
 import com.furina.classtools.ui.screens.diag.DiagScreen
 import com.furina.classtools.ui.screens.draw.DrawScreen
@@ -98,6 +107,7 @@ import com.furina.classtools.ui.screens.feedback.FeedbackScreen
 import com.furina.classtools.ui.screens.guide.UserGuideScreen
 import com.furina.classtools.ui.screens.home.HomeScreen
 import com.furina.classtools.ui.screens.jw.JwEntryScreen
+import com.furina.classtools.ui.screens.map.CampusMapScreen
 import com.furina.classtools.ui.screens.me.MeStats
 import com.furina.classtools.ui.screens.me.MeStatsBuilder
 import com.furina.classtools.ui.screens.me.ReminderStatus
@@ -142,6 +152,9 @@ fun MainNavHost(
     modifier: Modifier = Modifier,
     initialToolId: String? = null,
     onInitialToolConsumed: () -> Unit = {},
+    /** OPPO PUSH 通知点击带入的通知 id（登录/进入主界面后进通知页并定位一次）。 */
+    initialNoticeId: String? = null,
+    onInitialNoticeConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
@@ -195,6 +208,16 @@ fun MainNavHost(
             navController.navigate(Routes.tool(initialToolId))
             onInitialToolConsumed()
         }
+    }
+
+    // OPPO PUSH 通知点击：进入通知页并定位到该通知（NoticesScreen 消费后清空）。
+    var pendingFocusNoticeId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(initialNoticeId) {
+        val noticeId = initialNoticeId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        pendingFocusNoticeId = noticeId
+        val targetTool = OppPushClick.targetToolId(noticeId) ?: OppPushClick.NOTICE_TOOL_ID
+        navController.navigate(Routes.tool(targetTool))
+        onInitialNoticeConsumed()
     }
 
     fun selectTab(index: Int) {
@@ -415,6 +438,11 @@ fun MainNavHost(
                     onExport = { payload -> launchExport(payload.toCardSpec()) },
                 )
 
+                "map" -> CampusMapScreen(
+                    onBack = { popTool(toolId) },
+                    onOpenTimetable = { navController.navigate(Routes.tool("tt")) },
+                )
+
                 "fit" -> {
                     // 体测历史：首屏从 fitrecs 云端读（2min TTL，失败降级本机缓存），保存/改名/删除写回云端
                     var fitHistory by remember { mutableStateOf<List<FitRecord>>(emptyList()) }
@@ -551,6 +579,9 @@ fun MainNavHost(
                         rawAttachmentLoader = ApiNoticeRawAttachmentLoader(container.apiClient),
                         // v3 附件外置：图片 https 签名 URL 复用 data/ppt 的 OkHttp+BitmapFactory+LRU 加载器
                         imageLoader = container.pptImageLoader,
+                        // OPPO PUSH 点击带入的通知：加载完成后定位并展开该通知详情
+                        initialFocusNoticeId = pendingFocusNoticeId,
+                        onFocusConsumed = { pendingFocusNoticeId = null },
                         onAddToCalendar = { group ->
                             if (NoticeCalendarMapper.eligible(group)) {
                                 writeCalendarEvent(NoticeCalendarMapper.eventFor(group))
@@ -603,6 +634,7 @@ fun MainNavHost(
 
                 "tt" -> TimetableViewScreen(
                     onBack = { popTool(toolId) },
+                    onOpenMap = { navController.navigate(Routes.tool("map")) },
                     repository = container.timetableRepository,
                     loginRepository = container.timetableLoginRepository,
                     sessionSid = session.sid,
@@ -661,6 +693,16 @@ fun MainNavHost(
 
                 "jw" -> JwEntryScreen(
                     sid = session.sid,
+                    onBack = { popTool(toolId) },
+                )
+
+                "chsi" -> ChsiEntryScreen(
+                    sid = session.sid,
+                    onBack = { popTool(toolId) },
+                )
+
+                "activity" -> ActivityScreen(
+                    repository = container.activityRepository,
                     onBack = { popTool(toolId) },
                 )
 
@@ -983,6 +1025,11 @@ private fun RootTabs(
         courseLeadMinutes = reminderSettings.courseLeadMinutes,
     )
 
+    // OPPO PUSH 状态（设置页「通知与权限」行；未配置密钥时显示「未配置」）。
+    val oppoPushStatus by container.oppoPushManager.status.collectAsStateWithLifecycle(
+        initialValue = OppoPushStatus(OppoPushState.NOT_CONFIGURED),
+    )
+
 
     val showNotificationPermissionBanner = !notificationGranted && reminderSettings.enabled
     Box(modifier = Modifier.fillMaxSize()) {
@@ -1031,6 +1078,12 @@ private fun RootTabs(
                         onOpenReminderSettings = onOpenReminderSettings,
                         meStats = meStats,
                         reminderStatus = reminderStatus,
+                        oppoPushStatus = oppoPushStatus,
+                        onRetryOppoPush = {
+                            // 已配置 → 重新注册；未配置 → 重跑一次启动检测（保持「未配置」状态，无副作用）
+                            val push = container.oppoPushManager
+                            if (push.isConfigured) push.retry() else push.onAppCreated()
+                        },
                         onOpenFeedback = onOpenFeedback,
                         onOpenGuide = onOpenGuide,
                         dynamicColorEnabled = dynamicColorEnabled,
@@ -1040,8 +1093,16 @@ private fun RootTabs(
             }
         }
 
-        CtFloatingDock(
-            destinations = destinations,
+        // 底部安全区背景：与页面底色一致，避免部分 ROM（ColorOS 等）在导航栏区域留下黑色系统条。
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                .background(MaterialTheme.colorScheme.background),
+        )
+
+        CtFloatingDock(            destinations = destinations,
             selectedIndex = pagerState.currentPage,
             onSelect = onSelectTab,
             pagerOffsetFraction = pagerState.currentPageOffsetFraction,
