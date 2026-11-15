@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
@@ -40,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.furina.classtools.features.chsi.ChsiCatalog
 import com.furina.classtools.features.chsi.ChsiExtractLogic
+import com.furina.classtools.features.chsi.ChsiNavigationLogic
+import com.furina.classtools.features.chsi.ChsiNavigationLogic.Mode as ChsiMode
 import com.furina.classtools.features.chsi.ChsiOfficialTool
 import com.furina.classtools.features.chsi.ChsiTexts
 import com.furina.classtools.ui.components.CtTopBar
@@ -48,27 +51,22 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
-/** 页面模式：登录（官方页面，用户手动登录）→ 卡片页；点卡片进入全屏 WebView。 */
-private enum class ChsiMode {
-    LOGIN,
-    CARDS,
-    WEB,
-}
-
+/** 页面模式说明：默认卡片页（后台自动恢复登录）→ 官方登录页（仅用户主动点登录）→ 全屏 WebView。 */
 /**
- * 学信网工具页（规格 `_audit/chsi_entry_20261115/CHSI_ENTRY_SPEC.md` §3）。
+ * 学信网工具页（规格 `_audit/chsi_entry_20261115/CHSI_ENTRY_SPEC.md` §3，2026-11-15 需求调整）。
  *
- * - 进入即加载 `https://my.chsi.com.cn/archive/wap/index.jsp`（隐藏 WebView）；
- *   未登录会被重定向到 `account.chsi.com.cn` 登录页 → **全屏显示官方登录页，由用户本人手动登录**
- *   （验证码/短信/实人核验），App **不预填、不保存、不上传**学信网账号密码；
- * - 登录成功（URL 回到 `my.chsi.com.cn` 档案域）→ 注入只读 JS 提取页面文本摘要 → 卡片页；
- * - 卡片页：『数据』学籍/学历/学位/在线验证报告（标签就近取 1–3 行，取不到 → 空态+官方页面入口）
- *   +『官方工具』10 个官方入口（内置 WebView 打开）+「打开完整学信档案」+「退出学信网登录」；
- * - WebView 顶栏「桌面版/手机版」切换（UA + reload）；
+ * - **默认进入卡片页**（CARDS，不强制跳登录页）：『数据』4 卡 +『官方工具』10 卡始终可见；
+ *   后台隐藏 WebView 加载 `https://my.chsi.com.cn/archive/wap/index.jsp` 自动恢复登录：
+ *   已登录 → 注入只读 JS 提取文本摘要并刷新数据卡；未登录 → 数据卡显示「未登录 · 去登录查看」；
+ * - 未登录时点「登录学信网」/数据卡 → 全屏打开官方账号登录页（`account.chsi.com.cn`），
+ *   由用户本人手动登录（验证码/短信/实人核验），App **不预填、不保存、不上传**账号密码；
+ * - 官方登录页完成登录 → URL 回到 my.chsi.com.cn 且页面内容确认已登录 → 自动回卡片页并刷新数据卡；
+ * - 点官方工具卡 = App 内 WebView 全屏打开官方页面，返回回卡片页；
+ * - WebView 顶栏「桌面版/手机版」切换（UA + reload）；「退出学信网登录」清 Cookie/WebStorage/缓存；
  * - 提取数据仅内存展示，不落盘/不上传/不打日志；展示前掩码 18 位身份证/11 位手机号。
  *
  * @param sid 班级身份学号（本页不使用：学信网登录与班级身份无关，保持导航签名一致）
- * @param onBack 顶栏返回（卡片页/登录页 → 退出工具页；WebView 模式 → 回卡片页）
+ * @param onBack 顶栏返回（卡片页 → 退出工具页；登录/WebView 模式 → 回卡片页）
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Suppress("UNUSED_PARAMETER")
@@ -99,15 +97,16 @@ fun ChsiEntryScreen(
                 state.pageUrl = current
                 if (state.mode.value == ChsiMode.WEB) return
                 when {
-                    // 被重定向到学信网账号登录页 = 未登录：显示全屏官方登录页（用户手动登录）。
+                    // 被重定向到学信网账号登录页 = 未登录：只在用户主动点「登录学信网」时停留登录页；
+                    // 默认卡片页/后台检查时不强制跳转（shouldAutoOpenLoginPage 恒为 false），
+                    // 保持官方工具卡始终可见。
                     ChsiExtractLogic.isLoginUrl(current) -> {
                         state.loggedIn.value = false
                         state.refreshing.value = false
                         state.extractInFlight = false
-                        if (state.mode.value != ChsiMode.LOGIN) state.mode.value = ChsiMode.LOGIN
                     }
-                    // 回到学信档案域 = 已登录：提取数据（登录完成 / 刷新 / 会话恢复共用）。
-                    ChsiExtractLogic.isLoggedInUrl(current) -> {
+                    // 回到学信档案域（含后台恢复登录）：提取数据，登录态由页面内容二次确认。
+                    ChsiNavigationLogic.shouldExtract(state.mode.value, current) -> {
                         if (!state.extractInFlight) {
                             state.extractInFlight = true
                             state.extractSeq.value += 1
@@ -147,8 +146,9 @@ fun ChsiEntryScreen(
         }
     }
 
-    // 进入即加载学信档案 wap 页：未登录会自动跳官方登录页（由用户手动登录）。
+    // 默认进卡片页（不强制跳登录页）：后台加载学信档案 wap 页，已登录则自动提取并刷新数据卡。
     LaunchedEffect(Unit) {
+        state.refreshing.value = true
         webView.loadUrl(ChsiCatalog.ARCHIVE_ENTRY)
     }
 
@@ -160,11 +160,11 @@ fun ChsiEntryScreen(
         state.globalError.value = null
         delay(ChsiExtractLogic.EXTRACT_DELAY_MS)
         if (!ChsiExtractLogic.isLoggedInUrl(state.pageUrl)) {
-            // 提取时已不在档案域（会话过期/被重定向到登录）：回到官方登录页。
+            // 提取时已不在档案域（会话过期/被重定向到登录）：回到卡片页未登录态，不强制跳登录页。
             state.extractInFlight = false
             state.refreshing.value = false
             state.loggedIn.value = false
-            state.mode.value = ChsiMode.LOGIN
+            state.cards.value = ChsiExtractLogic.extractCards(null)
             return@LaunchedEffect
         }
         val raw = runCatching {
@@ -179,9 +179,8 @@ fun ChsiEntryScreen(
             state.loggedIn.value = false
             state.lastUpdated.value = null
             state.cards.value = ChsiExtractLogic.extractCards(null)
-            state.mode.value = ChsiMode.LOGIN
-            // 档案域未登录时只是营销首页；直接跳到官方账号登录页，减少用户再点一次。
-            if (ChsiExtractLogic.isArchiveUrl(state.pageUrl)) {
+            // 用户主动进入登录流程时停在官方登录页；默认卡片页保持卡片展示，不强制跳转。
+            if (state.mode.value == ChsiMode.LOGIN) {
                 state.loading.value = true
                 webView.loadUrl(ChsiCatalog.LOGIN_URL)
             }
@@ -193,7 +192,8 @@ fun ChsiEntryScreen(
         if (payload == null) state.globalError.value = ChsiTexts.MSG_EXTRACT_FAILED
         state.refreshing.value = false
         state.extractInFlight = false
-        state.mode.value = ChsiMode.CARDS
+        // 登录成功（含在官方登录页完成登录）：自动回卡片页并展示已提取的数据卡。
+        state.mode.value = ChsiNavigationLogic.modeAfterExtract(state.mode.value, loggedIn = true)
     }
 
     fun reloadArchive() {
@@ -202,11 +202,23 @@ fun ChsiEntryScreen(
         webView.loadUrl(ChsiCatalog.ARCHIVE_ENTRY)
     }
 
+    /** 用户主动点「登录学信网」：打开官方账号登录页，由用户本人手动登录。 */
     fun goLogin() {
         state.loggedIn.value = false
         state.globalError.value = null
         state.mode.value = ChsiMode.LOGIN
-        reloadArchive()
+        state.loading.value = true
+        webView.loadUrl(ChsiCatalog.LOGIN_URL)
+    }
+
+    /** 从登录页返回卡片页（不改变登录态；后台可再检查一次）。 */
+    fun backToCards() {
+        state.mode.value = ChsiMode.CARDS
+        if (!state.loggedIn.value && !state.refreshing.value) {
+            state.extractInFlight = false
+            state.loading.value = true
+            webView.loadUrl(ChsiCatalog.ARCHIVE_ENTRY)
+        }
     }
 
     fun refresh() {
@@ -251,8 +263,10 @@ fun ChsiEntryScreen(
         state.extractInFlight = false
         state.desktopUa.value = false
         webView.settings.userAgentString = ChsiCatalog.MOBILE_UA
-        state.mode.value = ChsiMode.LOGIN
+        // 退出后回卡片页（10 个官方工具卡仍在），后台重新检查登录态即可，不强制停在登录页。
+        state.mode.value = ChsiMode.CARDS
         state.loading.value = true
+        state.refreshing.value = true
         webView.loadUrl(ChsiCatalog.ARCHIVE_ENTRY)
         Toast.makeText(context, ChsiTexts.MSG_LOGGED_OUT, Toast.LENGTH_SHORT).show()
     }
@@ -273,6 +287,7 @@ fun ChsiEntryScreen(
         when {
             state.logoutConfirmVisible.value -> state.logoutConfirmVisible.value = false
             state.mode.value == ChsiMode.WEB -> state.mode.value = ChsiMode.CARDS
+            state.mode.value == ChsiMode.LOGIN -> backToCards()
             else -> onBack()
         }
     }
@@ -286,67 +301,73 @@ fun ChsiEntryScreen(
         ) {
             val mode = state.mode.value
             CtTopBar(
-                title = if (mode == ChsiMode.WEB) {
-                    state.webTitle.value ?: ChsiTexts.PAGE_TITLE
-                } else {
-                    ChsiTexts.PAGE_TITLE
+                title = when (mode) {
+                    ChsiMode.WEB -> state.webTitle.value ?: ChsiTexts.PAGE_TITLE
+                    ChsiMode.LOGIN -> ChsiTexts.BTN_LOGIN_ACTION
+                    ChsiMode.CARDS -> ChsiTexts.PAGE_TITLE
                 },
-                onBack = if (mode == ChsiMode.WEB) {
-                    { state.mode.value = ChsiMode.CARDS }
-                } else {
-                    onBack
+                onBack = when (mode) {
+                    ChsiMode.WEB -> ({ state.mode.value = ChsiMode.CARDS })
+                    ChsiMode.LOGIN -> ({ backToCards() })
+                    ChsiMode.CARDS -> onBack
                 },
                 actions = {
-                    if (mode == ChsiMode.WEB) {
-                        TextButton(onClick = { toggleUserAgent() }) {
+                    when (mode) {
+                        ChsiMode.WEB -> TextButton(onClick = { toggleUserAgent() }) {
                             Text(
                                 if (state.desktopUa.value) ChsiTexts.BTN_MOBILE else ChsiTexts.BTN_DESKTOP,
                             )
                         }
+                        ChsiMode.LOGIN -> TextButton(onClick = { backToCards() }) {
+                            Text(ChsiTexts.BTN_BACK_TO_CARDS)
+                        }
+                        ChsiMode.CARDS -> Unit
                     }
                 },
             )
 
-            when (mode) {
-                ChsiMode.CARDS -> ChsiCardsContent(
-                    cards = state.cards.value,
-                    loggedIn = state.loggedIn.value,
-                    refreshing = state.refreshing.value,
-                    lastUpdated = state.lastUpdated.value,
-                    globalError = state.globalError.value,
-                    onLogin = { goLogin() },
-                    onRefresh = { refresh() },
-                    onOpenCard = { card -> openOfficialPage(card.targetUrl, card.kind.title) },
-                    onOpenTool = { tool -> openOfficialPage(tool.url, tool.title) },
-                    onOpenArchive = { openOfficialPage(ChsiCatalog.ARCHIVE_HOME, ChsiTexts.PAGE_TITLE) },
-                    onLogout = { state.logoutConfirmVisible.value = true },
-                    modifier = Modifier.weight(1f),
-                )
-
-                ChsiMode.LOGIN, ChsiMode.WEB -> {
-                    if (mode == ChsiMode.LOGIN) {
-                        ChsiHintBanner(ChsiTexts.HINT_MANUAL_LOGIN)
-                    }
-                    state.globalError.value?.takeIf { it.isNotBlank() }?.let { message ->
-                        ChsiHintBanner(message, isError = true)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                    ) {
-                        AndroidView(
-                            factory = { webView },
+            Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                if (mode == ChsiMode.LOGIN) {
+                    ChsiHintBanner(ChsiTexts.HINT_MANUAL_LOGIN)
+                }
+                state.globalError.value?.takeIf { it.isNotBlank() }?.let { message ->
+                    ChsiHintBanner(message, isError = true)
+                }
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    // WebView 始终保留在组合树里（卡片页隐藏为 1dp）：后台恢复登录/提取依赖它。
+                    AndroidView(
+                        factory = { webView },
+                        modifier = if (mode == ChsiMode.CARDS) {
+                            Modifier.size(1.dp)
+                        } else {
+                            Modifier.fillMaxSize()
+                        },
+                    )
+                    if (mode == ChsiMode.CARDS) {
+                        ChsiCardsContent(
+                            cards = state.cards.value,
+                            loggedIn = state.loggedIn.value,
+                            refreshing = state.refreshing.value,
+                            lastUpdated = state.lastUpdated.value,
+                            globalError = state.globalError.value,
+                            onLogin = { goLogin() },
+                            onRefresh = { refresh() },
+                            onOpenCard = { card -> openOfficialPage(card.targetUrl, card.kind.title) },
+                            onOpenTool = { tool -> openOfficialPage(tool.url, tool.title) },
+                            onOpenArchive = {
+                                openOfficialPage(ChsiCatalog.ARCHIVE_HOME, ChsiTexts.PAGE_TITLE)
+                            },
+                            onLogout = { state.logoutConfirmVisible.value = true },
                             modifier = Modifier.fillMaxSize(),
                         )
-                        if (state.loading.value) {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .fillMaxWidth()
-                                    .height(2.dp),
-                            )
-                        }
+                    }
+                    if (mode != ChsiMode.CARDS && state.loading.value) {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .height(2.dp),
+                        )
                     }
                 }
             }
@@ -372,13 +393,16 @@ fun ChsiEntryScreen(
 
 /** 页面运行态（集中放 Compose State，供 WebViewClient 回调与提取协程读写）。 */
 private class ChsiScreenState {
-    val mode = mutableStateOf(ChsiMode.LOGIN)
+    /** 默认卡片页（不强制跳登录页）：官方工具 10 卡始终可见，后台自动恢复登录态。 */
+    val mode = mutableStateOf(ChsiNavigationLogic.initialMode())
     val webTitle = mutableStateOf<String?>(null)
     val loading = mutableStateOf(true)
     val cards = mutableStateOf(ChsiExtractLogic.extractCards(null))
     val lastUpdated = mutableStateOf<String?>(null)
     val loggedIn = mutableStateOf(false)
-    val refreshing = mutableStateOf(false)
+
+    /** 后台自动恢复登录/提取进行中（首帧即 true，避免数据卡先闪「未登录」）。 */
+    val refreshing = mutableStateOf(true)
     val globalError = mutableStateOf<String?>(null)
     val logoutConfirmVisible = mutableStateOf(false)
     val desktopUa = mutableStateOf(false)

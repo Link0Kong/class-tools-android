@@ -15,6 +15,9 @@ import com.furina.classtools.data.diag.installCrashHandler
 import com.furina.classtools.data.fitrecs.DefaultFitRecsRepository
 import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.calendar.AndroidCalendarWriter
+import com.furina.classtools.data.cloudspace.CloudSpaceApi
+import com.furina.classtools.data.cloudspace.CloudSpaceDefaults
+import com.furina.classtools.data.cloudspace.CloudSpaceRepository
 import com.furina.classtools.data.calendar.CalendarWriter
 import com.furina.classtools.features.feedback.DefaultFeedbackRepository
 import com.furina.classtools.features.feedback.FeedbackRepository
@@ -116,6 +119,8 @@ class AppContainer(context: Context) {
         // （未登录时 manager 内部跳过，等下次 onSessionChanged；重复上传由幂等门跳过）。
         if (previousSid != session?.sid) {
             runCatching { oppoPushManager.onSessionChanged() }
+            // 云空间会话绑定班级身份；切号/退出时丢弃内存会话与游标，避免串号。
+            runCatching { cloudSpaceRepository.reset() }
         }
     }
 
@@ -235,6 +240,16 @@ class AppContainer(context: Context) {
     /** 第二课堂活动：本机 token + 请求签名直连学校接口（不经过任何自建服务器）。 */
     /** 懒加载：启动首帧不需要活动仓库。 */
     val activityRepository: ActivityRepository by lazy { ActivityRepository(appContext) }
+
+    /** 临时云空间（ECS drop 服务）：同账号跨设备；token 只放 X-Device-Id 请求头。 */
+    val cloudSpaceRepository: CloudSpaceRepository by lazy {
+        CloudSpaceRepository(
+            api = CloudSpaceApi(
+                baseUrl = CloudSpaceDefaults.BASE_URL,
+                tokenProvider = { activeSession?.takeUnless { it.debug }?.token },
+            ),
+        )
+    }
 
     /** 团员名单仓库（RPC class_league；仅姓名/座号，无 sid）。 */
     /** 懒加载：启动首帧不需要团员名单仓库。 */

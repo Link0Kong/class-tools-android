@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -41,6 +42,7 @@ import com.furina.classtools.data.power.PowerRange
 import com.furina.classtools.data.power.PowerStats
 import com.furina.classtools.data.power.TrendLine
 import com.furina.classtools.data.power.TrendPoint
+import com.furina.classtools.ui.theme.LocalCtBrandColors
 
 /**
  * 电费趋势图（Compose Canvas；口径与网页/小程序一致）。
@@ -49,12 +51,14 @@ import com.furina.classtools.data.power.TrendPoint
  * - 点击/左右拖动 → 按 x 比例命中**最近真实采样点** → 竖线 + 圆点 + 右上角固定气泡（气泡在绘图区外，由 [PowerTrendSection] 渲染）；
  * - **禁止横向滚动**：图不包 scroll 容器；横向手势由本组件消费，纵向手势留给页面滚动；
  * - 空态（<2 采样点）不画图，只显示「数据积累中 / 未选择宿舍」；
- * - 慢频房（13/16 号楼）画阶梯线 + 真实变化点。
+ * - 慢频房（13/16 号楼）画阶梯线 + 真实变化点；
+ * - 区间内有充值跳变（`Δq>0.5`）时，折线 y 已是**折算剩余**（连续下降），并按 [TrendLine.rechargeMarks]
+ *   画充值竖虚线（暖沙色虚线，对齐网页 `.pw-rline`）；真实剩余仍在图例「当前」与游标文案中。
  *
  * @param cursorIndex 当前游标命中的采样点下标（null=未查看）
  * @param onCursor 游标变化（点在同一采样点再次点击 = 取消，传 null）
- * @param yLabelHi / yLabelMid / yLabelLo 纵轴刻度文案（由调用方按电量格式计算）
- * @param legendTexts 图例三段文案（起点 / 当前 / 区间下降）
+ * @param yLabelHi / yLabelMid / yLabelLo 纵轴刻度文案（折算范围，由调用方按电量格式计算）
+ * @param legendExtras 图例补充行（如「充值 +N 度（已折算）」/「扣减 N 度」）
  */
 @Composable
 fun PowerTrendChart(
@@ -72,6 +76,7 @@ fun PowerTrendChart(
     legendDrop: String,
     modifier: Modifier = Modifier,
     lineColor: Color = MaterialTheme.colorScheme.primary,
+    legendExtras: List<String> = emptyList(),
 ) {
     if (trend.empty) {
         EmptyTrend(note = trend.note, modifier = modifier)
@@ -82,6 +87,7 @@ fun PowerTrendChart(
     val leftAxis = 46.dp
     val surfaceColor = MaterialTheme.colorScheme.surface
     val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val rechargeColor = LocalCtBrandColors.current.powerWarn
     var plotSize by remember { mutableStateOf(IntSize.Zero) }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -106,7 +112,11 @@ fun PowerTrendChart(
                     .height(plotHeight)
                     .semantics {
                         // 自定义 Canvas 趋势图读屏描述（无障碍：图形信息不缺失）。
-                        contentDescription = "${range.title}，共 ${trend.points.size} 个采样点"
+                        contentDescription = buildString {
+                            append(range.title)
+                            if (trend.foldedRecharge > 0.0) append("，已折算充值")
+                            append("，共 ${trend.points.size} 个采样点")
+                        }
                     }
                     .onSizeChanged { plotSize = it }
                     .pointerInput(trend.points, range) {
@@ -139,6 +149,21 @@ fun PowerTrendChart(
                         end = Offset(w, h * fy),
                         strokeWidth = 1f,
                     )
+                }
+
+                // 充值位置竖虚线（只做标记，不改变折算后的用电曲线；对齐网页 .pw-rline 暖沙虚线）
+                if (trend.rechargeMarks.isNotEmpty()) {
+                    val dash = PathEffect.dashPathEffect(floatArrayOf(3f, 3f))
+                    trend.rechargeMarks.forEach { mark ->
+                        val x = mark.x.coerceIn(0f, 1f) * w
+                        drawLine(
+                            color = rechargeColor.copy(alpha = 0.55f),
+                            start = Offset(x, 0f),
+                            end = Offset(x, h),
+                            strokeWidth = 1f,
+                            pathEffect = dash,
+                        )
+                    }
                 }
 
                 val points = trend.points
@@ -238,16 +263,33 @@ fun PowerTrendChart(
             }
         }
 
-        // 图例
-        Row(
+        // 图例（网页 .pw-legend：可换行；补充行展示充值折算/异常扣减，不挤占主图例）
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            LegendItem("起点", legendStart)
-            LegendItem("当前", legendCurrent)
-            LegendItem(range.dropLabel, legendDrop)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                LegendItem("起点", legendStart)
+                LegendItem("当前", legendCurrent)
+                LegendItem(range.dropLabel, legendDrop)
+            }
+            if (legendExtras.isNotEmpty()) {
+                Text(
+                    text = legendExtras.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (trend.foldedRecharge > 0.0) {
+                        rechargeColor
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }

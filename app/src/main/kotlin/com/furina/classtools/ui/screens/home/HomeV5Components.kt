@@ -56,6 +56,7 @@ import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
+import com.furina.classtools.ui.theme.rememberCtHeroColors
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -81,7 +82,8 @@ internal val HomeHeroShape = RoundedCornerShape(28.dp)
  * 顶部「今日」hero：日期/星期 + 问候 + 上课中/下一节 + 进度条。
  *
  * 数据来自 [HomeWorkbenchLogic.heroState]（纯逻辑可单测）；点击整卡打开课表。
- * 深浅色自适应：浅色用 primary→secondary 深渐变 + 白字；深色用容器色 + 浅色字。
+ * 深浅色自适应：浅色用 primary→secondary 深渐变 + 白字；深色用**中性 tonal 深色** + onSurface 文字
+ * （品牌绿只保留 chip/头像/进度条等小面积 accent，避免深色下大面积青绿观感差）。
  */
 @Composable
 internal fun HomeHeroCard(
@@ -104,9 +106,9 @@ internal fun HomeHeroCard(
     val roleText = session.role.trim()
 
     val dark = LocalCtDarkTheme.current
-    val start = if (dark) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary
-    val end = if (dark) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.secondary
-    val content = if (dark) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimary
+    val heroColors = rememberCtHeroColors()
+    val content = heroColors.content
+    val accent = heroColors.accent
 
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -127,13 +129,13 @@ internal fun HomeHeroCard(
         shape = HomeHeroShape,
         color = Color.Transparent,
         contentColor = content,
-        border = BorderStroke(1.dp, content.copy(alpha = 0.14f)),
+        border = BorderStroke(1.dp, heroColors.border),
         interactionSource = interaction,
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.linearGradient(colors = listOf(start, end))),
+                .background(Brush.linearGradient(colors = listOf(heroColors.start, heroColors.end))),
         ) {
             // 光场高光：右上角柔光 + 左下暗角（HFUT/ColorOS 风格的柔和层次，不使用模糊 API）。
             // 用 radialGradient + drawRect（与 ExpressiveBackground 同实现）而不是纯色圆形，
@@ -165,7 +167,7 @@ internal fun HomeHeroCard(
 
             Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    HeroChip(text = "今日", tint = content)
+                    HeroChip(text = "今日", tint = accent)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = dateText,
@@ -177,7 +179,7 @@ internal fun HomeHeroCard(
                     Spacer(modifier = Modifier.weight(1f))
                     HomeAvatar(
                         initial = session.name.trim().take(1).ifBlank { "同" },
-                        tint = content,
+                        tint = accent,
                     )
                 }
                 Spacer(modifier = Modifier.height(10.dp))
@@ -200,7 +202,13 @@ internal fun HomeHeroCard(
                     )
                 }
                 Spacer(modifier = Modifier.height(14.dp))
-                HeroCourseBlock(hero = hero, contentColor = content, reduceMotion = reduceMotion)
+                HeroCourseBlock(
+                    hero = hero,
+                    contentColor = content,
+                    chipTint = accent,
+                    innerFill = heroColors.innerFill,
+                    reduceMotion = reduceMotion,
+                )
             }
         }
     }
@@ -208,16 +216,22 @@ internal fun HomeHeroCard(
 
 /** hero 内课程区（上课中 / 下一节 / 空态 + 进度）。 */
 @Composable
-private fun HeroCourseBlock(hero: HomeHeroState, contentColor: Color, reduceMotion: Boolean) {
+private fun HeroCourseBlock(
+    hero: HomeHeroState,
+    contentColor: Color,
+    chipTint: Color,
+    innerFill: Color,
+    reduceMotion: Boolean,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(contentColor.copy(alpha = 0.10f))
+            .background(innerFill)
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            HeroChip(text = hero.tag, tint = contentColor)
+            HeroChip(text = hero.tag, tint = chipTint)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = hero.title,
@@ -256,7 +270,7 @@ private fun HeroCourseBlock(hero: HomeHeroState, contentColor: Color, reduceMoti
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
-            HomeHeroProgressBar(progress = progress, color = contentColor, reduceMotion = reduceMotion)
+            HomeHeroProgressBar(progress = progress, color = chipTint, reduceMotion = reduceMotion)
         } else if (hero.hint.isNotBlank()) {
             Spacer(modifier = Modifier.height(5.dp))
             Text(

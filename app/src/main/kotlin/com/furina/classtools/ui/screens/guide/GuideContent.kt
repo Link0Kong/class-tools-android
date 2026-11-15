@@ -4,7 +4,7 @@ package com.furina.classtools.ui.screens.guide
  * 使用说明「卡片化」内容数据（**纯 Kotlin，无 Compose / Android 依赖**，可直接单测）。
  *
  * 信息架构与三端共享契约 `web/使用说明_卡片化重构契约_20261112.md` 一致：
- * 5 个分类（入门 / 学习 / 生活 / 协作 / 更多）、24 张卡、一屏一张左右滑动。
+ * 5 个分类（入门 / 学习 / 生活 / 协作 / 更多）、25 张卡、一屏一张左右滑动。
  *
  * 文案硬规则（契约 §0）：
  * - 标题 ≤ 8 字；一句话作用 ≤ 20 字；每条步骤 ≤ 24 字；提示 ≤ 30 字；
@@ -18,7 +18,7 @@ package com.furina.classtools.ui.screens.guide
 object UserGuideContent {
 
     /** 内容版本（内容较上一版有实质变化时递增；供设置页/关于页展示）。 */
-    const val VERSION: String = "2026-11-15.2"
+    const val VERSION: String = "2026-11-15.3"
 
     /** 轮播顺序即本列表顺序（契约 §5.2）。 */
     val cards: List<GuideCard> = listOf(
@@ -245,6 +245,20 @@ object UserGuideContent {
             tip = "学校账号仅本机；报名以学校为准",
             scene = GuideScene.PEOPLE,
             tone = GuideTone.SAND,
+        ),
+        GuideCard(
+            id = "file",
+            category = GuideCategory.TEAM,
+            title = "文件传输",
+            subtitle = "临时云空间 · 保留 3 天",
+            steps = listOf(
+                "点「文件传输」进临时云空间",
+                "同一班级身份跨设备自动互通",
+                "上传下载删除，文件保留 3 天",
+            ),
+            tip = "任意大小分片上传；到期自动清理",
+            scene = GuideScene.GRID,
+            tone = GuideTone.BLUE,
         ),
         GuideCard(
             id = "ppt",

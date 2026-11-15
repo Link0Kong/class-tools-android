@@ -2,9 +2,15 @@ package com.furina.classtools.ui.screens.activity
 
 import android.annotation.SuppressLint
 import android.text.format.DateFormat
+import android.util.Log
 import android.webkit.CookieManager
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,9 +53,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.furina.classtools.BuildConfig
 import com.furina.classtools.data.activity.ActivityRepository
 import com.furina.classtools.data.activity.ActivityResult
 import com.furina.classtools.data.activity.ActivityToken
+import com.furina.classtools.data.activity.ActivityWebSession
 import com.furina.classtools.data.activity.ScActivity
 import com.furina.classtools.data.activity.ScDetail
 import com.furina.classtools.ui.components.CtTopBar
@@ -61,13 +69,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
-private const val SPA_URL = "https://rcm.fjtcm.edu.cn/wechat/"
-private const val LG_INFO_JS = "(function(){try{return localStorage.getItem('lgInfo')||''}catch(e){return ''}})()"
+private const val SPA_URL = ActivityWebSession.SPA_LOGIN_URL
+private const val LG_INFO_JS = ActivityWebSession.LG_INFO_JS
 
 /**
  * 「活动」工具：学校第二课堂活动列表 / 名额 / 报名。
@@ -389,6 +393,7 @@ private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit)
 @Composable
 private fun LoginWebView(modifier: Modifier = Modifier, onToken: (ActivityToken) -> Unit) {
     val context = LocalContext.current
+    var routeRecovered by remember { mutableStateOf(false) }
     val webView = remember {
         WebView(context).apply {
             settings.javaScriptEnabled = true
@@ -396,6 +401,38 @@ private fun LoginWebView(modifier: Modifier = Modifier, onToken: (ActivityToken)
             settings.cacheMode = WebSettings.LOAD_DEFAULT
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String?) {
+                    val current = url.orEmpty().ifBlank { view.url.orEmpty() }
+                    // 兜底：若 H5 路由/存储把学校编号弄成 undefined（历史缓存/旧入口），
+                    // 页面会请求 schoolNo=undefined 并弹「未找到对应编号的学校信息」。
+                    // 重新用带 #/fjtcm/login 的正确入口加载一次（只重试一次，避免死循环）。
+                    if (!routeRecovered && ActivityWebSession.hasUndefinedSchoolNo(current)) {
+                        routeRecovered = true
+                        view.loadUrl(SPA_URL)
+                        return
+                    }
+                    view.evaluateJavascript(ActivityWebSession.ENSURE_SCHOOL_NO_JS, null)
+                }
+
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: WebResourceError,
+                ) {
+                    if (request.isForMainFrame && BuildConfig.DEBUG) {
+                        Log.d(TAG, "login page error: ${error.errorCode} ${error.description}")
+                    }
+                }
+            }
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "console: ${message.message().take(200)}")
+                    }
+                    return true
+                }
+            }
             loadUrl(SPA_URL)
         }
     }
@@ -408,8 +445,15 @@ private fun LoginWebView(modifier: Modifier = Modifier, onToken: (ActivityToken)
     LaunchedEffect(Unit) {
         while (isActive) {
             delay(1200)
+            // 保证 H5 路由能读到正确学校编号（只在缺失/undefined 时写入，幂等）。
+            webView.evalJs(ActivityWebSession.ENSURE_SCHOOL_NO_JS)
             val raw = webView.evalJs(LG_INFO_JS) ?: continue
-            val token = parseLgInfo(raw) ?: continue
+            if (raw.isNotBlank() && BuildConfig.DEBUG) {
+                // 只打印键名/类型/长度（脱敏），用于确认 lgInfo 字段与后端 userId/classId 要求一致。
+                Log.d(TAG, "lgInfo shape: ${ActivityWebSession.describeLgInfo(raw)}")
+            }
+            val token = ActivityWebSession.parseLgInfo(raw) ?: continue
+            if (BuildConfig.DEBUG) Log.d(TAG, "lgInfo parsed: userId length=${token.userId.length}, classId length=${token.classId.length}")
             CookieManager.getInstance().flush()
             onToken(token)
             break
@@ -418,33 +462,15 @@ private fun LoginWebView(modifier: Modifier = Modifier, onToken: (ActivityToken)
     AndroidView(factory = { webView }, modifier = modifier)
 }
 
+private const val TAG = "ActivityLogin"
+
 private suspend fun WebView.evalJs(script: String): String? =
     suspendCancellableCoroutine { cont ->
         evaluateJavascript(script) { value -> cont.resume(value) }
     }
 
 /** `evaluateJavascript` 返回的是 JSON 字符串，lgInfo 本身又是一段 JSON 文本。 */
-internal fun parseLgInfo(raw: String): ActivityToken? {
-    val text = raw.trim().removeSurrounding("\"")
-        .replace("\\\"", "\"")
-        .replace("\\\\", "\\")
-        .replace("\\/", "/")
-    if (!text.startsWith("{")) return null
-    return runCatching {
-        val obj = kotlinx.serialization.json.Json.parseToJsonElement(text).jsonObject
-        val token = obj.str("token")
-        val userId = obj.str("userId")
-        val classId = obj.str("classId")
-        if (token.isBlank() || userId.isBlank() || classId.isBlank()) {
-            null
-        } else {
-            ActivityToken(token, userId, classId, System.currentTimeMillis())
-        }
-    }.getOrNull()
-}
-
-private fun JsonObject.str(key: String): String =
-    this[key]?.jsonPrimitive?.contentOrNull.orEmpty()
+internal fun parseLgInfo(raw: String): ActivityToken? = ActivityWebSession.parseLgInfo(raw)
 
 private fun fmt(ms: Long?): String {
     if (ms == null || ms <= 0) return "—"

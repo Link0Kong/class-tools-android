@@ -7,6 +7,7 @@ import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Casino
+import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Groups
@@ -125,6 +126,15 @@ object ToolCatalog {
                 "各角色剩余名额",
                 "一键报名 / 取消（本机登录，不上传账号）",
             ),
+        ),
+        AppTool(
+            id = "file",
+            name = "文件传输",
+            subtitle = "临时云空间 · 保留 3 天",
+            icon = Icons.Rounded.Cloud,
+            accent = teal,
+            category = ToolCategory.CLASS,
+            features = listOf("同账号跨设备临时空间（无需配对）", "任意大小 · 8 MiB 分片上传", "文件上传完成起保留 72 小时"),
         ),
         AppTool(
             id = "tt",

@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.power.PowerRange
 import com.furina.classtools.data.power.PowerHistoryResult
+import com.furina.classtools.data.power.PowerHistoryWindowResult
 import com.furina.classtools.data.power.PowerRepository
 import com.furina.classtools.data.power.PowerRow
 import com.furina.classtools.data.power.PowerRowResult
@@ -96,7 +97,6 @@ import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
-import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtTokens
 import com.furina.classtools.ui.theme.ctEmphasized
 import com.furina.classtools.ui.theme.rememberReduceMotion
@@ -108,6 +108,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+
+/** 「区间用电」tile 的 key（[PowerStats.tilesOf]；对应网页 `#pwUseTile`）。 */
+private const val TILE_KEY_USE = "use"
 
 /**
  * 宿舍电费页（hero 电量 + 24h/7d/30d 趋势 + 指标 tile；口径与网页/小程序一致）。
@@ -122,10 +125,14 @@ import kotlinx.serialization.json.put
  * )
  * ```
  *
- * 关键行为（web/AGENTS.md §4b-8/11/16/17）：
+ * 关键行为（web/AGENTS.md §4b-8/11/16/17 + web/CHANGELOG.md 增量 53）：
  * - 未选择宿舍 → **0 请求**；选择写入 userdata v6 `power` section（`sel/at/low`）；
  * - 趋势：点击/左右拖动命中最近真实采样点 → 竖线 + 圆点 + **右上角固定气泡**（绘图区外）；
  *   **禁止横向滚动**；空态不画图；
+ * - 同期比较：「区间用电」tile 内**独立一行**（较昨日/上周/上月同期 ±x%，完整不省略）；
+ *   自然周期同期窗口、两侧 ≥35% 覆盖、14d/70d 隐藏窗口补拉与网页 `POWER.cmpSource` 同口径；
+ * - 充值后趋势可读：区间内 `Δq>0.5` 的充值跳变 → 绘图值扣除累计充值（连续下降）、充值竖虚线、
+ *   标题「· 已折算充值」、图例「充值 +N 度（已折算）」；y 轴按折算范围，**真实剩余**仍在图例/游标；
  * - 慢频房（13/16 号楼）：固定「日更」标记；30d 真实变化点 slowStats；估算「参考」；
  * - 慢更新：24h 变化 ≤2 次 → 「数据更新较慢 · 上次变化 …」/「数据未更新」；
  * - 隐私：仅展示楼栋+房间号；不显示姓名/学号；不导出、不分享。
@@ -181,6 +188,10 @@ fun PowerScreen(
     }
     var row by remember(initialRow) { mutableStateOf(initialRow) }
     var histories by remember { mutableStateOf(initialHistories.toMap()) }
+    // 同期比较的隐藏取数窗口（14d/70d；与网页 cmpSource 同口径，不进区间按钮）
+    var compareExtraHistories by remember { mutableStateOf<Map<String, List<PowerPoint>>>(emptyMap()) }
+    // 主数据（当前值 + 当前档历史）已加载完成到哪一档：比较补拉等它完成后再发起，不抢首屏/切档请求。
+    var loadedRange by remember { mutableStateOf<PowerRange?>(null) }
     val initialBuilding = remember { PowerRooms.buildingOf(PowerRooms.normalizeSel(initialSelectedRv)) }
     var range by remember { mutableStateOf(PowerCompareLogic.normRange(initialRange, initialBuilding)) }
     var rangeBeforeHidden by remember { mutableStateOf<PowerRange?>(null) }
@@ -265,6 +276,7 @@ fun PowerScreen(
         }
 
         phase = PowerPhase.READY
+        loadedRange = range
     }
 
     // 13/16 号楼主楼：隐藏 24h；切换宿舍时归位到 7d，切回实时房恢复进入前档位（不覆盖用户显式选择）。
@@ -283,12 +295,34 @@ fun PowerScreen(
     val visibleRanges = remember(building) {
         PowerCompareLogic.showRange(PowerRange.entries, building)
     }
-    // 同期比较：合并已加载窗口（当前仓储无 14d/70d 隐藏窗口能力，数据不足时自动隐藏徽标）。
-    val compareHistory = remember(histories) {
-        histories.values.flatten().distinctBy { it.t }.sortedBy { it.t }
+    // 同期比较取数来源（网页 POWER.cmpSource 同口径）：H24→已加载 7d；D7→慢频房 30d / 其它隐藏 14d；D30→隐藏 70d。
+    val compareSource = remember(range, slowRoom) { PowerCompareLogic.compareSource(range, slowRoom) }
+    val compareHistory = remember(histories, compareExtraHistories, compareSource) {
+        val loaded = compareSource.loadedRange
+        if (loaded != null) {
+            histories[loaded].orEmpty()
+        } else {
+            compareExtraHistories[compareSource.key].orEmpty()
+        }
     }
     val compareResult = remember(range, compareHistory, refreshToken) {
         PowerCompareLogic.compare(range, compareHistory, clock())
+    }
+
+    // 隐藏窗口按需补拉（14d/70d）：等主数据完成、失败静默（徽标隐藏）、并发由仓储互斥 + 5min 缓存去重。
+    LaunchedEffect(sel, compareSource.key, range, loadedRange, refreshToken, phase, skipLoad) {
+        val hidden = compareSource.hiddenRange ?: return@LaunchedEffect
+        if (skipLoad || phase != PowerPhase.READY || sel.isBlank() || session == null) return@LaunchedEffect
+        // 当前档位历史还没加载完 → 让路给主请求（回填后 loadedRange 变化会再触发一次）。
+        if (loadedRange != range) return@LaunchedEffect
+        val force = refreshToken > 0
+        if (!force && compareExtraHistories.containsKey(hidden.key)) return@LaunchedEffect
+        when (val result = repository.loadCompareHistory(sel, hidden, force)) {
+            is PowerHistoryWindowResult.Success ->
+                compareExtraHistories = compareExtraHistories + (hidden.key to result.points)
+
+            is PowerHistoryWindowResult.Failure -> Unit // 比较徽标隐藏，不打扰主流程
+        }
     }
 
     val rowValue = row
@@ -332,6 +366,8 @@ fun PowerScreen(
         sel = normalized
         row = null
         histories = emptyMap()
+        compareExtraHistories = emptyMap()
+        loadedRange = null
         cursorIndex = null
         slowRoom = false
         phase = PowerPhase.LOADING
@@ -801,6 +837,8 @@ private fun TrendSection(
         if (index < 0) return
         ranges.getOrNull(index + delta)?.let(onRangeChange)
     }
+    // 网页口径：区间内有充值跳变 → 标题追加「· 已折算充值」（曲线按折算剩余连续下降）。
+    val trendTitle = range.title + if (trend.foldedRecharge > 0.0) " · 已折算充值" else ""
 
     CtToolCard(contentPadding = PaddingValues(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -811,7 +849,7 @@ private fun TrendSection(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = range.title,
+                        text = trendTitle,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -833,6 +871,13 @@ private fun TrendSection(
                 }
                 if (rangeStats.recharge) {
                     CtPill(text = "期间有充值", containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                }
+                // 异常扣减（水费从电费账户扣等）：网页趋势头 #pwDeduct「已忽略 N 次扣减」同口径。
+                if (rangeStats.deduct.n > 0) {
+                    CtPill(
+                        text = "已忽略 ${rangeStats.deduct.n} 次扣减",
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    )
                 }
             }
             // 区间按钮行：左右滑动切换区间（趋势图内的 x 轴拖动仍只查看采样点，不切档）。
@@ -940,6 +985,14 @@ private fun TrendChartBody(
     cursorIndex: Int?,
     onCursor: (Int?) -> Unit,
 ) {
+    // 图例补充（网页同口径）：充值折算总量 + 已忽略的异常扣减；「当前」始终是**真实剩余**。
+    val legendExtras = buildList {
+        if (frame.trend.foldedRecharge > 0.0) {
+            add("充值 +${PowerStats.fmtDrop(frame.trend.foldedRecharge)} 度（已折算）")
+        }
+        val deductDeg = frame.rangeStats.deduct.deg
+        if (deductDeg > 0.0) add("扣减 ${PowerStats.fmtDrop(deductDeg)} 度")
+    }
     PowerTrendChart(
         trend = frame.trend,
         range = frame.range,
@@ -951,8 +1004,10 @@ private fun TrendChartBody(
         yLabelMid = PowerStats.fmtQ(frame.trend.mid),
         yLabelLo = PowerStats.fmtQ(frame.trend.lo),
         legendStart = PowerStats.fmtQ(frame.trend.points.firstOrNull()?.q),
+        // 真实剩余（不随折算变化；网页图例「当前」也用 row.q / d.end）
         legendCurrent = PowerStats.fmtQ(frame.trend.points.lastOrNull()?.q),
         legendDrop = PowerStats.fmtDrop(frame.rangeStats.drop),
+        legendExtras = legendExtras,
     )
 }
 
@@ -965,13 +1020,14 @@ private fun TilesSection(
     onTileClick: (PowerTile) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        tiles.chunked(2).forEachIndexed { rowIndex, rowTiles ->
+        tiles.chunked(2).forEach { rowTiles ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                rowTiles.forEachIndexed { colIndex, tile ->
+                rowTiles.forEach { tile ->
                     Tile(
                         tile = tile,
                         modifier = Modifier.weight(1f),
-                        compare = if (rowIndex == 0 && colIndex == 0) compare else null,
+                        // 网页把「较昨日/上周/上月同期」放在「区间用电」tile 内（#pwUseTile）独立一行
+                        compare = if (tile.key == TILE_KEY_USE) compare else null,
                         onCompareClick = onCompareClick,
                         onClick = { onTileClick(tile) },
                     )
@@ -1061,12 +1117,24 @@ private fun Tile(
             val availableCompare = compare?.takeIf { it.available }
             if (availableCompare != null) {
                 val delta = availableCompare.percent ?: 0.0
-                val increase = delta > 0.05
-                val tone = if (increase) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-                Surface(
+                val tone = if (delta > 0.05) {
+                    MaterialTheme.colorScheme.tertiary
+                } else {
+                    MaterialTheme.colorScheme.primary
+                }
+                val arrow = when {
+                    delta > 0.05 -> "↑"
+                    delta < -0.05 -> "↓"
+                    else -> "→"
+                }
+                Text(
+                    // 独立一行、允许换行完整显示（对齐网页 `.pw-cmp`：white-space:normal，不再挤单行省略副标）
+                    text = "$arrow ${availableCompare.label} ${PowerCompareLogic.formatPercent(delta)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tone,
                     modifier = Modifier
-                        .padding(top = 4.dp)
-                        .heightIn(min = 28.dp)
+                        .padding(top = 2.dp)
+                        .fillMaxWidth()
                         .clickable(onClick = onCompareClick)
                         .semantics {
                             // 颜色只区分增减，读屏需明确方向（无障碍：不依赖颜色传达信息）。
@@ -1079,24 +1147,7 @@ private fun Tile(
                                 PowerCompareLogic.formatPercent(kotlin.math.abs(delta))
                             }，点击查看说明"
                         },
-                    shape = CtShapeTokens.pill,
-                    color = tone.copy(alpha = 0.12f),
-                    contentColor = tone,
-                ) {
-                    Text(
-                        text = buildString {
-                            append(if (delta > 0.05) "↑" else if (delta < -0.05) "↓" else "→")
-                            append(' ')
-                            append(availableCompare.label)
-                            append(' ')
-                            append(PowerCompareLogic.formatPercent(delta))
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
+                )
             }
         }
     }

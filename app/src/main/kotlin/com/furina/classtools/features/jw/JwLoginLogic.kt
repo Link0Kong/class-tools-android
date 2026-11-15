@@ -99,11 +99,50 @@ object JwLoginLogic {
     /** 凭据保存提示（明确「仅本机」）。 */
     const val HINT_PASSWORD_LOCAL: String = "密码仅用系统加密保存在本机，可随时清除；不上传、不同步。"
 
+    // ---- 网络探测 / WebVPN（校外先登录学校 WebVPN）---------------------------
+
+    /** 进入页面时网络探测中。 */
+    const val MSG_NETWORK_PROBING: String = "正在检测网络（校园网直连 / 学校 WebVPN）…"
+
+    /** 自动探测到无法直连教务、已自动改用 WebVPN。 */
+    const val MSG_DIRECT_UNAVAILABLE: String = "当前网络无法直连教务，已自动改用学校 WebVPN"
+
+    /** 正在打开 WebVPN 登录页。 */
+    const val MSG_WEBVPN_OPENING: String = "正在打开学校 WebVPN 登录页…"
+
+    /** 正在自动填充 WebVPN 登录表单。 */
+    const val MSG_WEBVPN_AUTO_LOGIN: String = "正在自动填充 WebVPN 登录…"
+
+    /** WebVPN 自动登录失败（验证码/字段变化/服务端拒绝）→ 回退人工。 */
+    const val MSG_WEBVPN_NEED_MANUAL: String = "WebVPN 自动登录未完成，请在页面手动登录"
+
+    /** WebVPN 需要二次验证（短信 / TOTP）→ 回退人工。 */
+    const val MSG_WEBVPN_TWO_STEP: String = "WebVPN 需要二次验证，请在页面手动完成"
+
+    /** WebVPN 登录成功，正在自动进入教务。 */
+    const val MSG_WEBVPN_LOGGED_IN: String = "WebVPN 已登录，正在进入教务…"
+
+    /** 门户里没自动找到教务资源 → 提示手动点。 */
+    const val MSG_WEBVPN_CLICK_MANUAL: String = "请在 WebVPN 页面点「本科教务」资源进入教务"
+
+    /** 已通过 WebVPN 进入教务业务页。 */
+    const val MSG_WEBVPN_ENTERED: String = "已通过 WebVPN 进入教务（官方页面）"
+
+    /** 校外 WebVPN 模式下卡片数据不可用（直连 JSON 接口需要校园网）。 */
+    const val MSG_WEBVPN_CARDS_UNAVAILABLE: String =
+        "校外 WebVPN 模式：卡片数据需校园网直连获取，可打开官方页面查看"
+
+    /** 手动入口按钮：强制直连。 */
+    const val BTN_DIRECT: String = "直接打开教务"
+
+    /** 手动入口按钮：强制走 WebVPN。 */
+    const val BTN_WEBVPN: String = "走 WebVPN"
+
     // ---- URL / 跳转 allowlist ----------------------------------------------
 
     /** 页面类型（用于决定注入与状态）。 */
     enum class PageKind {
-        /** authserver 账号密码登录页（可自动填充）。 */
+        /** authserver 账号密码登录页（可自动填充）；含 WebVPN 包装后的 authserver 登录页。 */
         AUTH_LOGIN,
 
         /** 210.34.74.77 上的 sso.jsp 跳板（等待跳统一认证）。 */
@@ -111,6 +150,15 @@ object JwLoginLogic {
 
         /** 已回到 210.34.74.77 的其它页面 = 登录后进入教务系统。 */
         JW_ENTERED,
+
+        /** 学校 WebVPN 登录页（校外入口，可自动填充账号密码）。 */
+        WEBVPN_LOGIN,
+
+        /** WebVPN 登录后的门户页（资源列表；自动找「本科教务」资源）。 */
+        WEBVPN_PORTAL,
+
+        /** 已通过 WebVPN 进入包装后的教务业务页。 */
+        WEBVPN_ENTERED,
 
         /** 其它页面（登录过程中的中间页/外部页）。 */
         OTHER,
@@ -153,11 +201,13 @@ object JwLoginLogic {
     fun isAllowedNavigation(url: String?): Boolean =
         isHttpUrl(url) && isSchoolHost(hostOf(url)) && userInfoOf(url) == null
 
-    /** 是否 authserver 的账号密码登录页。 */
+    /** 是否 authserver 的账号密码登录页（直连或 WebVPN 包装后都算）。 */
     fun isAuthServerLoginUrl(url: String?): Boolean {
         if (!isHttpUrl(url)) return false
-        if (hostOf(url) != AUTH_HOST) return false
-        return pathOf(url)?.startsWith(AUTH_LOGIN_PATH) == true
+        if (hostOf(url) == AUTH_HOST && pathOf(url)?.startsWith(AUTH_LOGIN_PATH) == true) return true
+        // 校外经由 WebVPN 包装后 host 变成 webvpn 域，但路径仍保留 /authserver/login：
+        // 页面 DOM 与直连一致，自动填充脚本可直接复用。
+        return JwWebVpn.isWrappedAuthServerLoginUrl(url)
     }
 
     /** 是否已回到教务系统（210.34.74.77 且不是 sso.jsp 跳板）= 视为登录成功。 */
@@ -174,6 +224,10 @@ object JwLoginLogic {
             isAuthServerLoginUrl(url) -> PageKind.AUTH_LOGIN
             hostOf(url) == JW_HOST && pathOf(url) == ENTRY_PATH -> PageKind.JW_ENTRY
             isJwEntered(url) -> PageKind.JW_ENTERED
+            // 校外 WebVPN 链路：登录页 → 门户页 → 包装后的教务业务页。
+            JwWebVpn.isWebVpnLoginUrl(url) -> PageKind.WEBVPN_LOGIN
+            JwWebVpn.isWebVpnPortalUrl(url) -> PageKind.WEBVPN_PORTAL
+            JwWebVpn.isWrappedJwEnteredUrl(url) -> PageKind.WEBVPN_ENTERED
             else -> PageKind.OTHER
         }
     }

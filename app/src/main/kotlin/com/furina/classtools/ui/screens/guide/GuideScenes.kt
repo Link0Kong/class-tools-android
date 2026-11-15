@@ -43,6 +43,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import com.furina.classtools.ui.theme.CtTokens
+import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlin.math.hypot
 
 /**
@@ -67,10 +68,31 @@ internal data class GuideSceneColors(
     val line: Color get() = ink.copy(alpha = 0.55f)
 }
 
-/** 按 tone 取本端主题色（不照搬 web 色值）。 */
+/**
+ * 按 tone 取本端主题色（不照搬 web 色值）。
+ *
+ * 深色模式：大面积底色统一改中性 tonal（surfaceContainerHigh + onSurface），
+ * 品牌/语义色只保留在 [GuideSceneColors.accent]（场景图形线条）小面积使用，
+ * 避免使用说明顶部 hero 在深色下出现大面积青绿。
+ */
 @Composable
 internal fun guideSceneColors(tone: GuideTone): GuideSceneColors {
     val scheme = MaterialTheme.colorScheme
+    val accent = when (tone) {
+        GuideTone.MINT -> scheme.primary
+        GuideTone.BLUE -> scheme.secondary
+        GuideTone.SAND -> scheme.tertiary
+        GuideTone.ROSE -> scheme.error
+        GuideTone.VIOLET -> lerp(scheme.secondary, scheme.error, 0.55f)
+        GuideTone.NEUTRAL -> scheme.onSurfaceVariant
+    }
+    if (LocalCtDarkTheme.current) {
+        return GuideSceneColors(
+            soft = scheme.surfaceContainerHigh,
+            ink = scheme.onSurface,
+            accent = accent,
+        )
+    }
     return when (tone) {
         GuideTone.MINT -> GuideSceneColors(
             soft = scheme.primaryContainer,
@@ -128,6 +150,9 @@ internal fun guideSceneIcon(scene: GuideScene): ImageVector = when (scene) {
 /**
  * hero 配图：圆角容器 + 主题色渐变底 + 场景自绘。
  *
+ * 浅色：tone 容器色 → 30% accent 的同色系渐变；深色：中性 tonal 底 → 6% ink 的轻微渐变，
+ * 品牌/语义色只出现在场景线条（accent）里。
+ *
  * @param modifier 由调用方决定高度（一般 `fillMaxWidth().height(heroHeight)`）
  */
 @Composable
@@ -136,6 +161,7 @@ internal fun GuideSceneArt(
     tone: GuideTone,
     modifier: Modifier = Modifier,
 ) {
+    val dark = LocalCtDarkTheme.current
     val colors = guideSceneColors(tone)
     val measurer = rememberTextMeasurer()
     Box(
@@ -143,7 +169,11 @@ internal fun GuideSceneArt(
             .clip(RoundedCornerShape(CtTokens.Radius.largeIncreased))
             .background(
                 Brush.linearGradient(
-                    colors = listOf(colors.soft, lerp(colors.soft, colors.accent, 0.30f)),
+                    colors = if (dark) {
+                        listOf(colors.soft, lerp(colors.soft, colors.ink, 0.06f))
+                    } else {
+                        listOf(colors.soft, lerp(colors.soft, colors.accent, 0.30f))
+                    },
                 ),
             ),
     ) {

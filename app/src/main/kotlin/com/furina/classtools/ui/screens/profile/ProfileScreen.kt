@@ -27,15 +27,20 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Article
+import androidx.compose.material.icons.rounded.BrightnessAuto
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Feedback
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
@@ -46,6 +51,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -67,15 +73,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.BuildConfig
 import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.session.Session
+import com.furina.classtools.data.settings.AppSettingsStore
+import com.furina.classtools.data.settings.LocalAppSettingsStore
 import com.furina.classtools.ui.adaptive.CtAdaptiveSpec
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.BrandMark
@@ -90,8 +100,11 @@ import com.furina.classtools.data.push.OppoPushStatus
 import com.furina.classtools.ui.screens.me.ReminderStatus
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
+import com.furina.classtools.ui.theme.AppearanceMode
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.LocalCtDarkTheme
+import com.furina.classtools.ui.theme.rememberProfileHeroColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
 
@@ -103,7 +116,7 @@ import kotlinx.coroutines.launch
  * 2. 通知权限提示（可选，一次性可关闭）；
  * 3. 「数据与同步」：我的数据 2×2 指标 + 云同步开关 + 数据与隐私 / 清除本机缓存；
  * 4. 「通知与权限」：权限管理 / 提醒设置（副标题实时显示提醒状态）；
- * 5. 「外观」：壁纸取色开关 / 深浅色跟随系统；
+ * 5. 「外观」：颜色模式（跟随系统 / 浅色 / 深色）+ 隐藏状态栏开关 + 壁纸取色开关；
  * 6. 「关于与帮助」：反馈建议 / 使用说明 / 用户协议 / 隐私政策 / 版本；
  * 7. 退出登录 + 版本页脚。
  *
@@ -114,6 +127,8 @@ import kotlinx.coroutines.launch
  * 不整页换皮、不新增图片资源；所有行高 ≥56dp（点按 ≥48dp）。
  *
  * @param adaptiveSpec 预览/测试注入窗口规格
+ * @param appearanceMode 外观模式（预览注入；生产环境读写 [LocalAppSettingsStore]，实时生效）
+ * @param hideStatusBar 隐藏系统状态栏（预览注入；生产环境同上）
  * @param initialShowSignOutConfirm 预览：直接打开退出确认
  * @param initialShowClearCacheConfirm 预览：直接打开清除缓存确认
  */
@@ -132,6 +147,10 @@ fun ProfileScreen(
     onOpenReminderSettings: () -> Unit = {},
     dynamicColorEnabled: Boolean = false,
     onDynamicColorChange: (Boolean) -> Unit = {},
+    appearanceMode: AppearanceMode = AppearanceMode.SYSTEM,
+    onAppearanceModeChange: (AppearanceMode) -> Unit = {},
+    hideStatusBar: Boolean = true,
+    onHideStatusBarChange: (Boolean) -> Unit = {},
     adaptiveSpec: CtAdaptiveSpec? = null,
     meStats: MeStats = MeStats(),
     reminderStatus: ReminderStatus = ReminderStatus(),
@@ -152,6 +171,35 @@ fun ProfileScreen(
     val scope = rememberCoroutineScope()
     val spec = adaptiveSpec ?: rememberCtAdaptiveSpec()
     val twoPane = spec.twoPane
+
+    // 外观类设置：生产环境直接读写本机设置存储（LocalAppSettingsStore 由 MainActivity 提供，
+    // 写入后主题根即时重组）；预览/孤立组件（null）用入参回退，不依赖 Context。
+    // pending* 是本机乐观态：点击后立刻高亮，DataStore 回写到位后清空。
+    val appSettings = LocalAppSettingsStore.current
+    val storedAppearanceMode = rememberAppearanceMode(appSettings, appearanceMode)
+    val storedHideStatusBar = rememberHideStatusBar(appSettings, hideStatusBar)
+    var pendingAppearanceMode by remember { mutableStateOf<AppearanceMode?>(null) }
+    var pendingHideStatusBar by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(storedAppearanceMode) {
+        if (pendingAppearanceMode == storedAppearanceMode) pendingAppearanceMode = null
+    }
+    LaunchedEffect(storedHideStatusBar) {
+        if (pendingHideStatusBar == storedHideStatusBar) pendingHideStatusBar = null
+    }
+    val effectiveAppearanceMode = pendingAppearanceMode ?: storedAppearanceMode
+    val effectiveHideStatusBar = pendingHideStatusBar ?: storedHideStatusBar
+
+    fun changeAppearanceMode(mode: AppearanceMode) {
+        pendingAppearanceMode = mode
+        onAppearanceModeChange(mode)
+        appSettings?.let { store -> scope.launch { runCatching { store.setAppearanceMode(mode) } } }
+    }
+
+    fun changeHideStatusBar(enabled: Boolean) {
+        pendingHideStatusBar = enabled
+        onHideStatusBarChange(enabled)
+        appSettings?.let { store -> scope.launch { runCatching { store.setHideStatusBar(enabled) } } }
+    }
 
     fun requestClearCache() {
         showClearCacheConfirm = true
@@ -210,6 +258,10 @@ fun ProfileScreen(
                             AppearanceSection(
                                 dynamicColorEnabled = dynamicColorEnabled,
                                 onDynamicColorChange = onDynamicColorChange,
+                                appearanceMode = effectiveAppearanceMode,
+                                onAppearanceModeChange = ::changeAppearanceMode,
+                                hideStatusBar = effectiveHideStatusBar,
+                                onHideStatusBarChange = ::changeHideStatusBar,
                             )
                             AboutSection(
                                 context = context,
@@ -254,6 +306,10 @@ fun ProfileScreen(
                         AppearanceSection(
                             dynamicColorEnabled = dynamicColorEnabled,
                             onDynamicColorChange = onDynamicColorChange,
+                            appearanceMode = effectiveAppearanceMode,
+                            onAppearanceModeChange = ::changeAppearanceMode,
+                            hideStatusBar = effectiveHideStatusBar,
+                            onHideStatusBarChange = ::changeHideStatusBar,
                         )
                         AboutSection(
                             context = context,
@@ -402,29 +458,32 @@ private fun IdentitySection(session: Session) {
 /**
  * 「我的」顶部身份 hero（v5，参考 xiaoying 渐变 banner + 重叠圆形标识的层级感；不复制样式/素材）。
  *
- * 隐私：不展示头像与学号，只用姓名首字圆形标识 + 姓名/身份胶囊；深色/浅色统一使用品牌深青→灰蓝渐变 + 白字，
- * 对比度按大字号/胶囊字重保证可读；右上角放品牌三圆点（BrandMark）呼应启动图标。
+ * 隐私：不展示头像与学号，只用姓名首字圆形标识 + 姓名/身份胶囊；右上角放品牌三圆点（BrandMark）呼应启动图标。
+ * 配色：浅色保持既有深青→灰蓝固定渐变 + 白字；深色改为中性 tonal 深色 + onSurface 文字
+ * （品牌绿只出现在胶囊/图标的小面积 accent），见 [rememberProfileHeroColors]。
  */
 @Composable
 private fun ProfileHeroCard(session: Session) {
-    val heroStart = Color(0xFF2F5D54)
-    val heroEnd = Color(0xFF44566E)
+    val scheme = MaterialTheme.colorScheme
+    val dark = LocalCtDarkTheme.current
+    val hero = rememberProfileHeroColors()
     val initial = session.name.trim().take(1).ifBlank { "班" }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 168.dp)
             .clip(RoundedCornerShape(28.dp))
-            .background(Brush.linearGradient(listOf(heroStart, heroEnd))),
+            .background(Brush.linearGradient(listOf(hero.start, hero.end))),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
+            // 深色用一点品牌色柔光做层次（小面积），浅色保持原来的白色高光。
             drawCircle(
-                color = Color.White.copy(alpha = 0.06f),
+                color = if (dark) scheme.primary.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.06f),
                 radius = size.minDimension * 0.42f,
                 center = Offset(size.width * 0.94f, size.height * 0.10f),
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.05f),
+                color = hero.content.copy(alpha = 0.05f),
                 radius = size.minDimension * 0.30f,
                 center = Offset(size.width * 0.72f, size.height * 1.02f),
             )
@@ -439,15 +498,29 @@ private fun ProfileHeroCard(session: Session) {
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.16f))
-                        .border(1.dp, Color.White.copy(alpha = 0.26f), CircleShape),
+                        .background(
+                            if (dark) {
+                                scheme.surfaceContainerHighest
+                            } else {
+                                Color.White.copy(alpha = 0.16f)
+                            },
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (dark) {
+                                scheme.outlineVariant.copy(alpha = 0.55f)
+                            } else {
+                                Color.White.copy(alpha = 0.26f)
+                            },
+                            shape = CircleShape,
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = initial,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = hero.content,
                     )
                 }
                 Spacer(modifier = Modifier.width(14.dp))
@@ -455,18 +528,18 @@ private fun ProfileHeroCard(session: Session) {
                     Text(
                         text = "班级工具站",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.74f),
+                        color = hero.content.copy(alpha = if (dark) 0.72f else 0.74f),
                     )
                     Text(
                         text = session.name.ifBlank { "班级成员" },
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = hero.content,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                BrandMark(size = 38.dp, container = Color.White.copy(alpha = 0.14f))
+                BrandMark(size = 38.dp, container = hero.innerFill)
             }
             Spacer(modifier = Modifier.height(16.dp))
             FlowRow(
@@ -482,16 +555,30 @@ private fun ProfileHeroCard(session: Session) {
     }
 }
 
+/** hero 胶囊：浅色为白字白底半透明（原视觉）；深色强调胶囊用品牌绿小面积点缀，普通胶囊用中性面。 */
 @Composable
 private fun HeroPill(text: String, emphasis: Boolean = false) {
+    val dark = LocalCtDarkTheme.current
+    val scheme = MaterialTheme.colorScheme
+    val container = when {
+        dark && emphasis -> scheme.primary.copy(alpha = 0.18f)
+        dark -> scheme.onSurface.copy(alpha = 0.08f)
+        emphasis -> Color.White.copy(alpha = 0.22f)
+        else -> Color.White.copy(alpha = 0.13f)
+    }
+    val content = when {
+        dark && emphasis -> scheme.primary
+        dark -> scheme.onSurfaceVariant
+        else -> Color.White
+    }
     Text(
         text = text,
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.SemiBold,
-        color = Color.White,
+        color = content,
         modifier = Modifier
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = if (emphasis) 0.22f else 0.13f))
+            .background(container)
             .padding(horizontal = 12.dp, vertical = 7.dp),
     )
 }
@@ -630,9 +717,23 @@ private fun NotifySection(
 private fun AppearanceSection(
     dynamicColorEnabled: Boolean,
     onDynamicColorChange: (Boolean) -> Unit,
+    appearanceMode: AppearanceMode,
+    onAppearanceModeChange: (AppearanceMode) -> Unit,
+    hideStatusBar: Boolean,
+    onHideStatusBarChange: (Boolean) -> Unit,
 ) {
     SectionTitle("外观")
     GroupCard {
+        AppearanceModeRows(mode = appearanceMode, onModeChange = onAppearanceModeChange)
+        RowDivider()
+        SwitchRow(
+            title = "隐藏状态栏",
+            subtitle = "沉浸式 · 下滑临时显示",
+            leadingIcon = Icons.Rounded.Fullscreen,
+            checked = hideStatusBar,
+            onCheckedChange = onHideStatusBarChange,
+        )
+        RowDivider()
         SwitchRow(
             title = "壁纸取色",
             subtitle = "Material You · 跟随系统壁纸",
@@ -640,12 +741,57 @@ private fun AppearanceSection(
             checked = dynamicColorEnabled,
             onCheckedChange = onDynamicColorChange,
         )
-        RowDivider()
-        ValueRow(
-            title = "深浅色",
-            value = "跟随系统",
-        )
     }
+}
+
+/** 颜色模式三选一（单选行，点按区 ≥48dp，读屏 role=RadioButton）。 */
+@Composable
+private fun AppearanceModeRows(
+    mode: AppearanceMode,
+    onModeChange: (AppearanceMode) -> Unit,
+) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        AppearanceMode.entries.forEach { item ->
+            val selected = item == mode
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .selectable(
+                        selected = selected,
+                        role = Role.RadioButton,
+                        onClick = { onModeChange(item) },
+                    )
+                    .padding(horizontal = 18.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(
+                    imageVector = appearanceModeIcon(item),
+                    contentDescription = null,
+                    tint = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.size(22.dp),
+                )
+                Text(
+                    text = item.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                RadioButton(selected = selected, onClick = null)
+            }
+        }
+    }
+}
+
+private fun appearanceModeIcon(mode: AppearanceMode) = when (mode) {
+    AppearanceMode.SYSTEM -> Icons.Rounded.BrightnessAuto
+    AppearanceMode.LIGHT -> Icons.Rounded.LightMode
+    AppearanceMode.DARK -> Icons.Rounded.DarkMode
 }
 
 // =============================================================================
@@ -887,4 +1033,30 @@ private fun ValueRow(title: String, value: String) {
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+// =============================================================================
+// 外观设置：本机存储读取（生产）/ 入参回退（预览）
+// =============================================================================
+
+/** 外观模式：有本机设置存储时读 DataStore Flow（实时生效），预览/孤立组件用入参。 */
+@Composable
+private fun rememberAppearanceMode(
+    store: AppSettingsStore?,
+    fallback: AppearanceMode,
+): AppearanceMode {
+    if (store == null) return fallback
+    val value by store.appearanceMode.collectAsStateWithLifecycle(initialValue = fallback)
+    return value
+}
+
+/** 「隐藏状态栏」开关：同上。 */
+@Composable
+private fun rememberHideStatusBar(
+    store: AppSettingsStore?,
+    fallback: Boolean,
+): Boolean {
+    if (store == null) return fallback
+    val value by store.hideStatusBar.collectAsStateWithLifecycle(initialValue = fallback)
+    return value
 }

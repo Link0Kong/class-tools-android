@@ -30,6 +30,17 @@ interface PowerRepository {
 
     suspend fun loadHistory(rv: String, range: PowerRange, force: Boolean = false): PowerHistoryResult
 
+    /**
+     * 加载「比较取数」的隐藏窗口（14d/70d；对齐网页 `POWER.cmpSource`，不出现在区间按钮里）。
+     *
+     * 默认实现返回失败：预览/测试 fake 不需要该能力；生产实现按 5 min 缓存 + 失败回退旧缓存。
+     */
+    suspend fun loadCompareHistory(
+        rv: String,
+        range: PowerCompareRange,
+        force: Boolean = false,
+    ): PowerHistoryWindowResult = PowerHistoryWindowResult.Failure("暂不支持比较取数")
+
     suspend fun clearCache()
 }
 
@@ -87,11 +98,7 @@ class DefaultPowerRepository(
             if (!force && cached != null && now - cached.savedAt < historyTtlMs) {
                 return PowerHistoryResult.Success(cached.value, range, fromCache = true)
             }
-            val cutIso = Instant.ofEpochMilli(now - range.windowMs).toString()
-            val path = "power_history?select=ts,quantity" +
-                "&roomverify=eq.${encode(room)}" +
-                "&ts=gte.${encode(cutIso)}" +
-                "&order=ts.asc&limit=2000"
+            val path = historyPath(room, Instant.ofEpochMilli(now - range.windowMs).toString())
             return when (val result = api.get(path)) {
                 is ApiResult.Failure -> staleHistoryFallback(cached, range, result.error.displayMessage)
                 is ApiResult.Success -> {
@@ -101,6 +108,38 @@ class DefaultPowerRepository(
                         historyCache[key] = Timed(points, now)
                     }
                     PowerHistoryResult.Success(points, range, fromCache = false)
+                }
+            }
+        } finally {
+            mutex.unlock()
+        }
+    }
+
+    override suspend fun loadCompareHistory(
+        rv: String,
+        range: PowerCompareRange,
+        force: Boolean,
+    ): PowerHistoryWindowResult {
+        val room = PowerRooms.normalizeSel(rv)
+        if (room.isEmpty()) return PowerHistoryWindowResult.Failure("请先选择关注的宿舍")
+        mutex.lock()
+        try {
+            val now = clock()
+            val key = cacheKey(room, range)
+            val cached = historyCache[key]
+            if (!force && cached != null && now - cached.savedAt < historyTtlMs) {
+                return PowerHistoryWindowResult.Success(cached.value, range, fromCache = true)
+            }
+            val path = historyPath(room, Instant.ofEpochMilli(now - range.windowMs).toString())
+            return when (val result = api.get(path)) {
+                is ApiResult.Failure -> staleWindowFallback(cached, range, result.error.displayMessage)
+                is ApiResult.Success -> {
+                    val points = parseHistory(json, result.value)
+                    // 空结果不写缓存（防「数据积累中」毒化，与区间历史一致）。
+                    if (points.isNotEmpty()) {
+                        historyCache[key] = Timed(points, now)
+                    }
+                    PowerHistoryWindowResult.Success(points, range, fromCache = false)
                 }
             }
         } finally {
@@ -137,6 +176,23 @@ class DefaultPowerRepository(
         PowerHistoryResult.Failure(message)
     }
 
+    private fun staleWindowFallback(
+        cached: Timed<List<PowerPoint>>?,
+        range: PowerCompareRange,
+        message: String,
+    ): PowerHistoryWindowResult = if (cached != null) {
+        PowerHistoryWindowResult.Success(cached.value, range, fromCache = true)
+    } else {
+        PowerHistoryWindowResult.Failure(message)
+    }
+
+    /** E23 历史请求路径（区间与隐藏比较窗口共用同一查询口径）。 */
+    private fun historyPath(room: String, cutIso: String): String =
+        "power_history?select=ts,quantity" +
+            "&roomverify=eq.${encode(room)}" +
+            "&ts=gte.${encode(cutIso)}" +
+            "&order=ts.asc&limit=2000"
+
     companion object {
         const val ROW_TTL_MS: Long = 2L * 60 * 1000
         const val HISTORY_TTL_MS: Long = 5L * 60 * 1000
@@ -144,6 +200,9 @@ class DefaultPowerRepository(
         private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")
 
         fun cacheKey(rv: String, range: PowerRange): String = "$rv|${range.key}"
+
+        /** 隐藏比较窗口（14d/70d）单独缓存键，避免与区间历史串用。 */
+        fun cacheKey(rv: String, range: PowerCompareRange): String = "$rv|${range.key}"
 
         /** 解析 E22 响应：数组→首行；quantity 兼容 number/数字字符串；非法 quantity → q=null。 */
         fun parseRow(json: Json, raw: String): PowerRow? {

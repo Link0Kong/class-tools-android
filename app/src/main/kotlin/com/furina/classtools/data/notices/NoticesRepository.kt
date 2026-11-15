@@ -34,6 +34,7 @@ object NoticeSignature {
  * - CloudBase `notices?select=*` 全表响应约 **13.9MB**，旧实现每次拉整表 → App 10s 超时 → 只显示本机缓存；
  * - 现改为**按 `ts` 倒序分页**：首次只拉最新 [PAGE_SIZE] 条（~0.55MB，快速出首屏），
  *   旧数据通过 [loadMore] 每页 20 条追加；签名变化时自动重载第一页；
+ *   **UI 由 [NoticesAutoLoader] 在后台自动循环 [loadMore] 直到 `hasMore=false`（用户无需点击「加载全部」）**；
  * - 每次请求加 30s 协程超时保护；超时/网络失败自动重试 1 次（ApiClient 对 GET 亦有一次网络重试）；
  * - 失败保留已加载缓存并在 UI 给出明确错误（「网络较慢或服务器无响应」）。
  *

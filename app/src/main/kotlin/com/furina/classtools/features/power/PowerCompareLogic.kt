@@ -1,5 +1,6 @@
 package com.furina.classtools.features.power
 
+import com.furina.classtools.data.power.PowerCompareRange
 import com.furina.classtools.data.power.PowerRange
 import com.furina.classtools.data.power.PowerStats
 import com.furina.classtools.data.power.PowerPoint
@@ -18,6 +19,22 @@ data class PowerCompareWindow(
 ) {
     val durationMillis: Long get() = (end - start).coerceAtLeast(0L)
 }
+
+/**
+ * 同期比较的**取数来源**（对齐网页 `POWER.cmpSource`）：
+ *
+ * - 24h：直接用已加载的 7d 窗口（含昨日同一时段）；
+ * - 7d：慢频房（13/16 日更）用已加载的 30d，其它楼栋按需补拉隐藏的 14d；
+ * - 30d：按需补拉隐藏的 70d（覆盖上月同期）。
+ *
+ * [loadedRange] 非空 = 已加载区间（UI 直接从历史表取）；[hiddenRange] 非空 = 需仓库补拉。
+ */
+data class PowerCompareSource(
+    val key: String,
+    val windowMs: Long,
+    val loadedRange: PowerRange? = null,
+    val hiddenRange: PowerCompareRange? = null,
+)
 
 /**
  * 自然周期同期比较结果（电费 tile 徽标用）。
@@ -53,7 +70,9 @@ data class PowerCompareResult(
  * - 24h：今日 00:00–现在 vs 昨日 00:00–昨日同一时刻；
  * - 7d：本周一 00:00–现在 vs 上周一 00:00–上周同一时刻；
  * - 30d：本月 1 日 00:00–现在 vs 上月 1 日 00:00–上月同一日同时刻（月末无同日按月末）；
- * - 只有**两侧真实采样覆盖均 ≥ 窗口 35%** 才显示比较；当前周期用电 = 窗口内真实采样下降和（**不插值**，忽略充值上升/噪声）；
+ * - 只有**两侧真实采样覆盖均 ≥ 窗口 35%** 且**两侧有效用电均 >0.01 度**才显示比较；
+ *   用电 = 窗口内真实采样下降和（**不插值**，忽略充值上升/噪声与异常扣减），与网页 `deriveRange` 同口径；
+ * - 取数窗口与网页 `POWER.cmpSource` 同口径（见 [compareSource]：隐藏 14d/70d 按需补拉）；
  * - 现网 power_history 只有约 6 天 → 上周/上月比较通常不可用，数据积累后自动出现（不硬凑）。
  *
  * 另外提供 13/16 号楼隐藏 24h 区间的规则 helper：[showRange] / [normRange]。
@@ -65,6 +84,9 @@ object PowerCompareLogic {
 
     /** 相邻采样下降超过该值才算有效用电（与 web/mp `CH` 同口径，忽略噪声）。 */
     const val MIN_DELTA: Double = 0.005
+
+    /** 一个周期内的有效用电下限（对齐网页 `naturalCompare`：`drop > 0.01` 才比较）。 */
+    const val MIN_USAGE: Double = 0.01
 
     private val HH_MM = DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA)
     private val MM_DD_HH_MM = DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.CHINA)
@@ -84,6 +106,45 @@ object PowerCompareLogic {
     /** 选中了当前楼栋不可见的档 → 回落到 7 天（切宿舍时归位，不覆盖用户显式选择）。 */
     fun normRange(range: PowerRange, building: String?): PowerRange =
         if (showRange(range, building)) range else PowerRange.D7
+
+    // ------------------------------------------------------------ 比较取数窗口
+
+    /**
+     * 比较取数来源（**与网页 `POWER.cmpSource` 同口径**）：
+     *
+     * - 24h → 已加载的 7d；
+     * - 7d → 慢频房已加载的 30d，其余隐藏补拉 14d；
+     * - 30d → 隐藏补拉 70d。
+     *
+     * @param slowRoom 当前宿舍是否为慢频房（13/16 号楼 && 24h 变化 <6 次，与 [PowerStats.isSlowRoom] 一致）
+     */
+    fun compareSource(range: PowerRange, slowRoom: Boolean): PowerCompareSource = when (range) {
+        PowerRange.H24 -> PowerCompareSource(
+            key = PowerRange.D7.key,
+            windowMs = PowerRange.D7.windowMs,
+            loadedRange = PowerRange.D7,
+        )
+
+        PowerRange.D7 -> if (slowRoom) {
+            PowerCompareSource(
+                key = PowerRange.D30.key,
+                windowMs = PowerRange.D30.windowMs,
+                loadedRange = PowerRange.D30,
+            )
+        } else {
+            PowerCompareSource(
+                key = PowerCompareRange.D14.key,
+                windowMs = PowerCompareRange.D14.windowMs,
+                hiddenRange = PowerCompareRange.D14,
+            )
+        }
+
+        PowerRange.D30 -> PowerCompareSource(
+            key = PowerCompareRange.D70.key,
+            windowMs = PowerCompareRange.D70.windowMs,
+            hiddenRange = PowerCompareRange.D70,
+        )
+    }
 
     // ------------------------------------------------------------ 自然周期窗口
 
@@ -154,24 +215,30 @@ object PowerCompareLogic {
     }
 
     /**
-     * 窗口内用电量 = 相邻真实采样下降之和（不插值；上升视为充值/异常跳过）。
-     * 样本不足 2 或窗口时长为 0 → null。
+     * 窗口内用电量 = 相邻真实采样下降之和（不插值；上升视为充值/异常跳过；
+     * `> max(5, 4×中位数)` 的异常扣减（水费从电费账户扣等）不计入，与网页 `deriveRange` 同口径）。
+     * 结果保留 2 位小数（网页 `d.drop` 同口径）。样本不足 2 或窗口时长为 0 → null。
      */
     fun usageIn(points: List<PowerPoint>, window: PowerCompareWindow): Double? {
         val inside = pointsIn(points, window)
         if (inside.size < 2) return null
+        val deduct = PowerStats.deductOf(inside)
         var used = 0.0
         for (index in 1 until inside.size) {
-            val delta = inside[index].q - inside[index - 1].q
-            if (delta < -MIN_DELTA) used += -delta
+            val drop = inside[index - 1].q - inside[index].q
+            // 正常下降计入；充值上升（drop<0）/噪声（≤MIN_DELTA）/异常扣减（>deduct.thr）都跳过。
+            if (drop > MIN_DELTA && drop <= deduct.thr) used += drop
         }
-        return used
+        // 与网页 deriveRange 的 d.drop 一致：2 位小数（比较百分比也基于同一数值）。
+        return PowerStats.round2(used)
     }
 
-    /** 窗口内真实采样点（按时间升序；窗口 `[start,end)`）。 */
+    /**
+     * 窗口内真实采样点（按时间升序；窗口闭区间 `[start,end]`，与网页 `cmpWindowPts` 一致）。
+     */
     fun pointsIn(points: List<PowerPoint>, window: PowerCompareWindow): List<PowerPoint> =
         points.asSequence()
-            .filter { it.q.isFinite() && it.t >= window.start && it.t < window.end }
+            .filter { it.q.isFinite() && it.t >= window.start && it.t <= window.end }
             .sortedBy { it.t }
             .toList()
 
@@ -215,10 +282,13 @@ object PowerCompareLogic {
         if (currentUse == null || currentCoverage < MIN_COVERAGE) {
             return unavailable("数据积累中")
         }
+        if (currentUse <= MIN_USAGE) {
+            return unavailable("当前周期无有效用电数据")
+        }
         if (previousUse == null || previousCoverage < MIN_COVERAGE) {
             return unavailable("上一周期数据不足")
         }
-        if (previousUse <= MIN_DELTA) {
+        if (previousUse <= MIN_USAGE) {
             return unavailable("上一周期无有效用电数据")
         }
         val percent = (currentUse - previousUse) / previousUse * 100.0

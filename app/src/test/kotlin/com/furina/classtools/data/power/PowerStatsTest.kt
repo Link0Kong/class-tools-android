@@ -337,6 +337,72 @@ class PowerStatsTest {
         assertTrue(dots.size >= line.points.size - 1)
     }
 
+    // ---- 趋势充值折算（web/CHANGELOG.md 增量 53 ②） -------------------------
+
+    @Test
+    fun foldRecharge_addsBackJumpsAndKeepsRealQ() {
+        // 注意：cleanPts 过滤 t<=0，采样时间从 1h 起（生产时间戳恒 >0）
+        val points = listOf(
+            pp(100.0, hour),
+            pp(99.0, 2 * hour),
+            pp(119.0, 3 * hour), // 充值 +20（>0.5 跳变）
+            pp(118.0, 4 * hour),
+            pp(117.0, 5 * hour),
+        )
+        val fold = PowerStats.foldRecharge(points)
+        assertEquals(20.0, fold.total, 0.0001)
+        assertEquals(1, fold.count)
+        assertEquals(3 * hour, fold.marks.single().t)
+        assertEquals(20.0, fold.marks.single().delta, 0.0001)
+        // 绘图值 = 真实剩余 - 累计充值：连续下降
+        assertEquals(
+            listOf(100.0, 99.0, 99.0, 98.0, 97.0),
+            fold.values.map { Math.round(it * 100.0) / 100.0 },
+        )
+
+        val line = PowerStats.trendLine(points)
+        assertFalse(line.empty)
+        assertEquals(20.0, line.foldedRecharge, 0.0001)
+        assertEquals(1, line.rechargeMarks.size)
+        // 真实剩余保留在 points.q（游标/图例「当前」用真实值）
+        assertEquals(listOf(100.0, 99.0, 119.0, 118.0, 117.0), line.points.map { it.q })
+        // y 轴按折算范围：起点顶部、终点底部
+        assertEquals(0f, line.points.first().y, 0.0001f)
+        assertEquals(1f, line.points.last().y, 0.0001f)
+        assertEquals(100.0, line.hi!!, 0.0001)
+        assertEquals(97.0, line.lo!!, 0.0001)
+        assertEquals(97.0, line.min!!, 0.0001)
+    }
+
+    @Test
+    fun foldRecharge_ignoresSmallJumps() {
+        // 0.4 度 ≤ 0.5 阈值：按噪声处理，不折算
+        val points = listOf(pp(100.0, hour), pp(100.4, 2 * hour), pp(99.0, 3 * hour))
+        val fold = PowerStats.foldRecharge(points)
+        assertEquals(0.0, fold.total, 0.0)
+        assertTrue(fold.marks.isEmpty())
+        val line = PowerStats.trendLine(points)
+        assertEquals(0.0, line.foldedRecharge, 0.0)
+        assertTrue(line.rechargeMarks.isEmpty())
+    }
+
+    @Test
+    fun foldRecharge_downsamplesWithoutLosingMarks() {
+        // 1001 个采样（每 10 分钟），第 500 个点充值 +30 → 抽稀到 200 点仍保留充值标记
+        val points = (0..1000).map { i ->
+            val q = 100.0 - i * 0.01 + if (i >= 500) 30.01 else 0.0
+            pp(q, (i + 1) * 600_000L)
+        }
+        val line = PowerStats.trendLine(points, maxPoints = 200)
+        assertTrue(line.count <= 200)
+        assertEquals(30.0, line.foldedRecharge, 0.001)
+        assertEquals(1, line.rechargeMarks.size)
+        // 折算后曲线连续下降 → y 单调不减（不出现充值上跳）
+        line.points.zipWithNext().forEach { (a, b) ->
+            assertTrue("y 应单调不减：${a.y} -> ${b.y}", b.y >= a.y - 0.001f)
+        }
+    }
+
     // ---- tiles / 计费 -------------------------------------------------------
 
     @Test

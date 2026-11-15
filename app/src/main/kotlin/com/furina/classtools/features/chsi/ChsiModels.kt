@@ -186,6 +186,21 @@ object ChsiTexts {
     /** 手动登录提示（App 不预填、不保存账号密码）。 */
     const val HINT_MANUAL_LOGIN: String = "请在下方官方页面手动登录学信网（App 不保存账号密码）"
 
+    /** 卡片页（未强制跳登录页）的登录提示。 */
+    const val HINT_LOGIN_FROM_CARDS: String = "未登录学信网：点「登录学信网」在官方页面手动登录，登录后自动回卡片页"
+
+    /** 未登录时数据卡占位（点击直达官方登录页）。 */
+    const val MSG_NEED_LOGIN: String = "未登录 · 去登录查看"
+
+    /** 卡片页在后台加载档案页判断登录态时的状态条文案。 */
+    const val STATUS_CHECKING: String = "正在检查学信网登录状态…"
+
+    /** 卡片页「登录学信网」按钮。 */
+    const val BTN_LOGIN_ACTION: String = "登录学信网"
+
+    /** 登录页返回卡片页按钮。 */
+    const val BTN_BACK_TO_CARDS: String = "返回卡片"
+
     /** 提取不到时的空态兜底（卡片可点开官方页面）。 */
     const val MSG_EMPTY_FALLBACK: String = "已登录 · 打开官方页面查看"
 

@@ -179,6 +179,64 @@ class PowerRepositoryTest {
     fun cacheKey_isPerRoomAndRange() {
         assertEquals("4-23A---321|24h", DefaultPowerRepository.cacheKey("4-23A---321", PowerRange.H24))
         assertEquals("1-13---324|30d", DefaultPowerRepository.cacheKey("1-13---324", PowerRange.D30))
+        // 隐藏比较窗口单独缓存键（不与区间历史串用）
+        assertEquals("4-23A---321|14d", DefaultPowerRepository.cacheKey("4-23A---321", PowerCompareRange.D14))
+        assertEquals("4-23A---321|70d", DefaultPowerRepository.cacheKey("4-23A---321", PowerCompareRange.D70))
+    }
+
+    // ------------------------------------------------------------ 隐藏比较窗口（14d/70d）
+
+    @Test
+    fun loadCompareHistory_buildsHiddenWindowQueryAndCaches() = runTest {
+        val transport = FakeTransport { ApiResponse(200, historyJson) }
+        val repo = DefaultPowerRepository(api = testApiClient(transport), clock = { now })
+
+        val d14 = repo.loadCompareHistory("4-23A---321", PowerCompareRange.D14)
+        assertTrue(d14 is PowerHistoryWindowResult.Success)
+        assertEquals(2, (d14 as PowerHistoryWindowResult.Success).points.size)
+        assertFalse(d14.fromCache)
+        val path14 = transport.paths().single()
+        assertTrue(path14.contains("power_history?select=ts,quantity"))
+        assertTrue(path14.contains("roomverify=eq.4-23A---321"))
+        assertTrue(path14.contains("order=ts.asc"))
+        assertTrue(path14.contains("limit=2000"))
+        // now - 14d = 2026-10-24T02:00:00Z
+        assertTrue(path14.contains("2026-10-24T02%3A00%3A00Z"))
+
+        // 5 min 内同窗口命中缓存：不再请求
+        val cached = repo.loadCompareHistory("4-23A---321", PowerCompareRange.D14)
+        assertTrue((cached as PowerHistoryWindowResult.Success).fromCache)
+        assertEquals(1, transport.requests.size)
+
+        // 70d 单独窗口/缓存键
+        repo.loadCompareHistory("4-23A---321", PowerCompareRange.D70)
+        assertEquals(2, transport.requests.size)
+        // now - 70d = 2026-08-29T02:00:00Z
+        assertTrue(transport.paths().last().contains("2026-08-29T02%3A00%3A00Z"))
+    }
+
+    @Test
+    fun loadCompareHistory_blankRoomReturnsFailureWithoutRequest() = runTest {
+        val transport = FakeTransport { ApiResponse(200, historyJson) }
+        val repo = DefaultPowerRepository(api = testApiClient(transport), clock = { now })
+        assertTrue(repo.loadCompareHistory("", PowerCompareRange.D14) is PowerHistoryWindowResult.Failure)
+        assertTrue(repo.loadCompareHistory("bad-room", PowerCompareRange.D70) is PowerHistoryWindowResult.Failure)
+        assertTrue(transport.requests.isEmpty())
+    }
+
+    @Test
+    fun loadCompareHistory_failureFallsBackToCachedWindow() = runTest {
+        val transport = FakeTransport { ApiResponse(200, historyJson) }
+        var clock = now
+        val repo = DefaultPowerRepository(api = testApiClient(transport), clock = { clock })
+        repo.loadCompareHistory("4-23A---321", PowerCompareRange.D14)
+
+        transport.responder = { ApiResponse(500, """{"message":"boom"}""") }
+        clock += 10 * 60_000L
+        val fallback = repo.loadCompareHistory("4-23A---321", PowerCompareRange.D14, force = true)
+        assertTrue(fallback is PowerHistoryWindowResult.Success)
+        assertEquals(2, (fallback as PowerHistoryWindowResult.Success).points.size)
+        assertTrue(fallback.fromCache)
     }
 }
 

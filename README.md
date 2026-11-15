@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.54.0**——底部导航黑条修复（透明系统栏 + 关闭对比度蒙层 + 安全区背景）；整合并行功能「活动」「地图」「学信网」「OPPO PUSH」并修复学信网未登录误判；工具 17 项、使用说明 24 卡。单测 **1279/0**、快速 E2E **44/0**（导航 10/10），签名 APK 已交付桌面。详见 [REPORT_ROUND61](docs/REPORT_ROUND61_20261115.md)。
+- 状态：**v4.55.0**——用户 12 项反馈修复（活动/拖动/状态栏/地图/外观/WebVPN/学信网/电费/描述/云空间/深色 hero/通知自动加载）+ 云空间同步；工具 18 项、使用说明 25 卡。单测 **1412/0**、快速 E2E **45/0**（导航 10/10），签名 APK 已交付桌面。详见 [REPORT_ROUND62](docs/REPORT_ROUND62_20261115.md)。
 
 ## 目录
 

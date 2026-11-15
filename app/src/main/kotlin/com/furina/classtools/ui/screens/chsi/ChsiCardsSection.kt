@@ -39,6 +39,7 @@ import com.furina.classtools.features.chsi.ChsiCardStatus
 import com.furina.classtools.features.chsi.ChsiCatalog
 import com.furina.classtools.features.chsi.ChsiDataCardKind
 import com.furina.classtools.features.chsi.ChsiDataCardUi
+import com.furina.classtools.features.chsi.ChsiNavigationLogic
 import com.furina.classtools.features.chsi.ChsiOfficialTool
 import com.furina.classtools.features.chsi.ChsiTexts
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -101,8 +102,10 @@ fun ChsiCardsContent(
                     row.forEach { card ->
                         ChsiDataCard(
                             card = card,
+                            loggedIn = loggedIn,
                             modifier = Modifier.weight(1f),
                             onOpen = onOpenCard,
+                            onLogin = onLogin,
                         )
                     }
                     repeat(columns - row.size) { Spacer(modifier = Modifier.weight(1f)) }
@@ -128,7 +131,11 @@ fun ChsiCardsContent(
                 }
             }
             item(key = "footer") {
-                ChsiFooter(onOpenArchive = onOpenArchive, onLogout = onLogout)
+                ChsiFooter(
+                    loggedIn = loggedIn,
+                    onOpenArchive = onOpenArchive,
+                    onLogout = onLogout,
+                )
             }
         }
     }
@@ -144,12 +151,12 @@ private fun ChsiStatusLine(
     onLogin: () -> Unit,
     onRefresh: () -> Unit,
 ) {
-    val text = when {
-        globalError != null -> globalError
-        refreshing -> ChsiTexts.STATUS_EXTRACTING
-        loggedIn && lastUpdated != null -> ChsiTexts.STATUS_READY_PREFIX + lastUpdated
-        else -> ChsiTexts.STATUS_NOT_LOGGED_IN
-    }
+    val text = ChsiNavigationLogic.statusText(
+        loggedIn = loggedIn,
+        refreshing = refreshing,
+        lastUpdated = lastUpdated,
+        globalError = globalError,
+    )
     val color = if (globalError != null) {
         MaterialTheme.colorScheme.error
     } else {
@@ -179,7 +186,7 @@ private fun ChsiStatusLine(
         )
         if (!loggedIn) {
             TextButton(onClick = onLogin, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(ChsiTexts.BTN_LOGIN)
+                Text(ChsiTexts.BTN_LOGIN_ACTION)
             }
         } else {
             TextButton(
@@ -210,15 +217,17 @@ private fun ChsiSectionHeader(text: String) {
     )
 }
 
-/** 单张数据卡（点开官方页面；空态也保留入口）。 */
+/** 单张数据卡（未登录 → 直达官方登录页；已登录 → 点开官方页面；空态也保留入口）。 */
 @Composable
 private fun ChsiDataCard(
     card: ChsiDataCardUi,
+    loggedIn: Boolean,
     modifier: Modifier = Modifier,
     onOpen: (ChsiDataCardUi) -> Unit,
+    onLogin: () -> Unit,
 ) {
     Surface(
-        onClick = { onOpen(card) },
+        onClick = { if (loggedIn) onOpen(card) else onLogin() },
         modifier = modifier.heightIn(min = 112.dp),
         shape = CtShapeTokens.toolCard,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -252,34 +261,52 @@ private fun ChsiDataCard(
                     modifier = Modifier.size(16.dp),
                 )
             }
-            when (card.status) {
-                ChsiCardStatus.READY -> {
-                    card.lines.take(3).forEach { line ->
+            if (!loggedIn) {
+                // 未登录：数据卡不显示假数据，统一显示「去登录」入口（点卡片直达官方登录页）。
+                Text(
+                    text = ChsiNavigationLogic.dataCardHint(loggedIn = false),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = ChsiTexts.BTN_LOGIN_ACTION,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                when (card.status) {
+                    ChsiCardStatus.READY -> {
+                        card.lines.take(3).forEach { line ->
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+
+                    ChsiCardStatus.EMPTY -> {
                         Text(
-                            text = line,
+                            text = card.lines.firstOrNull() ?: ChsiTexts.MSG_EMPTY_FALLBACK,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = ChsiTexts.BTN_OPEN_OFFICIAL,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                }
-
-                ChsiCardStatus.EMPTY -> {
-                    Text(
-                        text = card.lines.firstOrNull() ?: ChsiTexts.MSG_EMPTY_FALLBACK,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = ChsiTexts.BTN_OPEN_OFFICIAL,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
                 }
             }
         }
@@ -331,9 +358,10 @@ private fun ChsiToolCard(
     }
 }
 
-/** 底部：打开完整学信档案 + 退出学信网登录。 */
+/** 底部：打开完整学信档案 + 退出学信网登录（未登录不显示退出）。 */
 @Composable
 private fun ChsiFooter(
+    loggedIn: Boolean,
     onOpenArchive: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -356,16 +384,18 @@ private fun ChsiFooter(
             Spacer(modifier = Modifier.size(8.dp))
             Text(ChsiTexts.BTN_OPEN_ARCHIVE)
         }
-        TextButton(
-            onClick = onLogout,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp),
-        ) {
-            Text(
-                text = ChsiTexts.BTN_LOGOUT,
-                color = MaterialTheme.colorScheme.error,
-            )
+        if (loggedIn) {
+            TextButton(
+                onClick = onLogout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+            ) {
+                Text(
+                    text = ChsiTexts.BTN_LOGOUT,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }

@@ -40,6 +40,12 @@ object PowerStats {
     /** 慢更新判定阈值：相邻 |Δq| > CH 计一次变化。 */
     const val SLOW_DIFF: Double = 0.005
 
+    /**
+     * 趋势「充值跳变」阈值（对齐网页 `POWER.renderTrend` 的 `dq>0.5`）：
+     * 区间内相邻采样上升超过该值视为充值/修正，绘图值扣除累计充值后显示。
+     */
+    const val RECHARGE_JUMP: Double = 0.5
+
     /** 慢频统计常量（power_cadence_spec.md §1）。 */
     const val CH: Double = 0.005
     const val MIN_SEG_H: Double = 6.0
@@ -475,29 +481,77 @@ object PowerStats {
 
     // ---- 趋势折线 / 游标 ----------------------------------------------------------
 
-    /** 趋势折线纯数据：按真实时间比例铺满（x），y=0 顶部/1 底部；全平垂直居中。 */
+    /**
+     * 趋势「已折算充值」：区间内相邻采样 `Δq > [RECHARGE_JUMP]`（0.5 度）视为充值/修正，
+     * 绘图值 = `真实剩余 - 累计充值`（连续下降）；真实剩余仍保留在 [PowerPoint.q]。
+     *
+     * 口径对齐网页 `POWER.renderTrend`（web/CHANGELOG.md 增量 53 ②）：
+     * 只做「加回累计充值」，不插值、不改真实采样；`≤0.5` 度的小幅上升不算充值（噪声/网关抖动）。
+     */
+    fun foldRecharge(points: List<PowerPoint>): RechargeFold {
+        val list = cleanPts(points)
+        if (list.isEmpty()) return RechargeFold()
+        val values = ArrayList<Double>(list.size)
+        val marks = ArrayList<TrendRechargeMark>()
+        var cumRecharge = 0.0
+        val t0 = list.first().t
+        val tSpan = max(1L, list.last().t - t0)
+        values.add(list.first().q)
+        for (i in 1 until list.size) {
+            val delta = list[i].q - list[i - 1].q
+            if (delta > RECHARGE_JUMP) {
+                cumRecharge += delta
+                marks.add(
+                    TrendRechargeMark(
+                        t = list[i].t,
+                        x = ((list[i].t - t0).toDouble() / tSpan).toFloat().coerceIn(0f, 1f),
+                        delta = round2(delta),
+                    ),
+                )
+            }
+            values.add(list[i].q - cumRecharge)
+        }
+        return RechargeFold(
+            values = values,
+            marks = marks,
+            total = round2(cumRecharge),
+            count = marks.size,
+        )
+    }
+
+    /**
+     * 趋势折线纯数据：按真实时间比例铺满（x），y=0 顶部/1 底部；全平垂直居中。
+     *
+     * 2026-11-15 对齐网页「充值后趋势可读」：区间内有 `Δq>0.5` 充值跳变时，
+     * [TrendLine.points] 的 y 按**折算剩余**计算（连续下降），[TrendPoint.q] 仍是真实剩余；
+     * y 轴刻度（[TrendLine.hi]/[TrendLine.mid]/[TrendLine.lo]）也按折算范围，充值位置见
+     * [TrendLine.rechargeMarks]（竖虚线）。
+     */
     fun trendLine(history: List<PowerPoint>, maxPoints: Int = TREND_MAX): TrendLine {
-        val pts = history.filter { it.q.isFinite() && it.t > 0 }.sortedBy { it.t }
+        val pts = cleanPts(history)
         if (pts.isEmpty()) return TrendLine(empty = true, note = "未选择宿舍")
         if (pts.size < 2) return TrendLine(empty = true, note = "数据积累中")
+        val fold = foldRecharge(pts)
         val cap = max(2, maxPoints)
-        val list: List<PowerPoint> = if (pts.size > cap) {
-            val sampled = ArrayList<PowerPoint>(cap)
+        // 先按真实时间等距抽稀下标（首/尾必保留），再取折算值：抽稀不改变折算口径。
+        val indices: List<Int> = if (pts.size > cap) {
+            val sampled = ArrayList<Int>(cap)
             for (i in 0 until cap) {
                 val idx = (i.toDouble() * (pts.size - 1) / (cap - 1)).roundToLong().toInt()
                     .coerceIn(0, pts.size - 1)
-                val p = pts[idx]
-                if (sampled.isEmpty() || sampled.last().t != p.t) sampled.add(p)
+                if (sampled.isEmpty() || pts[idx].t != pts[sampled.last()].t) sampled.add(idx)
             }
             sampled
         } else {
-            pts
+            pts.indices.toList()
         }
-        var lo = list.first().q
-        var hi = list.first().q
-        list.forEach {
-            if (it.q < lo) lo = it.q
-            if (it.q > hi) hi = it.q
+        val list = indices.map { pts[it] }
+        val plotValues = indices.map { fold.values[it] }
+        var lo = plotValues.first()
+        var hi = plotValues.first()
+        plotValues.forEach {
+            if (it < lo) lo = it
+            if (it > hi) hi = it
         }
         val flat = (hi - lo) < CH
         if (hi - lo < 0.05) hi = lo + 0.05
@@ -505,13 +559,16 @@ object PowerStats {
         val t0 = list.first().t
         val t1 = list.last().t
         val tSpan = max(1L, t1 - t0)
-        val outPoints = list.map { p ->
+        val outPoints = list.mapIndexed { index, p ->
             TrendPoint(
                 x = ((p.t - t0).toDouble() / tSpan).toFloat().coerceIn(0f, 1f),
-                y = if (flat) 0.5f else ((hi - p.q) / span).toFloat().coerceIn(0f, 1f),
-                q = p.q,
+                y = if (flat) 0.5f else ((hi - plotValues[index]) / span).toFloat().coerceIn(0f, 1f),
+                q = p.q, // 真实剩余（游标/图例「当前」展示用，不随折算变化）
                 t = p.t,
             )
+        }
+        val marks = fold.marks.map { mark ->
+            mark.copy(x = ((mark.t - t0).toDouble() / tSpan).toFloat().coerceIn(0f, 1f))
         }
         return TrendLine(
             empty = false,
@@ -524,6 +581,8 @@ object PowerStats {
             min = lo,
             max = hi,
             flat = flat,
+            foldedRecharge = fold.total,
+            rechargeMarks = marks,
         )
     }
 

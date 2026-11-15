@@ -118,11 +118,15 @@ class ActivityRepository(
         return transport.execute(ApiRequest(method, full, headers(url, token), body))
     }
 
-    private fun errFor(status: Int, body: String = ""): String = when (status) {
-        401 -> "登录已过期，请重新登录"
-        408 -> "请求被拒绝（登录可能已失效）"
-        else -> "服务器返回 $status" + if (body.isBlank()) "" else "：${body.take(120)}"
-    }
+    /**
+     * 可诊断错误文案：状态码 + 服务端原文 message（不含 token/账号等敏感信息）。
+     *
+     * 2026-11-15 用户报的「未找到对应编号的学校信息」就是学校 API 的 message 原文
+     * （HTTP 500 `{"message":"未找到对应编号的学校信息"}`），原先只显示 body 前 120 字符，
+     * 既可能被 JSON 外壳占满也不够可读；现在优先取 `message/msg/error` 字段并附操作名。
+     */
+    private fun errFor(status: Int, body: String = "", action: String = ""): String =
+        activityErrorMessage(status, body, action)
 
     // ---------------------------------------------------------------- 业务
 
@@ -131,7 +135,7 @@ class ActivityRepository(
         return try {
             val path = "/organizations/activity/page/for_sign/${t.userId}/class/${t.classId}"
             val resp = call(HttpMethod.POST, path, t.token, "orderBy=0&page=1&rows=$rows", """{"type":""}""")
-            if (resp.status != 200) return ActivityResult.Err(errFor(resp.status, resp.body))
+            if (resp.status != 200) return ActivityResult.Err(errFor(resp.status, resp.body, "活动列表"))
             val root = NetJson.parseToJsonElement(resp.body).jsonObject
             val arr = (root["list"] as? JsonArray) ?: JsonArray(emptyList())
             ActivityResult.Ok(arr.mapNotNull { (it as? JsonObject)?.toActivity() })
@@ -145,7 +149,7 @@ class ActivityRepository(
         return try {
             val path = "/organizations/activity/all/$activityId"
             val resp = call(HttpMethod.GET, path, t.token, "studentUserId=${t.userId}")
-            if (resp.status != 200) return ActivityResult.Err(errFor(resp.status, resp.body))
+            if (resp.status != 200) return ActivityResult.Err(errFor(resp.status, resp.body, "活动详情"))
             ActivityResult.Ok(NetJson.parseToJsonElement(resp.body).jsonObject.toDetail())
         } catch (e: Exception) {
             ActivityResult.Err("网络错误：${e.message ?: e.javaClass.simpleName}")
@@ -158,7 +162,7 @@ class ActivityRepository(
             val path = "/organizations/sign_up/activity/$activityId/role/$roleId/user/${t.userId}"
             val resp = call(HttpMethod.POST, path, t.token)
             if (resp.status == 200) ActivityResult.Ok(Unit)
-            else ActivityResult.Err(errFor(resp.status, resp.body))
+            else ActivityResult.Err(errFor(resp.status, resp.body, "报名"))
         } catch (e: Exception) {
             ActivityResult.Err("网络错误：${e.message ?: e.javaClass.simpleName}")
         }
@@ -170,11 +174,54 @@ class ActivityRepository(
             val path = "/organizations/sign_up/cancel/$activityId/user/${t.userId}"
             val resp = call(HttpMethod.POST, path, t.token)
             if (resp.status == 200) ActivityResult.Ok(Unit)
-            else ActivityResult.Err(errFor(resp.status, resp.body))
+            else ActivityResult.Err(errFor(resp.status, resp.body, "取消报名"))
         } catch (e: Exception) {
             ActivityResult.Err("网络错误：${e.message ?: e.javaClass.simpleName}")
         }
     }
+}
+
+// ---------------------------------------------------------------- 错误文案（可单测）
+
+/**
+ * 学校 API 错误 → 可诊断文案（状态码 + 服务端原文 message + 操作名；不含敏感信息）。
+ *
+ * 例：`activityErrorMessage(500, """{"message":"未找到对应编号的学校信息"}""", "活动列表")`
+ * → `服务器返回 500（活动列表）：未找到对应编号的学校信息 · 请重新登录学校账号（登录入口学校编号异常）`。
+ */
+internal fun activityErrorMessage(status: Int, body: String = "", action: String = ""): String = when (status) {
+    401 -> "登录已过期，请重新登录学校账号"
+    408 -> "请求被拒绝（登录可能已失效）"
+    else -> buildString {
+        append("服务器返回 ").append(status)
+        if (action.isNotBlank()) append("（").append(action).append("）")
+        val message = activityServerMessageOf(body)
+        if (message.isNotBlank()) {
+            append("：").append(message)
+        } else if (body.isNotBlank()) {
+            append("：").append(body.replace(Regex("\\s+"), " ").trim().take(160))
+        }
+        if (message.contains("学校信息") || message.contains("学校编号")) {
+            append(" · 请重新登录学校账号（登录入口学校编号异常）")
+        }
+    }
+}
+
+/** 从学校 API 错误响应中提取可读 message（JSON 的 message/msg/error 优先；无则原文压缩截断）。 */
+internal fun activityServerMessageOf(body: String): String {
+    val text = body.trim()
+    if (text.isEmpty()) return ""
+    val fromJson = runCatching {
+        val root = NetJson.parseToJsonElement(text)
+        val obj = root as? JsonObject
+        listOf("message", "msg", "error", "errorMessage")
+            .firstNotNullOfOrNull { key ->
+                obj?.get(key)?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+            }
+    }.getOrNull()
+    if (!fromJson.isNullOrBlank()) return fromJson.take(160)
+    // 非 JSON（如 nginx 错误页）：压缩空白后截断，仍保留原文特征。
+    return text.replace(Regex("\\s+"), " ").trim().take(160)
 }
 
 // ---------------------------------------------------------------- JSON 映射

@@ -98,6 +98,7 @@ import com.furina.classtools.ui.components.dock.rememberCtTabPagerState
 import com.furina.classtools.ui.screens.all.AllToolsScreen
 import com.furina.classtools.ui.screens.activity.ActivityScreen
 import com.furina.classtools.ui.screens.chsi.ChsiEntryScreen
+import com.furina.classtools.ui.screens.cloudspace.CloudSpaceScreen
 import com.furina.classtools.ui.screens.data.DataPrivacyScreen
 import com.furina.classtools.ui.screens.diag.DiagScreen
 import com.furina.classtools.ui.screens.draw.DrawScreen
@@ -699,6 +700,11 @@ fun MainNavHost(
                 "chsi" -> ChsiEntryScreen(
                     sid = session.sid,
                     onBack = { popTool(toolId) },
+                )
+
+                "file" -> CloudSpaceScreen(
+                    onBack = { popTool(toolId) },
+                    repository = container.cloudSpaceRepository,
                 )
 
                 "activity" -> ActivityScreen(

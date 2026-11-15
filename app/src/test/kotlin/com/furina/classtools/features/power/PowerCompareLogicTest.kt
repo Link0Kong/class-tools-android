@@ -1,5 +1,6 @@
 package com.furina.classtools.features.power
 
+import com.furina.classtools.data.power.PowerCompareRange
 import com.furina.classtools.data.power.PowerPoint
 import com.furina.classtools.data.power.PowerRange
 import java.time.LocalDateTime
@@ -93,8 +94,9 @@ class PowerCompareLogicTest {
     @Test
     fun `今日与昨日同期比较百分比`() {
         val (current, previous) = PowerCompareLogic.windows(PowerRange.H24, now, zone)
-        val history = decliningSeries(current.start, 21, dropPerHour = 1.0) +
-            decliningSeries(previous.start, 21, dropPerHour = 0.8, startQ = 90.0)
+        // 窗口取闭区间 [start,end]（与网页 cmpWindowPts 同口径）→ 末点不要落在 end 上，避免多算一次下降。
+        val history = decliningSeries(current.start, 20, dropPerHour = 1.0) +
+            decliningSeries(previous.start, 20, dropPerHour = 0.8, startQ = 90.0)
         val result = PowerCompareLogic.compare(PowerRange.H24, history, now, zone)
         assertTrue(result.available)
         assertEquals("较昨日同期", result.label)
@@ -150,6 +152,59 @@ class PowerCompareLogicTest {
         val all = PowerCompareLogic.compareAll(history, now, zone)
         assertEquals(3, all.size)
         assertTrue(all.containsKey(PowerRange.H24))
+    }
+
+    // ------------------------------------------------------------ 比较取数窗口（web cmpSource）
+
+    @Test
+    fun `对比取数窗口与网页 cmpSource 同口径`() {
+        val h24 = PowerCompareLogic.compareSource(PowerRange.H24, slowRoom = false)
+        assertEquals("7d", h24.key)
+        assertEquals(PowerRange.D7, h24.loadedRange)
+        assertNull(h24.hiddenRange)
+
+        val d7 = PowerCompareLogic.compareSource(PowerRange.D7, slowRoom = false)
+        assertEquals("14d", d7.key)
+        assertEquals(PowerCompareRange.D14, d7.hiddenRange)
+        assertNull(d7.loadedRange)
+        assertEquals(14L * 24 * 3600 * 1000, d7.windowMs)
+
+        // 慢频房（13/16 日更）7 天比较用已加载的 30d，与网页 isSlowRoom 分支一致
+        val d7Slow = PowerCompareLogic.compareSource(PowerRange.D7, slowRoom = true)
+        assertEquals("30d", d7Slow.key)
+        assertEquals(PowerRange.D30, d7Slow.loadedRange)
+        assertNull(d7Slow.hiddenRange)
+
+        val d30 = PowerCompareLogic.compareSource(PowerRange.D30, slowRoom = false)
+        assertEquals("70d", d30.key)
+        assertEquals(PowerCompareRange.D70, d30.hiddenRange)
+        assertEquals(70L * 24 * 3600 * 1000, d30.windowMs)
+    }
+
+    @Test
+    fun `异常扣减不计入比较用电量`() {
+        val (current, _) = PowerCompareLogic.windows(PowerRange.H24, now, zone)
+        val points = listOf(
+            PowerPoint(100.0, current.start + 3_600_000L),
+            PowerPoint(99.5, current.start + 2 * 3_600_000L), // -0.5 正常
+            PowerPoint(99.0, current.start + 3 * 3_600_000L), // -0.5 正常
+            PowerPoint(60.0, current.start + 4 * 3_600_000L), // -39 异常扣减（水费）
+            PowerPoint(59.5, current.start + 5 * 3_600_000L), // -0.5 正常
+        )
+        // 只算 3 次 -0.5；异常大跌不计（与网页 deriveRange 同口径）
+        assertEquals(1.5, PowerCompareLogic.usageIn(points, current)!!, 0.0001)
+    }
+
+    @Test
+    fun `当前周期用电过小时不可比较`() {
+        val (current, previous) = PowerCompareLogic.windows(PowerRange.H24, now, zone)
+        // 今日覆盖足够但几乎无下降（≈0.004 度 < 0.01 门槛）
+        val flat = (0..20).map { h -> PowerPoint(50.0 - h * 0.0002, current.start + h * 3_600_000L) }
+        val prev = decliningSeries(previous.start, 21, dropPerHour = 1.0, startQ = 90.0)
+        val result = PowerCompareLogic.compare(PowerRange.H24, flat + prev, now, zone)
+        assertFalse(result.available)
+        assertEquals("当前周期无有效用电数据", result.reason)
+        assertNull(result.badgeText)
     }
 
     // ------------------------------------------------------------ 13/16 隐藏 24h

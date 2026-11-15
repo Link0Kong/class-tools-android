@@ -171,12 +171,40 @@ data class SlowStats(
     val lastRecharge: RechargePoint? = null,
 )
 
-/** 趋势折线点（x/y ∈ [0,1]；y=0 顶部、1 底部，与 web 一致）。 */
+/**
+ * 趋势折线点（x/y ∈ [0,1]；y=0 顶部、1 底部，与 web 一致）。
+ *
+ * [y] 由**绘图值**（重置/充值后为折算剩余）计算；[q] 保留**真实剩余**（游标/图例展示用）。
+ */
 data class TrendPoint(
     val x: Float,
     val y: Float,
     val q: Double,
     val t: Long,
+)
+
+/** 趋势充值标记（竖虚线；[x] 为真实时间比例 0..1，[delta] 为该次充值跳变度数）。 */
+data class TrendRechargeMark(
+    val t: Long,
+    val x: Float,
+    val delta: Double,
+)
+
+/**
+ * 趋势「已折算充值」结果（对齐网页 `POWER.renderTrend` 2026-11-12 优化）：
+ *
+ * 区间内相邻采样 `Δq > [PowerStats.RECHARGE_JUMP]`（0.5 度）= 充值跳变；
+ * 绘图值改为 `真实剩余 - 累计充值`，使曲线保持连续下降；真实剩余仍保留在 [PowerPoint.q]。
+ */
+data class RechargeFold(
+    /** 与输入采样一一对应的绘图值（扣除累计充值后的折算剩余）。 */
+    val values: List<Double> = emptyList(),
+    /** 充值事件（每笔 +0.5 度以上跳变一个；用于画竖虚线）。 */
+    val marks: List<TrendRechargeMark> = emptyList(),
+    /** 区间内累计充值度数（>0 时标题/图例标「已折算充值」）。 */
+    val total: Double = 0.0,
+    /** 充值事件笔数。 */
+    val count: Int = 0,
 )
 
 /** 趋势折线数据（canvas 绘制用纯数据）。 */
@@ -185,12 +213,17 @@ data class TrendLine(
     val note: String = "",
     val count: Int = 0,
     val points: List<TrendPoint> = emptyList(),
+    /** y 轴上/中/下刻度值：**折算范围**（有充值时 ≠ 真实剩余范围）。 */
     val hi: Double? = null,
     val mid: Double? = null,
     val lo: Double? = null,
     val min: Double? = null,
     val max: Double? = null,
     val flat: Boolean = false,
+    /** 区间内累计充值（>0 → 标题「已折算充值」+ 图例「充值 +N 度（已折算）」）。 */
+    val foldedRecharge: Double = 0.0,
+    /** 充值位置（竖虚线）。 */
+    val rechargeMarks: List<TrendRechargeMark> = emptyList(),
 )
 
 /** 点击/拖动命中最近真实采样点。 */
@@ -267,5 +300,33 @@ sealed interface PowerHistoryResult {
     ) : PowerHistoryResult
 
     data class Failure(val message: String) : PowerHistoryResult
+}
+
+/**
+ * 比较取数的隐藏窗口（对齐网页 `PW_RANGE_MAP["14d"/"70d"]`，**不出现在区间按钮**）。
+ *
+ * - 7 天比较需要「上周同一时段」→ 14d；
+ * - 30 天比较需要「上月同期」→ 70d；
+ * - 24h 比较直接用已加载的 7d（无需额外窗口）。
+ */
+enum class PowerCompareRange(val key: String, val windowMs: Long) {
+    D14("14d", 14L * 24 * 3600 * 1000),
+    D70("70d", 70L * 24 * 3600 * 1000),
+    ;
+
+    companion object {
+        fun fromKey(key: String?): PowerCompareRange? = entries.firstOrNull { it.key == key?.trim() }
+    }
+}
+
+/** 隐藏窗口历史加载结果（比较取数专用；不参与区间档位/趋势渲染）。 */
+sealed interface PowerHistoryWindowResult {
+    data class Success(
+        val points: List<PowerPoint>,
+        val range: PowerCompareRange,
+        val fromCache: Boolean,
+    ) : PowerHistoryWindowResult
+
+    data class Failure(val message: String) : PowerHistoryWindowResult
 }
 

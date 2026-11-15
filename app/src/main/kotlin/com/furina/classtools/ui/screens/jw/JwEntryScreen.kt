@@ -55,6 +55,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.furina.classtools.data.jw.JwCardsRepository
 import com.furina.classtools.data.jw.JwCredentialStore
 import com.furina.classtools.features.jw.JwLoginLogic
+import com.furina.classtools.features.jw.JwNetworkDetector
+import com.furina.classtools.features.jw.JwWebVpn
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import kotlinx.coroutines.delay
@@ -68,6 +70,12 @@ private enum class JwMode {
     WEB,
 }
 
+/** WebVPN 门户页自动找教务资源的最多尝试次数（失败回退用户手动点）。 */
+private const val MAX_PORTAL_JUMP_ATTEMPTS: Int = 2
+
+/** WebVPN 门户跳转延迟（等待资源列表渲染）。 */
+private const val PORTAL_JUMP_DELAY_MS: Long = 900L
+
 /**
  * 教务工具页 v3（规格 `_audit/jw_entry_20261113/JW_CARDS_V1_SPEC.md`，2026-11-14 用户新需求）。
  *
@@ -76,6 +84,11 @@ private enum class JwMode {
  * - 登录沿用 v4.46.1：WebView 打开 `sso.jsp` → authserver 自动填充账号密码并提交（验证码/失败回退人工）；
  *   登录成功后从 `CookieManager` 取同域 cookie，由 [JwCardsRepository] 原生 GET 官方 JSON 接口；
  * - 点任意卡片 = App 内置 WebView 全屏打开官方页面，返回回卡片页（写操作只在官方页面内完成）；
+ * - **校外 / 非校园网（2026-11-15 新增）**：进入时短超时探测 `210.34.74.77:80`；不可直连则自动打开
+ *   学校 WebVPN 登录页 `https://webvpn.fjtcm.edu.cn:4433/login`，用本机 Keystore 保存的教务账号密码
+ *   自动填充官方登录页（失败/二次验证/滑块验证码 → 回退人工）；登录成功后在门户页自动找「本科教务」
+ *   资源进入 WebVPN 包装后的教务地址（找不到则提示用户手动点）；顶栏/横幅提供「直接打开教务 / 走 WebVPN」
+ *   手动入口。WebVPN 模式下官方 JSON 卡片接口不可直连，卡片区提示打开官方页面查看；
  * - cookie/密码只在调用瞬间使用，不落盘、不打日志、不上传；卡片数据只内存展示；
  * - 会话失效（接口返回 HTML/登录页）→ 自动重登 1 次，仍失败显示「登录失效，请重试」。
  *
@@ -118,8 +131,35 @@ fun JwEntryScreen(
                 state.pageUrl = current
                 when (JwLoginLogic.pageKind(current)) {
                     // 统一身份认证登录页：触发自动填充/提交（卡片页/官方页内会话过期也适用）。
+                    // 校外经 WebVPN 包装后的 authserver 登录页 host 变为 webvpn 域，但 DOM 相同，
+                    // 同样走这条分支（JwLoginLogic.isAuthServerLoginUrl 已兼容）。
                     JwLoginLogic.PageKind.AUTH_LOGIN -> state.authPageSeq.value += 1
-                    // 回到 210.34.74.77 = 已登录进入教务系统。
+                    // 学校 WebVPN 登录页：校外入口，自动填充统一身份认证账号密码。
+                    JwLoginLogic.PageKind.WEBVPN_LOGIN -> state.webVpnLoginSeq.value += 1
+                    // WebVPN 登录成功后的门户页：自动找「本科教务」资源并进入。
+                    JwLoginLogic.PageKind.WEBVPN_PORTAL -> {
+                        state.webVpnLoggedIn = true
+                        state.manualRequired.value = false
+                        state.statusText.value = JwLoginLogic.MSG_WEBVPN_LOGGED_IN
+                        if (state.portalJumpAttempts < MAX_PORTAL_JUMP_ATTEMPTS) {
+                            state.portalJumpAttempts += 1
+                            state.portalJumpSeq.value += 1
+                        } else {
+                            state.manualRequired.value = true
+                            state.statusText.value = JwLoginLogic.MSG_WEBVPN_CLICK_MANUAL
+                        }
+                    }
+                    // 已通过 WebVPN 进入包装后的教务业务页：全屏展示官方页面。
+                    JwLoginLogic.PageKind.WEBVPN_ENTERED -> {
+                        state.cookie = null
+                        state.statusText.value = null
+                        state.manualRequired.value = false
+                        state.injectAttempts = 0
+                        state.webVpnEntered = true
+                        state.webTitle.value = "教务（WebVPN）"
+                        if (state.mode.value == JwMode.LOGIN) state.mode.value = JwMode.WEB
+                    }
+                    // 回到 210.34.74.77 = 已登录进入教务系统（校园网直连）。
                     JwLoginLogic.PageKind.JW_ENTERED -> {
                         state.cookie = CookieManager.getInstance()
                             .getCookie(JwCardCatalog.BASE_URL)
@@ -187,8 +227,30 @@ fun JwEntryScreen(
         }
     }
 
+    /**
+     * 进入时探测网络：先短超时直连 `210.34.74.77:80`；
+     * 不可直连（校外）→ 自动打开学校 WebVPN 登录页（`webvpn.fjtcm.edu.cn:4433/login`），
+     * 可直连 → 走原直进流程（sso.jsp → authserver 自动填充）。
+     */
     LaunchedEffect(Unit) {
-        webView.loadUrl(JwLoginLogic.ENTRY_URL)
+        state.probing.value = true
+        state.statusText.value = JwLoginLogic.MSG_NETWORK_PROBING
+        val direct = JwNetworkDetector.directReachable()
+        state.directReachable.value = direct
+        state.probing.value = false
+        val route = JwWebVpn.routeFor(direct)
+        state.route.value = route
+        if (route == JwWebVpn.Route.WEBVPN) {
+            state.statusText.value = JwLoginLogic.MSG_DIRECT_UNAVAILABLE
+            webView.loadUrl(JwWebVpn.LOGIN_URL)
+        } else {
+            state.statusText.value = if (state.password.value.isNullOrEmpty()) {
+                null
+            } else {
+                JwLoginLogic.MSG_AUTO_LOGIN
+            }
+            webView.loadUrl(JwLoginLogic.ENTRY_URL)
+        }
     }
 
     // 自动填充 + 提交 + 复核（每次 authserver 登录页加载完成触发一次；失败回退人工、最多 MAX_INJECT_ATTEMPTS 次）。
@@ -231,10 +293,87 @@ fun JwEntryScreen(
         }
     }
 
+    // WebVPN 登录页自动填充 + 提交 + 复核（复用本机 Keystore 的教务账号密码，只输入官方页面）。
+    val webVpnLoginSeq = state.webVpnLoginSeq.value
+    LaunchedEffect(webVpnLoginSeq, injectionPassword) {
+        val password = injectionPassword
+        if (webVpnLoginSeq <= 0) return@LaunchedEffect
+        if (state.route.value != JwWebVpn.Route.WEBVPN || state.webVpnEntered) return@LaunchedEffect
+        if (password.isNullOrEmpty()) {
+            // 没有本机密码：不猜、不预填，直接回退手动登录。
+            state.manualRequired.value = true
+            state.statusText.value = JwLoginLogic.MSG_WEBVPN_NEED_MANUAL
+            return@LaunchedEffect
+        }
+        if (state.webVpnInjectAttempts >= JwLoginLogic.MAX_INJECT_ATTEMPTS) {
+            state.manualRequired.value = true
+            state.statusText.value = JwLoginLogic.MSG_WEBVPN_NEED_MANUAL
+            return@LaunchedEffect
+        }
+        if (state.manualRequired.value) return@LaunchedEffect
+        state.webVpnInjectAttempts += 1
+        state.statusText.value = JwLoginLogic.MSG_WEBVPN_AUTO_LOGIN
+        delay(JwLoginLogic.INJECT_DELAY_MS)
+        if (!JwWebVpn.isWebVpnLoginUrl(state.pageUrl)) return@LaunchedEffect
+        val fillResult = runCatching {
+            webView.evaluateJavascriptAwait(JwWebVpn.buildFillAndSubmitScript(sid, password))
+        }.getOrNull()
+        val token = JwLoginLogic.parseJsStringResult(fillResult)
+        if (JwWebVpn.loginOutcomeOf(token) != JwWebVpn.LoginOutcome.SUBMITTED) {
+            state.manualRequired.value = true
+            state.statusText.value = JwLoginLogic.MSG_WEBVPN_NEED_MANUAL
+            return@LaunchedEffect
+        }
+        delay(JwLoginLogic.VERIFY_DELAY_MS)
+        if (!JwWebVpn.isWebVpnLoginUrl(state.pageUrl)) return@LaunchedEffect
+        val checkResult = runCatching {
+            webView.evaluateJavascriptAwait(JwWebVpn.buildResultCheckScript())
+        }.getOrNull()
+        when (JwWebVpn.verifyOutcomeOf(JwLoginLogic.parseJsStringResult(checkResult))) {
+            JwWebVpn.VerifyOutcome.TWO_STEP -> {
+                state.manualRequired.value = true
+                state.statusText.value = JwLoginLogic.MSG_WEBVPN_TWO_STEP
+            }
+            JwWebVpn.VerifyOutcome.ERROR -> {
+                state.manualRequired.value = true
+                state.statusText.value = JwLoginLogic.MSG_WEBVPN_NEED_MANUAL
+            }
+            JwWebVpn.VerifyOutcome.LOGGED_IN, JwWebVpn.VerifyOutcome.WAIT -> Unit
+        }
+    }
+
+    // WebVPN 登录成功后：在门户页自动找「本科教务」资源并进入（找不到提示手动点）。
+    val portalJumpSeq = state.portalJumpSeq.value
+    LaunchedEffect(portalJumpSeq) {
+        if (portalJumpSeq <= 0) return@LaunchedEffect
+        delay(PORTAL_JUMP_DELAY_MS)
+        if (state.route.value != JwWebVpn.Route.WEBVPN) return@LaunchedEffect
+        if (!JwWebVpn.isWebVpnPortalUrl(state.pageUrl)) return@LaunchedEffect
+        val result = runCatching {
+            webView.evaluateJavascriptAwait(JwWebVpn.buildPortalJumpScript())
+        }.getOrNull()
+        when (JwWebVpn.portalJumpOutcomeOf(JwLoginLogic.parseJsStringResult(result))) {
+            JwWebVpn.PortalJumpOutcome.CLICKED -> {
+                state.statusText.value = JwLoginLogic.MSG_WEBVPN_LOGGED_IN
+            }
+            JwWebVpn.PortalJumpOutcome.NEED_MANUAL -> {
+                state.manualRequired.value = true
+                state.statusText.value = JwLoginLogic.MSG_WEBVPN_CLICK_MANUAL
+            }
+        }
+    }
+
     // 拉取 4 个官方接口数据（登录成功后 / 刷新 / 单卡重试）。
     val refreshSeq = state.refreshSeq.value
     LaunchedEffect(refreshSeq) {
         if (refreshSeq <= 0) return@LaunchedEffect
+        // 校外 WebVPN 模式：官方 JSON 接口只认直连校园网，卡片数据不可用，提示打开官方页面。
+        if (state.route.value == JwWebVpn.Route.WEBVPN) {
+            state.cardsLoading.value = false
+            state.cardsError.value = JwLoginLogic.MSG_WEBVPN_CARDS_UNAVAILABLE
+            state.mode.value = JwMode.CARDS
+            return@LaunchedEffect
+        }
         state.cardsLoading.value = true
         state.cardsError.value = null
         val cookie = CookieManager.getInstance().getCookie(JwCardCatalog.BASE_URL)
@@ -288,6 +427,46 @@ fun JwEntryScreen(
         state.mode.value = JwMode.LOGIN
         // 登录页若已经加载完成（不再触发 onPageFinished），手动补一次注入触发。
         if (JwLoginLogic.isAuthServerLoginUrl(state.pageUrl)) state.authPageSeq.value += 1
+        // 校外 WebVPN 登录页已加载时同样补一次自动填充。
+        if (JwWebVpn.isWebVpnLoginUrl(state.pageUrl)) {
+            state.webVpnInjectAttempts = 0
+            state.webVpnLoginSeq.value += 1
+        }
+    }
+
+    /** 手动入口：忽略探测结果，直接尝试校园网直连教务。 */
+    fun openDirect() {
+        state.route.value = JwWebVpn.Route.DIRECT
+        state.userOverride = JwWebVpn.Route.DIRECT
+        state.webVpnLoggedIn = false
+        state.webVpnEntered = false
+        state.manualRequired.value = false
+        state.injectAttempts = 0
+        state.statusText.value = if (state.password.value.isNullOrEmpty()) {
+            null
+        } else {
+            JwLoginLogic.MSG_AUTO_LOGIN
+        }
+        state.mode.value = JwMode.LOGIN
+        state.loading.value = true
+        webView.loadUrl(JwLoginLogic.ENTRY_URL)
+    }
+
+    /** 手动入口：忽略探测结果，先登录学校 WebVPN（校外可用）。 */
+    fun openWebVpn() {
+        state.route.value = JwWebVpn.Route.WEBVPN
+        state.userOverride = JwWebVpn.Route.WEBVPN
+        state.webVpnLoggedIn = false
+        state.webVpnEntered = false
+        state.webVpnInjectAttempts = 0
+        state.portalJumpAttempts = 0
+        state.webVpnLoginSeq.value = 0
+        state.portalJumpSeq.value = 0
+        state.manualRequired.value = false
+        state.statusText.value = JwLoginLogic.MSG_WEBVPN_OPENING
+        state.mode.value = JwMode.LOGIN
+        state.loading.value = true
+        webView.loadUrl(JwWebVpn.LOGIN_URL)
     }
 
     fun openOfficialPage(url: String, title: String) {
@@ -312,6 +491,13 @@ fun JwEntryScreen(
         state.cardsLoading.value = false
         state.lastUpdated.value = null
         state.mode.value = JwMode.LOGIN
+        // 清登录同时重置 WebVPN 会话状态（Cookie 统一清除），入口按当前网络探测结果决定。
+        state.webVpnLoggedIn = false
+        state.webVpnEntered = false
+        state.webVpnInjectAttempts = 0
+        state.portalJumpAttempts = 0
+        state.webVpnLoginSeq.value = 0
+        state.portalJumpSeq.value = 0
         runCatching { CookieManager.getInstance().removeAllCookies(null) }
         runCatching { CookieManager.getInstance().flush() }
         runCatching { WebStorage.getInstance().deleteAllData() }
@@ -320,7 +506,9 @@ fun JwEntryScreen(
             webView.clearHistory()
             webView.clearFormData()
         }
-        webView.loadUrl(JwLoginLogic.ENTRY_URL)
+        webView.loadUrl(
+            if (state.route.value == JwWebVpn.Route.WEBVPN) JwWebVpn.LOGIN_URL else JwLoginLogic.ENTRY_URL,
+        )
         state.promptVisible.value = true
         Toast.makeText(context, JwLoginLogic.MSG_CLEARED, Toast.LENGTH_SHORT).show()
     }
@@ -401,6 +589,25 @@ fun JwEntryScreen(
                         manual = state.manualRequired.value,
                     )
                 }
+                if (mode == JwMode.LOGIN) {
+                    // 手动入口（契约：允许用户手动「直接打开 / 走 WebVPN」）。
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextButton(
+                            onClick = { openDirect() },
+                            enabled = !state.probing.value,
+                        ) { Text(JwLoginLogic.BTN_DIRECT) }
+                        TextButton(
+                            onClick = { openWebVpn() },
+                            enabled = !state.probing.value,
+                        ) { Text(JwLoginLogic.BTN_WEBVPN) }
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -450,6 +657,37 @@ fun JwEntryScreen(
 
 /** 页面运行态（集中放 Compose State，供 WebViewClient 回调与数据拉取协程读写）。 */
 private class JwScreenState {
+    // ---- 网络探测 / WebVPN（2026-11-15 校外先登录 WebVPN）----
+    /** 探测进行中（按钮禁用，状态条显示探测文案）。 */
+    val probing = mutableStateOf(false)
+
+    /** 最近一次探测结果：能否直连 210.34.74.77。 */
+    val directReachable = mutableStateOf(false)
+
+    /** 当前实际使用的入口（直连 / WebVPN）。 */
+    val route = mutableStateOf(JwWebVpn.Route.DIRECT)
+
+    /** 用户手动选择的入口（null = 使用自动探测结果）。 */
+    var userOverride: JwWebVpn.Route? = null
+
+    /** 每次 WebVPN 登录页加载完成 +1，用于触发一次自动填充。 */
+    val webVpnLoginSeq = mutableStateOf(0)
+
+    /** 每次 WebVPN 门户页加载完成 +1，用于触发一次教务资源跳转。 */
+    val portalJumpSeq = mutableStateOf(0)
+
+    /** WebVPN 登录是否成功（已回到门户页）。 */
+    var webVpnLoggedIn: Boolean = false
+
+    /** 是否已通过 WebVPN 进入包装后的教务业务页。 */
+    var webVpnEntered: Boolean = false
+
+    /** 本次 WebVPN 登录页已尝试自动填充次数。 */
+    var webVpnInjectAttempts: Int = 0
+
+    /** 本次门户页已尝试自动跳转次数。 */
+    var portalJumpAttempts: Int = 0
+
     // ---- 登录（沿用 v4.46.1）----
     val promptVisible = mutableStateOf(false)
     val clearConfirmVisible = mutableStateOf(false)
@@ -621,7 +859,7 @@ private fun JwStatusBanner(text: String, manual: Boolean) {
                 )
                 if (manual) {
                     Text(
-                        text = "校外打不开可先连学校 VPN",
+                        text = "可点「走 WebVPN」通过学校 WebVPN 登录（校外可用）",
                         style = MaterialTheme.typography.labelSmall,
                         color = content.copy(alpha = 0.82f),
                     )

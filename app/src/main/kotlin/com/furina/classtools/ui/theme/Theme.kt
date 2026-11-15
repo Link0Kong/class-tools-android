@@ -204,7 +204,9 @@ private fun brandedDynamicScheme(context: android.content.Context, dark: Boolean
 /**
  * 全局主题。
  *
- * @param darkTheme 是否深色（默认跟随系统）。
+ * @param darkTheme 是否深色（默认跟随系统）。调用方按「外观模式」用
+ *   [AppearanceMode.resolveDark] 解析后传入即可强制浅色/深色（我的 → 外观），
+ *   传 `isSystemInDarkTheme()` 则跟随系统。
  * @param dynamicColor 是否跟随系统壁纸取色（Material You）。默认关闭以保持品牌识别；
  *   Android 12+ 开启后为「混合动态色」（品牌主色保留，surface 跟随壁纸）。
  * @param spacing 语义间距（默认 CtSpacing；大屏可由调用方覆盖）。
@@ -255,8 +257,28 @@ fun ClassToolsTheme(
     )
 }
 
+/**
+ * 按「外观模式」强制浅/深（跟随系统时取 [isSystemInDarkTheme]）：我的 → 外观三选一直接传入。
+ *
+ * 与 [ClassToolsTheme] 的 `darkTheme` 重载等价，便于页面/预览少写解析代码。
+ */
+@Composable
+fun ClassToolsTheme(
+    appearance: AppearanceMode,
+    dynamicColor: Boolean = false,
+    spacing: CtSpacing = CtSpacing(),
+    content: @Composable () -> Unit,
+) {
+    ClassToolsTheme(
+        darkTheme = appearance.resolveDark(isSystemInDarkTheme()),
+        dynamicColor = dynamicColor,
+        spacing = spacing,
+        content = content,
+    )
+}
+
 /** 从 Compose Context 向上找 Activity（系统栏外观设置用）。 */
-private tailrec fun Context.findActivity(): Activity? = when (this) {
+internal tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null

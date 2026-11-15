@@ -37,10 +37,11 @@ import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.rememberReduceMotion
 
 /**
- * 「全部工具」卡片 v6：与微信小程序 `pages/all` 的 `.tool-cell__in` 同尺寸/同结构
- * （横向：图标 chip + 名称/副标题两行，min-height ≈ 72dp，2 列 48.6% 宽）。
+ * 「全部工具」卡片 v7：横向结构（图标 chip + 名称/副标题）不变，副标题最多 **2 行**，
+ * 网格卡高由调用方的 `itemHeight`（96dp）固定；2 列 48.6% 宽。
  *
- * 只做视觉尺寸对齐；点击/长按拖动/转场锚点/读屏语义由调用方保持原逻辑。
+ * task-58：副标单行会被截断成「公平随机 · 可导…」，改为 2 行后常见描述可完整显示
+ * （超长仍 ellipsis）；按压缩放（0.96）/16dp 圆角/转场锚点/读屏语义保持不变。
  */
 @Composable
 internal fun AllToolCard(
@@ -68,7 +69,8 @@ internal fun AllToolCard(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 72.dp)
+            // 网格由调用方以固定 96dp 测量；此处 min 只兜底预览/独立使用，避免两行副标被压扁。
+            .heightIn(min = 88.dp)
             .then(transitionSource)
             .graphicsLayer {
                 scaleX = scale
@@ -118,9 +120,13 @@ internal fun AllToolCard(
                 )
                 Text(
                     text = tool.subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    // task-58：常见描述（如「公平随机 · 可导出」）2 行内不折叠；超长仍省略。
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

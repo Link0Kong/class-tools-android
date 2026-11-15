@@ -9,14 +9,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.data.push.OppPushClick
 import com.furina.classtools.data.reminder.ReminderIntentFactory
+import com.furina.classtools.data.settings.LocalAppSettingsStore
 import com.furina.classtools.ui.ClassToolsRoot
 import com.furina.classtools.ui.platform.VolumeKeyBridge
 import com.furina.classtools.ui.theme.ClassToolsTheme
+import com.furina.classtools.ui.theme.CtImmersiveStatusBar
 
 class MainActivity : ComponentActivity() {
 
@@ -49,19 +54,34 @@ class MainActivity : ComponentActivity() {
         pendingNoticeId.value = noticeIdFrom(intent)
         val container = (application as ClassToolsApp).container
         setContent {
-            // 外观偏好存本机（不进 userdata）：壁纸取色开关实时生效。
+            // 外观偏好存本机（不进 userdata）：壁纸取色 / 外观模式 / 隐藏状态栏均实时生效。
             val dynamicColor by container.appSettings.dynamicColor
                 .collectAsStateWithLifecycle(initialValue = false)
+            // 首帧用 SharedPreferences 镜像同步初始化，避免冷启动先按系统/默认渲染一帧再跳变。
+            val initialAppearanceMode = remember { container.appSettings.startupAppearanceMode() }
+            val initialHideStatusBar = remember { container.appSettings.startupHideStatusBar() }
+            val appearanceMode by container.appSettings.appearanceMode
+                .collectAsStateWithLifecycle(initialValue = initialAppearanceMode)
+            val hideStatusBar by container.appSettings.hideStatusBar
+                .collectAsStateWithLifecycle(initialValue = initialHideStatusBar)
+            // 外观模式：跟随系统 / 强制浅色 / 强制深色（我的 → 外观 三选一）。
+            val darkTheme = appearanceMode.resolveDark(isSystemInDarkTheme())
             val pendingTool by pendingToolId
             val pendingNotice by pendingNoticeId
-            ClassToolsTheme(dynamicColor = dynamicColor) {
-                ClassToolsRoot(
-                    container = container,
-                    pendingToolId = pendingTool,
-                    onPendingToolConsumed = { pendingToolId.value = null },
-                    pendingNoticeId = pendingNotice,
-                    onPendingNoticeConsumed = { pendingNoticeId.value = null },
-                )
+            ClassToolsTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
+                // 「我的 → 外观」直接读写本机设置（MainNavHost 之外的新设置项，不改导航层）。
+                CompositionLocalProvider(LocalAppSettingsStore provides container.appSettings) {
+                    // 全局隐藏系统状态栏（下滑临时显示）；关闭时恢复 statusBarsPadding 的常规行为。
+                    CtImmersiveStatusBar(enabled = hideStatusBar) {
+                        ClassToolsRoot(
+                            container = container,
+                            pendingToolId = pendingTool,
+                            onPendingToolConsumed = { pendingToolId.value = null },
+                            pendingNoticeId = pendingNotice,
+                            onPendingNoticeConsumed = { pendingNoticeId.value = null },
+                        )
+                    }
+                }
             }
         }
     }
