@@ -220,8 +220,100 @@ class ChsiNavigationLogicTest {
     fun `登录页兜底按钮只在 LOGIN 模式且空闲时展示`() {
         assertTrue(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.LOGIN, refreshing = false))
         assertFalse(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.LOGIN, refreshing = true))
-        assertFalse(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.CARDS, refreshing = false))
+        // 2026-11-16：卡片页未登录且空闲时也显示（用户确认已登录可直接进入）。
+        assertTrue(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.CARDS, refreshing = false))
+        assertFalse(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.CARDS, refreshing = true))
+        assertFalse(
+            ChsiNavigationLogic.showEnterCardsFallback(
+                ChsiNavigationLogic.Mode.CARDS,
+                refreshing = false,
+                loggedIn = true,
+            ),
+        )
         assertEquals("已登录，进入卡片页", ChsiTexts.BTN_ENTER_CARDS)
         assertTrue(ChsiTexts.HINT_ENTER_CARDS_FALLBACK.contains("卡片页"))
+    }
+
+    // ---- 2026-11-16：登录态延迟检测（延迟重试 + 数据信号 + Cookie 辅助）--------------
+
+    /** 合成夹具：档案页有数据信号（学籍/姓名/专业）但没有「退出/个人中心」。 */
+    private val dataSignalPayload = ChsiPagePayload(
+        url = archiveUrl,
+        title = "学信档案",
+        text = "学信档案\n姓名：测试同学\n学籍信息\n专业：中药学",
+    )
+
+    /** 合成夹具：文本够长但没有任何学信数据信号，也没有营销标记（如账号设置页）。 */
+    private val noSignalPayload = ChsiPagePayload(
+        url = archiveUrl,
+        title = "账号信息",
+        text = "账号信息页面\n请先完善个人资料后再查看相关内容\n当前页面没有可展示的档案数据",
+    )
+
+    @Test
+    fun `数据信号是宽松判定必要条件`() {
+        assertTrue(ChsiExtractLogic.hasDataSignals(dataSignalPayload))
+        assertFalse(ChsiExtractLogic.hasDataSignals(noSignalPayload))
+        assertTrue(ChsiExtractLogic.isLoginSuccessAfterLogin(dataSignalPayload, archiveUrl))
+        // 无数据信号、无 Cookie、无营销标记 → 不判定已登录（避免账号设置页误判）
+        assertFalse(ChsiExtractLogic.isLoginSuccessAfterLogin(noSignalPayload, archiveUrl))
+        // Cookie 辅助：session Cookie 存在时放宽
+        assertTrue(
+            ChsiExtractLogic.isLoginSuccessAfterLogin(
+                noSignalPayload,
+                archiveUrl,
+                archiveCookiePresent = true,
+            ),
+        )
+        // 营销页即使有 Cookie 也不判定
+        assertFalse(
+            ChsiExtractLogic.isLoginSuccessAfterLogin(
+                marketingPayload,
+                archiveUrl,
+                archiveCookiePresent = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `my chsi 会话 Cookie 启发式识别`() {
+        assertTrue(ChsiExtractLogic.hasArchiveSessionCookie("JSESSIONID=abcdef123456; other=1"))
+        assertTrue(ChsiExtractLogic.hasArchiveSessionCookie("CHSI_SESSION=zzzzzzzzzzzz"))
+        assertTrue(ChsiExtractLogic.hasArchiveSessionCookie("auth_token=0123456789abcdef"))
+        // 短值 / 无关 cookie / 空 → false
+        assertFalse(ChsiExtractLogic.hasArchiveSessionCookie("JSESSIONID=abc"))
+        assertFalse(ChsiExtractLogic.hasArchiveSessionCookie("_ga=GA1.2.3.4; _gid=GA1.2.5.6"))
+        assertFalse(ChsiExtractLogic.hasArchiveSessionCookie(""))
+        assertFalse(ChsiExtractLogic.hasArchiveSessionCookie(null))
+    }
+
+    @Test
+    fun `提取延迟重试常量与重试次数`() {
+        assertEquals(3, ChsiNavigationLogic.EXTRACT_MAX_ATTEMPTS)
+        assertEquals(1200L, ChsiNavigationLogic.EXTRACT_RETRY_INTERVAL_MS)
+        assertEquals("https://my.chsi.com.cn", ChsiNavigationLogic.ARCHIVE_COOKIE_URL)
+        assertTrue(ChsiNavigationLogic.shouldRetryExtract(0))
+        assertTrue(ChsiNavigationLogic.shouldRetryExtract(1))
+        assertFalse(ChsiNavigationLogic.shouldRetryExtract(2))
+    }
+
+    @Test
+    fun `登录后 Cookie 辅助判定接入 loggedInAfterExtract`() {
+        assertTrue(
+            ChsiNavigationLogic.loggedInAfterExtract(
+                payload = noSignalPayload,
+                pageUrl = archiveUrl,
+                mode = ChsiNavigationLogic.Mode.LOGIN,
+                archiveCookiePresent = true,
+            ),
+        )
+        assertFalse(
+            ChsiNavigationLogic.loggedInAfterExtract(
+                payload = noSignalPayload,
+                pageUrl = archiveUrl,
+                mode = ChsiNavigationLogic.Mode.LOGIN,
+                archiveCookiePresent = false,
+            ),
+        )
     }
 }

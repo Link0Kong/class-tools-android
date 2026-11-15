@@ -222,6 +222,22 @@ class JwWebVpnTest {
         assertTrue(JwWebVpn.MSG_PORTAL_MANUAL.contains("手动"))
     }
 
+    @Test
+    fun `WebVPN 填写与提交拆成两步脚本`() {
+        val fill = JwWebVpn.buildFillScript("2024000001", "fake-pwd")
+        assertTrue(fill.contains("getElementById('user_name')"))
+        assertTrue(fill.contains("input[name=\\\"password\\\"]") || fill.contains("input[name=\"password\"]"))
+        assertTrue(fill.contains("'filled'"))
+        assertFalse("填写脚本不应提交", fill.contains("submit.click"))
+        assertEquals(JwWebVpn.FillOutcome.FILLED, JwWebVpn.fillOutcomeOf("filled"))
+        assertEquals(JwWebVpn.FillOutcome.NEED_MANUAL, JwWebVpn.fillOutcomeOf(null))
+
+        val submit = JwWebVpn.buildSubmitScript()
+        assertTrue(submit.contains("getElementById('login')"))
+        assertTrue(submit.contains("'submitted'"))
+        assertFalse(submit.contains("fake-pwd"))
+    }
+
     // ---- 文案 ---------------------------------------------------------------
 
     @Test

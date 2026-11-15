@@ -71,6 +71,7 @@ fun ChsiCardsContent(
     onOpenTool: (ChsiOfficialTool) -> Unit,
     onOpenArchive: () -> Unit,
     onLogout: () -> Unit,
+    onEnterCards: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -89,6 +90,36 @@ fun ChsiCardsContent(
                     onLogin = onLogin,
                     onRefresh = onRefresh,
                 )
+            }
+            // 2026-11-16 用户反馈「登录后仍提示未登录」：卡片页也提供显眼的兜底按钮，
+            // 用户确认已登录但自动判定失败时可直接进入卡片页（再触发一次提取）。
+            if (ChsiNavigationLogic.showEnterCardsFallback(
+                    mode = ChsiNavigationLogic.Mode.CARDS,
+                    refreshing = refreshing,
+                    loggedIn = loggedIn,
+                )
+            ) {
+                item(key = "enter-cards") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = ChsiTexts.HINT_ENTER_CARDS_FALLBACK,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            onClick = onEnterCards,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) {
+                            Text(ChsiTexts.BTN_ENTER_CARDS)
+                        }
+                    }
+                }
             }
             item(key = "data-header") { ChsiSectionHeader(ChsiTexts.SECTION_DATA) }
             items(

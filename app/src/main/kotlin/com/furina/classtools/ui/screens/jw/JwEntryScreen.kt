@@ -206,6 +206,14 @@ fun JwEntryScreen(
                         }
                     }
                 }
+                // 2026-11-16：自动登录进行中若落到非登录页（CAS 繁忙/错误页），触发一次只读繁忙检测；
+                // 识别到「服务器繁忙」立即停止自动重试，改提示手动/浏览器打开。
+                val status = state.statusText.value
+                if (status == JwLoginLogic.MSG_AUTO_LOGIN ||
+                    status == JwLoginLogic.MSG_WEBVPN_AUTO_LOGIN
+                ) {
+                    state.busyCheckSeq.value += 1
+                }
             }
 
             override fun onReceivedError(
@@ -226,6 +234,10 @@ fun JwEntryScreen(
             setBackgroundColor(android.graphics.Color.WHITE)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            // 2026-11-16：与微信内一致的环境（微信 UA）/第三方 Cookie/DOM storage/mixed content，
+            // 避免 CAS 因请求特征差异返回「服务器繁忙」。
+            settings.userAgentString = JwLoginLogic.WECHAT_UA
+            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.javaScriptCanOpenWindowsAutomatically = false
@@ -283,6 +295,15 @@ fun JwEntryScreen(
         }
     }
 
+    /**
+     * CAS/WebVPN 返回「服务器繁忙」：立即停止自动重试，提示改用手动/浏览器（不循环）。
+     */
+    fun onServerBusy() {
+        state.manualRequired.value = true
+        state.busyDetected.value = true
+        state.statusText.value = JwLoginLogic.MSG_SERVER_BUSY
+    }
+
     // 2026-11-15：模式切换（CARDS→LOGIN/WEB）后强制 WebView 重新测量。
     // WebView 现在始终保留在组合树（卡片页 1dp 隐藏），切换时 Compose 可能复用旧测量结果，
     // 这里 requestLayout 一次确保填满顶栏以下区域（修复「只显示顶部一小条」）。
@@ -311,19 +332,43 @@ fun JwEntryScreen(
         }
         state.injectAttempts += 1
         state.statusText.value = JwLoginLogic.MSG_AUTO_LOGIN
+        // 2026-11-16：放慢自动填充节奏（页面加载后 700ms 再填、提交前再停 300ms），
+        // 模拟人工操作，避免 CAS 风控返回「服务器繁忙」；自动只尝试 1 次。
         delay(JwLoginLogic.INJECT_DELAY_MS)
         if (!JwLoginLogic.isAuthServerLoginUrl(state.pageUrl)) return@LaunchedEffect
         val fillResult = runCatching {
-            webView.evaluateJavascriptAwait(JwLoginLogic.buildFillAndSubmitScript(sid, password))
+            webView.evaluateJavascriptAwait(JwLoginLogic.buildFillScript(sid, password))
         }.getOrNull()
-        val token = JwLoginLogic.parseJsStringResult(fillResult)
-        if (JwLoginLogic.loginOutcomeOf(token) != JwLoginLogic.LoginOutcome.SUBMITTED) {
+        if (JwLoginLogic.fillOutcomeOf(JwLoginLogic.parseJsStringResult(fillResult)) !=
+            JwLoginLogic.FillOutcome.FILLED
+        ) {
             state.manualRequired.value = true
             state.statusText.value = JwLoginLogic.MSG_NEED_MANUAL
             return@LaunchedEffect
         }
-        // 提交后复核：仍停在登录页且出现错误提示/验证码 → 回退人工。
+        delay(JwLoginLogic.PRE_SUBMIT_DELAY_MS)
+        if (!JwLoginLogic.isAuthServerLoginUrl(state.pageUrl)) return@LaunchedEffect
+        val submitResult = runCatching {
+            webView.evaluateJavascriptAwait(JwLoginLogic.buildSubmitScript())
+        }.getOrNull()
+        if (JwLoginLogic.loginOutcomeOf(JwLoginLogic.parseJsStringResult(submitResult)) !=
+            JwLoginLogic.LoginOutcome.SUBMITTED
+        ) {
+            state.manualRequired.value = true
+            state.statusText.value = JwLoginLogic.MSG_NEED_MANUAL
+            return@LaunchedEffect
+        }
+        // 提交后复核：先识别「服务器繁忙」（风控页可能已不是登录页 URL），命中即停止自动重试。
         delay(JwLoginLogic.VERIFY_DELAY_MS)
+        val busyResult = runCatching {
+            webView.evaluateJavascriptAwait(JwLoginLogic.buildBusyCheckScript())
+        }.getOrNull()
+        if (JwLoginLogic.busyOutcomeOf(JwLoginLogic.parseJsStringResult(busyResult)) ==
+            JwLoginLogic.BusyOutcome.BUSY
+        ) {
+            onServerBusy()
+            return@LaunchedEffect
+        }
         if (!JwLoginLogic.isAuthServerLoginUrl(state.pageUrl)) return@LaunchedEffect
         val checkResult = runCatching {
             webView.evaluateJavascriptAwait(JwLoginLogic.buildResultCheckScript())
@@ -357,18 +402,42 @@ fun JwEntryScreen(
         if (state.manualRequired.value) return@LaunchedEffect
         state.webVpnInjectAttempts += 1
         state.statusText.value = JwLoginLogic.MSG_WEBVPN_AUTO_LOGIN
+        // 2026-11-16：同样放慢节奏（700ms 后填、提交前 300ms），自动只尝试 1 次。
         delay(JwLoginLogic.INJECT_DELAY_MS)
         if (!JwWebVpn.isWebVpnLoginUrl(state.pageUrl)) return@LaunchedEffect
         val fillResult = runCatching {
-            webView.evaluateJavascriptAwait(JwWebVpn.buildFillAndSubmitScript(sid, password))
+            webView.evaluateJavascriptAwait(JwWebVpn.buildFillScript(sid, password))
         }.getOrNull()
-        val token = JwLoginLogic.parseJsStringResult(fillResult)
-        if (JwWebVpn.loginOutcomeOf(token) != JwWebVpn.LoginOutcome.SUBMITTED) {
+        if (JwWebVpn.fillOutcomeOf(JwLoginLogic.parseJsStringResult(fillResult)) !=
+            JwWebVpn.FillOutcome.FILLED
+        ) {
+            state.manualRequired.value = true
+            state.statusText.value = JwLoginLogic.MSG_WEBVPN_NEED_MANUAL
+            return@LaunchedEffect
+        }
+        delay(JwLoginLogic.PRE_SUBMIT_DELAY_MS)
+        if (!JwWebVpn.isWebVpnLoginUrl(state.pageUrl)) return@LaunchedEffect
+        val submitResult = runCatching {
+            webView.evaluateJavascriptAwait(JwWebVpn.buildSubmitScript())
+        }.getOrNull()
+        if (JwWebVpn.loginOutcomeOf(JwLoginLogic.parseJsStringResult(submitResult)) !=
+            JwWebVpn.LoginOutcome.SUBMITTED
+        ) {
             state.manualRequired.value = true
             state.statusText.value = JwLoginLogic.MSG_WEBVPN_NEED_MANUAL
             return@LaunchedEffect
         }
         delay(JwLoginLogic.VERIFY_DELAY_MS)
+        // 先识别「服务器繁忙」类错误（避免把风控页当普通失败后再次自动尝试）。
+        val busyResult = runCatching {
+            webView.evaluateJavascriptAwait(JwLoginLogic.buildBusyCheckScript())
+        }.getOrNull()
+        if (JwLoginLogic.busyOutcomeOf(JwLoginLogic.parseJsStringResult(busyResult)) ==
+            JwLoginLogic.BusyOutcome.BUSY
+        ) {
+            onServerBusy()
+            return@LaunchedEffect
+        }
         if (!JwWebVpn.isWebVpnLoginUrl(state.pageUrl)) return@LaunchedEffect
         val checkResult = runCatching {
             webView.evaluateJavascriptAwait(JwWebVpn.buildResultCheckScript())
@@ -463,6 +532,23 @@ fun JwEntryScreen(
         }
     }
 
+    // 2026-11-16：页面加载完成后若仍在自动登录流程，做一次只读「服务器繁忙」检测；
+    // 命中即停止自动重试（区分风控繁忙与验证码/密码错误，避免反复提交触发更严格风控）。
+    val busyCheckSeq = state.busyCheckSeq.value
+    LaunchedEffect(busyCheckSeq) {
+        if (busyCheckSeq <= 0) return@LaunchedEffect
+        if (state.manualRequired.value) return@LaunchedEffect
+        delay(200)
+        val raw = runCatching {
+            webView.evaluateJavascriptAwait(JwLoginLogic.buildBusyCheckScript())
+        }.getOrNull()
+        if (JwLoginLogic.busyOutcomeOf(JwLoginLogic.parseJsStringResult(raw)) ==
+            JwLoginLogic.BusyOutcome.BUSY
+        ) {
+            onServerBusy()
+        }
+    }
+
     // 拉取 4 个官方接口数据（登录成功后 / 刷新 / 单卡重试）。
     val refreshSeq = state.refreshSeq.value
     LaunchedEffect(refreshSeq) {
@@ -521,6 +607,7 @@ fun JwEntryScreen(
         state.password.value = rawPassword
         state.injectAttempts = 0
         state.manualRequired.value = false
+        state.busyDetected.value = false
         state.promptVisible.value = false
         state.statusText.value = JwLoginLogic.MSG_AUTO_LOGIN
         state.reloginAttempts = 0
@@ -541,6 +628,7 @@ fun JwEntryScreen(
         state.webVpnLoggedIn = false
         state.webVpnEntered = false
         state.manualRequired.value = false
+        state.busyDetected.value = false
         state.injectAttempts = 0
         state.statusText.value = if (state.password.value.isNullOrEmpty()) {
             null
@@ -565,6 +653,7 @@ fun JwEntryScreen(
         state.portalJumpSeq.value = 0
         state.webVpnProbeSeq.value = 0
         state.manualRequired.value = false
+        state.busyDetected.value = false
         state.statusText.value = JwLoginLogic.MSG_WEBVPN_OPENING
         state.mode.value = JwMode.LOGIN
         state.loading.value = true
@@ -574,6 +663,7 @@ fun JwEntryScreen(
     /** 手动入口：打开 WebVPN 门户（自动跳转失败时，让用户自己在门户里点「本科教务」）。 */
     fun openWebVpnPortal() {
         state.manualRequired.value = false
+        state.busyDetected.value = false
         state.webVpnJumpFailed = false
         state.statusText.value = JwWebVpn.MSG_PORTAL_MANUAL
         state.loading.value = true
@@ -587,11 +677,19 @@ fun JwEntryScreen(
         webView.loadUrl(url)
     }
 
+    /** 用系统浏览器打开当前登录/官方页面（CAS 繁忙时的降级入口，可用微信内置浏览器）。 */
+    fun openInSystemBrowser() {
+        val url = state.pageUrl.takeIf { JwLoginLogic.isHttpUrl(it) }
+            ?: if (state.route.value == JwWebVpn.Route.WEBVPN) JwWebVpn.LOGIN_URL else JwLoginLogic.ENTRY_URL
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    }
+
     fun clearLogin() {
         runCatching { store.clear() }
         state.password.value = null
         state.injectAttempts = 0
         state.manualRequired.value = false
+        state.busyDetected.value = false
         state.statusText.value = null
         state.clearConfirmVisible.value = false
         state.reloginAttempts = 0
@@ -672,6 +770,12 @@ fun JwEntryScreen(
                             onClick = { state.refreshSeq.value += 1 },
                             enabled = !state.cardsLoading.value,
                         ) { Text(JwCardTexts.BTN_REFRESH) }
+                    }
+                    // 2026-11-16：CAS 繁忙/自动登录失败时的浏览器降级入口（LOGIN/WEB 模式可见）。
+                    if (mode != JwMode.CARDS) {
+                        TextButton(onClick = { openInSystemBrowser() }) {
+                            Text(JwLoginLogic.BTN_OPEN_BROWSER)
+                        }
                     }
                     // DEBUG：设备上验证 WEB 模式 WebView 是否填满顶栏以下并滚动（release 不显示）。
                     if (BuildConfig.DEBUG && mode == JwMode.WEB) {
@@ -832,6 +936,12 @@ private class JwScreenState {
 
     /** 本次门户页已尝试自动跳转次数。 */
     var portalJumpAttempts: Int = 0
+
+    /** 2026-11-16：页面加载完成后 +1，触发一次只读「服务器繁忙」检测。 */
+    val busyCheckSeq = mutableStateOf(0)
+
+    /** 是否已检测到 CAS/网关「服务器繁忙」（用于停止自动重试、提示手动/浏览器打开）。 */
+    val busyDetected = mutableStateOf(false)
 
     // ---- 登录（沿用 v4.46.1）----
     val promptVisible = mutableStateOf(false)
@@ -1004,7 +1114,7 @@ private fun JwStatusBanner(text: String, manual: Boolean) {
                 )
                 if (manual) {
                     Text(
-                        text = "可点「走 WebVPN」通过学校 WebVPN 登录（校外可用）",
+                        text = "可点「走 WebVPN」/「浏览器」手动完成（校外可用）",
                         style = MaterialTheme.typography.labelSmall,
                         color = content.copy(alpha = 0.82f),
                     )

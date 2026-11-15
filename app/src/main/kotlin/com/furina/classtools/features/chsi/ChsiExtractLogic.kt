@@ -335,6 +335,19 @@ object ChsiExtractLogic {
     /** 登录后宽松判定所要求的最少页面文本长度（过滤空白/错误页）。 */
     const val MIN_LOGGED_IN_TEXT_LENGTH: Int = 20
 
+    /** 学信档案数据信号（姓名/证件/学籍/学历/学位/报告/院校/专业）——放宽登录态判定用。 */
+    private val DATA_SIGNAL_MARKERS: List<String> = listOf(
+        "姓名", "证件", "身份证", "学籍", "学历", "学位", "报告", "院校", "专业", "入学", "毕业",
+    )
+
+    /** 页面是否包含学信档案「数据信号」（放宽登录态判定的必要条件之一）。 */
+    fun hasDataSignals(payload: ChsiPagePayload?): Boolean {
+        if (payload == null) return false
+        val haystack = haystackOf(payload)
+        if (haystack.isBlank()) return false
+        return DATA_SIGNAL_MARKERS.any { haystack.contains(it) }
+    }
+
     /**
      * 页面是否包含「未登录营销」强信号（注册学信网账号 / 立即登录 / 账号登录 …）。
      * 供登录完成后的宽松判定与单测复用。
@@ -346,23 +359,52 @@ object ChsiExtractLogic {
     }
 
     /**
-     * **LOGIN 模式登录完成后的宽松判定**（2026-11-15 用户反馈：登录后一直停在账号信息界面）。
+     * my.chsi 域 Cookie 是否像「已登录会话」（**辅助信号**，不作为唯一依据）。
      *
-     * 真实登录后的 my.chsi 档案页并不一定包含「退出登录 / 个人中心」等强信号（页面改版/移动端精简版），
-     * 旧实现 [isLoggedInPayload] 因此判定失败 → 一直不切卡片。
-     * 规则（仅在用户主动登录流程里使用，后台自动恢复仍用强信号）：
+     * 学信网 Cookie 名未公开/会变化，这里只做保守启发：Cookie 中存在名称含
+     * session/jspsession/chsi/token/user/auth 且值长度 ≥8 的键值对。
+     * 仅用于「页面有档案域数据但缺少强信号」时放宽判定；营销页仍会被 [hasLoggedOutMarkers] 排除。
+     */
+    fun hasArchiveSessionCookie(cookie: String?): Boolean {
+        val text = cookie?.trim().orEmpty()
+        if (text.isEmpty()) return false
+        return text.split(';').any { part ->
+            val idx = part.indexOf('=')
+            if (idx <= 0) return@any false
+            val name = part.substring(0, idx).trim().lowercase()
+            val value = part.substring(idx + 1).trim()
+            if (name.isEmpty() || value.length < 8) return@any false
+            name.contains("session") || name.contains("jsessionid") ||
+                name.contains("chsi") || name.contains("token") ||
+                name.contains("user") || name.contains("auth")
+        }
+    }
+
+    /**
+     * **LOGIN 模式登录完成后的宽松判定**（2026-11-16 用户反馈：v4.56.1 登录后仍提示未登录）。
+     *
+     * 真实登录后的 my.chsi 档案页不一定包含「退出登录 / 个人中心」等强信号（页面改版/移动端精简版），
+     * 且页面可能延迟渲染（登录跳转后首帧仍是空壳/加载中）。规则：
      * 1. 当前 URL 已回到 my.chsi 档案域；
      * 2. 提取到的页面数据非空且文本长度 ≥ [MIN_LOGGED_IN_TEXT_LENGTH]；
-     * 3. 不含「注册学信网账号 / 登录学信档案 / 立即登录 / 账号登录」等未登录营销标记。
+     * 3. 不含「注册学信网账号 / 登录学信档案 / 立即登录 / 账号登录」等未登录营销标记；
+     * 4. **含任一数据信号**（姓名/证件/学籍/学历/学位/报告/院校/专业）；
+     *    或页面已存在 my.chsi 会话 Cookie（[archiveCookiePresent] 辅助信号）时，文本非营销即可。
      * 满足即视为登录成功（数据卡后续再用页面内容尽力提取，取不到走空态兜底）。
      */
-    fun isLoginSuccessAfterLogin(payload: ChsiPagePayload?, pageUrl: String?): Boolean {
+    fun isLoginSuccessAfterLogin(
+        payload: ChsiPagePayload?,
+        pageUrl: String?,
+        archiveCookiePresent: Boolean = false,
+    ): Boolean {
         if (!isLoggedInUrl(pageUrl)) return false
         if (payload == null) return false
         val text = payload.text.trim()
         if (text.length < MIN_LOGGED_IN_TEXT_LENGTH) return false
         if (hasLoggedOutMarkers(payload)) return false
-        return true
+        if (hasDataSignals(payload)) return true
+        // Cookie 辅助：确有 my.chsi 会话 Cookie 且页面非营销页时也视为已登录（数据卡走空态兜底）。
+        return archiveCookiePresent
     }
 
     private fun haystackOf(payload: ChsiPagePayload?): String {

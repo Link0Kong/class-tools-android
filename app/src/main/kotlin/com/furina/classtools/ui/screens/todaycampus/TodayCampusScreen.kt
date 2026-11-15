@@ -52,6 +52,7 @@ import com.furina.classtools.data.todaycampus.TodayCampusLoginLogic
 import com.furina.classtools.data.todaycampus.TodayCampusLoginLogic.FillOutcome
 import com.furina.classtools.data.todaycampus.TodayCampusLoginLogic.PageKind
 import com.furina.classtools.data.todaycampus.TodayCampusLoginLogic.VerifyOutcome
+import com.furina.classtools.features.todaycampus.TodayCampusWebLogic
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.theme.CtTokens
@@ -135,8 +136,25 @@ fun TodayCampusScreen(
                         state.injectAttempts = 0
                         state.error.value = null
                         state.status.value = TodayCampusLoginLogic.MSG_ENTERED
+                        // 2026-11-16 用户反馈：CAS 登录后停在 /login2 空壳白屏 → 显式加载门户首页
+                        // （同一 WebView，登录 Cookie 保留）。
+                        if (TodayCampusWebLogic.shouldLoadPortalHomeAfterLogin(
+                                url = current,
+                                alreadyLoadedHome = state.portalHomeLoaded,
+                            )
+                        ) {
+                            state.portalHomeLoaded = true
+                            state.status.value = TodayCampusWebLogic.MSG_PORTAL_HOME_LOADING
+                            state.loading.value = true
+                            view.loadUrl(TodayCampusWebLogic.PORTAL_HOME_URL)
+                            return
+                        }
                     }
                     PageKind.OTHER -> Unit
+                }
+                // 白屏检测（onPageFinished 500ms 后看 body.innerText 长度）。
+                if (TodayCampusLoginLogic.isHttpUrl(current)) {
+                    state.blankCheckSeq.value += 1
                 }
             }
 
@@ -179,6 +197,10 @@ fun TodayCampusScreen(
             settings.builtInZoomControls = true
             settings.displayZoomControls = false
             settings.saveFormData = false
+            // 2026-11-16：融合门户/统一认证可能混用 https/http 资源，允许兼容模式加载；
+            // DOM storage/第三方 Cookie 已在下面开启（CAS 跨 authserver 域需要）。
+            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
             webViewClient = pageClient
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -194,6 +216,8 @@ fun TodayCampusScreen(
         state.error.value = null
         state.manualRequired.value = false
         state.injectAttempts = 0
+        state.blankReloads = 0
+        state.portalHomeLoaded = false
         state.status.value = TodayCampusLoginLogic.MSG_OPENING
         state.loading.value = true
         webView.loadUrl(url)
@@ -230,6 +254,15 @@ fun TodayCampusScreen(
         state.injectAttempts = 0
         state.passwordRequested = false
         state.password = null
+        state.blankReloads = 0
+        state.portalHomeLoaded = false
+    }
+
+    /** 用系统浏览器打开当前页面（白屏/错误态降级入口）。 */
+    fun openInBrowser() {
+        val url = state.pageUrl.takeIf { TodayCampusLoginLogic.isHttpUrl(it) }
+            ?: state.targetUrl.value
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     }
 
     /** WebView 顶栏刷新：重置自动登录状态后重载当前官方页。 */
@@ -237,6 +270,8 @@ fun TodayCampusScreen(
         state.error.value = null
         state.manualRequired.value = false
         state.injectAttempts = 0
+        state.blankReloads = 0
+        state.portalHomeLoaded = false
         state.loading.value = true
         runCatching { webView.reload() }
             .onFailure {
@@ -245,13 +280,23 @@ fun TodayCampusScreen(
             }
     }
 
-    /** 错误态重试：重新打开入口 URL（不依赖失败页的 URL）。 */
+    /** 错误态重试：重新打开入口 URL / 门户首页（不依赖失败页的 URL）。 */
     fun retryWeb() {
         state.error.value = null
         state.manualRequired.value = false
         state.injectAttempts = 0
+        state.blankReloads = 0
+        state.portalHomeLoaded = false
         state.loading.value = true
-        webView.loadUrl(state.targetUrl.value)
+        val retryUrl = if (TodayCampusLoginLogic.isHttpUrl(state.pageUrl) &&
+            TodayCampusWebLogic.isPortalHost(state.pageUrl)
+        ) {
+            // 门户域内重试优先回首页（登录后空壳页重载仍会白屏）。
+            TodayCampusWebLogic.PORTAL_HOME_URL
+        } else {
+            state.targetUrl.value
+        }
+        webView.loadUrl(retryUrl)
     }
 
     /** 「打开今日校园 App」：未安装 / 拉起失败 → 提示并回退 App 内融合门户。 */
@@ -337,6 +382,58 @@ fun TodayCampusScreen(
             FillOutcome.NEED_MANUAL -> {
                 state.manualRequired.value = true
                 state.status.value = TodayCampusLoginLogic.MSG_NEED_MANUAL
+            }
+        }
+    }
+
+    // 白屏检测（2026-11-16 用户反馈：CAS 登录后 WebView 白屏）：
+    // onPageFinished 500ms 后只读检查 body.innerText 长度；<20 视为空白 →
+    // 清缓存重载一次（优先门户首页，**不清登录 Cookie**）→ 仍空白显示错误条
+    // （重试 / 浏览器打开 / 融合门户），不循环重载。
+    val blankCheckSeq = state.blankCheckSeq.value
+    LaunchedEffect(blankCheckSeq) {
+        if (blankCheckSeq <= 0) return@LaunchedEffect
+        // 记录本次检测对应的页面；等待期间用户若已切页/回首页，放弃本次检测（避免误重载）。
+        val checkedUrl = state.pageUrl
+        delay(TodayCampusWebLogic.BLANK_CHECK_DELAY_MS)
+        if (state.mode.value != TodayCampusMode.WEB) return@LaunchedEffect
+        if (state.pageUrl != checkedUrl) return@LaunchedEffect
+        if (!TodayCampusLoginLogic.isHttpUrl(checkedUrl)) return@LaunchedEffect
+        val raw = runCatching {
+            webView.evaluateJavascriptAwait(TodayCampusWebLogic.buildBlankCheckScript())
+        }.getOrNull()
+        var length = TodayCampusWebLogic.parseBlankTextLength(raw)
+        if (TodayCampusWebLogic.isBlankTextLength(length)) {
+            // 门户是 Vue SPA（外壳只有 <div id="app">），首次 500ms 可能仍在挂载：
+            // 再等 800ms 复核一次，避免把「加载稍慢」误判成白屏。
+            delay(TodayCampusWebLogic.BLANK_RECHECK_DELAY_MS)
+            if (state.mode.value != TodayCampusMode.WEB) return@LaunchedEffect
+            val raw2 = runCatching {
+                webView.evaluateJavascriptAwait(TodayCampusWebLogic.buildBlankCheckScript())
+            }.getOrNull()
+            length = TodayCampusWebLogic.parseBlankTextLength(raw2)
+        }
+        if (!TodayCampusWebLogic.isBlankTextLength(length)) {
+            // 页面正常渲染：恢复空白重载计数，清掉「白屏」错误条。
+            state.blankReloads = 0
+            if (state.error.value == TodayCampusWebLogic.MSG_BLANK) {
+                state.error.value = null
+            }
+            return@LaunchedEffect
+        }
+        when (TodayCampusWebLogic.blankAction(state.blankReloads)) {
+            TodayCampusWebLogic.BlankAction.RELOAD -> {
+                state.blankReloads += 1
+                state.loading.value = true
+                state.status.value = TodayCampusWebLogic.MSG_BLANK_RETRYING
+                // 只清 HTTP 缓存，不动 Cookie/WebStorage（保留 CAS 登录态）。
+                runCatching { webView.clearCache(true) }
+                webView.loadUrl(TodayCampusWebLogic.reloadUrlForBlank(state.pageUrl))
+            }
+            TodayCampusWebLogic.BlankAction.SHOW_ERROR -> {
+                state.loading.value = false
+                state.status.value = null
+                state.error.value = TodayCampusWebLogic.MSG_BLANK
             }
         }
     }
@@ -439,6 +536,11 @@ fun TodayCampusScreen(
                             isError = true,
                             actionLabel = TodayCampusCatalog.BTN_RETRY,
                             onAction = { retryWeb() },
+                            // 白屏/错误降级：系统浏览器打开 + 融合门户（2026-11-16）。
+                            extraActions = listOf(
+                                TodayCampusWebLogic.BTN_OPEN_BROWSER to { openInBrowser() },
+                                TodayCampusWebLogic.BTN_OPEN_PORTAL to { openPortal() },
+                            ),
                         )
                     }
                     if (state.error.value == null) {
@@ -521,6 +623,15 @@ private class TodayCampusScreenState {
     /** 最近一次页面 URL（WebView 回调更新，注入时机判断用）。 */
     var pageUrl: String = ""
 
+    /** 每次主文档加载完成 +1，触发一次白屏检测（500ms 后读 body.innerText 长度）。 */
+    val blankCheckSeq = mutableStateOf(0)
+
+    /** 白屏自动重载次数（最多 1 次，之后转错误条，不循环）。 */
+    var blankReloads: Int = 0
+
+    /** 本轮会话是否已从登录空壳页显式跳到融合门户首页（避免循环）。 */
+    var portalHomeLoaded: Boolean = false
+
     /** 本次进入页面已自动尝试次数（防循环；上限 1 次）。 */
     var injectAttempts: Int = 0
 
@@ -560,31 +671,54 @@ private fun TodayCampusNoticeBar(
     isError: Boolean = false,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    extraActions: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     val scheme = MaterialTheme.colorScheme
     val container = if (isError) scheme.errorContainer else scheme.surfaceContainerHigh
     val content = if (isError) scheme.onErrorContainer else scheme.onSurfaceVariant
     Surface(color = container, modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .heightIn(min = CtTokens.Size.minTouchTarget)
-                .padding(start = CtTokens.Spacing.lg, end = CtTokens.Spacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(CtTokens.Spacing.sm),
-        ) {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.labelMedium,
-                color = content,
-                maxLines = 2,
-                modifier = Modifier.weight(1f),
-            )
-            if (actionLabel != null && onAction != null) {
-                TextButton(
-                    onClick = onAction,
-                    modifier = Modifier.heightIn(min = CtTokens.Size.minTouchTarget),
+        // 窄屏（360dp）下「重试 + 浏览器打开 + 融合门户」三个按钮与文案同排会挤压/裁切，
+        // 因此主操作留在文案行末尾，附加降级按钮单独一行右对齐。
+        Column {
+            Row(
+                modifier = Modifier
+                    .heightIn(min = CtTokens.Size.minTouchTarget)
+                    .padding(start = CtTokens.Spacing.lg, end = CtTokens.Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(CtTokens.Spacing.sm),
+            ) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = content,
+                    maxLines = 2,
+                    modifier = Modifier.weight(1f),
+                )
+                if (actionLabel != null && onAction != null) {
+                    TextButton(
+                        onClick = onAction,
+                        modifier = Modifier.heightIn(min = CtTokens.Size.minTouchTarget),
+                    ) {
+                        Text(actionLabel)
+                    }
+                }
+            }
+            if (extraActions.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = CtTokens.Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End,
                 ) {
-                    Text(actionLabel)
+                    extraActions.forEach { (label, action) ->
+                        TextButton(
+                            onClick = action,
+                            modifier = Modifier.heightIn(min = CtTokens.Size.minTouchTarget),
+                        ) {
+                            Text(label, maxLines = 1)
+                        }
+                    }
                 }
             }
         }

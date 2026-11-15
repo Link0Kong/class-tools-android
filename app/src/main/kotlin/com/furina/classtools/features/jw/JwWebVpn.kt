@@ -164,6 +164,54 @@ object JwWebVpn {
         if (token == "submitted") LoginOutcome.SUBMITTED else LoginOutcome.NEED_MANUAL
 
     /**
+     * 2026-11-16：把填充与提交拆成两步，中间停顿 [JwLoginLogic.PRE_SUBMIT_DELAY_MS]，
+     * 模拟人工操作以降低网关/CAS 风控概率。只填写，不提交。
+     * 返回 `filled` / `no-form` / `no-submit` / `error`。
+     */
+    fun buildFillScript(account: String, password: String): String = """
+        (function () {
+          try {
+            var u = document.getElementById('user_name');
+            var p = document.querySelector('#form input[name="password"]') ||
+                    document.querySelector('input[type="password"]');
+            if (!u || !p) { return 'no-form'; }
+            u.value = ${JwLoginLogic.jsStringLiteral(account)};
+            u.dispatchEvent(new Event('input', { bubbles: true }));
+            u.dispatchEvent(new Event('change', { bubbles: true }));
+            p.value = ${JwLoginLogic.jsStringLiteral(password)};
+            p.dispatchEvent(new Event('input', { bubbles: true }));
+            p.dispatchEvent(new Event('change', { bubbles: true }));
+            return 'filled';
+          } catch (e) {
+            return 'error';
+          }
+        })()
+    """.trimIndent()
+
+    /** 第二步：点击登录按钮（填写后延迟调用）。返回 `submitted` / `no-submit` / `error`。 */
+    fun buildSubmitScript(): String = """
+        (function () {
+          try {
+            var submit = document.getElementById('login');
+            if (!submit) { return 'no-submit'; }
+            submit.click();
+            return 'submitted';
+          } catch (e) {
+            return 'error';
+          }
+        })()
+    """.trimIndent()
+
+    /** 填充结果。 */
+    enum class FillOutcome {
+        FILLED,
+        NEED_MANUAL,
+    }
+
+    fun fillOutcomeOf(token: String?): FillOutcome =
+        if (token == "filled") FillOutcome.FILLED else FillOutcome.NEED_MANUAL
+
+    /**
      * 登录提交后的复核脚本：`two-step`（双重认证层可见）/ `error`（错误提示可见）/
      * `logged-in`（登录表单已消失，页面已跳转）/ `wait`。
      */

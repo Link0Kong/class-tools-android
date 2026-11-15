@@ -44,6 +44,7 @@ import com.furina.classtools.features.chsi.ChsiExtractLogic
 import com.furina.classtools.features.chsi.ChsiNavigationLogic
 import com.furina.classtools.features.chsi.ChsiNavigationLogic.Mode as ChsiMode
 import com.furina.classtools.features.chsi.ChsiOfficialTool
+import com.furina.classtools.features.chsi.ChsiPagePayload
 import com.furina.classtools.features.chsi.ChsiTexts
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
@@ -153,46 +154,54 @@ fun ChsiEntryScreen(
     }
 
     // 已登录页面加载完成 → 延迟注入只读 JS 提取文本摘要（仅内存）。
+    // 2026-11-16：登录跳转后档案页可能延迟渲染，改为「延迟重试 2–3 次（1.2s）+ Cookie 辅助判定」。
     val extractSeq = state.extractSeq.value
     LaunchedEffect(extractSeq) {
         if (extractSeq <= 0) return@LaunchedEffect
         state.refreshing.value = true
         state.globalError.value = null
         delay(ChsiExtractLogic.EXTRACT_DELAY_MS)
-        if (!ChsiExtractLogic.isLoggedInUrl(state.pageUrl)) {
-            // 提取时已不在档案域（会话过期/被重定向到登录）：回到卡片页未登录态，不强制跳登录页。
-            state.extractInFlight = false
-            state.refreshing.value = false
-            state.loggedIn.value = false
-            state.cards.value = ChsiExtractLogic.extractCards(null)
-            return@LaunchedEffect
-        }
-        val raw = runCatching {
-            webView.evaluateJavascriptAwait(ChsiExtractLogic.buildExtractScript())
-        }.getOrNull()
-        val payload = ChsiExtractLogic.parseWebViewResult(raw)
-        // 学信档案域未登录时也会显示营销首页（不是登录页 URL），必须用页面内容确认登录态，
-        // 否则会把「免费查看学籍…」的引导页误判成已登录并展示空数据卡。
-        // 2026-11-15 用户反馈：真实登录后的档案页可能没有「退出登录/个人中心」强信号 →
-        // LOGIN 模式下用宽松判定（档案域 + 非空数据 + 无未登录营销标记）视为登录成功，自动回卡片页。
-        val loggedIn = ChsiNavigationLogic.loggedInAfterExtract(
-            payload = payload,
-            pageUrl = state.pageUrl,
-            // 用户在登录页点过「已登录，进入卡片页」→ 之后提取也按登录流程的宽松判定处理，
+        var payload: ChsiPagePayload? = null
+        var loggedIn = false
+        for (attempt in 0 until ChsiNavigationLogic.EXTRACT_MAX_ATTEMPTS) {
+            if (!ChsiExtractLogic.isLoggedInUrl(state.pageUrl)) {
+                // 提取时已不在档案域（会话过期/被重定向到登录）：回到卡片页未登录态，不强制跳登录页。
+                state.extractInFlight = false
+                state.refreshing.value = false
+                state.loggedIn.value = false
+                state.cards.value = ChsiExtractLogic.extractCards(null)
+                return@LaunchedEffect
+            }
+            val raw = runCatching {
+                webView.evaluateJavascriptAwait(ChsiExtractLogic.buildExtractScript())
+            }.getOrNull()
+            payload = ChsiExtractLogic.parseWebViewResult(raw)
+            // Cookie 辅助信号（只读，不改 Cookie / 不读密码）：登录态延迟或强信号缺失时辅助判定。
+            val archiveCookie = runCatching {
+                CookieManager.getInstance().getCookie(ChsiNavigationLogic.ARCHIVE_COOKIE_URL)
+            }.getOrNull()
+            val hasArchiveCookie = ChsiExtractLogic.hasArchiveSessionCookie(archiveCookie)
+            // 用户在登录页/卡片页点过「已登录，进入卡片页」→ 提取按登录流程的宽松判定处理，
             // 避免刚进卡片页又被营销页误判打回未登录态。
-            mode = if (state.loginConfirmedByUser) ChsiMode.LOGIN else state.mode.value,
-        )
+            loggedIn = ChsiNavigationLogic.loggedInAfterExtract(
+                payload = payload,
+                pageUrl = state.pageUrl,
+                mode = if (state.loginConfirmedByUser) ChsiMode.LOGIN else state.mode.value,
+                archiveCookiePresent = hasArchiveCookie,
+            )
+            if (loggedIn) break
+            if (ChsiNavigationLogic.shouldRetryExtract(attempt)) {
+                delay(ChsiNavigationLogic.EXTRACT_RETRY_INTERVAL_MS)
+            }
+        }
         if (!loggedIn) {
             state.extractInFlight = false
             state.refreshing.value = false
             state.loggedIn.value = false
             state.lastUpdated.value = null
             state.cards.value = ChsiExtractLogic.extractCards(null)
-            // 用户主动进入登录流程时停在官方登录页；默认卡片页保持卡片展示，不强制跳转。
-            if (state.mode.value == ChsiMode.LOGIN) {
-                state.loading.value = true
-                webView.loadUrl(ChsiCatalog.LOGIN_URL)
-            }
+            // 不强制跳回登录页（2026-11-16 要求）：停留在当前页面，卡片页/登录页都显示
+            // 「已登录，进入卡片页」兜底按钮，由用户确认后手动进入。
             return@LaunchedEffect
         }
         state.cards.value = ChsiExtractLogic.extractCards(payload)
@@ -406,6 +415,7 @@ fun ChsiEntryScreen(
                                 openOfficialPage(ChsiCatalog.ARCHIVE_HOME, ChsiTexts.PAGE_TITLE)
                             },
                             onLogout = { state.logoutConfirmVisible.value = true },
+                            onEnterCards = { enterCardsFromLogin() },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

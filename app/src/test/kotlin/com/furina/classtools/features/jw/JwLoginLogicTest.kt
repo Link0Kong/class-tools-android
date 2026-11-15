@@ -319,10 +319,76 @@ class JwLoginLogicTest {
 
     @Test
     fun `注入延迟与重试上限符合契约`() {
-        assertEquals(300L, JwLoginLogic.INJECT_DELAY_MS)
+        // 2026-11-16：放慢节奏 + 自动仅 1 次（规避 CAS 风控「服务器繁忙」）。
+        assertEquals(700L, JwLoginLogic.INJECT_DELAY_MS)
+        assertEquals(300L, JwLoginLogic.PRE_SUBMIT_DELAY_MS)
         assertEquals(800L, JwLoginLogic.VERIFY_DELAY_MS)
-        assertTrue(JwLoginLogic.MAX_INJECT_ATTEMPTS in 1..3)
+        assertEquals(1, JwLoginLogic.MAX_INJECT_ATTEMPTS)
         assertEquals(128, JwLoginLogic.MAX_PASSWORD_LENGTH)
+    }
+
+    // ---- 2026-11-16：CAS「服务器繁忙」识别 + 慢速填充 + 微信 UA -----------------
+
+    @Test
+    fun `微信 UA 含 MicroMessenger 与 XWEB`() {
+        val ua = JwLoginLogic.WECHAT_UA
+        assertTrue(ua.contains("MicroMessenger/8.0.49"))
+        assertTrue(ua.contains("XWEB/"))
+        assertTrue(ua.contains("Weixin"))
+        assertTrue(ua.contains("Android"))
+    }
+
+    @Test
+    fun `识别服务器繁忙文案`() {
+        listOf(
+            "服务器繁忙，请稍后再试",
+            "系统繁忙",
+            "请求过于频繁",
+            "访问过于频繁",
+            "请稍后再试",
+            "操作过于频繁，请稍候",
+        ).forEach { text -> assertTrue("应识别繁忙：$text", JwLoginLogic.isServerBusyText(text)) }
+        assertFalse(JwLoginLogic.isServerBusyText("用户名或密码错误"))
+        assertFalse(JwLoginLogic.isServerBusyText(""))
+        assertFalse(JwLoginLogic.isServerBusyText(null))
+    }
+
+    @Test
+    fun `繁忙检测脚本只读且返回 token`() {
+        val script = JwLoginLogic.buildBusyCheckScript()
+        assertTrue(script.contains("服务器繁忙"))
+        assertTrue(script.contains("'busy'"))
+        assertTrue(script.contains("'ok'"))
+        assertFalse(script.contains("localStorage"))
+        assertFalse(script.contains("fetch("))
+        assertEquals(JwLoginLogic.BusyOutcome.BUSY, JwLoginLogic.busyOutcomeOf("busy"))
+        assertEquals(JwLoginLogic.BusyOutcome.OK, JwLoginLogic.busyOutcomeOf("ok"))
+        assertEquals(JwLoginLogic.BusyOutcome.OK, JwLoginLogic.busyOutcomeOf(null))
+    }
+
+    @Test
+    fun `填写与提交拆成两步脚本`() {
+        val fill = JwLoginLogic.buildFillScript("2024000001", "fake-pwd")
+        assertTrue(fill.contains("getElementById('username')"))
+        assertTrue(fill.contains("getElementById('password')"))
+        assertTrue(fill.contains("'filled'"))
+        assertFalse("填写脚本不应提交", fill.contains("login_submit"))
+        assertFalse(fill.contains("submit.click"))
+        assertEquals(JwLoginLogic.FillOutcome.FILLED, JwLoginLogic.fillOutcomeOf("filled"))
+        assertEquals(JwLoginLogic.FillOutcome.NEED_MANUAL, JwLoginLogic.fillOutcomeOf("no-form"))
+
+        val submit = JwLoginLogic.buildSubmitScript()
+        assertTrue(submit.contains("getElementById('login_submit')"))
+        assertTrue(submit.contains("'submitted'"))
+        assertFalse("提交脚本不应包含账号密码", submit.contains("fake-pwd"))
+    }
+
+    @Test
+    fun `繁忙提示文案引导手动或浏览器打开`() {
+        assertTrue(JwLoginLogic.MSG_SERVER_BUSY.contains("繁忙"))
+        assertTrue(JwLoginLogic.MSG_SERVER_BUSY.contains("手动"))
+        assertTrue(JwLoginLogic.MSG_SERVER_BUSY.contains("浏览器"))
+        assertEquals("浏览器", JwLoginLogic.BTN_OPEN_BROWSER)
     }
 
     // ---- 本机凭据 Base64 ------------------------------------------------

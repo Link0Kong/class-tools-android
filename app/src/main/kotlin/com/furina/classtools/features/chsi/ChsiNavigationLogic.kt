@@ -23,6 +23,18 @@ object ChsiNavigationLogic {
     /** 进入工具页的默认模式：卡片页（官方工具 10 卡始终可见）。 */
     fun initialMode(): Mode = Mode.CARDS
 
+    /** 登录页提交后等待档案域 + 延迟重试提取的最大次数（2026-11-16：登录后状态延迟渲染）。 */
+    const val EXTRACT_MAX_ATTEMPTS: Int = 3
+
+    /** 重试提取间隔（1.2s × 2 次 = 约 2.4s 等待，覆盖登录跳转后异步渲染）。 */
+    const val EXTRACT_RETRY_INTERVAL_MS: Long = 1200L
+
+    /** 读取 my.chsi 会话 Cookie 的 URL（CookieManager 按 URL 取同域 Cookie，辅助登录态判定）。 */
+    const val ARCHIVE_COOKIE_URL: String = "https://my.chsi.com.cn"
+
+    /** 是否还应继续延迟重试提取（attempt 从 0 开始）。 */
+    fun shouldRetryExtract(attempt: Int): Boolean = attempt < EXTRACT_MAX_ATTEMPTS - 1
+
     /** 页面加载完成后是否应**自动**打开官方登录页：永远 false（不强制跳登录页）。 */
     fun shouldAutoOpenLoginPage(mode: Mode, pageIsLoginUrl: Boolean): Boolean = false
 
@@ -38,22 +50,30 @@ object ChsiNavigationLogic {
      *
      * - 后台自动恢复（CARDS）：沿用强信号 [ChsiExtractLogic.isLoggedInPayload]；
      * - 用户主动登录（LOGIN）：真实档案页可能没有「退出/个人中心」字样，使用宽松判定
-     *   [ChsiExtractLogic.isLoginSuccessAfterLogin]（URL 回档案域 + 非空数据 + 无营销标记）——
-     *   修复「登录后一直停在账号信息界面不切卡片」。
+     *   [ChsiExtractLogic.isLoginSuccessAfterLogin]（档案域 + 非空数据 + 无营销标记 + 数据信号/Cookie 辅助）。
      */
     fun loggedInAfterExtract(
         payload: ChsiPagePayload?,
         pageUrl: String?,
         mode: Mode,
+        archiveCookiePresent: Boolean = false,
     ): Boolean {
         if (ChsiExtractLogic.isLoggedInPayload(payload)) return true
         if (mode != Mode.LOGIN) return false
-        return ChsiExtractLogic.isLoginSuccessAfterLogin(payload, pageUrl)
+        return ChsiExtractLogic.isLoginSuccessAfterLogin(payload, pageUrl, archiveCookiePresent)
     }
 
-    /** LOGIN 模式下是否展示「已登录，进入卡片页」兜底按钮（用户已登录但自动判定失败时）。 */
-    fun showEnterCardsFallback(mode: Mode, refreshing: Boolean): Boolean =
-        mode == Mode.LOGIN && !refreshing
+    /**
+     * 是否展示「已登录，进入卡片页」兜底按钮（2026-11-16：确保卡片页与登录页都能看到）。
+     *
+     * - 登录页（LOGIN）空闲时始终展示（用户可能已完成登录但自动判定失败）；
+     * - 卡片页（CARDS）未登录且空闲时也展示（提取失败但用户确认已登录）。
+     */
+    fun showEnterCardsFallback(
+        mode: Mode,
+        refreshing: Boolean,
+        loggedIn: Boolean = false,
+    ): Boolean = !refreshing && (mode == Mode.LOGIN || (mode == Mode.CARDS && !loggedIn))
 
     /** 页面加载完成时若命中登录页 URL：仅用户主动在登录模式时停留；卡片页后台检查不跳转。 */
     fun staysOnLoginPage(mode: Mode, pageIsLoginUrl: Boolean): Boolean = pageIsLoginUrl && mode == Mode.LOGIN

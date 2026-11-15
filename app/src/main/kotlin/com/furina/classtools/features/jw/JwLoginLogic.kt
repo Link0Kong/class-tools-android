@@ -38,14 +38,14 @@ object JwLoginLogic {
     /** 学校域名根（含子域；教务/统一认证页面都在此范围内）。 */
     const val SCHOOL_DOMAIN: String = "fjtcm.edu.cn"
 
-    /** 页面加载完成后延迟注入（契约 §5.3-4：~300ms）。 */
-    const val INJECT_DELAY_MS: Long = 300
+    /** 页面加载完成后延迟注入（2026-11-16：300→700ms，放慢节奏避免 CAS 风控「服务器繁忙」）。 */
+    const val INJECT_DELAY_MS: Long = 700
 
     /** 提交后复核延迟（契约 §5.3-4：800ms）。 */
     const val VERIFY_DELAY_MS: Long = 800
 
-    /** 同一页面会话最多自动尝试注入次数（失败后回退人工，避免死循环）。 */
-    const val MAX_INJECT_ATTEMPTS: Int = 2
+    /** 同一页面会话最多自动尝试注入次数（2026-11-16：2→1，失败即转人工，不触发风控循环）。 */
+    const val MAX_INJECT_ATTEMPTS: Int = 1
 
     /** 密码最大长度（防御异常输入；不裁剪首尾空格）。 */
     const val MAX_PASSWORD_LENGTH: Int = 128
@@ -426,4 +426,119 @@ object JwLoginLogic {
         "captcha" -> VerifyOutcome.CAPTCHA
         else -> VerifyOutcome.WAIT
     }
+
+    // ---- 2026-11-16：CAS「服务器繁忙」风控规避 + 慢速自动填充 -----------------
+
+    /**
+     * 教务/统一认证 WebView 使用的微信 UA（2026-11-16 用户反馈：微信内登录正常、App 内提示
+     * 「服务器繁忙」；对比请求特征后统一为微信 UA，降低 CAS 风控概率）。
+     */
+    const val WECHAT_UA: String =
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP2A.240905.003; wv) " +
+            "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/116.0.0.0 " +
+            "Mobile Safari/537.36 MicroMessenger/8.0.49.2600(0x2800313D) " +
+            "WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64 " +
+            "XWEB/1375 MMWEBSDK/20240409"
+
+    /** 填写账号密码后、点击提交前的停顿（模拟人工操作，避免风控）。 */
+    const val PRE_SUBMIT_DELAY_MS: Long = 300
+
+    /** CAS/登录页返回「服务器繁忙」类文案的标记（出现即停止自动重试）。 */
+    val SERVER_BUSY_MARKERS: List<String> = listOf(
+        "服务器繁忙",
+        "系统繁忙",
+        "请求过于频繁",
+        "访问过于频繁",
+        "操作过于频繁",
+        "请稍后再试",
+    )
+
+    /** 页面文本是否包含「服务器繁忙」类标记。 */
+    fun isServerBusyText(text: String?): Boolean {
+        val value = text?.replace(Regex("\\s+"), "").orEmpty()
+        if (value.isEmpty()) return false
+        return SERVER_BUSY_MARKERS.any { value.contains(it.replace(" ", "")) }
+    }
+
+    /** 繁忙检测脚本：页面含繁忙文案返回 `busy`，否则 `ok`（只读）。 */
+    fun buildBusyCheckScript(): String = """
+        (function () {
+          try {
+            var text = String((document.body && document.body.innerText) || '').replace(/\s+/g, '');
+            var markers = ['服务器繁忙', '系统繁忙', '请求过于频繁', '访问过于频繁', '操作过于频繁', '请稍后再试'];
+            for (var i = 0; i < markers.length; i++) {
+              if (text.indexOf(markers[i]) >= 0) { return 'busy'; }
+            }
+            return 'ok';
+          } catch (e) {
+            return 'ok';
+          }
+        })()
+    """.trimIndent()
+
+    /** 繁忙检测结果。 */
+    enum class BusyOutcome {
+        BUSY,
+        OK,
+    }
+
+    fun busyOutcomeOf(token: String?): BusyOutcome =
+        if (token == "busy") BusyOutcome.BUSY else BusyOutcome.OK
+
+    /** CAS 服务器繁忙时的提示（停止自动重试，改手动/浏览器/微信打开）。 */
+    const val MSG_SERVER_BUSY: String =
+        "登录服务器繁忙（可能触发风控），已停止自动重试：请手动登录，或点「浏览器」用微信/浏览器打开"
+
+    /** 顶栏/手动入口：用系统浏览器打开当前登录页。 */
+    const val BTN_OPEN_BROWSER: String = "浏览器"
+
+    /**
+     * 第一步注入：只**填写**账号密码并派发 input/change（不提交）。
+     * 返回 `filled` / `no-form` / `error`；不返回/不打印账号密码。
+     */
+    fun buildFillScript(account: String, password: String): String = """
+        (function () {
+          try {
+            var u = document.getElementById('username');
+            var p = document.getElementById('password');
+            var box = document.getElementById('pwdLoginDiv');
+            if (!u || !p) { return 'no-form'; }
+            if (box && box.style && box.style.display === 'none') {
+              box.style.setProperty('display', 'block', 'important');
+            }
+            u.value = ${jsStringLiteral(account)};
+            u.dispatchEvent(new Event('input', { bubbles: true }));
+            u.dispatchEvent(new Event('change', { bubbles: true }));
+            p.value = ${jsStringLiteral(password)};
+            p.dispatchEvent(new Event('input', { bubbles: true }));
+            p.dispatchEvent(new Event('change', { bubbles: true }));
+            return 'filled';
+          } catch (e) {
+            return 'error';
+          }
+        })()
+    """.trimIndent()
+
+    /** 第二步注入（填写后 [PRE_SUBMIT_DELAY_MS] 再点击提交）：返回 `submitted` / `no-submit` / `error`。 */
+    fun buildSubmitScript(): String = """
+        (function () {
+          try {
+            var submit = document.getElementById('login_submit');
+            if (!submit) { return 'no-submit'; }
+            submit.click();
+            return 'submitted';
+          } catch (e) {
+            return 'error';
+          }
+        })()
+    """.trimIndent()
+
+    /** 填写结果。 */
+    enum class FillOutcome {
+        FILLED,
+        NEED_MANUAL,
+    }
+
+    fun fillOutcomeOf(token: String?): FillOutcome =
+        if (token == "filled") FillOutcome.FILLED else FillOutcome.NEED_MANUAL
 }
