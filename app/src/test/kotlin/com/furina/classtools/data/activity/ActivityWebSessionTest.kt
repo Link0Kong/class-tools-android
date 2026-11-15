@@ -199,4 +199,68 @@ class ActivityWebSessionTest {
         assertTrue(normal.contains("服务器返回 400（报名）：报名已截止"))
         assertFalse(normal.contains("请重新登录"))
     }
+
+    // ---- 2026-11-15 追加：活动页「请在微信小程序打开」微信环境兼容 -------------
+
+    @Test
+    fun `微信 UA 含 MicroMessenger 与 XWEB 字段`() {
+        val ua = ActivityWebSession.WECHAT_UA
+        assertTrue(ua.contains("MicroMessenger/8.0.49"))
+        assertTrue(ua.contains("XWEB/"))
+        assertTrue(ua.contains("Weixin"))
+        assertTrue(ua.contains("Android"))
+        assertFalse(ua.contains("wv)") && !ua.contains("MicroMessenger"))
+    }
+
+    @Test
+    fun `识别微信 OAuth 跳转地址`() {
+        assertTrue(
+            ActivityWebSession.isWechatOauthUrl(
+                "https://open.weixin.qq.com/connect/oauth2/authorize?appid=wxcf&redirect_uri=x",
+            ),
+        )
+        assertTrue(ActivityWebSession.isWechatOauthUrl("weixin://dl/business/?t=abc"))
+        assertFalse(ActivityWebSession.isWechatOauthUrl("https://open.weixin.qq.com/"))
+        assertFalse(ActivityWebSession.isWechatOauthUrl("https://rcm.fjtcm.edu.cn/wechat/#/fjtcm/login"))
+        assertFalse(ActivityWebSession.isWechatOauthUrl(null))
+        assertFalse(ActivityWebSession.isWechatOauthUrl(""))
+    }
+
+    @Test
+    fun `微信环境桩只提供只读能力不伪造登录`() {
+        val stub = ActivityWebSession.WX_ENV_STUB_JS
+        assertTrue(stub.contains("__wxjs_environment"))
+        assertTrue(stub.contains("miniprogram: false"))
+        // 不得包含登录/支付/用户信息相关 API
+        listOf(
+            "login", "pay", "requestPayment", "getUserInfo", "getUserProfile",
+            "localStorage", "lgInfo", "token", "openId",
+        ).forEach { forbidden ->
+            assertFalse("微信环境桩不应包含 $forbidden", stub.contains(forbidden))
+        }
+    }
+
+    @Test
+    fun `会话桩只写最小微信环境字段且 openId 留空`() {
+        val seed = ActivityWebSession.SEED_WX_SESSION_JS
+        assertTrue(seed.contains("wxUser"))
+        assertTrue(seed.contains("wxNickname"))
+        assertTrue(seed.contains("schoolNo"))
+        // 关键：不伪造微信身份 → openId 必须为空字符串（不写入随机/真实 openId）。
+        assertTrue(seed.contains("openId: ''"))
+        assertFalse(seed.contains("Math.random"))
+        // 不写 lgInfo / token，不接触账号密码。
+        assertFalse(seed.contains("lgInfo"))
+        assertFalse(seed.contains("token"))
+        assertFalse(seed.contains("password"))
+        // 幂等：先判断已有合法 wxUser 才决定是否写入。
+        assertTrue(seed.contains("valid"))
+    }
+
+    @Test
+    fun `拦截 OAuth 提示文案可诊断`() {
+        assertTrue(ActivityWebSession.MSG_OAUTH_BLOCKED.contains("微信"))
+        assertTrue(ActivityWebSession.MSG_OAUTH_BLOCKED.contains("重新加载"))
+        assertEquals("请在微信", ActivityWebSession.WECHAT_PROMPT_MARKER)
+    }
 }

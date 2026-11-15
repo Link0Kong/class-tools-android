@@ -177,19 +177,49 @@ class JwWebVpnTest {
     }
 
     @Test
-    fun `门户跳转脚本只点教务资源且不做外部跳转`() {
+    fun `门户跳转脚本多策略扫描教务资源且不做外部跳转`() {
         val script = JwWebVpn.buildPortalJumpScript()
-        assertTrue(script.contains("querySelectorAll('a[href]')"))
-        listOf("本科教务", "教务系统", "210.34.74.77").forEach { keyword ->
-            assertTrue("应包含资源关键字 $keyword", script.contains(keyword))
-        }
-        assertTrue(script.contains("a.click()"))
+        // 多选择器：a[href] + data-url/data-href/onclick/li/资源卡片容器
+        listOf("a[href]", "[data-url]", "[data-href]", "[onclick]", ".resource-item", ".app-item")
+            .forEach { selector -> assertTrue("应包含选择器 $selector", script.contains(selector)) }
+        listOf("本科教务", "教务系统", "教务管理", "教学管理", "学生端", "210.34.74.77")
+            .forEach { keyword -> assertTrue("应包含资源关键字 $keyword", script.contains(keyword)) }
+        assertTrue(script.contains("target.click()"))
+        assertTrue(script.contains("dispatchEvent"))
         // 只读页面结构：不读写 cookie/localStorage、不发请求、不 window.open。
         listOf("document.cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "window.open")
             .forEach { forbidden -> assertFalse("脚本不应包含 $forbidden", script.contains(forbidden)) }
         assertEquals(JwWebVpn.PortalJumpOutcome.CLICKED, JwWebVpn.portalJumpOutcomeOf("clicked"))
-        assertEquals(JwWebVpn.PortalJumpOutcome.NEED_MANUAL, JwWebVpn.portalJumpOutcomeOf("none"))
+        assertEquals(JwWebVpn.PortalJumpOutcome.NEED_MANUAL, JwWebVpn.portalJumpOutcomeOf("no-link"))
+        assertEquals(JwWebVpn.PortalJumpOutcome.NEED_MANUAL, JwWebVpn.portalJumpOutcomeOf("error"))
         assertEquals(JwWebVpn.PortalJumpOutcome.NEED_MANUAL, JwWebVpn.portalJumpOutcomeOf(null))
+    }
+
+    @Test
+    fun `登录成功探针识别门户 登录表单 二次验证 错误`() {
+        val script = JwWebVpn.buildPortalProbeScript()
+        assertTrue(script.contains("second_login_layer"))
+        assertTrue(script.contains("user_name"))
+        assertTrue(script.contains("error-message"))
+        listOf("资源", "最近访问", "我的收藏", "退出").forEach { marker ->
+            assertTrue("探针应包含门户特征 $marker", script.contains(marker))
+        }
+        // 只读：不读写存储/不发请求。
+        listOf("document.cookie", "localStorage", "fetch(", "XMLHttpRequest")
+            .forEach { forbidden -> assertFalse("探针不应包含 $forbidden", script.contains(forbidden)) }
+        assertEquals(JwWebVpn.PortalProbeOutcome.PORTAL, JwWebVpn.portalProbeOutcomeOf("portal"))
+        assertEquals(JwWebVpn.PortalProbeOutcome.LOGIN_FORM, JwWebVpn.portalProbeOutcomeOf("login-form"))
+        assertEquals(JwWebVpn.PortalProbeOutcome.TWO_STEP, JwWebVpn.portalProbeOutcomeOf("two-step"))
+        assertEquals(JwWebVpn.PortalProbeOutcome.ERROR, JwWebVpn.portalProbeOutcomeOf("error"))
+        assertEquals(JwWebVpn.PortalProbeOutcome.UNKNOWN, JwWebVpn.portalProbeOutcomeOf("unknown"))
+        assertEquals(JwWebVpn.PortalProbeOutcome.UNKNOWN, JwWebVpn.portalProbeOutcomeOf(null))
+    }
+
+    @Test
+    fun `手动门户入口文案`() {
+        assertEquals("打开 WebVPN 门户", JwWebVpn.BTN_OPEN_PORTAL)
+        assertTrue(JwWebVpn.MSG_PORTAL_MANUAL.contains("本科教务"))
+        assertTrue(JwWebVpn.MSG_PORTAL_MANUAL.contains("手动"))
     }
 
     // ---- 文案 ---------------------------------------------------------------

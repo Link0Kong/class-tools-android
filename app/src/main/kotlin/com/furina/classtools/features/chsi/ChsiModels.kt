@@ -201,6 +201,12 @@ object ChsiTexts {
     /** 登录页返回卡片页按钮。 */
     const val BTN_BACK_TO_CARDS: String = "返回卡片"
 
+    /** LOGIN 模式兜底：用户已登录但自动判定失败时，手动进入卡片页。 */
+    const val BTN_ENTER_CARDS: String = "已登录，进入卡片页"
+
+    /** 登录页兜底提示（真实登录页可能没有「退出登录」等强信号）。 */
+    const val HINT_ENTER_CARDS_FALLBACK: String = "已完成登录？若页面仍停留在此，可点右侧按钮直接进入卡片页"
+
     /** 提取不到时的空态兜底（卡片可点开官方页面）。 */
     const val MSG_EMPTY_FALLBACK: String = "已登录 · 打开官方页面查看"
 

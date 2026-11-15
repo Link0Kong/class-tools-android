@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import android.Manifest
 import android.content.Intent
 import androidx.activity.compose.BackHandler
@@ -74,6 +76,7 @@ import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.push.OppPushClick
 import com.furina.classtools.data.push.OppoPushState
 import com.furina.classtools.data.push.OppoPushStatus
+import com.furina.classtools.data.jw.JwCredentialStore
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
@@ -105,6 +108,7 @@ import com.furina.classtools.ui.screens.draw.DrawScreen
 import com.furina.classtools.ui.screens.fit.FitScreen
 import com.furina.classtools.ui.screens.group.GroupScreen
 import com.furina.classtools.ui.screens.feedback.FeedbackScreen
+import com.furina.classtools.ui.screens.express.ExpressScreen
 import com.furina.classtools.ui.screens.guide.UserGuideScreen
 import com.furina.classtools.ui.screens.home.HomeScreen
 import com.furina.classtools.ui.screens.jw.JwEntryScreen
@@ -125,6 +129,7 @@ import com.furina.classtools.ui.screens.roster.RosterScreen
 import com.furina.classtools.ui.screens.settings.PermissionSettingsScreen
 import com.furina.classtools.ui.screens.settings.ReminderSettingsScreen
 import com.furina.classtools.ui.screens.timetable.TimetableViewScreen
+import com.furina.classtools.ui.screens.todaycampus.TodayCampusScreen
 import com.furina.classtools.ui.screens.vote.VoteCreateScreen
 import com.furina.classtools.ui.screens.vote.VoteDetailScreen
 import com.furina.classtools.ui.screens.vote.VoteListScreen
@@ -408,8 +413,10 @@ fun MainNavHost(
             ),
             enterTransition = { CtPageTransitions.pushEnter() },
             exitTransition = { CtPageTransitions.pushExit() },
-            popEnterTransition = { CtPageTransitions.popEnter() },
-            popExitTransition = { CtPageTransitions.popExit() },
+            // 退出由 ToolTransitionOverlay 的「收回卡片」覆盖层负责；NavHost 不再叠加 pop 动画，
+            // 否则会出现「页面滑走 + 卡片收回」两重动画。
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { ExitTransition.None },
         ) { entry ->
             val toolId = entry.arguments?.getString(Routes.TOOL_ARG).orEmpty()
             val pickInTool = entry.arguments?.getBoolean(Routes.TOOL_PICK_ARG) == true
@@ -705,6 +712,18 @@ fun MainNavHost(
                 "file" -> CloudSpaceScreen(
                     onBack = { popTool(toolId) },
                     repository = container.cloudSpaceRepository,
+                )
+
+                "express" -> ExpressScreen(
+                    onBack = { popTool(toolId) },
+                )
+
+                "today" -> TodayCampusScreen(
+                    sid = session.sid,
+                    passwordProvider = {
+                        runCatching { JwCredentialStore(context).load(session.sid)?.password }.getOrNull()
+                    },
+                    onBack = { popTool(toolId) },
                 )
 
                 "activity" -> ActivityScreen(

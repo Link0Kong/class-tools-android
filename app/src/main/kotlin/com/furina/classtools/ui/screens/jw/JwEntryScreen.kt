@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.furina.classtools.BuildConfig
 import com.furina.classtools.data.jw.JwCardsRepository
 import com.furina.classtools.data.jw.JwCredentialStore
 import com.furina.classtools.features.jw.JwLoginLogic
@@ -71,10 +73,30 @@ private enum class JwMode {
 }
 
 /** WebVPN 门户页自动找教务资源的最多尝试次数（失败回退用户手动点）。 */
-private const val MAX_PORTAL_JUMP_ATTEMPTS: Int = 2
+private const val MAX_PORTAL_JUMP_ATTEMPTS: Int = 3
 
-/** WebVPN 门户跳转延迟（等待资源列表渲染）。 */
-private const val PORTAL_JUMP_DELAY_MS: Long = 900L
+/** WebVPN 门户跳转基础延迟（等待资源列表渲染；按尝试次数递增）。 */
+private const val PORTAL_JUMP_DELAY_MS: Long = 600L
+
+/** WebVPN 页面状态探针延迟（登录提交后等待网关跳转/门户渲染）。 */
+private const val WEBVPN_PROBE_DELAY_MS: Long = 900L
+
+/**
+ * DEBUG 专用：本地 data URL 长页面，用于设备上验证 WEB 模式 WebView 是否填满顶栏以下区域并可滚动
+ * （不联网、不含任何真实数据；通过顶栏「布局自测」按钮触发，release 包不显示该按钮）。
+ */
+private val JW_LAYOUT_SELFTEST_URL: String by lazy {
+    val rows = (1..80).joinToString("") { "<div class=\"row\">布局自测 行 $it / 80</div>" }
+    val html = """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">""" +
+        "<style>body{margin:0;font-family:sans-serif}" +
+        "#h{position:sticky;top:0;background:#4E9082;color:#fff;padding:10px;font-size:13px}" +
+        ".row{height:44px;line-height:44px;border-bottom:1px solid #ddd;padding-left:12px;font-size:13px}" +
+        "</style></head><body><div id=\"h\">布局自测：本页应填满顶栏以下区域，并可滚动到底部</div>$rows" +
+        "<script>window.addEventListener('load',function(){" +
+        "document.getElementById('h').textContent='布局自测：视口高 '+window.innerHeight+'px，应可滚动到底部';});" +
+        "</script></body></html>"
+    "data:text/html;charset=utf-8," + Uri.encode(html)
+}
 
 /**
  * 教务工具页 v3（规格 `_audit/jw_entry_20261113/JW_CARDS_V1_SPEC.md`，2026-11-14 用户新需求）。
@@ -135,19 +157,17 @@ fun JwEntryScreen(
                     // 同样走这条分支（JwLoginLogic.isAuthServerLoginUrl 已兼容）。
                     JwLoginLogic.PageKind.AUTH_LOGIN -> state.authPageSeq.value += 1
                     // 学校 WebVPN 登录页：校外入口，自动填充统一身份认证账号密码。
-                    JwLoginLogic.PageKind.WEBVPN_LOGIN -> state.webVpnLoginSeq.value += 1
-                    // WebVPN 登录成功后的门户页：自动找「本科教务」资源并进入。
+                    // 同时触发一次探针：个别网关登录成功后 URL 仍停在 /login（SPA 原地切换内容），
+                    // 探针能识别「已是门户」并继续自动进教务，避免卡在登录页。
+                    JwLoginLogic.PageKind.WEBVPN_LOGIN -> {
+                        state.webVpnLoginSeq.value += 1
+                        state.webVpnProbeSeq.value += 1
+                    }
+                    // WebVPN 登录后的门户页（URL 可能是 /、/portal、/home 等）：先用只读探针确认
+                    // 页面确实是门户，再自动找「本科教务」资源（修复登录后不自动进教务）。
                     JwLoginLogic.PageKind.WEBVPN_PORTAL -> {
-                        state.webVpnLoggedIn = true
-                        state.manualRequired.value = false
                         state.statusText.value = JwLoginLogic.MSG_WEBVPN_LOGGED_IN
-                        if (state.portalJumpAttempts < MAX_PORTAL_JUMP_ATTEMPTS) {
-                            state.portalJumpAttempts += 1
-                            state.portalJumpSeq.value += 1
-                        } else {
-                            state.manualRequired.value = true
-                            state.statusText.value = JwLoginLogic.MSG_WEBVPN_CLICK_MANUAL
-                        }
+                        state.webVpnProbeSeq.value += 1
                     }
                     // 已通过 WebVPN 进入包装后的教务业务页：全屏展示官方页面。
                     JwLoginLogic.PageKind.WEBVPN_ENTERED -> {
@@ -174,7 +194,17 @@ fun JwEntryScreen(
                             state.refreshSeq.value += 1
                         }
                     }
-                    JwLoginLogic.PageKind.JW_ENTRY, JwLoginLogic.PageKind.OTHER -> Unit
+                    JwLoginLogic.PageKind.JW_ENTRY -> Unit
+                    // 其它页面：若在 WebVPN 域且不是登录页/包装页，可能是登录成功后的 SPA 门户变体，
+                    // 同样触发一次探针，避免「URL 不匹配门户判定」导致卡住。
+                    JwLoginLogic.PageKind.OTHER -> {
+                        if (JwWebVpn.isWebVpnHost(current) &&
+                            !JwWebVpn.isWebVpnLoginUrl(current) &&
+                            !JwWebVpn.isWrappedUrl(current)
+                        ) {
+                            state.webVpnProbeSeq.value += 1
+                        }
+                    }
                 }
             }
 
@@ -250,6 +280,20 @@ fun JwEntryScreen(
                 JwLoginLogic.MSG_AUTO_LOGIN
             }
             webView.loadUrl(JwLoginLogic.ENTRY_URL)
+        }
+    }
+
+    // 2026-11-15：模式切换（CARDS→LOGIN/WEB）后强制 WebView 重新测量。
+    // WebView 现在始终保留在组合树（卡片页 1dp 隐藏），切换时 Compose 可能复用旧测量结果，
+    // 这里 requestLayout 一次确保填满顶栏以下区域（修复「只显示顶部一小条」）。
+    val modeForLayout = state.mode.value
+    LaunchedEffect(modeForLayout) {
+        if (modeForLayout == JwMode.WEB || modeForLayout == JwMode.LOGIN) {
+            delay(40)
+            runCatching {
+                webView.requestLayout()
+                webView.post { webView.requestLayout() }
+            }
         }
     }
 
@@ -342,23 +386,79 @@ fun JwEntryScreen(
         }
     }
 
-    // WebVPN 登录成功后：在门户页自动找「本科教务」资源并进入（找不到提示手动点）。
+    // WebVPN 页面状态探针（2026-11-15）：登录成功后自动确认门户并触发「本科教务」自动点击。
+    val webVpnProbeSeq = state.webVpnProbeSeq.value
+    LaunchedEffect(webVpnProbeSeq) {
+        if (webVpnProbeSeq <= 0) return@LaunchedEffect
+        if (state.route.value != JwWebVpn.Route.WEBVPN || state.webVpnEntered) return@LaunchedEffect
+        delay(WEBVPN_PROBE_DELAY_MS)
+        if (!JwWebVpn.isWebVpnHost(state.pageUrl) || JwWebVpn.isWrappedUrl(state.pageUrl)) return@LaunchedEffect
+        val result = runCatching {
+            webView.evaluateJavascriptAwait(JwWebVpn.buildPortalProbeScript())
+        }.getOrNull()
+        when (JwWebVpn.portalProbeOutcomeOf(JwLoginLogic.parseJsStringResult(result))) {
+            JwWebVpn.PortalProbeOutcome.PORTAL -> {
+                state.webVpnLoggedIn = true
+                state.webVpnJumpFailed = false
+                state.manualRequired.value = false
+                state.statusText.value = JwLoginLogic.MSG_WEBVPN_LOGGED_IN
+                state.portalJumpSeq.value += 1
+            }
+            JwWebVpn.PortalProbeOutcome.LOGIN_FORM -> {
+                // 页面仍是登录表单（可能登录未提交/被拒）：有本机密码则再尝试一次自动填充。
+                if (!state.password.value.isNullOrEmpty() &&
+                    state.webVpnInjectAttempts < JwLoginLogic.MAX_INJECT_ATTEMPTS
+                ) {
+                    state.webVpnLoginSeq.value += 1
+                } else {
+                    state.manualRequired.value = true
+                    state.statusText.value = JwLoginLogic.MSG_WEBVPN_NEED_MANUAL
+                }
+            }
+            JwWebVpn.PortalProbeOutcome.TWO_STEP -> {
+                state.manualRequired.value = true
+                state.statusText.value = JwLoginLogic.MSG_WEBVPN_TWO_STEP
+            }
+            JwWebVpn.PortalProbeOutcome.ERROR -> {
+                state.manualRequired.value = true
+                state.statusText.value = JwLoginLogic.MSG_WEBVPN_NEED_MANUAL
+            }
+            JwWebVpn.PortalProbeOutcome.UNKNOWN -> {
+                // 无法识别门户特征：给手动入口，用户可在当前页面自行点「本科教务」。
+                state.manualRequired.value = true
+                state.webVpnJumpFailed = true
+                state.statusText.value = JwWebVpn.MSG_PORTAL_MANUAL
+            }
+        }
+    }
+
+    // WebVPN 登录成功后：在门户页自动找「本科教务」资源并进入（找不到提示手动点/给手动按钮）。
     val portalJumpSeq = state.portalJumpSeq.value
     LaunchedEffect(portalJumpSeq) {
         if (portalJumpSeq <= 0) return@LaunchedEffect
-        delay(PORTAL_JUMP_DELAY_MS)
         if (state.route.value != JwWebVpn.Route.WEBVPN) return@LaunchedEffect
-        if (!JwWebVpn.isWebVpnPortalUrl(state.pageUrl)) return@LaunchedEffect
+        if (!JwWebVpn.isWebVpnPortalUrl(state.pageUrl) && !JwWebVpn.isWebVpnHost(state.pageUrl)) {
+            return@LaunchedEffect
+        }
+        // 门户资源列表可能异步渲染：按尝试次数递增延迟（600/1200/1800ms）。
+        delay(PORTAL_JUMP_DELAY_MS * state.portalJumpAttempts.coerceAtLeast(1))
         val result = runCatching {
             webView.evaluateJavascriptAwait(JwWebVpn.buildPortalJumpScript())
         }.getOrNull()
         when (JwWebVpn.portalJumpOutcomeOf(JwLoginLogic.parseJsStringResult(result))) {
             JwWebVpn.PortalJumpOutcome.CLICKED -> {
+                state.webVpnJumpFailed = false
                 state.statusText.value = JwLoginLogic.MSG_WEBVPN_LOGGED_IN
             }
             JwWebVpn.PortalJumpOutcome.NEED_MANUAL -> {
-                state.manualRequired.value = true
-                state.statusText.value = JwLoginLogic.MSG_WEBVPN_CLICK_MANUAL
+                if (state.portalJumpAttempts < MAX_PORTAL_JUMP_ATTEMPTS) {
+                    state.portalJumpAttempts += 1
+                    state.portalJumpSeq.value += 1
+                } else {
+                    state.manualRequired.value = true
+                    state.webVpnJumpFailed = true
+                    state.statusText.value = JwWebVpn.MSG_PORTAL_MANUAL
+                }
             }
         }
     }
@@ -458,15 +558,26 @@ fun JwEntryScreen(
         state.userOverride = JwWebVpn.Route.WEBVPN
         state.webVpnLoggedIn = false
         state.webVpnEntered = false
+        state.webVpnJumpFailed = false
         state.webVpnInjectAttempts = 0
         state.portalJumpAttempts = 0
         state.webVpnLoginSeq.value = 0
         state.portalJumpSeq.value = 0
+        state.webVpnProbeSeq.value = 0
         state.manualRequired.value = false
         state.statusText.value = JwLoginLogic.MSG_WEBVPN_OPENING
         state.mode.value = JwMode.LOGIN
         state.loading.value = true
         webView.loadUrl(JwWebVpn.LOGIN_URL)
+    }
+
+    /** 手动入口：打开 WebVPN 门户（自动跳转失败时，让用户自己在门户里点「本科教务」）。 */
+    fun openWebVpnPortal() {
+        state.manualRequired.value = false
+        state.webVpnJumpFailed = false
+        state.statusText.value = JwWebVpn.MSG_PORTAL_MANUAL
+        state.loading.value = true
+        webView.loadUrl(JwWebVpn.HOME_URL)
     }
 
     fun openOfficialPage(url: String, title: String) {
@@ -494,10 +605,12 @@ fun JwEntryScreen(
         // 清登录同时重置 WebVPN 会话状态（Cookie 统一清除），入口按当前网络探测结果决定。
         state.webVpnLoggedIn = false
         state.webVpnEntered = false
+        state.webVpnJumpFailed = false
         state.webVpnInjectAttempts = 0
         state.portalJumpAttempts = 0
         state.webVpnLoginSeq.value = 0
         state.portalJumpSeq.value = 0
+        state.webVpnProbeSeq.value = 0
         runCatching { CookieManager.getInstance().removeAllCookies(null) }
         runCatching { CookieManager.getInstance().flush() }
         runCatching { WebStorage.getInstance().deleteAllData() }
@@ -560,6 +673,12 @@ fun JwEntryScreen(
                             enabled = !state.cardsLoading.value,
                         ) { Text(JwCardTexts.BTN_REFRESH) }
                     }
+                    // DEBUG：设备上验证 WEB 模式 WebView 是否填满顶栏以下并滚动（release 不显示）。
+                    if (BuildConfig.DEBUG && mode == JwMode.WEB) {
+                        TextButton(onClick = { webView.loadUrl(JW_LAYOUT_SELFTEST_URL) }) {
+                            Text("布局自测")
+                        }
+                    }
                     if (mode != JwMode.WEB) {
                         TextButton(onClick = { state.clearConfirmVisible.value = true }) {
                             Text(JwLoginLogic.BTN_CLEAR)
@@ -568,21 +687,8 @@ fun JwEntryScreen(
                 },
             )
 
-            if (mode == JwMode.CARDS) {
-                JwCardsSection(
-                    cards = state.cards.value,
-                    refreshing = state.cardsLoading.value,
-                    lastUpdated = state.lastUpdated.value,
-                    globalError = state.cardsError.value,
-                    onRefresh = { state.refreshSeq.value += 1 },
-                    onOpenDataCard = { card -> openOfficialPage(card.targetUrl, card.kind.title) },
-                    onOpenTool = { tool -> openOfficialPage(JwCardCatalog.url(tool.path), tool.title) },
-                    onOpenSite = {
-                        openOfficialPage(JwCardCatalog.SITE_URL, JwCardTexts.BTN_OPEN_SITE)
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
+            val showWeb = mode != JwMode.CARDS
+            if (showWeb) {
                 state.statusText.value?.let { text ->
                     JwStatusBanner(
                         text = text,
@@ -598,6 +704,14 @@ fun JwEntryScreen(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        // WebVPN 自动进入教务失败时的手动入口：打开门户，由用户自己点「本科教务」。
+                        if (state.route.value == JwWebVpn.Route.WEBVPN &&
+                            (state.webVpnJumpFailed || state.webVpnLoggedIn)
+                        ) {
+                            TextButton(onClick = { openWebVpnPortal() }) {
+                                Text(JwWebVpn.BTN_OPEN_PORTAL)
+                            }
+                        }
                         TextButton(
                             onClick = { openDirect() },
                             enabled = !state.probing.value,
@@ -608,23 +722,48 @@ fun JwEntryScreen(
                         ) { Text(JwLoginLogic.BTN_WEBVPN) }
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                ) {
-                    AndroidView(
-                        factory = { webView },
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                // 2026-11-15 修复「点官方卡片进入 WebView 只显示顶部一小条」：
+                // WebView 始终保留在组合树里（卡片页时隐藏为 1dp），避免从 CARDS→WEB 重新
+                // Attach 时 AndroidView 测量到旧/0 高度；update 里显式 MATCH_PARENT 并 requestLayout。
+                AndroidView(
+                    factory = { webView },
+                    modifier = if (showWeb) Modifier.fillMaxSize() else Modifier.size(1.dp),
+                    update = { wv ->
+                        wv.layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        )
+                        wv.requestLayout()
+                    },
+                )
+                if (mode == JwMode.CARDS) {
+                    JwCardsSection(
+                        cards = state.cards.value,
+                        refreshing = state.cardsLoading.value,
+                        lastUpdated = state.lastUpdated.value,
+                        globalError = state.cardsError.value,
+                        onRefresh = { state.refreshSeq.value += 1 },
+                        onOpenDataCard = { card -> openOfficialPage(card.targetUrl, card.kind.title) },
+                        onOpenTool = { tool -> openOfficialPage(JwCardCatalog.url(tool.path), tool.title) },
+                        onOpenSite = {
+                            openOfficialPage(JwCardCatalog.SITE_URL, JwCardTexts.BTN_OPEN_SITE)
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
-                    if (state.loading.value) {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .fillMaxWidth()
-                                .height(2.dp),
-                        )
-                    }
+                }
+                if (showWeb && state.loading.value) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .height(2.dp),
+                    )
                 }
             }
         }
@@ -676,8 +815,14 @@ private class JwScreenState {
     /** 每次 WebVPN 门户页加载完成 +1，用于触发一次教务资源跳转。 */
     val portalJumpSeq = mutableStateOf(0)
 
+    /** 每次 WebVPN 页面（门户/登录后变体）+1，用于只读探针确认登录成功/门户态。 */
+    val webVpnProbeSeq = mutableStateOf(0)
+
     /** WebVPN 登录是否成功（已回到门户页）。 */
     var webVpnLoggedIn: Boolean = false
+
+    /** 自动找「本科教务」是否失败（用于展示「打开 WebVPN 门户」手动按钮）。 */
+    var webVpnJumpFailed: Boolean = false
 
     /** 是否已通过 WebVPN 进入包装后的教务业务页。 */
     var webVpnEntered: Boolean = false

@@ -209,31 +209,161 @@ object JwWebVpn {
 
     // ---- 注入脚本：WebVPN 门户里自动进入教务资源 ----------------------------
 
+    /** WebVPN 登录成功/门户态检测结果。 */
+    enum class PortalProbeOutcome {
+        /** 仍是登录表单（可能误判/需要重填）。 */
+        LOGIN_FORM,
+
+        /** 出现二次验证层（短信/TOTP），需要人工。 */
+        TWO_STEP,
+
+        /** 已登录并出现门户资源列表特征。 */
+        PORTAL,
+
+        /** 有登录错误提示。 */
+        ERROR,
+
+        /** 无法判定（非登录表单但也没有明显门户特征）。 */
+        UNKNOWN,
+    }
+
     /**
-     * 在 WebVPN 门户页只读扫描 `<a>`，命中「教务 / 本科教务 / 教学管理 / 210.34.74.77」等关键字的
-     * 官方资源链接后点击，进入网关包装后的教务地址。
+     * 只读检测当前 WebVPN 页面状态（2026-11-15 用户反馈：登录后没有自动打开教务）。
      *
-     * 只返回 `clicked` / `none` / `error`，不读取页面文本内容、不打印链接。
-     * 找不到时不猜 URL（网关加密格式无法离线确认），由用户手动点「本科教务」资源。
+     * 为什么要额外探针：登录成功后网关可能跳到 `/portal`、`/home`、带 query 的路径或 SPA 首页，
+     * 仅靠 URL 判断不可靠；同时门户资源列表是异步渲染，需要「页面文本/元素特征」判断。
+     *
+     * 返回 token：`login-form` / `two-step` / `portal` / `error` / `unknown`。
+     * - 出现 `#form` + `#user_name` → login-form；
+     * - 二次验证层可见 → two-step；
+     * - 错误提示可见 → error；
+     * - 文本含「资源/应用/最近访问/我的收藏/注销/退出登录」或出现资源列表容器 → portal；
+     * - 其它 → unknown。
+     */
+    fun buildPortalProbeScript(): String = """
+        (function () {
+          try {
+            function visible(el) {
+              if (!el) { return false; }
+              var s = window.getComputedStyle ? window.getComputedStyle(el) : null;
+              return (el.offsetWidth > 0 || el.offsetHeight > 0) &&
+                (!s || (s.display !== 'none' && s.visibility !== 'hidden'));
+            }
+            if (visible(document.getElementById('second_login_layer')) ||
+                visible(document.getElementById('second_login_layer_totp'))) {
+              return 'two-step';
+            }
+            var form = document.getElementById('form');
+            var user = document.getElementById('user_name');
+            if (form && user && visible(user)) { return 'login-form'; }
+            var err = document.getElementById('error-message');
+            if (visible(err) && String(err.textContent || '').replace(/\s+/g, '').length > 0) {
+              return 'error';
+            }
+            var text = String((document.body && document.body.innerText) || '');
+            if (text.indexOf('资源') >= 0 || text.indexOf('应用') >= 0 ||
+                text.indexOf('最近访问') >= 0 || text.indexOf('我的收藏') >= 0 ||
+                text.indexOf('注销') >= 0 || text.indexOf('退出登录') >= 0 ||
+                text.indexOf('退出') >= 0) {
+              return 'portal';
+            }
+            var containers = document.querySelectorAll(
+              '.resource-list, .resource-item, .app-list, .app-item, .res-list, [class*="resource"], [class*="app-item"]');
+            if (containers && containers.length > 0) { return 'portal'; }
+            return 'unknown';
+          } catch (e) {
+            return 'unknown';
+          }
+        })()
+    """.trimIndent()
+
+    fun portalProbeOutcomeOf(token: String?): PortalProbeOutcome = when (token) {
+        "login-form" -> PortalProbeOutcome.LOGIN_FORM
+        "two-step" -> PortalProbeOutcome.TWO_STEP
+        "portal" -> PortalProbeOutcome.PORTAL
+        "error" -> PortalProbeOutcome.ERROR
+        else -> PortalProbeOutcome.UNKNOWN
+    }
+
+    /**
+     * 在 WebVPN 门户页只读扫描资源入口，命中「本科教务 / 教务系统 / 教学管理 / 210.34.74.77」等
+     * 关键字的官方资源链接后点击，进入网关包装后的教务地址。
+     *
+     * 2026-11-15 增强（用户反馈「登录后未自动打开教务」）：
+     * - 扫描范围从 `a[href]` 扩到 `[data-url]` / `[data-href]` / `[onclick]` / `li` / 资源卡片容器；
+     * - 关键字补齐「本科教务/教务系统/教务管理/教学管理/教学服务平台/学生端/新版教务/旧版教务」；
+     * - href/onclick 里含 `210.34.74.77`、`/http/`、`/https/`、`jw`、`jwgl`、`jwxt`、`教务` 也命中；
+     * - 逐层向上找可点击元素再 dispatch click（兼容 Vue/React 事件委托）。
+     *
+     * 只返回 `clicked` / `no-link` / `error`，不读取/不打印链接内容；
+     * 找不到时不猜加密 URL（网关格式需真实账号验证），由用户手动点「本科教务」资源。
      */
     fun buildPortalJumpScript(): String = """
         (function () {
           try {
-            var keywords = ['本科教务', '教务系统', '教务管理', '教务', '教学管理', '210.34.74.77', 'jwgl'];
-            var anchors = document.querySelectorAll('a[href]');
-            for (var i = 0; i < anchors.length; i++) {
-              var a = anchors[i];
-              if (!a.href) { continue; }
-              var text = String(a.textContent || a.title || '').replace(/\s+/g, '');
-              var href = String(a.getAttribute('href') || '');
-              for (var k = 0; k < keywords.length; k++) {
-                if (text.indexOf(keywords[k]) >= 0 || href.indexOf(keywords[k]) >= 0) {
-                  a.click();
-                  return 'clicked';
-                }
-              }
+            var keywords = [
+              '本科教务', '教务系统', '教务管理', '教务', '教学管理', '教学服务平台',
+              '学生端', '新版教务', '旧版教务', '210.34.74.77', 'jwgl', 'jwxt'
+            ];
+            var hrefHints = ['210.34.74.77', '/http', '/https', 'jwgl', 'jwxt', 'jwapp'];
+            function textOf(el) {
+              if (!el) { return ''; }
+              return String(el.textContent || el.title || el.getAttribute('aria-label') || '')
+                .replace(/\s+/g, '');
             }
-            return 'none';
+            function metaOf(el) {
+              if (!el) { return ''; }
+              return String(el.getAttribute('href') || '') + ' ' +
+                String(el.getAttribute('data-url') || '') + ' ' +
+                String(el.getAttribute('data-href') || '') + ' ' +
+                String(el.getAttribute('data-link') || '') + ' ' +
+                String(el.getAttribute('onclick') || '');
+            }
+            function matches(el) {
+              var t = textOf(el);
+              var m = metaOf(el);
+              for (var k = 0; k < keywords.length; k++) {
+                if (t.indexOf(keywords[k]) >= 0 || m.indexOf(keywords[k]) >= 0) { return true; }
+              }
+              for (var h = 0; h < hrefHints.length; h++) {
+                if (m.indexOf(hrefHints[h]) >= 0) { return true; }
+              }
+              return false;
+            }
+            function clickable(el) {
+              var node = el;
+              var depth = 0;
+              while (node && node !== document.body && depth < 6) {
+                var tag = String(node.tagName || '').toLowerCase();
+                if (tag === 'a' || tag === 'button' || tag === 'li' ||
+                    node.getAttribute('onclick') || node.getAttribute('role') === 'button' ||
+                    node.getAttribute('tabindex') !== null) {
+                  return node;
+                }
+                node = node.parentElement;
+                depth += 1;
+              }
+              return el;
+            }
+            var candidates = document.querySelectorAll(
+              'a[href], [data-url], [data-href], [data-link], [onclick], li, ' +
+              '.resource-item, .app-item, .res-item, [class*="resource"], [class*="app-item"]');
+            for (var i = 0; i < candidates.length; i++) {
+              var el = candidates[i];
+              if (!matches(el)) { continue; }
+              var target = clickable(el);
+              try {
+                target.click();
+                return 'clicked';
+              } catch (e) {}
+              try {
+                var ev = document.createEvent('MouseEvents');
+                ev.initEvent('click', true, true);
+                target.dispatchEvent(ev);
+                return 'clicked';
+              } catch (e2) {}
+            }
+            return 'no-link';
           } catch (e) {
             return 'error';
           }
@@ -248,4 +378,10 @@ object JwWebVpn {
 
     fun portalJumpOutcomeOf(token: String?): PortalJumpOutcome =
         if (token == "clicked") PortalJumpOutcome.CLICKED else PortalJumpOutcome.NEED_MANUAL
+
+    /** 手动入口按钮：直接打开 WebVPN 门户（自动跳转失败时用）。 */
+    const val BTN_OPEN_PORTAL: String = "打开 WebVPN 门户"
+
+    /** 自动跳转失败时的提示（让用户明确手动操作）。 */
+    const val MSG_PORTAL_MANUAL: String = "未自动找到「本科教务」入口：请在下方门户里手动点「本科教务」资源"
 }

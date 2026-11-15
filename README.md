@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.55.0**——用户 12 项反馈修复（活动/拖动/状态栏/地图/外观/WebVPN/学信网/电费/描述/云空间/深色 hero/通知自动加载）+ 云空间同步；工具 18 项、使用说明 25 卡。单测 **1412/0**、快速 E2E **45/0**（导航 10/10），签名 APK 已交付桌面。详见 [REPORT_ROUND62](docs/REPORT_ROUND62_20261115.md)。
+- 状态：**v4.56.1**——第二轮 8 项反馈（浅色底栏/学信网/双重动画/活动微信/WebVPN/教务 WebView/顶部留白/今日校园）+ 快递 + 地图网页嵌入 + 课表课程块重叠修复；工具 20 项、说明 27 卡。单测 **1459/0**、E2E **45/0**；鸿蒙 1.0.6 HAP 与网页/小程序移植见 `docs/REPORT_ROUND63_20261116.md`。
 
 ## 目录
 

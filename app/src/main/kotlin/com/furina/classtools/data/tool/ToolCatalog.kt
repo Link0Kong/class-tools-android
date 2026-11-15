@@ -11,6 +11,7 @@ import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.LocalShipping
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.HowToVote
@@ -202,6 +203,24 @@ object ToolCatalog {
             accent = clay,
             category = ToolCategory.CLASS,
             features = listOf("点名名单与到/假", "沿用抽签名单", "已处理沉底 / 重置本轮"),
+        ),
+        AppTool(
+            id = "express",
+            name = "快递",
+            subtitle = "取件码 · 身份码 · 驿站",
+            icon = Icons.Rounded.LocalShipping,
+            accent = clay,
+            category = ToolCategory.CLASS,
+            features = listOf("拼多多/淘宝身份码一键打开", "菜鸟/京东查件入口", "未装 App 自动转官方网页"),
+        ),
+        AppTool(
+            id = "today",
+            name = "今日校园",
+            subtitle = "学工事务 · 融合门户",
+            icon = Icons.Rounded.Groups,
+            accent = teal,
+            category = ToolCategory.CLASS,
+            features = listOf("12 个学工/门户服务入口", "融合门户自动登录", "打开今日校园 App"),
         ),
         AppTool(
             id = "diag",

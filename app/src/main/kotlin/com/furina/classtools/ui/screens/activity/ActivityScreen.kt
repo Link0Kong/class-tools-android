@@ -358,6 +358,8 @@ private fun ActivityList(
 
 @Composable
 private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit) {
+    var hint by remember { mutableStateOf<String?>(null) }
+    var reloadSeq by remember { mutableIntStateOf(0) }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -374,14 +376,20 @@ private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit)
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f),
                     )
+                    TextButton(onClick = { reloadSeq += 1 }) { Text("重新加载") }
+                }
+                hint?.let { text ->
                     Text(
-                        "登录后自动返回",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = text,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
                     )
                 }
                 LoginWebView(
                     modifier = Modifier.fillMaxWidth().weight(1f),
+                    reloadSeq = reloadSeq,
+                    onHint = { hint = it },
                     onToken = onToken,
                 )
             }
@@ -391,19 +399,60 @@ private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit)
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun LoginWebView(modifier: Modifier = Modifier, onToken: (ActivityToken) -> Unit) {
+private fun LoginWebView(
+    modifier: Modifier = Modifier,
+    reloadSeq: Int = 0,
+    onHint: (String?) -> Unit = {},
+    onToken: (ActivityToken) -> Unit,
+) {
     val context = LocalContext.current
     var routeRecovered by remember { mutableStateOf(false) }
+    var oauthRecovered by remember { mutableStateOf(false) }
+    var stubInjected by remember { mutableStateOf(false) }
     val webView = remember {
         WebView(context).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.cacheMode = WebSettings.LOAD_DEFAULT
+            // 2026-11-15：学校活动 H5 是微信内应用；普通 WebView UA 会被微信 OAuth 拦截页
+            // 提示「请在微信客户端/小程序打开」。这里固定微信 UA（含 MicroMessenger/XWEB/Weixin），
+            // 再配合 SEED_WX_SESSION_JS 环境桩，让 H5 走学校登录页而不是微信 OAuth。
+            settings.userAgentString = ActivityWebSession.WECHAT_UA
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): Boolean {
+                    val url = request.url.toString()
+                    // 1) 微信 OAuth 跳转：拦截并使用环境桩重新加载（否则用户只会看到微信提示页）。
+                    if (ActivityWebSession.isWechatOauthUrl(url)) {
+                        onHint(ActivityWebSession.MSG_OAUTH_BLOCKED)
+                        if (!oauthRecovered) {
+                            oauthRecovered = true
+                            view.evaluateJavascript(ActivityWebSession.SEED_WX_SESSION_JS, null)
+                            view.loadUrl(SPA_URL)
+                        }
+                        return true
+                    }
+                    // 2) 只允许 http(s)；weixin:// 等自定义 scheme 一律阻止（避免调起微信/其它 App）。
+                    return !(url.startsWith("http://") || url.startsWith("https://"))
+                }
+
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    // 尽早注入环境桩/会话桩（文档刚创建时；失败也无副作用，onPageFinished 会再注入一次）。
+                    view.evaluateJavascript(ActivityWebSession.SEED_WX_SESSION_JS, null)
+                }
+
                 override fun onPageFinished(view: WebView, url: String?) {
                     val current = url.orEmpty().ifBlank { view.url.orEmpty() }
+                    // 环境桩注入：保证 H5 不再跳微信 OAuth（幂等，可用于后续刷新）。
+                    view.evaluateJavascript(ActivityWebSession.SEED_WX_SESSION_JS, null)
+                    if (!stubInjected) {
+                        stubInjected = true
+                        view.evaluateJavascript(ActivityWebSession.WX_ENV_STUB_JS, null)
+                    }
                     // 兜底：若 H5 路由/存储把学校编号弄成 undefined（历史缓存/旧入口），
                     // 页面会请求 schoolNo=undefined 并弹「未找到对应编号的学校信息」。
                     // 重新用带 #/fjtcm/login 的正确入口加载一次（只重试一次，避免死循环）。
@@ -412,7 +461,11 @@ private fun LoginWebView(modifier: Modifier = Modifier, onToken: (ActivityToken)
                         view.loadUrl(SPA_URL)
                         return
                     }
-                    view.evaluateJavascript(ActivityWebSession.ENSURE_SCHOOL_NO_JS, null)
+                    // 兜底：如果仍停留在微信 OAuth 页面（拦截没命中的重定向），用环境桩重载 SPA。
+                    if (!oauthRecovered && ActivityWebSession.isWechatOauthUrl(current)) {
+                        oauthRecovered = true
+                        view.loadUrl(SPA_URL)
+                    }
                 }
 
                 override fun onReceivedError(
@@ -442,11 +495,28 @@ private fun LoginWebView(modifier: Modifier = Modifier, onToken: (ActivityToken)
             runCatching { webView.destroy() }
         }
     }
+    // 「重新加载」按钮：先补环境桩，再重载 H5。
+    LaunchedEffect(reloadSeq) {
+        if (reloadSeq <= 0) return@LaunchedEffect
+        webView.evalJs(ActivityWebSession.SEED_WX_SESSION_JS)
+        webView.evalJs(ActivityWebSession.WX_ENV_STUB_JS)
+        webView.loadUrl(SPA_URL)
+    }
     LaunchedEffect(Unit) {
         while (isActive) {
             delay(1200)
-            // 保证 H5 路由能读到正确学校编号（只在缺失/undefined 时写入，幂等）。
+            // 环境桩（幂等）+ 学校编号兜底（只在缺失/undefined 时写入）。
+            webView.evalJs(ActivityWebSession.SEED_WX_SESSION_JS)
             webView.evalJs(ActivityWebSession.ENSURE_SCHOOL_NO_JS)
+            // 兜底：个别 H5 版本/缓存仍弹「请在微信…」提示时，尝试重载一次。
+            val promptText = webView.evalJs(WECHAT_PROMPT_JS)
+            if (promptText == "prompt") {
+                onHint(ActivityWebSession.MSG_OAUTH_BLOCKED)
+                if (!oauthRecovered) {
+                    oauthRecovered = true
+                    webView.loadUrl(SPA_URL)
+                }
+            }
             val raw = webView.evalJs(LG_INFO_JS) ?: continue
             if (raw.isNotBlank() && BuildConfig.DEBUG) {
                 // 只打印键名/类型/长度（脱敏），用于确认 lgInfo 字段与后端 userId/classId 要求一致。
@@ -461,6 +531,35 @@ private fun LoginWebView(modifier: Modifier = Modifier, onToken: (ActivityToken)
     }
     AndroidView(factory = { webView }, modifier = modifier)
 }
+
+/**
+ * 页面是否出现微信打开提示（只读检测 + 自动关掉 H5 的「服务器异常」弹层）。
+ *
+ * 返回 `prompt` 表示出现「请在微信…」提示；`dismissed` 表示关掉了一个非致命弹层；其它为 `ok`。
+ */
+private const val WECHAT_PROMPT_JS = """
+    (function () {
+      try {
+        var text = (document.body && document.body.innerText) || '';
+        if (text.indexOf('请在微信') >= 0) { return 'prompt'; }
+        var dialogs = document.querySelectorAll('.weui-dialog__btn_primary, .vux-dialog .weui-dialog__btn_primary, .vux-x-dialog .weui-dialog__btn_primary');
+        for (var i = 0; i < dialogs.length; i++) {
+          var btn = dialogs[i];
+          var label = String(btn.innerText || '').replace(/\s+/g, '');
+          if (label.indexOf('确定') < 0 && label.indexOf('知道了') < 0) { continue; }
+          var box = btn.closest('.weui-dialog, .vux-dialog, .vux-x-dialog') || btn.parentElement;
+          var boxText = box ? String(box.innerText || '') : '';
+          if (boxText.indexOf('服务器异常') >= 0 || boxText.indexOf('请稍后重试') >= 0) {
+            btn.click();
+            return 'dismissed';
+          }
+        }
+        return 'ok';
+      } catch (e) {
+        return 'ok';
+      }
+    })()
+"""
 
 private const val TAG = "ActivityLogin"
 

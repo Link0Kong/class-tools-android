@@ -64,6 +64,120 @@ object ActivityWebSession {
             text.contains("schoolNo=undefined")
     }
 
+    // ---- 微信环境兼容（2026-11-15 用户反馈「活动页出现请在微信小程序打开」）----
+
+    /**
+     * 活动 H5 的微信 UA（保持 MicroMessenger / XWEB / Weixin 常用字段）。
+     *
+     * 2026-11-15 匿名实测（Chromium headless，`rcm.fjtcm.edu.cn/wechat/#/fjtcm/login`）：
+     * - 普通 Android UA / 桌面 UA：H5 仍会跳转 `open.weixin.qq.com/connect/oauth2/authorize`，
+     *   WeChat 页面显示「请在微信客户端打开链接」（用户看到的是同类提示「请在微信小程序打开」）；
+     * - 仅换 UA 不能跳过 OAuth：真正触发跳转的是 H5 启动时缺少 `localStorage.wxUser` 的微信登录检查；
+     * - 预置一个**只读环境桩** `wxUser`（随机 openId + wxNickname）后，H5 的 `basic/user/wechat`
+     *   查询返回空（匿名接口实测 HTTP 200 空 body）→ H5 走 `status=3` 分支渲染学校登录页，
+     *   **不再跳微信 OAuth**（这是本页修复的核心，见 [SEED_WX_SESSION_JS]）。
+     */
+    const val WECHAT_UA: String =
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP2A.240905.003; wv) " +
+            "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/116.0.0.0 " +
+            "Mobile Safari/537.36 MicroMessenger/8.0.49.2600(0x2800313D) " +
+            "WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64 " +
+            "XWEB/1375 MMWEBSDK/20240409"
+
+    /**
+     * 微信登录 OAuth 跳转地址（`open.weixin.qq.com/connect/oauth2/authorize`）。
+     *
+     * 该页面在非微信客户端会显示「请在微信客户端打开链接」；本 App 会拦截它并用环境桩重新加载，
+     * 避免把用户丢到微信的提示页。
+     */
+    fun isWechatOauthUrl(url: String?): Boolean {
+        val text = url?.trim().orEmpty()
+        if (text.isEmpty()) return false
+        val host = runCatching { java.net.URI(text).host?.lowercase() }.getOrNull()
+        if (host == "open.weixin.qq.com") return text.contains("/connect/oauth2/authorize")
+        return text.startsWith("weixin://")
+    }
+
+    /**
+     * 最小只读微信环境桩（不伪造登录、不调起支付）：
+     * - `window.__wxjs_environment='wechat'` + `__wxjs_is_wkwebview=false`（微信内普通网页环境）；
+     * - `window.wx` / `jWeixin` 只提供 `ready/config/error` 与 `miniProgram` 的空实现，
+     *   `miniProgram.getEnv` 返回 `{miniprogram:false}`，不执行任何登录/支付/跳转。
+     *
+     * 页面已加载后注入（WebView 无法在文档创建前注入）；H5 的启动逻辑主要看 `wxUser`，
+     * 桩只是消除个别功能对 `wx` 存在性的硬依赖。
+     */
+    val WX_ENV_STUB_JS: String = """
+        (function () {
+          try {
+            window.__wxjs_environment = 'wechat';
+            window.__wxjs_is_wkwebview = false;
+            var w = window.wx || {};
+            var noop = function () {};
+            if (!w.ready) { w.ready = function (cb) { try { cb && cb(); } catch (e) {} }; }
+            if (!w.error) { w.error = noop; }
+            if (!w.config) { w.config = noop; }
+            if (!w.checkJsApi) { w.checkJsApi = noop; }
+            if (!w.miniProgram) {
+              w.miniProgram = {
+                getEnv: function (cb) { try { cb && cb({ miniprogram: false }); } catch (e) {} },
+                navigateTo: noop, redirectTo: noop, switchTab: noop, reLaunch: noop,
+                navigateBack: noop, postMessage: noop
+              };
+            }
+            window.wx = w;
+            window.jWeixin = window.jWeixin || w;
+            return 'stubbed';
+          } catch (e) {
+            return 'error';
+          }
+        })()
+    """.trimIndent()
+
+    /**
+     * 预置微信登录检查所需的最小会话桩（**只读环境桩，不伪造登录/不写入 lgInfo**）：
+     * - `localStorage.schoolNo = fjtcm`（避免学校编号 undefined 报错）；
+     * - `localStorage.wxUser = {openId: "", wxNickname: "班级工具站", schoolNo: fjtcm}`
+     *   仅当缺失/无效时写入，使 H5 跳过微信 OAuth 跳转、渲染学校自己的登录页；
+     *   **openId 故意留空**（不伪造微信身份）：H5 用空 openId 调 `basic/user/wechat` 匿名实测
+     *   返回 HTTP 200 空 body → H5 走 status=3 分支渲染登录页，不会绑定/冒充任何微信账号。
+     * 幂等：已有合法 wxUser（wxNickname 非空）时不覆盖。
+     */
+    val SEED_WX_SESSION_JS: String = """
+        (function () {
+          try {
+            var no = '$SCHOOL_NO';
+            var cur = '';
+            try { cur = localStorage.getItem('schoolNo') || ''; } catch (e) {}
+            if (!cur || cur === 'undefined' || cur === 'null') {
+              localStorage.setItem('schoolNo', no);
+            }
+            var valid = false;
+            try {
+              var raw = localStorage.getItem('wxUser');
+              var u = raw ? JSON.parse(raw) : null;
+              valid = !!(u && typeof u.wxNickname === 'string' && u.wxNickname);
+            } catch (e) { valid = false; }
+            if (!valid) {
+              localStorage.setItem('wxUser', JSON.stringify({
+                openId: '', wxNickname: '班级工具站', schoolNo: no
+              }));
+              return 'seeded';
+            }
+            return 'kept';
+          } catch (e) {
+            return 'error';
+          }
+        })()
+    """.trimIndent()
+
+    /** 页面出现了微信「请在微信…打开」提示（拦截失败/新版 H5 时的兜底识别，供 UI 提示）。 */
+    const val WECHAT_PROMPT_MARKER: String = "请在微信"
+
+    /** 拦截 OAuth 后的 App 内提示（不把用户丢到微信提示页）。 */
+    const val MSG_OAUTH_BLOCKED: String =
+        "已拦截微信授权跳转，正在用学校登录页继续；若仍提示微信打开，请点「重新加载」"
+
     /**
      * 解析 WebView 回调里的 `lgInfo` 文本 → [ActivityToken]。
      *

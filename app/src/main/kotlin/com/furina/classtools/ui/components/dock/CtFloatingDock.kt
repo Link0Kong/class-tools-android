@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -59,7 +60,9 @@ import kotlin.math.roundToInt
  * **ColorOS 17 浮岛式底栏**（task-20 / v2.0.0）。
  *
  * 设计要点（对齐 ColorOS 17 Floating Island + M3 Expressive floating toolbar）：
- * - 半透明胶囊条：surfaceContainer 半透明 + 1dp 高光描边 + 柔和阴影（不用 NavigationBar 默认样式）；
+ * - 半透明胶囊条：surfaceContainer 半透明 + 1dp 高光描边（不用 NavigationBar 默认样式）；
+ * - **浅色无黑色投影**（v4.55 用户反馈「浅色底部工具栏发黑」）：浅色下阴影 0dp、改用 1dp 细边框
+ *   + 近白 tonal 底定义边缘；深色保留克制阴影（6dp）。避免 12dp 高度阴影在浅色页面上形成黑灰晕影；
  * - **悬浮离底**：底部在导航栏 insets 之上再留 10dp，左右留 20dp（平板限宽 480dp 居中）；
  * - **弹性药丸**：选中项背后 secondaryContainer 药丸，位置用 `selectedIndex + pagerOffsetFraction`
  *   跟手；松手由 [CtMotion.spatialFast] spring 吸附；拖动中药丸横向拉伸 8%、纵向略压；
@@ -102,6 +105,7 @@ fun CtFloatingDock(
     val safeIndex = selectedIndex.coerceIn(0, destinations.lastIndex)
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
+    val dark = LocalCtDarkTheme.current
     val specularColor = MaterialTheme.colorScheme.surfaceBright
     var specularX by remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
 
@@ -127,12 +131,22 @@ fun CtFloatingDock(
         label = "dockPillScaleY",
     )
 
-    val containerColor = if (translucent) {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainer
+    // 浅色：近白 tonal 底（与页面底色同族）+ 1dp 细边框，靠边框而不是黑色投影区分层次。
+    // 深色：保持原半透明 surface 底与克制阴影。
+    val containerColor = when {
+        !translucent -> MaterialTheme.colorScheme.surfaceContainer
+        dark -> MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
+        else -> MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.92f)
     }
-    val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+    val borderColor = if (dark) {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.80f)
+    }
+    // 浅色 0dp：不产生黑色投影晕影；深色保留 6dp 克制阴影（原 12dp 过重）。
+    val dockShadowElevation = if (dark) 6.dp else 0.dp
+    // 选中药丸同理：浅色无投影，深色 2dp 轻微悬浮。
+    val pillShadowElevation = if (dark) 2.dp else 0.dp
 
     Box(
         modifier = modifier
@@ -150,7 +164,7 @@ fun CtFloatingDock(
             color = if (glassModifier != null) Color.Transparent else containerColor,
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = 0.dp,
-            shadowElevation = 12.dp,
+            shadowElevation = dockShadowElevation,
             border = BorderStroke(1.dp, borderColor),
         ) {
             androidx.compose.foundation.layout.BoxWithConstraints(
@@ -236,7 +250,7 @@ fun CtFloatingDock(
                         1.dp,
                         MaterialTheme.colorScheme.surfaceBright.copy(alpha = 0.55f),
                     ),
-                    shadowElevation = 6.dp,
+                    shadowElevation = pillShadowElevation,
                 ) {}
 
                 Row(

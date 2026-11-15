@@ -4,7 +4,7 @@ package com.furina.classtools.ui.screens.guide
  * 使用说明「卡片化」内容数据（**纯 Kotlin，无 Compose / Android 依赖**，可直接单测）。
  *
  * 信息架构与三端共享契约 `web/使用说明_卡片化重构契约_20261112.md` 一致：
- * 5 个分类（入门 / 学习 / 生活 / 协作 / 更多）、25 张卡、一屏一张左右滑动。
+ * 5 个分类（入门 / 学习 / 生活 / 协作 / 更多）、27 张卡、一屏一张左右滑动。
  *
  * 文案硬规则（契约 §0）：
  * - 标题 ≤ 8 字；一句话作用 ≤ 20 字；每条步骤 ≤ 24 字；提示 ≤ 30 字；
@@ -18,7 +18,7 @@ package com.furina.classtools.ui.screens.guide
 object UserGuideContent {
 
     /** 内容版本（内容较上一版有实质变化时递增；供设置页/关于页展示）。 */
-    const val VERSION: String = "2026-11-15.3"
+    const val VERSION: String = "2026-11-16.1"
 
     /** 轮播顺序即本列表顺序（契约 §5.2）。 */
     val cards: List<GuideCard> = listOf(
@@ -219,6 +219,20 @@ object UserGuideContent {
             tone = GuideTone.BLUE,
         ),
         GuideCard(
+            id = "express",
+            category = GuideCategory.LIFE,
+            title = "快递",
+            subtitle = "取件码 · 身份码一键打开",
+            steps = listOf(
+                "点「快递」选拼多多/淘宝/菜鸟/京东",
+                "打开对应 App 的身份码/取件码",
+                "未装 App 自动转官方网页",
+            ),
+            tip = "仅打开官方页面，不保存取件信息",
+            scene = GuideScene.GRID,
+            tone = GuideTone.SAND,
+        ),
+        GuideCard(
             id = "vote",
             category = GuideCategory.TEAM,
             title = "投票",
@@ -257,6 +271,20 @@ object UserGuideContent {
                 "上传下载删除，文件保留 3 天",
             ),
             tip = "任意大小分片上传；到期自动清理",
+            scene = GuideScene.GRID,
+            tone = GuideTone.BLUE,
+        ),
+        GuideCard(
+            id = "today",
+            category = GuideCategory.TEAM,
+            title = "今日校园",
+            subtitle = "学工事务 · 融合门户",
+            steps = listOf(
+                "点「今日校园」看学工服务入口",
+                "融合门户用统一身份认证登录",
+                "也可直接打开今日校园 App",
+            ),
+            tip = "登录信息只在本机，不上传",
             scene = GuideScene.GRID,
             tone = GuideTone.BLUE,
         ),

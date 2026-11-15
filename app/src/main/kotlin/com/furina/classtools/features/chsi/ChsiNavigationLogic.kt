@@ -33,6 +33,28 @@ object ChsiNavigationLogic {
     /** 提取完成后应处于的模式：确认已登录 → 回卡片页；未登录 → 保持当前模式（登录页/卡片页）。 */
     fun modeAfterExtract(mode: Mode, loggedIn: Boolean): Mode = if (loggedIn) Mode.CARDS else mode
 
+    /**
+     * 一次提取结果是否应判定为「已登录」。
+     *
+     * - 后台自动恢复（CARDS）：沿用强信号 [ChsiExtractLogic.isLoggedInPayload]；
+     * - 用户主动登录（LOGIN）：真实档案页可能没有「退出/个人中心」字样，使用宽松判定
+     *   [ChsiExtractLogic.isLoginSuccessAfterLogin]（URL 回档案域 + 非空数据 + 无营销标记）——
+     *   修复「登录后一直停在账号信息界面不切卡片」。
+     */
+    fun loggedInAfterExtract(
+        payload: ChsiPagePayload?,
+        pageUrl: String?,
+        mode: Mode,
+    ): Boolean {
+        if (ChsiExtractLogic.isLoggedInPayload(payload)) return true
+        if (mode != Mode.LOGIN) return false
+        return ChsiExtractLogic.isLoginSuccessAfterLogin(payload, pageUrl)
+    }
+
+    /** LOGIN 模式下是否展示「已登录，进入卡片页」兜底按钮（用户已登录但自动判定失败时）。 */
+    fun showEnterCardsFallback(mode: Mode, refreshing: Boolean): Boolean =
+        mode == Mode.LOGIN && !refreshing
+
     /** 页面加载完成时若命中登录页 URL：仅用户主动在登录模式时停留；卡片页后台检查不跳转。 */
     fun staysOnLoginPage(mode: Mode, pageIsLoginUrl: Boolean): Boolean = pageIsLoginUrl && mode == Mode.LOGIN
 

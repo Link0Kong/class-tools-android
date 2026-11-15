@@ -173,7 +173,16 @@ fun ChsiEntryScreen(
         val payload = ChsiExtractLogic.parseWebViewResult(raw)
         // 学信档案域未登录时也会显示营销首页（不是登录页 URL），必须用页面内容确认登录态，
         // 否则会把「免费查看学籍…」的引导页误判成已登录并展示空数据卡。
-        if (!ChsiExtractLogic.isLoggedInPayload(payload)) {
+        // 2026-11-15 用户反馈：真实登录后的档案页可能没有「退出登录/个人中心」强信号 →
+        // LOGIN 模式下用宽松判定（档案域 + 非空数据 + 无未登录营销标记）视为登录成功，自动回卡片页。
+        val loggedIn = ChsiNavigationLogic.loggedInAfterExtract(
+            payload = payload,
+            pageUrl = state.pageUrl,
+            // 用户在登录页点过「已登录，进入卡片页」→ 之后提取也按登录流程的宽松判定处理，
+            // 避免刚进卡片页又被营销页误判打回未登录态。
+            mode = if (state.loginConfirmedByUser) ChsiMode.LOGIN else state.mode.value,
+        )
+        if (!loggedIn) {
             state.extractInFlight = false
             state.refreshing.value = false
             state.loggedIn.value = false
@@ -221,6 +230,22 @@ fun ChsiEntryScreen(
         }
     }
 
+    /**
+     * LOGIN 模式兜底：用户反馈已完成登录但页面仍停留在账号/档案页时，手动进入卡片页。
+     *
+     * 不伪造登录态：只是切回卡片页并再尝试提取一次数据；提取不到的卡走空态兜底。
+     */
+    fun enterCardsFromLogin() {
+        state.loginConfirmedByUser = true
+        state.mode.value = ChsiMode.CARDS
+        state.loggedIn.value = true
+        state.refreshing.value = true
+        state.globalError.value = null
+        state.extractInFlight = false
+        state.loading.value = true
+        state.extractSeq.value += 1
+    }
+
     fun refresh() {
         if (state.refreshing.value) return
         state.refreshing.value = true
@@ -247,6 +272,7 @@ fun ChsiEntryScreen(
     /** 退出学信网登录：清 Cookie + WebStorage + 缓存，回登录态（不影响学信网账号本身）。 */
     fun logout() {
         state.logoutConfirmVisible.value = false
+        state.loginConfirmedByUser = false
         runCatching { CookieManager.getInstance().removeAllCookies(null) }
         runCatching { CookieManager.getInstance().flush() }
         runCatching { WebStorage.getInstance().deleteAllData() }
@@ -329,6 +355,28 @@ fun ChsiEntryScreen(
             Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 if (mode == ChsiMode.LOGIN) {
                     ChsiHintBanner(ChsiTexts.HINT_MANUAL_LOGIN)
+                    // 2026-11-15 兜底：真实登录页可能没有「退出登录」等强信号导致自动判定失败，
+                    // 用户确认已登录时可直接进入卡片页（不伪造登录态，进卡片后仍会再提取一次）。
+                    if (ChsiNavigationLogic.showEnterCardsFallback(mode, state.refreshing.value)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = ChsiTexts.HINT_ENTER_CARDS_FALLBACK,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { enterCardsFromLogin() }) {
+                                Text(ChsiTexts.BTN_ENTER_CARDS)
+                            }
+                        }
+                    }
                 }
                 state.globalError.value?.takeIf { it.isNotBlank() }?.let { message ->
                     ChsiHintBanner(message, isError = true)
@@ -415,6 +463,9 @@ private class ChsiScreenState {
 
     /** 是否有提取正在进行（避免同一次页面加载重复触发）。 */
     var extractInFlight: Boolean = false
+
+    /** 用户是否在登录页点过「已登录，进入卡片页」兜底（之后提取按登录流程宽松判定）。 */
+    var loginConfirmedByUser: Boolean = false
 }
 
 /** 学信网页内提示条（手动登录提示 / 加载失败）。 */

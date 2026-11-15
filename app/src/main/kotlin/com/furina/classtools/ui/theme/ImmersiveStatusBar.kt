@@ -38,9 +38,9 @@ import kotlinx.coroutines.delay
  *   回前台（ON_RESUME）/ 其它页面把状态栏重新 show 出来时自动补隐藏；
  * - [enabled] = false：恢复显示状态栏，各页面 `statusBarsPadding()` 的行为完全不变；
  * - **insets 兜底**：状态栏隐藏后 `WindowInsets.statusBars` 会变成 0，页面 `statusBarsPadding()`
- *   也会归零。这里在内容顶部补一段等价安全区（系统 status_bar_height 与刘海取大者），
- *   页面视觉与「状态栏可见时」一致，顶栏返回按钮不会被下滑临时显示的状态栏遮挡。
- *   页面自行进入全屏（导航栏也被隐藏，如沉浸式 PPT 播放器）时不补，保持真正全屏。
+ *   也会归零。这里在内容顶部补一段等价安全区（系统 status_bar_height 与刘海取大者）**再加 10dp
+ *   呼吸区**（v4.55 用户反馈「UI 不要直接贴顶」），保证身份页/工作台/工具页/WebView 页的内容与
+ *   返回按钮都不贴屏幕顶边；页面自行进入全屏（导航栏也被隐藏，如沉浸式 PPT 播放器）时不补，保持真正全屏。
  *
  * 只负责状态栏；底部导航栏仍由 MainActivity 的 `enableEdgeToEdge` + 透明导航栏（v4.54 黑条修复）管理。
  */
@@ -85,11 +85,12 @@ fun CtImmersiveStatusBar(
         window?.setStatusBarsHidden(enabled)
     }
 
-    // 状态栏隐藏时的顶部安全区（见类注释）：status_bar_height 与刘海高度取大；24dp 兜底。
+    // 状态栏隐藏时的顶部安全区（见类注释）：status_bar_height 与刘海高度取大；24dp 兜底；
+    // 再额外加 [CtTopBreathing] 呼吸区，避免页面内容/顶栏返回按钮贴屏幕顶边。
     val statusBarHeightPx = remember(context) { statusBarHeightPx(context) }
     val reserveTop = enabled && statusBarTop == 0 && navigationBarBottom > 0
     val extraTop = if (reserveTop) {
-        with(density) { maxOf(statusBarHeightPx, cutoutTop).toDp() }
+        with(density) { maxOf(statusBarHeightPx, cutoutTop).toDp() } + CtTopBreathing
     } else {
         0.dp
     }
@@ -129,3 +130,10 @@ private fun statusBarHeightPx(context: Context): Int {
     val fallback = (24f * res.displayMetrics.density).toInt()
     return maxOf(fromRes, fallback)
 }
+
+/**
+ * 状态栏隐藏时，在安全区之外再留的顶部呼吸区（用户要求约 8–12dp，取 10dp）。
+ *
+ * 既避免页面内容/顶栏返回按钮贴屏幕顶边，也不至于明显压缩首屏。
+ */
+private val CtTopBreathing = 10.dp

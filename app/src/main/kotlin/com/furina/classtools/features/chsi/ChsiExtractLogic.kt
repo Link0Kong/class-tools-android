@@ -332,6 +332,45 @@ object ChsiExtractLogic {
         "个人中心",
     )
 
+    /** 登录后宽松判定所要求的最少页面文本长度（过滤空白/错误页）。 */
+    const val MIN_LOGGED_IN_TEXT_LENGTH: Int = 20
+
+    /**
+     * 页面是否包含「未登录营销」强信号（注册学信网账号 / 立即登录 / 账号登录 …）。
+     * 供登录完成后的宽松判定与单测复用。
+     */
+    fun hasLoggedOutMarkers(payload: ChsiPagePayload?): Boolean {
+        val haystack = haystackOf(payload)
+        if (haystack.isBlank()) return false
+        return LOGGED_OUT_MARKERS.any { haystack.contains(it) }
+    }
+
+    /**
+     * **LOGIN 模式登录完成后的宽松判定**（2026-11-15 用户反馈：登录后一直停在账号信息界面）。
+     *
+     * 真实登录后的 my.chsi 档案页并不一定包含「退出登录 / 个人中心」等强信号（页面改版/移动端精简版），
+     * 旧实现 [isLoggedInPayload] 因此判定失败 → 一直不切卡片。
+     * 规则（仅在用户主动登录流程里使用，后台自动恢复仍用强信号）：
+     * 1. 当前 URL 已回到 my.chsi 档案域；
+     * 2. 提取到的页面数据非空且文本长度 ≥ [MIN_LOGGED_IN_TEXT_LENGTH]；
+     * 3. 不含「注册学信网账号 / 登录学信档案 / 立即登录 / 账号登录」等未登录营销标记。
+     * 满足即视为登录成功（数据卡后续再用页面内容尽力提取，取不到走空态兜底）。
+     */
+    fun isLoginSuccessAfterLogin(payload: ChsiPagePayload?, pageUrl: String?): Boolean {
+        if (!isLoggedInUrl(pageUrl)) return false
+        if (payload == null) return false
+        val text = payload.text.trim()
+        if (text.length < MIN_LOGGED_IN_TEXT_LENGTH) return false
+        if (hasLoggedOutMarkers(payload)) return false
+        return true
+    }
+
+    private fun haystackOf(payload: ChsiPagePayload?): String {
+        if (payload == null) return ""
+        val linkTexts = payload.links.map { it.text }
+        return payload.text + "\n" + linkTexts.joinToString("\n")
+    }
+
     /** 当前本地时间 `HH:mm`（状态条「数据更新 HH:mm」，JVM 可测）。 */
     fun updatedTimeText(millis: Long = System.currentTimeMillis()): String =
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(millis))

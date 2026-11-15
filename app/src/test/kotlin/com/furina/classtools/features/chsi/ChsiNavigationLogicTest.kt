@@ -121,4 +121,107 @@ class ChsiNavigationLogicTest {
         assertEquals("返回卡片", ChsiTexts.BTN_BACK_TO_CARDS)
         assertTrue(ChsiTexts.HINT_LOGIN_FROM_CARDS.contains("登录学信网"))
     }
+
+    // ---- 2026-11-15 追加：登录后不切卡片（真实档案页无「退出/个人中心」强信号）---------
+
+    /** 合成夹具：真实登录后的 my.chsi 档案页 —— 只有学籍/学历/学位等业务文本，没有「退出登录/个人中心」。 */
+    private val realLoggedInPayload = ChsiPagePayload(
+        url = archiveUrl,
+        title = "学信档案",
+        text = """
+            学信档案
+            学籍信息
+            学校：福建中医药大学
+            专业：中药学
+            学籍状态：在籍（注册学籍）
+            学历信息
+            院校：福建中医药大学
+            学历：本科
+            学位信息
+            学位：理学学士
+        """.trimIndent(),
+        links = listOf(
+            ChsiLink(text = "学籍信息", href = "https://my.chsi.com.cn/archive/wap/enrollment.jsp"),
+            ChsiLink(text = "学历信息", href = "https://my.chsi.com.cn/archive/wap/education.jsp"),
+        ),
+    )
+
+    /** 合成夹具：未登录营销首页（档案域也可能返回，含「注册学信网账号/立即登录」）。 */
+    private val marketingPayload = ChsiPagePayload(
+        url = archiveUrl,
+        title = "学信档案",
+        text = """
+            学信档案
+            免费查看学籍、学历、学位信息
+            注册学信网账号
+            立即登录
+        """.trimIndent(),
+    )
+
+    @Test
+    fun `LOGIN 模式登录后无强信号也自动回卡片页`() {
+        assertFalse("强信号判定应为 false（真实页面没有退出/个人中心）", ChsiExtractLogic.isLoggedInPayload(realLoggedInPayload))
+        assertTrue(
+            "宽松判定应为 true",
+            ChsiExtractLogic.isLoginSuccessAfterLogin(realLoggedInPayload, archiveUrl),
+        )
+        assertTrue(
+            ChsiNavigationLogic.loggedInAfterExtract(
+                realLoggedInPayload,
+                archiveUrl,
+                ChsiNavigationLogic.Mode.LOGIN,
+            ),
+        )
+        assertEquals(
+            ChsiNavigationLogic.Mode.CARDS,
+            ChsiNavigationLogic.modeAfterExtract(ChsiNavigationLogic.Mode.LOGIN, loggedIn = true),
+        )
+    }
+
+    @Test
+    fun `CARDS 模式后台恢复仍用强信号避免营销页误判`() {
+        // 后台自动恢复（CARDS）不接受宽松判定：真实登录页无强信号时保持未登录，等待用户主动登录。
+        assertFalse(
+            ChsiNavigationLogic.loggedInAfterExtract(
+                realLoggedInPayload,
+                archiveUrl,
+                ChsiNavigationLogic.Mode.CARDS,
+            ),
+        )
+    }
+
+    @Test
+    fun `未登录营销页不会被宽松判定误判`() {
+        assertFalse(ChsiExtractLogic.isLoginSuccessAfterLogin(marketingPayload, archiveUrl))
+        assertFalse(
+            ChsiNavigationLogic.loggedInAfterExtract(
+                marketingPayload,
+                archiveUrl,
+                ChsiNavigationLogic.Mode.LOGIN,
+            ),
+        )
+    }
+
+    @Test
+    fun `宽松判定要求档案域 URL 与非空数据`() {
+        assertFalse(ChsiExtractLogic.isLoginSuccessAfterLogin(realLoggedInPayload, loginUrl))
+        assertFalse(ChsiExtractLogic.isLoginSuccessAfterLogin(realLoggedInPayload, null))
+        assertFalse(ChsiExtractLogic.isLoginSuccessAfterLogin(null, archiveUrl))
+        // 文本过短（空白/错误页）不判定
+        assertFalse(
+            ChsiExtractLogic.isLoginSuccessAfterLogin(
+                ChsiPagePayload(url = archiveUrl, text = "加载中"),
+                archiveUrl,
+            ),
+        )
+    }
+
+    @Test
+    fun `登录页兜底按钮只在 LOGIN 模式且空闲时展示`() {
+        assertTrue(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.LOGIN, refreshing = false))
+        assertFalse(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.LOGIN, refreshing = true))
+        assertFalse(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.CARDS, refreshing = false))
+        assertEquals("已登录，进入卡片页", ChsiTexts.BTN_ENTER_CARDS)
+        assertTrue(ChsiTexts.HINT_ENTER_CARDS_FALLBACK.contains("卡片页"))
+    }
 }

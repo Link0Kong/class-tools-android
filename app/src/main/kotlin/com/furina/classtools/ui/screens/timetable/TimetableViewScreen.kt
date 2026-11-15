@@ -1286,6 +1286,8 @@ private fun CourseBlockV5(
 
     Box(
         modifier = Modifier
+            // 课程块按开始节次偏移到对应行（v4.56 修复同一列全部叠在顶部）
+            .offset(y = rowHeight * (course.start - 1).coerceAtLeast(0))
             .padding(start = 1.5.dp, end = 1.5.dp, top = 2.dp)
             .height(rowHeight * span - 4.dp)
             .width(width - 3.dp)
