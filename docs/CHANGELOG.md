@@ -1,5 +1,11 @@
 # 版本记录（Android 客户端）
 
+## v4.56.4 · 2026-11-16（2.5D 地图白屏修复）
+- 根因（WebView DevTools 实测）：地图 H5 的 html/body/#app 在 Android WebView 中计算高度为 0，`canvas.clientHeight=0`（画布内容其实已绘制但 CSS 高 0 不可见）。
+- 修复 H5（已更新 OSS+ECS）：`#scene` 改 `position:fixed; width:100vw; height:100vh`；resize 用 innerWidth/innerHeight 兜底并显式写 canvas style 宽高；初始布局未完成时 40/120/300/700ms 多帧重试 resize，监听 resize；移动端 DPR 上限 1.25。
+- Android：MAP_VERSION→202611160800 强制刷新缓存；保留软件层渲染规避部分 WebView canvas 合成问题。
+- 验证：DevTools 检查 canvas 514×988 且像素非空；模拟器截图 2.5D 地图完整渲染（artifacts/map-fixed-css.png）。单测 **1478/0**（110 suites）；Release **3,399,577 B / SHA-256 `EAC29685F282EB39B7C7BB128395F35D5A512B58879A040B4285E7D27E8EB9ED`**（vc78 / 4.56.4），冷启动 367/302ms、稳定 305/289/306ms；logcat 0 FATAL/ANR。
+
 ## v4.56.3 · 2026-11-16（退出动画时序最终修正）
 - 反向转场改为等收回动画即将结束（272ms）才 pop 工具路由，且覆盖层不淡出、结束后延迟 32ms 撤层；工具页移除与覆盖层撤除几乎同时，修复动画结束后工具页残留一瞬。onDone 仍保留强制 pop 兜底。
 - 其余同 v4.56.2（学信网登录态/今日校园白屏/教务服务器繁忙修复）。单测 **1478/0**（110 suites）；快速 E2E 45 步 0 FAIL（v4.56.2 代码，1041.4s，导航 10/10）；Release **3,399,581 B / SHA-256 `FDA7D88ADCBD53BA7B4D8050AEE6C8334CC9D690939A09510AF95CDE44300855`**（vc77 / 4.56.3），冷启动 433/367ms、稳定 393/331/335ms。

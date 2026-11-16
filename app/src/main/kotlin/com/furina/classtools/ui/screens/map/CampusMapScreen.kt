@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
 import android.util.Log
+import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
@@ -59,7 +60,7 @@ private const val TAG = "CampusMap"
 
 /** 地图 H5 页面（ECS IP 调试入口；备案/DNS 恢复后改同源 https）。 */
 private const val MAP_BASE = "http://121.196.47.2/map/campus_final_25d.html"
-private const val MAP_VERSION = "202611152330"
+private const val MAP_VERSION = "202611160800"
 
 /** H5 已内置的 App 定位桥（HTTP 页面不能用 navigator.geolocation）。 */
 private const val JS_INTERFACE_NAME = "AndroidMap"
@@ -123,6 +124,8 @@ fun CampusMapScreen(
     val webView = remember {
         WebView(context).apply {
             setBackgroundColor(android.graphics.Color.rgb(243, 245, 236))
+            // 部分 WebView/GPU 组合对 2D canvas 页面会白屏；软件层可稳定绘制静态 2.5D 地图。
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.loadsImagesAutomatically = true
