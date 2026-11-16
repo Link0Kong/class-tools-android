@@ -31,9 +31,9 @@ object CtTokens {
         val sectionGapCompact = 16.dp
         val sectionGapExpanded = 24.dp
 
-        /** 卡片间距。 */
-        val cardGapCompact = 12.dp
-        val cardGapExpanded = 16.dp
+        /** 卡片间距（2026-11-16 统一到 8dp 栅格）。 */
+        val cardGapCompact = 8.dp
+        val cardGapExpanded = 12.dp
 
         /** 卡片内边距。 */
         val cardPaddingCompact = 16.dp
@@ -44,21 +44,22 @@ object CtTokens {
         val cardGap: androidx.compose.ui.unit.Dp get() = cardGapCompact
     }
 
-    /** 圆角数值（需要动画插值/自定义 RoundedCornerShape 时用）。 */
+    /** 圆角数值（需要动画插值/自定义 RoundedCornerShape 时用；2026-11-16 统一 16/20/24）。 */
     object Radius {
         val extraSmall = 4.dp
         val small = 8.dp
         val medium = 12.dp
         val large = 16.dp
         val largeIncreased = 20.dp
-        val extraLarge = 28.dp
-        val extraLargeIncreased = 32.dp
+        val extraLarge = 24.dp
+        val extraLargeIncreased = 24.dp
         val extraExtraLarge = 48.dp
 
         val card = 16.dp
-        val hero = 32.dp
+        val cardLarge = 20.dp
+        val hero = 24.dp
         val cardPressed = 12.dp
-        val sheetTop = 30.dp
+        val sheetTop = 28.dp
         val dialog = 28.dp
     }
 

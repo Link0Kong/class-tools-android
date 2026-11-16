@@ -14,8 +14,10 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,7 +44,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.R
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -108,6 +113,9 @@ fun CampusMapScreen(
     var source by remember { mutableStateOf(MapSource.ASSET) }
     // 本地 asset 已自动降级过一次就不再反复重试（避免加载失败时循环）。
     var assetFallbackTried by remember { mutableStateOf(false) }
+    // 终极兜底：asset 与网络版都健康检查失败/主文档错误时，展示内置静态地图，
+    // 保证任何 WebView/系统环境下都「至少能看到地图」，并保留重试网页入口。
+    var staticFallback by remember { mutableStateOf(false) }
 
     fun assetUrl(): String {
         val base = ASSET_MAP_URL
@@ -184,9 +192,23 @@ fun CampusMapScreen(
                         target.evaluateJavascript(MAP_HEALTH_JS) { raw ->
                             val health = parseMapHealth(raw)
                             if (health == null || health.canvasCount <= 0) {
-                                assetFallbackTried = true
-                                switchToNetwork("本地离线地图加载失败，已切换网络版")
-                                target.post { target.loadUrl(currentUrl()) }
+                                if (source == MapSource.ASSET) {
+                                    assetFallbackTried = true
+                                    switchToNetwork("本地离线地图加载失败，已切换网络版")
+                                    target.post { target.loadUrl(currentUrl()) }
+                                } else {
+                                    staticFallback = true
+                                    error = "WebView 无法绘制地图，已显示内置静态图；可点「重试网页」或用浏览器打开"
+                                }
+                            }
+                        }
+                    }
+                    if (source == MapSource.NETWORK && !staticFallback) {
+                        target.evaluateJavascript(MAP_HEALTH_JS) { raw ->
+                            val health = parseMapHealth(raw)
+                            if (health == null || health.canvasCount <= 0) {
+                                staticFallback = true
+                                error = "WebView 无法绘制地图，已显示内置静态图；可点「重试网页」或用浏览器打开"
                             }
                         }
                     }
@@ -208,6 +230,7 @@ fun CampusMapScreen(
                             view?.post { view.loadUrl(currentUrl()) }
                         } else {
                             error = detail
+                            staticFallback = true
                         }
                     }
                 }
@@ -302,6 +325,9 @@ fun CampusMapScreen(
                 onRetry = {
                     error = null
                     loading = true
+                    staticFallback = false
+                    source = MapSource.ASSET
+                    assetFallbackTried = false
                     reloadSeq += 1
                 },
                 onSwitchSource = {
@@ -324,16 +350,38 @@ fun CampusMapScreen(
                 .weight(1f)
                 .fillMaxWidth(),
         ) {
-            AndroidView(
+            if (staticFallback) {
+                Image(
+                    painter = painterResource(R.drawable.map_campus_fallback),
+                    contentDescription = "校内 2.5D 地图（静态兜底）",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Text(
+                    text = "静态地图 · 网页版绘制失败",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 10.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                            RoundedCornerShape(999.dp),
+                        )
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                )
+            } else {
+                AndroidView(
                 factory = { webView },
-                modifier = Modifier
-                    .fillMaxSize()
-                    // WebView 布局尺寸就绪后强制 H5 重算 canvas（解决「页面在布局前 boot → 白屏」）。
-                    .onSizeChanged { _ ->
-                        webView.evaluateJavascript(MAP_RESIZE_JS, null)
-                    },
-            )
-            if (loading) {
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // WebView 布局尺寸就绪后强制 H5 重算 canvas（解决「页面在布局前 boot → 白屏」）。
+                        .onSizeChanged { _ ->
+                            webView.evaluateJavascript(MAP_RESIZE_JS, null)
+                        },
+                )
+            }
+            if (loading && !staticFallback) {
                 LinearProgressIndicator(
                     modifier = Modifier
                         .align(Alignment.TopCenter)

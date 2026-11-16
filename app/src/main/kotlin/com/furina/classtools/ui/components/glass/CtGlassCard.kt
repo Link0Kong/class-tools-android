@@ -42,7 +42,7 @@ fun CtGlassCard(
         alpha = if (dark) 0.16f else 0.65f,
     )
     val border = MaterialTheme.colorScheme.outlineVariant.copy(
-        alpha = if (dark) 0.35f else 0.45f,
+        alpha = if (dark) 0.30f else 0.35f,
     )
     val glassModifier = modifier.fillMaxWidth()
     if (onClick != null) {

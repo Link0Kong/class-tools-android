@@ -390,7 +390,7 @@ internal fun HomeInfoCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 HomeIconBadge(icon = icon, accent = accent)
@@ -476,7 +476,7 @@ internal fun QuickToolTile(
                 scaleX = scale
                 scaleY = scale
             },
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,
         interactionSource = interaction,
@@ -486,19 +486,19 @@ internal fun QuickToolTile(
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Surface(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = tool.accent.copy(alpha = tintAlpha),
                 contentColor = tool.accent,
             ) {
-                Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = tool.icon,
                         contentDescription = null,
                         tint = tool.accent,
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
@@ -537,7 +537,7 @@ internal fun EditableToolTile(
     } else {
         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
     }
-    Box(modifier = modifier.height(104.dp)) {
+    Box(modifier = modifier.height(96.dp)) {
         Surface(
             onClick = onClick,
             modifier = Modifier
@@ -546,7 +546,7 @@ internal fun EditableToolTile(
                     scaleX = scale
                     scaleY = scale
                 },
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(16.dp),
             color = if (selected) {
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
             } else {
@@ -567,16 +567,16 @@ internal fun EditableToolTile(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Surface(
-                    shape = RoundedCornerShape(13.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = tool.accent.copy(alpha = 0.16f),
                     contentColor = tool.accent,
                 ) {
-                    Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
                             tint = tool.accent,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(18.dp),
                         )
                     }
                 }

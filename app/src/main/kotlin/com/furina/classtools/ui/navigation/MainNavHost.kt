@@ -377,7 +377,15 @@ fun MainNavHost(
                 startDestination = Routes.ROOT,
                 modifier = modifier.fillMaxSize(),
             ) {
-        composable(Routes.ROOT) {
+        composable(
+            route = Routes.ROOT,
+            // 根页不参与 NavHost 的 pop 淡入：工具页 pop 由快照覆盖层负责，
+            // 若根页再做 fadeIn，会出现「快照收回卡片后工具页仍停留一瞬」。
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { ExitTransition.None },
+        ) {
             RootTabs(
                 container = container,
                 session = session,

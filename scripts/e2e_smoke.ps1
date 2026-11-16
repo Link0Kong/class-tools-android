@@ -84,7 +84,7 @@ function U8([string]$b64) { [Text.Encoding]::UTF8.GetString([Convert]::FromBase6
 $L = @{
     DevPreview     = U8 '5byA5Y+R6aKE6KeI'                            # Dev Preview (identity)
     IdentityTitle  = U8 '6Lqr5Lu95qC46aqM'                           # identity gate title
-    QuickTools     = U8 '5bi455So5bel5YW3'                           # quick tools section
+    QuickTools     = U8 '5LuK5pel6K++56iL'                           # quick tools section
     Today          = U8 '5LuK5pel'                                   # today section
     AllTab         = U8 '5bel5YW3'                                   # bottom dock: tools tab (v2)
     AllToolsTitle  = U8 '5YWo6YOo5bel5YW3'                           # all tools title
@@ -353,8 +353,15 @@ function Get-ScreenKind {
     if ($joined.Contains($L.IdentityTitle)) { return 'IDENTITY' }
     if ($joined.Contains($L.QuickTools)) { return 'HOME' }
     if ($joined.Contains($L.ProfileMark) -or $joined.Contains($L.ProfileSection) -or $joined.Contains($L.MyData) -or $joined.Contains($L.FeedbackEntry) -or $joined.Contains($L.GuideEntry)) { return 'PROFILE' }
+    # 底部导航「工具」Tab 已选中 = ALL（比同时出现三个 Tab 文案可靠，避免把 HOME 误判为 ALL）。
+    $allSelected = @($doc.SelectNodes('//node') | Where-Object {
+        $d = [string]$_.'content-desc'
+        $t = [string]$_.text
+        ($d.Contains('工具') -and $d.Contains('已选中')) -or ($t.Contains('工具') -and $t.Contains('已选中'))
+    }).Count -gt 0
+    if ($allSelected) { return 'ALL' }
     # All-tools grid may be scrolled, so the "all tools" title is not always on screen.
-    # Fall back to the triple bottom-nav labels (only top-level pages have them).
+    if ($joined.Contains($L.AllToolsTitle)) { return 'ALL' }
     if ($joined.Contains($L.Workbench) -and $joined.Contains($L.AllTab) -and $joined.Contains($L.MyTab)) { return 'ALL' }
     return 'OTHER'
 }
@@ -1044,7 +1051,7 @@ function Invoke-Scenario {
         $swPage = [Diagnostics.Stopwatch]::StartNew()
         $stateNode = $null
         for ($try = 1; $try -le 2; $try++) {
-            Tap-UiText -Label $pg.card -Exact -TimeoutSec 15 -ScrollTries 3
+            Tap-UiText -Label $pg.card -Exact -TimeoutSec 15 -ScrollTries 8
             # slow pages: poll up to 8s every 800ms for an allowed four-state text
             $stateNode = Wait-UiAny -Labels $pg.states -TimeoutSec 8
             if ($stateNode) { break }
@@ -1068,6 +1075,8 @@ function Invoke-Scenario {
         Add-Step $pg.step 'PASS' '' $swPage.ElapsedMilliseconds
         $null = Invoke-Adb @('shell', 'input', 'keyevent', 'KEYCODE_BACK')
         Start-Sleep -Milliseconds 1000
+        # 返回动画后 root pager 可能停在其它 tab；显式切回「工具」再断言，避免误判。
+        Go-AllTools
         if (-not (Wait-ScreenKind 'ALL' 15)) { throw "back from '$($pg.card)' did not return to all tools" }
     }
     Add-Step 'tool_pages' 'PASS' ('{0} pages' -f $pages.Count) $swStep.ElapsedMilliseconds

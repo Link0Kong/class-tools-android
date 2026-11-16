@@ -35,7 +35,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
@@ -89,16 +91,23 @@ private const val LG_INFO_JS = ActivityWebSession.LG_INFO_JS
 /**
  * 「活动」工具：学校第二课堂活动列表 / 名额 / 报名。
  *
- * 登录方式：内置 WebView 打开学校网页，用户在页面上用统一身份认证登录；
- * 登录成功后从 localStorage.lgInfo 读回 token（不接触密码），只存本机。
+ * ## 2026-11-16 task-73 模拟器实测结论（activity H5 登录）
  *
- * 2026-11-16 用户反馈「活动需要微信身份（openId）」：H5 是微信内应用，App 内 WebView 拿不到
- * 微信身份，因此新增**微信登录引导**（[ActivityWeChatLogin]）：
- * - 检测微信客户端（Android 11+ 允许「无法确认」）；
- * - 「在微信中打开」= 复制活动 H5 链接 + 尝试用微信打开 / 拉起微信，用户在微信内完成微信登录；
- * - 「复制链接」= 手动粘贴到微信；
- * - 明确降级：微信与 App 的 Cookie/身份不共享，微信内登录后回 App 仍需学校账号登录，**不会假装已登录**
- *   （`lgInfo` 仍只认 H5 真实会话）；原有微信 UA + 环境桩保留，让 H5 在 App 内回落到学校登录页。
+ * - 登录页是**学校账号登录**（上传真实头像 + 身份证后六位 + 学号；另有「我是教师」）；
+ * - **头像上传不是 `<input type=file>`**：组件点击走微信 JSSDK `wx.chooseImage/uploadImage`，
+ *   由学校后端从微信拉取照片；App 内 WebView 没有微信 JSSDK 桥，点击头像**无任何反应**
+ *   （实测无 file input / 无 onShowFileChooser / 无请求）；
+ * - 不传头像点登录 → 客户端提示「请上传头像」；设置头像 URL 后点登录 →
+ *   `POST /basic/user/student/bind` 返回 HTTP 500「openId不能为空」→ **学校账号绑定也要求微信 openId**；
+ * - openId 只能由微信客户端内的学校 H5 微信授权（oauth2 authorize + code 换 token）取得，App 无法合法获取。
+ *
+ * 因此 UI 改为**双主路径 + 诚实降级**（[ActivityWeChatLogin]）：
+ * 1) 主路径「在微信内打开活动页」：复制 H5 链接并尝试唤起微信，微信内可完成微信登录或学校账号登录；
+ * 2) 次路径「学校账号登录」：App 内仍可打开官方登录页查看，但明确提示该页依赖微信 openId/头像、
+ *    App 内无法完成，引导改用微信内打开；
+ * - 登录页出现「openId不能为空 / 请上传头像」时，App 内显示「去微信内打开」提示；
+ * - **不伪造 openId/登录态**：`lgInfo` 仍只认 H5 真实会话；原有微信 UA + 环境桩保留，
+ *   让 H5 在 App 内回落到学校登录页（而不是微信 OAuth 提示页）。
  */
 @Composable
 fun ActivityScreen(
@@ -299,63 +308,34 @@ private fun LoginPrompt(
     onCopyLink: () -> Unit = {},
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 12.dp),
     ) {
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(12.dp))
         Text("还没登录学校账号", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
-            "点下面按钮，在打开的学校页面里用统一身份认证登录；登录后回到这里即可看到活动。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = onLogin) { Text("登录学校账号") }
-
-        Spacer(Modifier.height(22.dp))
-        WeChatLoginGuide(
-            presence = wechatPresence,
-            hint = wechatHint,
-            onOpenInWeChat = onOpenInWeChat,
-            onCopyLink = onCopyLink,
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "登录信息只保存在本机，不上传任何服务器。",
+            "活动 H5 登录需要微信环境（openId 只能微信客户端授权取得），推荐在微信内打开完成登录。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
 
-/**
- * 微信登录引导（2026-11-16 用户反馈：活动 H5 需要微信身份 openId）。
- *
- * 三件事：检测微信 → 复制链接 / 在微信中打开 → **明确降级**。
- * 不提供任何「假装微信已登录」的能力：App 内 WebView 拿不到 openId，`lgInfo` 仍只认 H5 真实会话。
- */
-@Composable
-private fun WeChatLoginGuide(
-    presence: ActivityWeChatLogin.Presence,
-    hint: String?,
-    onOpenInWeChat: () -> Unit,
-    onCopyLink: () -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
+        // ---- 主路径 1：在微信内打开（完整可用）----
+        Spacer(Modifier.height(18.dp))
         Text(
-            ActivityWeChatLogin.TITLE_WECHAT_LOGIN,
+            ActivityWeChatLogin.TITLE_OPEN_IN_WECHAT,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        Spacer(Modifier.height(4.dp))
         Text(
-            ActivityWeChatLogin.statusText(presence),
-            style = MaterialTheme.typography.labelSmall,
+            ActivityWeChatLogin.DESC_OPEN_IN_WECHAT,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -369,23 +349,58 @@ private fun WeChatLoginGuide(
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             ) { Text(ActivityWeChatLogin.BTN_OPEN_IN_WECHAT) }
         }
+        Spacer(Modifier.height(6.dp))
         Text(
-            ActivityWeChatLogin.HINT_OPENID_LIMIT,
-            style = MaterialTheme.typography.bodySmall,
+            ActivityWeChatLogin.statusText(wechatPresence),
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            ActivityWeChatLogin.HINT_DEGRADED,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        hint?.takeIf { it.isNotBlank() }?.let { text ->
+        wechatHint?.takeIf { it.isNotBlank() }?.let { text ->
             Text(
                 text,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
             )
         }
+
+        // ---- 次路径：App 内学校登录页（受限，仅查看/备用）----
+        Spacer(Modifier.height(18.dp))
+        Text(
+            ActivityWeChatLogin.TITLE_SCHOOL_LOGIN_LIMITED,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            ActivityWeChatLogin.DESC_SCHOOL_LOGIN_LIMITED,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = onLogin,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        ) { Text(ActivityWeChatLogin.BTN_OPEN_SCHOOL_LOGIN) }
+
+        Spacer(Modifier.height(14.dp))
+        Text(
+            ActivityWeChatLogin.HINT_OPENID_LIMIT,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            ActivityWeChatLogin.HINT_DEGRADED,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "登录信息只保存在本机，不上传任何服务器。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -530,8 +545,9 @@ private fun LoginDialog(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
                     )
                 }
-                // 2026-11-16：登录 WebView 内也保留微信登录引导（H5 提示「请在微信打开」时可直接处理）。
-                WeChatDialogGuide(
+                // 2026-11-16 task-73：该登录页依赖微信 openId/微信头像上传，App 内无法完成；
+                // 顶部明确提示并给出「在微信中打开」出口（不是 App 内微信登录，不会伪造登录态）。
+                LoginLimitedStrip(
                     presence = wechatPresence,
                     hint = wechatHint,
                     onOpenInWeChat = onOpenInWeChat,
@@ -549,9 +565,9 @@ private fun LoginDialog(
     }
 }
 
-/** 登录 WebView 顶部的微信引导条（紧凑一行：检测状态 + 复制链接 / 在微信中打开）。 */
+/** 登录 WebView 顶部的「App 内登录受限」提示条：明确该页需要微信能力 + 微信内打开出口。 */
 @Composable
-private fun WeChatDialogGuide(
+private fun LoginLimitedStrip(
     presence: ActivityWeChatLogin.Presence,
     hint: String?,
     onOpenInWeChat: () -> Unit,
@@ -564,10 +580,10 @@ private fun WeChatDialogGuide(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = ActivityWeChatLogin.statusText(presence),
+                text = ActivityWeChatLogin.DESC_SCHOOL_LOGIN_LIMITED,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
+                maxLines = 3,
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onCopyLink) { Text(ActivityWeChatLogin.BTN_COPY_LINK) }
@@ -575,12 +591,18 @@ private fun WeChatDialogGuide(
                 Text(ActivityWeChatLogin.BTN_OPEN_IN_WECHAT)
             }
         }
+        Text(
+            text = ActivityWeChatLogin.statusText(presence),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
         hint?.takeIf { it.isNotBlank() }?.let { text ->
             Text(
                 text,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
-                maxLines = 2,
+                maxLines = 3,
             )
         }
     }
@@ -773,18 +795,37 @@ private fun LoginWebView(
         webView.loadUrl(FILE_SELF_TEST_DATA_URL)
     }
     LaunchedEffect(Unit) {
+        var lastLoginRequirement = ""
         while (isActive) {
             delay(1200)
             // 环境桩（幂等）+ 学校编号兜底（只在缺失/undefined 时写入）。
             webView.evalJs(ActivityWebSession.SEED_WX_SESSION_JS)
             webView.evalJs(ActivityWebSession.ENSURE_SCHOOL_NO_JS)
             // 兜底：个别 H5 版本/缓存仍弹「请在微信…」提示时，尝试重载一次。
-            val promptText = webView.evalJs(WECHAT_PROMPT_JS)
+            // 注意：`evaluateJavascript` 回调会把 JS 字符串值再包一层 JSON 引号（如 "prompt"），
+            // 这里先去掉引号再比较（旧实现直接比较 "prompt"，实际永远不相等）。
+            val promptText = webView.evalJs(WECHAT_PROMPT_JS).orEmpty().trim().trim('"')
             if (promptText == "prompt") {
                 onHint(ActivityWebSession.MSG_OAUTH_BLOCKED)
                 if (!oauthRecovered) {
                     oauthRecovered = true
                     webView.loadUrl(SPA_URL)
+                }
+            }
+            // task-73 实测：该登录页依赖微信 openId / 微信头像上传，App 内无法完成。
+            // 检测到服务端「openId不能为空」或客户端「请上传头像」时，明确提示改用「在微信中打开」。
+            val requirement = webView.evalJs(ActivityWeChatLogin.LOGIN_REQUIREMENT_JS)
+                .orEmpty().trim().trim('"')
+            if (requirement != lastLoginRequirement) {
+                lastLoginRequirement = requirement
+                when (requirement) {
+                    "openid" -> onHint(
+                        ActivityWeChatLogin.MSG_PAGE_REQUIRES_WECHAT + "（服务端提示：openId不能为空）",
+                    )
+                    "avatar" -> onHint(
+                        ActivityWeChatLogin.MSG_PAGE_REQUIRES_WECHAT + "（页面提示：请上传头像）",
+                    )
+                    else -> Unit
                 }
             }
             val raw = webView.evalJs(LG_INFO_JS) ?: continue

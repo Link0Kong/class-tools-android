@@ -55,24 +55,42 @@ fun NotificationPermissionBanner(
     modifier: Modifier = Modifier,
 ) {
     if (!visible || NotificationPermissionBannerState.dismissedThisSession) return
+    val scheme = MaterialTheme.colorScheme
+    // 2026-11-16 视觉统一：去大面积 tertiaryContainer 色块，改「浅色玻璃底 + 小面积警示色图标」，
+    // 与卡片体系一致（1dp 软描边、16dp 圆角、56dp 行高）；文案与交互保持不变。
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = CtShapeTokens.toolCard,
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        color = scheme.surfaceContainerLow,
+        contentColor = scheme.onSurface,
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = scheme.outlineVariant.copy(alpha = 0.35f),
+        ),
     ) {
         Row(
             modifier = Modifier
                 .heightIn(min = 56.dp)
-                .padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Icon(
-                imageVector = Icons.Rounded.NotificationsActive,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-            )
+            Surface(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                color = scheme.tertiary.copy(alpha = 0.14f),
+                contentColor = scheme.tertiary,
+            ) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier.size(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.NotificationsActive,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "通知权限未开启",
@@ -81,7 +99,7 @@ fun NotificationPermissionBanner(
                 Text(
                     text = "开启后才能收到作业/上课提醒",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.82f),
+                    color = scheme.onSurfaceVariant,
                 )
             }
             TextButton(onClick = onOpenPermissions) { Text("去开启") }

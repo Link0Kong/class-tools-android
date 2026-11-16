@@ -1,7 +1,5 @@
 package com.furina.classtools.ui.screens.all
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,8 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -62,10 +58,8 @@ import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
-import com.furina.classtools.ui.components.CtBrandDots
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.reorderableSemantics
-import com.furina.classtools.ui.theme.rememberCtHeroColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -184,9 +178,9 @@ fun AllToolsScreen(
         }
     }
 
-    // v7：卡高 96dp（副标最多 2 行）；2 列 48.6% 宽。拖动几何/幽灵高度/自动滚动共用同一 itemHeight 常量。
+    // v8：统一 8dp 栅格间距（原 10dp）；卡高仍 96dp（副标最多 2 行）；2 列 48.6% 宽。
     val itemHeightDp = 96.dp
-    val spacingDp = 10.dp
+    val spacingDp = 8.dp
     val itemHeightPx = with(density) { itemHeightDp.toPx() }
     val spacingPx = with(density) { spacingDp.toPx() }
     val autoScrollTopEdgePx = with(density) { AllToolsDragGeometry.AUTO_SCROLL_TOP_EDGE_DP.dp.toPx() }
@@ -328,8 +322,8 @@ fun AllToolsScreen(
                         modifier = Modifier.padding(
                             start = spec.horizontalPadding,
                             end = spec.horizontalPadding,
-                            top = 8.dp,
-                            bottom = 2.dp,
+                            top = 0.dp,
+                            bottom = 0.dp,
                         ),
                         toolCount = toolsInOrder.size,
                         dragging = effectiveDraggingId != null,
@@ -437,8 +431,8 @@ fun AllToolsScreen(
                         }
                     }
 
-                    // 底部留白：让最后一行卡片能滚到悬浮 dock 上方（不是被 dock 挡住）。
-                    Spacer(modifier = Modifier.height(124.dp))
+                    // 底部留白：让最后一行卡片能滚到悬浮 dock 上方（不是被 dock 挡住）；统一 120dp。
+                    Spacer(modifier = Modifier.height(120.dp))
                 }
 
                 // 跟手 ghost（拖动中 / 预览注入）：以指针为中心，尺寸 = 与网格相同的 itemWidth/itemHeight。
@@ -477,13 +471,10 @@ fun AllToolsScreen(
 }
 
 /**
- * v5 页头：渐变（品牌雾青→灰蓝）+ 工具数量 + 拖动提示。
+ * v8 页头（2026-11-16 视觉统一）：去大色块/装饰圆点，改为轻量标题行 + 计数胶囊。
  *
- * task-58：拖动提示从「额外一行」改为**同一胶囊文案替换**（「17 个」⇄「松手保存」），
- * 页头高度在拖动开始/结束时保持不变，避免把网格整体下推导致落位几何在拖动首帧跳变。
- *
- * 配色走主题共享 hero 口径：浅色保持原品牌渐变 + 白字；深色改中性 tonal 深色
- * （surfaceContainerHigh→surfaceContainer）+ onSurface 文字，品牌绿只做小面积点缀。
+ * task-58 约束保留：拖动提示仍复用同一胶囊文案（「N 个」⇄「松手保存」），页头高度不变，
+ * 避免拖动首帧落位几何跳变。
  */
 @Composable
 private fun AllToolsHeader(
@@ -491,49 +482,33 @@ private fun AllToolsHeader(
     dragging: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val hero = rememberCtHeroColors()
-    val content = hero.content
-    val accent = hero.accent
-
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        color = Color.Transparent,
-        contentColor = content,
-        border = BorderStroke(1.dp, hero.border),
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Brush.linearGradient(colors = listOf(hero.start, hero.end))),
+        Text(
+            text = "全部工具",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         ) {
-            Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 15.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CtBrandDots(dotSize = 6.dp, gap = 4.dp)
-                    Spacer(modifier = Modifier.width(9.dp))
-                    Text(
-                        text = "全部工具",
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = content,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Surface(
-                        shape = CircleShape,
-                        color = accent.copy(alpha = 0.18f),
-                        contentColor = accent,
-                    ) {
-                        Text(
-                            // 拖动中同一胶囊换成「松手保存」：页头高度不变（几何不跳）。
-                            text = if (dragging) "松手保存" else "$toolCount 个",
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        )
-                    }
-                }
-            }
+            Text(
+                // 拖动中同一胶囊换成「松手保存」：页头高度不变（几何不跳）。
+                text = if (dragging) "松手保存" else "$toolCount 个",
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            )
         }
     }
 }

@@ -85,21 +85,21 @@ internal fun AllToolCard(
             modifier = Modifier
                 .fillMaxSize()
                 .then(contentSemantics)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 与 mp 一致的 40dp 彩色圆角 chip（mp：72rpx ≈ 39dp）。
+            // 与 mp 一致的彩色圆角 chip（2026-11-16 统一到 36dp / 12dp 圆角，克制的图标底色）。
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = tool.accent.copy(alpha = if (effectiveReduceMotion) 0.17f else 0.17f),
                 contentColor = tool.accent,
             ) {
-                Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = tool.icon,
                         contentDescription = null,
                         tint = tool.accent,
-                        modifier = Modifier.size(21.dp),
+                        modifier = Modifier.size(19.dp),
                     )
                 }
             }

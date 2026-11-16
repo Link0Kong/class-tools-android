@@ -50,6 +50,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -62,6 +63,7 @@ import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,6 +71,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
@@ -133,9 +136,9 @@ import com.furina.classtools.data.ppt.PptImageLoader
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -476,6 +479,8 @@ fun NoticesScreen(
     }
     var query by rememberSaveable { mutableStateOf(initialQuery) }
     var searchVisible by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
+    // 极简固定头方案：统计卡 / 分类筛选收进「筛选」底部弹层，单行筛选 chips 作为滚动内容第一项。
+    var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     // 分类 chip 筛选（null = 全部；契约 §2.2：对所有视图生效）
     var categoryKey by rememberSaveable { mutableStateOf<String?>(null) }
     var expiredExpanded by rememberSaveable { mutableStateOf(initialExpiredExpanded) }
@@ -685,38 +690,43 @@ fun NoticesScreen(
                     .fillMaxSize()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
-                    title = "班级通知",
-                    subtitle = buildSubtitle(
-                        allItemsCount = allItems.size,
-                        pending = pendingCount,
-                        hiddenCount = data?.hiddenCount ?: 0,
-                    ),
+                // 极简固定头（56dp）：返回 + 标题 + 总数 + 搜索/筛选入口。
+                // 统计卡与分类筛选收进「筛选」底部弹层；单行筛选 chips 移到滚动内容第一项。
+                NoticeMinimalHeader(
+                    totalCount = if (phase == Phase.LOADING) null else allItems.size,
+                    searchVisible = searchVisible,
+                    filterActive = cardFilter != null || categoryKey != null,
                     onBack = onBack,
-                    actions = {
-                        IconButton(onClick = {
-                            searchVisible = !searchVisible
-                            if (!searchVisible) query = ""
-                        }) {
-                            Icon(
-                                Icons.Rounded.Search,
-                                contentDescription = if (searchVisible) "关闭搜索" else "搜索通知",
-                                tint = if (searchVisible) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                            )
-                        }
-                        IconButton(onClick = { refresh() }) {
-                            Icon(
-                                Icons.Rounded.Refresh,
-                                contentDescription = "刷新通知",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                    onToggleSearch = {
+                        searchVisible = !searchVisible
+                        if (!searchVisible) query = ""
                     },
+                    onOpenFilters = { showFilterSheet = true },
                 )
+
+                AnimatedVisibility(
+                    visible = searchVisible,
+                    enter = if (reduceMotion) {
+                        EnterTransition.None
+                    } else {
+                        expandVertically(expandFrom = Alignment.Top) + fadeIn(tween(160))
+                    },
+                    exit = if (reduceMotion) {
+                        ExitTransition.None
+                    } else {
+                        shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(tween(110))
+                    },
+                ) {
+                    NoticeSearchField(
+                        query = query,
+                        onQueryChange = { query = it },
+                        onClose = {
+                            query = ""
+                            searchVisible = false
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
 
                 Box(
                     modifier = Modifier
@@ -724,106 +734,15 @@ fun NoticesScreen(
                         .fillMaxWidth(),
                     contentAlignment = Alignment.TopCenter,
                 ) {
+                    val offline = data?.fromCache == true || (errorMessage != null && data != null)
+                    val offlineMessage = errorMessage?.let { "刷新失败，显示本机缓存" }
+                        ?: ("本机缓存 · 更新于 ${formatTs(data?.fetchedAt ?: 0L)}")
                     Column(
                         modifier = Modifier
                             .widthIn(max = spec.contentMaxWidth)
                             .fillMaxSize()
                             .padding(horizontal = spec.horizontalPadding),
                     ) {
-                        // 顶部 5 张可点数据卡（契约 §2.1）：待处理 / 24h 截止 / 7 天内 / 长期通知 / 最新发布
-                        if (phase != Phase.FAILED && allItems.isNotEmpty()) {
-                            NoticeOverviewCards(
-                                stats = overview,
-                                active = cardFilter,
-                                onPick = { selectCardFilter(it) },
-                                reduceMotion = reduceMotion,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-
-                        NoticeFilterChips(
-                            chips = listOf(
-                                NoticeChip(
-                                    NoticeFilter.ALL.name,
-                                    "全部 " + animatedStatText(allItems.size, reduceMotion),
-                                ),
-                                NoticeChip(
-                                    NoticeFilter.PENDING.name,
-                                    "未处理 " + animatedStatText(pendingCount, reduceMotion),
-                                ),
-                                NoticeChip(
-                                    NoticeFilter.PINNED.name,
-                                    "置顶 " + animatedStatText(pinnedCount, reduceMotion),
-                                ),
-                            ),
-                            // 顶部卡激活时 chips 取消选中（与 chips 互斥，§2.1）
-                            selectedKey = if (cardFilter != null) "" else filter.name,
-                            onSelect = { key ->
-                                NoticeFilter.entries.firstOrNull { it.name == key }?.let { selectFilter(it) }
-                            },
-                            reduceMotion = reduceMotion,
-                            modifier = Modifier.padding(top = 2.dp),
-                            previewBounceKey = previewChipBounceKey,
-                        )
-
-                        // 分类筛选 chips（契约 §2.2：分类筛选对所有视图生效；null = 全部）
-                        if (categories.size > 1) {
-                            NoticeFilterChips(
-                                chips = listOf(NoticeChip("", "全部")) +
-                                    categories.map { NoticeChip(it, it) },
-                                selectedKey = categoryKey.orEmpty(),
-                                onSelect = { key -> categoryKey = key.ifBlank { null } },
-                                reduceMotion = reduceMotion,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-
-                        AnimatedVisibility(
-                            visible = searchVisible,
-                            enter = if (reduceMotion) {
-                                EnterTransition.None
-                            } else {
-                                expandVertically(expandFrom = Alignment.Top) + fadeIn(tween(160))
-                            },
-                            exit = if (reduceMotion) {
-                                ExitTransition.None
-                            } else {
-                                shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(tween(110))
-                            },
-                        ) {
-                            NoticeSearchField(
-                                query = query,
-                                onQueryChange = { query = it },
-                                onClose = {
-                                    query = ""
-                                    searchVisible = false
-                                },
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-
-                        val offline = data?.fromCache == true || (errorMessage != null && data != null)
-                        AnimatedVisibility(
-                            visible = offline && phase != Phase.FAILED,
-                            enter = if (reduceMotion) {
-                                EnterTransition.None
-                            } else {
-                                expandVertically(expandFrom = Alignment.Top) + fadeIn(tween(160))
-                            },
-                            exit = if (reduceMotion) {
-                                ExitTransition.None
-                            } else {
-                                shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(tween(110))
-                            },
-                        ) {
-                            NoticeOfflineBanner(
-                                message = errorMessage?.let { "刷新失败，显示本机缓存" }
-                                    ?: ("本机缓存 · 更新于 ${formatTs(data?.fetchedAt ?: 0L)}"),
-                                onRetry = { refresh() },
-                                modifier = Modifier.padding(top = 6.dp),
-                            )
-                        }
-
                         Box(modifier = Modifier.weight(1f)) {
                             when {
                                 phase == Phase.LOADING -> NoticeSkeletonList(
@@ -857,6 +776,60 @@ fun NoticesScreen(
                                     }
                                     val hasMore = data?.hasMore == true
                                     val remaining = data?.remainingCount ?: 0
+                                    // 滚动内容第一项：单行筛选 chips（固定头不再放 chips / 统计卡）。
+                                    val cardChipKey = OUTSIDE_CARD_CHIP
+                                    val categoryChipKey = OUTSIDE_CATEGORY_CHIP
+                                    val allCountText = animatedStatText(allItems.size, reduceMotion)
+                                    val pendingText = animatedStatText(pendingCount, reduceMotion)
+                                    val pinnedText = animatedStatText(pinnedCount, reduceMotion)
+                                    val pageChips = buildList {
+                                        if (pageCardFilter != null) {
+                                            add(NoticeChip(cardChipKey, "${pageCardFilter.label} ×"))
+                                        } else {
+                                            add(NoticeChip(NoticeFilter.ALL.name, "全部 $allCountText"))
+                                            add(NoticeChip(NoticeFilter.PENDING.name, "未处理 $pendingText"))
+                                            add(NoticeChip(NoticeFilter.PINNED.name, "置顶 $pinnedText"))
+                                        }
+                                        categoryKey?.let { add(NoticeChip(categoryChipKey, "$it ×")) }
+                                    }
+                                    val selectedChipKey = when {
+                                        pageCardFilter != null -> cardChipKey
+                                        categoryKey != null -> categoryChipKey
+                                        else -> pageFilter.name
+                                    }
+                                    val onPageChipSelect: (String) -> Unit = { key ->
+                                        when (key) {
+                                            cardChipKey -> {
+                                                cardFilterKey = null
+                                                selectFilter(NoticeFilter.ALL)
+                                            }
+
+                                            categoryChipKey -> categoryKey = null
+                                            else -> NoticeFilter.entries
+                                                .firstOrNull { it.name == key }
+                                                ?.let { selectFilter(it) }
+                                        }
+                                    }
+                                    val pageContentHeader: @Composable () -> Unit = {
+                                        NoticeFilterStrip(
+                                            chips = pageChips,
+                                            selectedKey = selectedChipKey,
+                                            onSelect = onPageChipSelect,
+                                            reduceMotion = reduceMotion,
+                                            modifier = Modifier.padding(bottom = 8.dp),
+                                        )
+                                    }
+                                    val pageBanner: (@Composable () -> Unit)? = if (offline) {
+                                        {
+                                            NoticeOfflineBanner(
+                                                message = offlineMessage,
+                                                onRetry = { refresh() },
+                                                modifier = Modifier.padding(bottom = 8.dp),
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    }
                                     PullToRefreshBox(
                                         isRefreshing = isRefreshing,
                                         onRefresh = { refresh() },
@@ -865,6 +838,10 @@ fun NoticesScreen(
                                         if (content.isEmpty) {
                                             // 放进 LazyColumn 以保留下拉刷新（空态也能刷新 / 加载更多）
                                             LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                                if (pageBanner != null) {
+                                                    item(key = "offline-banner") { pageBanner() }
+                                                }
+                                                item(key = "filter-header") { pageContentHeader() }
                                                 item(key = "empty") {
                                                     NoticeEmptyState(
                                                         filter = pageFilter,
@@ -913,6 +890,8 @@ fun NoticesScreen(
                                                 loadingMore = isLoadingMore,
                                                 loadMoreError = loadMoreError,
                                                 onRetryLoadAll = { startAutoLoad() },
+                                                header = pageContentHeader,
+                                                banner = pageBanner,
                                                 modifier = Modifier.fillMaxSize(),
                                             )
                                         } else {
@@ -936,6 +915,8 @@ fun NoticesScreen(
                                                 loadingMore = isLoadingMore,
                                                 loadMoreError = loadMoreError,
                                                 onRetryLoadAll = { startAutoLoad() },
+                                                header = pageContentHeader,
+                                                banner = pageBanner,
                                                 modifier = Modifier.fillMaxSize(),
                                             )
                                         }
@@ -955,6 +936,42 @@ fun NoticesScreen(
                     .padding(bottom = 12.dp),
             )
         }
+    }
+
+    if (showFilterSheet) {
+        NoticeFilterSheet(
+            stats = overview,
+            activeCard = cardFilter,
+            filter = filter,
+            categories = categories,
+            categoryKey = categoryKey,
+            allCount = allItems.size,
+            pendingCount = pendingCount,
+            pinnedCount = pinnedCount,
+            hiddenCount = data?.hiddenCount ?: 0,
+            reduceMotion = reduceMotion,
+            onDismiss = { showFilterSheet = false },
+            onPickCard = {
+                selectCardFilter(it)
+                showFilterSheet = false
+            },
+            onPickFilter = {
+                selectFilter(it)
+                showFilterSheet = false
+            },
+            onPickCategory = {
+                categoryKey = it
+                showFilterSheet = false
+            },
+            onOpenSearch = {
+                searchVisible = true
+                showFilterSheet = false
+            },
+            onRefresh = {
+                refresh()
+                showFilterSheet = false
+            },
+        )
     }
 
     selectedItem?.let { item ->
@@ -987,6 +1004,247 @@ private fun buildSubtitle(
         if (isNotEmpty()) append(" · ")
         append("已隐藏 ")
         append(hiddenCount)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 极简固定头（≤56dp）+ 筛选弹层
+// -----------------------------------------------------------------------------
+
+/** 滚动内容 chips 里的「当前卡片筛选」伪 key（点它 = 清除卡片筛选、恢复全部）。 */
+private const val OUTSIDE_CARD_CHIP: String = "__card_filter"
+
+/** 滚动内容 chips 里的「当前分类筛选」伪 key（点它 = 清除分类筛选）。 */
+private const val OUTSIDE_CATEGORY_CHIP: String = "__category_filter"
+
+/**
+ * 极简固定头（2026-11-16 用户反馈「通知上部固定 UI 太大」）：
+ *
+ * 一行 = 返回 + 「班级通知」+ 总数胶囊 + 搜索/筛选入口，高 56dp；
+ * 统计卡与分类筛选进 [NoticeFilterSheet]，单行筛选 chips 由滚动内容第一项承担。
+ */
+@Composable
+private fun NoticeMinimalHeader(
+    totalCount: Int?,
+    searchVisible: Boolean,
+    filterActive: Boolean,
+    onBack: () -> Unit,
+    onToggleSearch: () -> Unit,
+    onOpenFilters: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            onClick = onBack,
+            modifier = Modifier.size(44.dp),
+            shape = CircleShape,
+            color = scheme.surfaceContainerHigh.copy(alpha = 0.72f),
+            contentColor = scheme.onSurface,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "返回",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = "班级通知",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = scheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (totalCount != null) {
+            Spacer(Modifier.width(8.dp))
+            Surface(
+                shape = CircleShape,
+                color = scheme.primary.copy(alpha = 0.12f),
+                contentColor = scheme.primary,
+            ) {
+                Text(
+                    text = totalCount.toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        NoticeHeaderIconButton(
+            icon = Icons.Rounded.Search,
+            description = if (searchVisible) "关闭搜索" else "搜索通知",
+            active = searchVisible,
+            onClick = onToggleSearch,
+        )
+        NoticeHeaderIconButton(
+            icon = Icons.Rounded.Tune,
+            description = "筛选通知",
+            active = filterActive,
+            onClick = onOpenFilters,
+        )
+    }
+}
+
+@Composable
+private fun NoticeHeaderIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/**
+ * 「筛选」底部弹层：统计卡（原固定区 5 张大卡）+ 状态 chips + 分类 chips + 搜索/刷新。
+ * 选择任一项后立即生效并关闭（与固定头 ≤56dp 的口径配套）。
+ */
+@Composable
+private fun NoticeFilterSheet(
+    stats: NoticeStats,
+    activeCard: NoticeCardFilter?,
+    filter: NoticeFilter,
+    categories: List<String>,
+    categoryKey: String?,
+    allCount: Int,
+    pendingCount: Int,
+    pinnedCount: Int,
+    hiddenCount: Int,
+    reduceMotion: Boolean,
+    onDismiss: () -> Unit,
+    onPickCard: (NoticeCardFilter) -> Unit,
+    onPickFilter: (NoticeFilter) -> Unit,
+    onPickCategory: (String?) -> Unit,
+    onOpenSearch: () -> Unit,
+    onRefresh: () -> Unit,
+) {
+    CtBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "筛选",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    val subtitle = buildSubtitle(allCount, pendingCount, hiddenCount)
+                    if (subtitle.isNotBlank()) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // 统计卡（原固定区大卡）：点选后立即筛选并关闭弹层。
+                NoticeOverviewCards(
+                    stats = stats,
+                    active = activeCard,
+                    onPick = onPickCard,
+                    reduceMotion = reduceMotion,
+                )
+                Text(
+                    text = "状态",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                NoticeFilterChips(
+                    chips = listOf(
+                        NoticeChip(NoticeFilter.ALL.name, "全部 $allCount"),
+                        NoticeChip(NoticeFilter.PENDING.name, "未处理 $pendingCount"),
+                        NoticeChip(NoticeFilter.PINNED.name, "置顶 $pinnedCount"),
+                    ),
+                    selectedKey = if (activeCard != null) "" else filter.name,
+                    onSelect = { key ->
+                        NoticeFilter.entries.firstOrNull { it.name == key }?.let(onPickFilter)
+                    },
+                    reduceMotion = reduceMotion,
+                )
+                if (categories.size > 1) {
+                    Text(
+                        text = "分类",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    NoticeFilterChips(
+                        chips = listOf(NoticeChip("", "全部")) +
+                            categories.map { NoticeChip(it, it) },
+                        selectedKey = categoryKey.orEmpty(),
+                        onSelect = { key -> onPickCategory(key.ifBlank { null }) },
+                        reduceMotion = reduceMotion,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onOpenSearch,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
+                        shape = CtShapeTokens.pill,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("搜索通知", style = MaterialTheme.typography.labelLarge)
+                    }
+                    Button(
+                        onClick = onRefresh,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
+                        shape = CtShapeTokens.pill,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("刷新", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
     }
 }
 
@@ -1155,7 +1413,7 @@ private fun NoticeSearchField(
             .fillMaxWidth()
             .focusRequester(focusRequester),
         singleLine = true,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
         trailingIcon = {
             IconButton(onClick = onClose) {
@@ -1179,11 +1437,16 @@ private fun NoticeOfflineBanner(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = RoundedCornerShape(16.dp),
+        color = scheme.surfaceContainerLow,
+        contentColor = scheme.onSurface,
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = scheme.outlineVariant.copy(alpha = 0.35f),
+        ),
     ) {
         Row(
             modifier = Modifier
@@ -1195,12 +1458,14 @@ private fun NoticeOfflineBanner(
             Icon(
                 imageVector = Icons.Rounded.WifiOff,
                 contentDescription = null,
+                tint = scheme.tertiary,
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(8.dp))
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -1283,13 +1548,27 @@ private fun NoticeList(
     loadingMore: Boolean = false,
     loadMoreError: String? = null,
     onRetryLoadAll: () -> Unit = {},
+    /** 滚动内容第一项：单行筛选 chips（固定头不放筛选 chips）。 */
+    header: (@Composable () -> Unit)? = null,
+    /** 滚动内容顶部提示条（离线/缓存）；滚动而非固定在头部。 */
+    banner: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(top = 4.dp, bottom = 88.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (banner != null) {
+            item(key = "offline-banner") {
+                Box(modifier = Modifier.fillMaxWidth()) { banner() }
+            }
+        }
+        if (header != null) {
+            item(key = "filter-header") {
+                Box(modifier = Modifier.fillMaxWidth()) { header() }
+            }
+        }
         if (content.longtermOnly || content.latestOnly) {
             val list = if (content.longtermOnly) content.longterm else content.latest
             itemsIndexed(items = list, key = { _, item -> "x-${item.key}" }) { index, item ->
@@ -1439,15 +1718,29 @@ private fun NoticeGrid(
     loadingMore: Boolean = false,
     loadMoreError: String? = null,
     onRetryLoadAll: () -> Unit = {},
+    /** 滚动内容第一项：单行筛选 chips（固定头不放筛选 chips）。 */
+    header: (@Composable () -> Unit)? = null,
+    /** 滚动内容顶部提示条（离线/缓存）；滚动而非固定在头部。 */
+    banner: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = modifier,
-        contentPadding = PaddingValues(top = 4.dp, bottom = 88.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (banner != null) {
+            item(key = "offline-banner", span = { GridItemSpan(maxLineSpan) }) {
+                Box(modifier = Modifier.fillMaxWidth()) { banner() }
+            }
+        }
+        if (header != null) {
+            item(key = "filter-header", span = { GridItemSpan(maxLineSpan) }) {
+                Box(modifier = Modifier.fillMaxWidth()) { header() }
+            }
+        }
         if (content.longtermOnly || content.latestOnly) {
             val list = if (content.longtermOnly) content.longterm else content.latest
             itemsIndexed(items = list, key = { _, item -> "x-${item.key}" }) { index, item ->
@@ -1612,7 +1905,7 @@ private fun NoticeLoadMoreRow(
     Surface(
         onClick = { if (error != null && !loading) onRetryLoadAll() },
         enabled = error != null && !loading,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
         modifier = Modifier
             .fillMaxWidth()
@@ -1675,7 +1968,7 @@ private fun NoticeGroupHeader(
         title = title,
         subtitle = subtitle,
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onToggle)
             .heightIn(min = 52.dp),
         trailing = {
@@ -1746,11 +2039,11 @@ private fun NoticeCard(
         expanded = expanded,
         previewPressed = previewPressed,
         pinned = item.pinned,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 NoticeCatPill(cat = item.cat, tone = item.tone)

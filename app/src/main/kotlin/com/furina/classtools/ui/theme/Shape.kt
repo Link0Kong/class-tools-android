@@ -29,11 +29,14 @@ val CtShapes = Shapes(
  * - pill / chip / input / sheet / dialog / listItem：按 M3 组件规范
  */
 object CtShapeTokens {
-    /** Hero 大卡：32dp（Expressive extraLargeIncreased）。 */
-    val hero = RoundedCornerShape(32.dp)
+    /** Hero 大卡：24dp（与工作台 hero 统一；2026-11-16 由 32dp 收紧）。 */
+    val hero = RoundedCornerShape(24.dp)
 
     /** 工具卡/普通卡片：16dp（品牌卡片圆角）。 */
     val toolCard = RoundedCornerShape(16.dp)
+
+    /** 大卡片/分组卡：20dp（与 16dp 卡片形成克制层级）。 */
+    val cardLarge = RoundedCornerShape(20.dp)
 
     /** 工具卡按压态：12dp（按下时形状收紧，配合 scale 0.97）。 */
     val toolCardPressed = RoundedCornerShape(12.dp)
@@ -47,8 +50,8 @@ object CtShapeTokens {
     /** 输入框：M3 OutlinedTextField 4dp。 */
     val input = RoundedCornerShape(4.dp)
 
-    /** 底部弹层：顶部 30dp（项目统一值）。 */
-    val sheet = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
+    /** 底部弹层：顶部 28dp（M3 extraLarge，2026-11-16 由 30dp 统一）。 */
+    val sheet = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
     /** 对话框：28dp（M3 extraLarge）。 */
     val dialog = RoundedCornerShape(28.dp)

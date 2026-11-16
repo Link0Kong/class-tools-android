@@ -146,6 +146,15 @@ fun ToolTransitionOverlay(
 
     val density = LocalDensity.current
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // 退出兜底：先铺一层不透明根页底色，再画缩小的快照。
+        // 这样即使 NavHost 的 pop 在极端时序下晚一帧，用户也绝不会看到「工具页内部」，
+        // 只会看到卡片在干净背景上收回；root 出现后再撤层。
+        if (reverse) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {}
+        }
         val fullWidthPx = constraints.maxWidth.toFloat()
         val fullHeightPx = constraints.maxHeight.toFloat()
         val progressValue = progress.value
@@ -157,8 +166,8 @@ fun ToolTransitionOverlay(
         val height = lerp(startBounds.height, fullHeightPx, p)
         val corner = (20f * (1f - p)).coerceAtLeast(0f)
         val fade = if (reverse) {
-            // 退出：保持不透明收回到卡片大小，最后 18% 淡出，与底层卡片无缝衔接。
-            if (p >= 0.18f) 1f else (p / 0.18f).coerceIn(0f, 1f)
+            // 退出：全程不透明；根页 pop 转场已关闭，收回结束才撤层，避免露出工具页。
+            1f
         } else {
             // 进入：最后 30% 淡出，露出已经完成 push 的目标页。
             if (p <= 0.7f) 1f else (1f - (p - 0.7f) / 0.3f).coerceIn(0f, 1f)

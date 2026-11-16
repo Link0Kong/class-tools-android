@@ -33,7 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Article
+import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -41,7 +41,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Feedback
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Shield
@@ -265,8 +265,8 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .weight(0.55f)
                                 .verticalScroll(rememberScrollState())
-                                .padding(top = 6.dp, bottom = 120.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                                .padding(top = 8.dp, bottom = 120.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             IdentitySection(session)
                             NotificationPermissionBanner(
@@ -285,8 +285,8 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .weight(0.45f)
                                 .verticalScroll(rememberScrollState())
-                                .padding(top = 6.dp, bottom = 120.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                                .padding(top = 8.dp, bottom = 120.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             NotifySection(
                                 reminderStatus = reminderStatus,
@@ -320,8 +320,8 @@ fun ProfileScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
-                            .padding(top = 10.dp, bottom = 120.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                            .padding(top = 8.dp, bottom = 120.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         IdentitySection(session)
                         NotificationPermissionBanner(
@@ -439,7 +439,7 @@ fun ProfileScreen(
 @Composable
 private fun ProfileHeader() {
     Row(
-        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+        modifier = Modifier.padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -458,13 +458,13 @@ private fun SectionTitle(text: String) {
         text = text,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 6.dp, top = 6.dp),
+        modifier = Modifier.padding(start = 8.dp, top = 8.dp),
     )
 }
 
 @Composable
 private fun GroupCard(content: @Composable ColumnScope.() -> Unit) {
-    CtGlassCard(shape = CtShapeTokens.hero) {
+    CtGlassCard(shape = CtShapeTokens.cardLarge) {
         Column(modifier = Modifier.fillMaxWidth(), content = content)
     }
 }
@@ -472,8 +472,8 @@ private fun GroupCard(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 private fun RowDivider() {
     HorizontalDivider(
-        color = MaterialTheme.colorScheme.outlineVariant,
-        modifier = Modifier.padding(start = 18.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+        modifier = Modifier.padding(start = 16.dp),
     )
 }
 
@@ -513,27 +513,22 @@ private fun ProfileHeroCard(session: Session) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 168.dp)
-            .clip(RoundedCornerShape(28.dp))
+            .heightIn(min = 152.dp)
+            .clip(RoundedCornerShape(24.dp))
             .background(Brush.linearGradient(listOf(hero.start, hero.end))),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // 深色用一点品牌色柔光做层次（小面积），浅色保持原来的白色高光。
+            // 只保留一层极轻柔光（2026-11-16：去掉第二层装饰圆，减少重装饰）。
             drawCircle(
                 color = if (dark) scheme.primary.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.06f),
                 radius = size.minDimension * 0.42f,
                 center = Offset(size.width * 0.94f, size.height * 0.10f),
             )
-            drawCircle(
-                color = hero.content.copy(alpha = 0.05f),
-                radius = size.minDimension * 0.30f,
-                center = Offset(size.width * 0.72f, size.height * 1.02f),
-            )
         }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 20.dp),
+                .padding(horizontal = 16.dp, vertical = 16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -565,7 +560,7 @@ private fun ProfileHeroCard(session: Session) {
                         color = hero.content,
                     )
                 }
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "班级工具站",
@@ -583,7 +578,7 @@ private fun ProfileHeroCard(session: Session) {
                 }
                 BrandMark(size = 38.dp, container = hero.innerFill)
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -621,7 +616,7 @@ private fun HeroPill(text: String, emphasis: Boolean = false) {
         modifier = Modifier
             .clip(CircleShape)
             .background(container)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
     )
 }
 
@@ -639,19 +634,19 @@ private fun DataSection(
 ) {
     SectionTitle("数据与同步")
     GroupCard {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(
                 text = "我的数据",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
                 MetricCell("待交作业", MeStatsBuilder.formatCount(stats.pendingHomework), Modifier.weight(1f))
                 MetricCell("已完成作业", MeStatsBuilder.formatCount(stats.doneHomework), Modifier.weight(1f))
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
                 MetricCell("抽签记录", MeStatsBuilder.formatCount(stats.drawRecords), Modifier.weight(1f))
                 MetricCell("体测记录", MeStatsBuilder.formatCount(stats.fitRecords), Modifier.weight(1f))
@@ -793,7 +788,7 @@ private fun AppearanceModeRows(
                         role = Role.RadioButton,
                         onClick = { onModeChange(item) },
                     )
-                    .padding(horizontal = 18.dp, vertical = 2.dp),
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -848,7 +843,7 @@ private fun AboutSection(
         )
         RowDivider()
         ActionRow(
-            icon = Icons.Rounded.MenuBook,
+            icon = Icons.AutoMirrored.Rounded.MenuBook,
             title = "使用说明",
             subtitle = "各功能用法速览",
             onClick = onOpenGuide,
@@ -861,7 +856,7 @@ private fun AboutSection(
         )
         RowDivider()
         ActionRow(
-            icon = Icons.Rounded.Article,
+            icon = Icons.AutoMirrored.Rounded.Article,
             title = "隐私政策",
             onClick = onShowPrivacy,
         )
@@ -895,7 +890,7 @@ private fun SignOutSection(
         onClick = onSignOutClick,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp),
+            .heightIn(min = 48.dp),
         shape = CtShapeTokens.pill,
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
@@ -945,7 +940,7 @@ private fun ActionRow(
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -998,7 +993,7 @@ private fun SwitchRow(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .padding(horizontal = 18.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -1040,7 +1035,7 @@ private fun ValueRow(title: String, value: String) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .padding(horizontal = 18.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

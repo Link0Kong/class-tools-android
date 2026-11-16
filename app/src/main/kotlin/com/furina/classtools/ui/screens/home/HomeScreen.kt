@@ -409,7 +409,7 @@ fun HomeScreen(
                         .statusBarsPadding()
                         .padding(horizontal = spec.horizontalPadding)
                         .verticalScroll(rememberScrollState())
-                        .padding(top = 10.dp, bottom = 124.dp),
+                        .padding(top = 8.dp, bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                 ) {
                     HomeReveal(enabled = animateEntrance, index = 0) {
@@ -693,7 +693,7 @@ private fun CourseRow(index: Int, sessionInfo: SessionInfo) {
                 .clip(CircleShape)
                 .background(courseAccent(index)),
         )
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = sessionInfo.name,
@@ -963,7 +963,7 @@ private fun HomeQuickToolsSection(
                 shape = HomeCardShape,
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -990,7 +990,7 @@ private fun HomeQuickToolsSection(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     quickTools.forEach { tool ->

@@ -36,7 +36,7 @@ import com.furina.classtools.ui.theme.CtShapeTokens
  * 工具页 v6 设计语言（参考 HFUT-Schedule 的大圆角卡片层级 + xiaoying 的柔和卡片/胶囊，只借鉴规律）：
  *
  * - 工具页顶栏统一用 [CtTopBar]（全局已更新为透明大标题 + 圆形玻璃返回/动作）；
- * - 内容卡片统一 [CtToolCard]：24dp 圆角、surfaceContainerLow 底、无硬描边、18dp 内边距、可选标题行；
+ * - 内容卡片统一 [CtToolCard]：20dp 圆角、surfaceContainerLow 底、1dp 软描边、16·14dp 内边距、可选标题行；
  * - 分组标题统一 [CtToolSectionHeader]：标题 + 可选说明 + 右侧动作；
  * - 表单/按钮/分段/筛选都提供轻量组件，避免各页面继续用不同风格。
  *
@@ -54,7 +54,7 @@ fun CtToolCard(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(
@@ -105,7 +105,7 @@ fun CtToolSectionHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 6.dp),
+            .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {

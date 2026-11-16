@@ -139,9 +139,9 @@ fun CtFloatingDock(
         else -> MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.92f)
     }
     val borderColor = if (dark) {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
     } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.80f)
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.60f)
     }
     // 浅色 0dp：不产生黑色投影晕影；深色保留 6dp 克制阴影（原 12dp 过重）。
     val dockShadowElevation = if (dark) 6.dp else 0.dp
@@ -152,7 +152,7 @@ fun CtFloatingDock(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Surface(
