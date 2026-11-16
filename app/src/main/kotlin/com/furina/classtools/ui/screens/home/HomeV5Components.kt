@@ -75,15 +75,20 @@ import kotlinx.coroutines.delay
 /** 工作台 v5 卡片圆角（比旧 16dp 更柔和，仍小于 hero 的 28dp）。 */
 internal val HomeCardShape = RoundedCornerShape(20.dp)
 
-/** 工作台 v5 hero 圆角（M3 extraLarge + 4dp，接近 xiaoying 渐变头图）。 */
-internal val HomeHeroShape = RoundedCornerShape(28.dp)
+/** 工作台 v5 hero 圆角（2026-11-16 改版：24dp，比旧 28dp 更轻）。 */
+internal val HomeHeroShape = RoundedCornerShape(24.dp)
 
 /**
- * 顶部「今日」hero：日期/星期 + 问候 + 上课中/下一节 + 进度条。
+ * 顶部「今日」hero（2026-11-16 轻量化改版）：日期/周次/角色一行 + 问候标题 + 今日课程摘要。
+ *
+ * 设计口径（用户反馈「最上面绿色卡片过于繁重」）：
+ * - **降低高度**：单行 meta（去掉「今日」胶囊与多层装饰）、标题 22sp、课程块紧凑，整体约 150dp；
+ * - **减少装饰**：只保留右上角一层极轻径向高光（删掉左下暗角/多余圆点），圆形头像缩到 34dp；
+ * - **层级清楚**：日期/周次/角色（label）→ 问候 + 姓名（标题）→ 课程信息块（内容）；
+ * - 颜色仍用品牌雾青（浅色 primary→secondary 深渐变 + 白字；深色中性 tonal），不引入外部资源；
+ * - 深色模式、平板（父级限宽）沿用既有自适应。
  *
  * 数据来自 [HomeWorkbenchLogic.heroState]（纯逻辑可单测）；点击整卡打开课表。
- * 深浅色自适应：浅色用 primary→secondary 深渐变 + 白字；深色用**中性 tonal 深色** + onSurface 文字
- * （品牌绿只保留 chip/头像/进度条等小面积 accent，避免深色下大面积青绿观感差）。
  */
 @Composable
 internal fun HomeHeroCard(
@@ -104,6 +109,9 @@ internal fun HomeHeroCard(
     val dateText = remember(date) { HomeWorkbenchLogic.dateText(date) }
     val weekText = remember(plan?.week) { HomeWorkbenchLogic.weekText(plan?.week) }
     val roleText = session.role.trim()
+    val metaText = remember(dateText, weekText, roleText) {
+        listOf(dateText, weekText, roleText).filter { it.isNotBlank() }.joinToString(" · ")
+    }
 
     val dark = LocalCtDarkTheme.current
     val heroColors = rememberCtHeroColors()
@@ -137,71 +145,46 @@ internal fun HomeHeroCard(
                 .fillMaxWidth()
                 .background(Brush.linearGradient(colors = listOf(heroColors.start, heroColors.end))),
         ) {
-            // 光场高光：右上角柔光 + 左下暗角（HFUT/ColorOS 风格的柔和层次，不使用模糊 API）。
-            // 用 radialGradient + drawRect（与 ExpressiveBackground 同实现）而不是纯色圆形，
-            // 避免出现生硬的「斜切色带」边缘，也规避 drawCircle(brush) 在预览渲染器里的异常。
+            // 单层极轻高光（右上）：保留品牌渐变的呼吸感，不再叠加左下暗角等装饰。
             Canvas(modifier = Modifier.fillMaxSize()) {
                 drawRect(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            content.copy(alpha = if (dark) 0.10f else 0.15f),
+                            content.copy(alpha = if (dark) 0.06f else 0.10f),
                             Color.Transparent,
                         ),
-                        center = Offset(size.width * 0.90f, -size.width * 0.06f),
-                        radius = size.width * 0.72f,
-                    ),
-                    size = size,
-                )
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = if (dark) 0.0f else 0.06f),
-                            Color.Transparent,
-                        ),
-                        center = Offset(-size.width * 0.05f, size.height * 1.06f),
-                        radius = size.width * 0.55f,
+                        center = Offset(size.width * 0.92f, -size.height * 0.15f),
+                        radius = size.width * 0.62f,
                     ),
                     size = size,
                 )
             }
 
-            Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    HeroChip(text = "今日", tint = accent)
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = dateText,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = content.copy(alpha = 0.94f),
+                        text = metaText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = content.copy(alpha = 0.86f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
-                    Spacer(modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.width(10.dp))
                     HomeAvatar(
                         initial = session.name.trim().take(1).ifBlank { "同" },
                         tint = accent,
                     )
                 }
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "$greeting，${session.name.trim().ifBlank { "同学" }}",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = content,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val subParts = listOf(weekText, roleText).filter { it.isNotBlank() }
-                if (subParts.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = subParts.joinToString(" · "),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = content.copy(alpha = 0.80f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 HeroCourseBlock(
                     hero = hero,
                     contentColor = content,
@@ -214,7 +197,7 @@ internal fun HomeHeroCard(
     }
 }
 
-/** hero 内课程区（上课中 / 下一节 / 空态 + 进度）。 */
+/** hero 内课程区（上课中 / 下一节 / 空态 + 进度；紧凑版：padding/间距收紧、进度条 5dp）。 */
 @Composable
 private fun HeroCourseBlock(
     hero: HomeHeroState,
@@ -226,13 +209,13 @@ private fun HeroCourseBlock(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(innerFill)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             HeroChip(text = hero.tag, tint = chipTint)
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(7.dp))
             Text(
                 text = hero.title,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -242,7 +225,7 @@ private fun HeroCourseBlock(
             )
         }
         if (hero.detail.isNotBlank()) {
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = hero.detail,
                 style = MaterialTheme.typography.bodySmall,
@@ -253,7 +236,7 @@ private fun HeroCourseBlock(
         }
         val progress = hero.progress
         if (progress != null) {
-            Spacer(modifier = Modifier.height(9.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = hero.progressText,
@@ -269,10 +252,10 @@ private fun HeroCourseBlock(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             HomeHeroProgressBar(progress = progress, color = chipTint, reduceMotion = reduceMotion)
         } else if (hero.hint.isNotBlank()) {
-            Spacer(modifier = Modifier.height(5.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = hero.hint,
                 style = MaterialTheme.typography.labelSmall,
@@ -296,7 +279,7 @@ private fun HomeHeroProgressBar(progress: Float, color: Color, reduceMotion: Boo
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(7.dp)
+            .height(5.dp)
             .clip(CircleShape)
             .background(color.copy(alpha = 0.24f))
             .semantics { progressBarRangeInfo = ProgressBarRangeInfo(clamped, 0f..1f) },
@@ -327,7 +310,7 @@ private fun HeroChip(text: String, tint: Color) {
     }
 }
 
-/** 半透明头像（xiaoying 重叠头像的轻量版：首字 + 圆形玻璃底）。 */
+/** 半透明头像（轻量版：首字 + 圆形玻璃底；34dp，减少 hero 装饰体积）。 */
 @Composable
 private fun HomeAvatar(initial: String, tint: Color) {
     Surface(
@@ -336,10 +319,10 @@ private fun HomeAvatar(initial: String, tint: Color) {
         contentColor = tint,
         border = BorderStroke(1.dp, tint.copy(alpha = 0.28f)),
     ) {
-        Box(modifier = Modifier.size(38.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(34.dp), contentAlignment = Alignment.Center) {
             Text(
                 text = initial,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
             )
         }
     }

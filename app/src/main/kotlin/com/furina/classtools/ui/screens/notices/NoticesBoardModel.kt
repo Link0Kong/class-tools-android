@@ -159,6 +159,7 @@ private fun autoUiItem(
         else -> rawStatus
     }
     val anchor = NoticeStatusMachine.anchorOf(group, entry.items, zone)
+    val publishedMillis = publishedAtOf(entry, zone)
     val summary = group.aiSummary.ifBlank {
         group.summary.ifBlank { NoticeBodyParser.firstTextOf(entry.items) }
     }
@@ -180,7 +181,7 @@ private fun autoUiItem(
             .filter { it.isNotBlank() }
             .joinToString(" · "),
         timeLabel = NoticeStatusMachine.displayText(group.timeLabel, anchor, nowMillis, zone),
-        postedText = formatPosted(entry.ts, nowMillis, zone),
+        postedText = formatPosted(publishedMillis, nowMillis, zone),
         whenMillis = NoticeStatusMachine.whenInfo(group, nowMillis, zone)?.atMillis,
         expired = rawStatus.expired,
         attachmentCount = NoticeBodyParser.attachmentCount(entry.items),
@@ -189,7 +190,7 @@ private fun autoUiItem(
         hidden = entry.hidden,
         recurring = recurrence != null,
         actionable = group.actionable,
-        publishedMillis = publishedAtOf(entry, zone),
+        publishedMillis = publishedMillis,
         hasTimeAnchor = hasTimeAnchor,
         // §1.2 资料 / 无时间：非过期、无有效 recurrence、无任何时间锚点
         material = recurrence == null && !rawStatus.expired && !hasTimeAnchor,
@@ -213,14 +214,22 @@ private fun autoUiItem(
 }
 
 /**
- * 发布时间（对齐网页 `pubTsOf`）：行 `ts`、`group.updatedAt`、首条 item 消息时间取最大。
- * 「最新发布」卡文案 / 排序与三端一致（合并/补充通知会更新 updatedAt / 追加 item 时间）。
+ * 真实发布时间（「最新发布」卡文案 / 筛选排序 / 卡片 postedText 共用同一键）：
+ *
+ * - 优先取组 `updatedAt`（采集端在补充/更正/合并时更新，代表该通知的最后一次有效发布）；
+ * - 与行 `ts`（首次入库时间）取较大值；都缺失时回退行 `ts`（缺失时间用 ts）；
+ * - **不再使用首条 item 的消息时间**：`item.time` 常见只有 `HH:mm`（当天时钟），按渲染日解析会
+ *   把历史通知算成「今天」，导致「最新发布」排序把旧通知顶到最前（2026-11-16 用户反馈的根因）；
+ * - **不使用**管理员 `edited_at`：编辑不是重新发布，不应改变发布顺序（编辑状态由「已更新」标签表达）。
  */
 internal fun publishedAtOf(entry: NoticeEntry, zone: ZoneId = ZoneId.systemDefault()): Long {
-    var best = entry.ts
-    NoticeStatusMachine.parseTs(entry.group.updatedAt, zone)?.let { if (it > best) best = it }
-    NoticeStatusMachine.anchorOf(entry.group, entry.items, zone)?.let { if (it > best) best = it }
-    return best
+    val ts = entry.ts
+    val updated = NoticeStatusMachine.parseTs(entry.group.updatedAt, zone)?.takeIf { it > 0L }
+    return when {
+        updated == null -> ts
+        ts > 0L -> maxOf(ts, updated)
+        else -> updated
+    }
 }
 
 // -----------------------------------------------------------------------------

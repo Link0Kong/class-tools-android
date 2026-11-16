@@ -28,10 +28,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
- * 轻量顶栏 v6：圆形玻璃返回 + 大标题（+ 副标题）+ 右侧动作胶囊。
+ * 轻量顶栏 v6：圆形玻璃返回 + 标题（+ 可选副标题）+ 右侧动作胶囊。
  *
  * 不再铺满半透明底条：直接落在 [com.furina.classtools.ui.components.ExpressiveBackground] 的新背景上，
  * 与「我的」hero / 工作台 hero 的层级一致；滚动行为仍由各页面自己控制。
+ *
+ * [compact]（默认 true，工具页统一口径）：**单行 56dp 紧凑顶栏**——标题 22sp（titleLarge）、
+ * 不显示副标题与多余装饰，把首屏垂直空间留给内容。需要大标题 + 副标题的页面显式传 `compact = false`。
  */
 @Composable
 fun CtTopBar(
@@ -40,10 +43,15 @@ fun CtTopBar(
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
     actions: @Composable () -> Unit = {},
+    compact: Boolean = true,
 ) {
     // 平板横屏（≥840dp）收紧左右/上下 padding（P2：大屏信息密度/留白）
     val widthDp = LocalConfiguration.current.screenWidthDp
     val tight = widthDp >= 840
+    if (compact) {
+        CompactTopBarRow(title = title, onBack = onBack, actions = actions, modifier = modifier)
+        return
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -101,6 +109,63 @@ fun CtTopBar(
                 )
             }
         }
+
+        actions()
+    }
+}
+
+/**
+ * 紧凑单行顶栏：44dp 圆形返回 + 22sp 单行标题 + 右侧动作，整体约 56dp。
+ *
+ * 不显示副标题（工具页首屏更轻）；标题过长省略，动作区保持原样（页面自己决定图标/文字按钮）。
+ */
+@Composable
+private fun CompactTopBarRow(
+    title: String,
+    onBack: (() -> Unit)?,
+    actions: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .padding(start = 10.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (onBack != null) {
+            Surface(
+                onClick = onBack,
+                modifier = Modifier.size(44.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                tonalElevation = 1.dp,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.size(21.dp),
+                    )
+                }
+            }
+        } else {
+            Box(modifier = Modifier.size(4.dp))
+        }
+
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .semantics { heading() },
+        )
 
         actions()
     }

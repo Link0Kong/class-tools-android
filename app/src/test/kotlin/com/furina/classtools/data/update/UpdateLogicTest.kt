@@ -100,14 +100,14 @@ class UpdateLogicTest {
 
     @Test
     fun `版本展示 带测试版本标签且去掉 debug 后缀`() {
-        assertEquals("v4.57.0-test1（测试版本 1）", UpdateTestVersion.versionDisplay("4.57.0-test1"))
+        assertEquals("v4.57.0-test1（测试版本）", UpdateTestVersion.versionDisplay("4.57.0-test1"))
         assertEquals(
-            "v4.57.0-test1（测试版本 1）",
+            "v4.57.0-test1（测试版本）",
             UpdateTestVersion.versionDisplay("4.57.0-test1-debug"),
         )
         assertEquals(1, UpdateTestVersion.version)
-        assertEquals("测试版本 1", UpdateTestVersion.label)
-        assertEquals("发现新版本 · 测试版本 1", UpdateTestVersion.dialogTitle())
+        assertEquals("测试版本", UpdateTestVersion.label)
+        assertEquals("发现新版本 · 测试版本", UpdateTestVersion.dialogTitle())
     }
 
     // ---------------------------------------------------------------- URL fallback

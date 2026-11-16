@@ -72,6 +72,7 @@ fun ChsiCardsContent(
     onOpenArchive: () -> Unit,
     onLogout: () -> Unit,
     onEnterCards: () -> Unit = {},
+    onClearCookies: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -168,6 +169,7 @@ fun ChsiCardsContent(
                     loggedIn = loggedIn,
                     onOpenArchive = onOpenArchive,
                     onLogout = onLogout,
+                    onClearCookies = onClearCookies,
                 )
             }
         }
@@ -391,12 +393,13 @@ private fun ChsiToolCard(
     }
 }
 
-/** 底部：打开完整学信档案 + 退出学信网登录（未登录不显示退出）。 */
+/** 底部：打开完整学信档案 +「清除 Cookie 重登」+ 退出学信网登录（未登录不显示退出）。 */
 @Composable
 private fun ChsiFooter(
     loggedIn: Boolean,
     onOpenArchive: () -> Unit,
     onLogout: () -> Unit,
+    onClearCookies: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -416,6 +419,19 @@ private fun ChsiFooter(
             )
             Spacer(modifier = Modifier.size(8.dp))
             Text(ChsiTexts.BTN_OPEN_ARCHIVE)
+        }
+        // 2026-11-16：卡片页也提供「清除 Cookie 重登」（参考 HFUT WebView+Cookie 模式）。
+        // 只清学信网域 Cookie / 当前页 DOM 存储，不影响活动/教务等其它工具登录。
+        TextButton(
+            onClick = onClearCookies,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
+        ) {
+            Text(
+                text = ChsiTexts.BTN_CLEAR_COOKIE_RELOGIN,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         if (loggedIn) {
             TextButton(

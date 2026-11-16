@@ -1,8 +1,12 @@
 package com.furina.classtools.ui.navigation
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -24,8 +28,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -71,8 +78,30 @@ fun Modifier.ctToolTransitionSource(toolId: String): Modifier {
 private fun lerp(from: Float, to: Float, fraction: Float): Float = from + (to - from) * fraction
 
 /**
- * 覆盖层：卡片 bounds → 全屏的圆角容器动画；[onHalfway] 时发起导航，[onDone] 时清除状态。
- * 若系统开启移除动画，则本 composable 不绘制任何覆盖层（调用方直接导航）。
+ * 捕获当前工具页的真实界面快照（主线程同步 `View.draw(Canvas)`；调用时必须仍未开始转场，保证拍到工具页）。
+ *
+ * - 返回 null（尺寸异常 / draw 抛异常 / OOM）时调用方降级为原图标卡覆盖层，不影响返回；
+ * - 仅用于「页面收回卡片」的退出动画（进入动画仍用图标卡，目标页很快会由 NavHost 渲染）；
+ * - WebView/SurfaceView 等硬件层可能不在软件 Canvas 中完整呈现，最坏情况是快照局部空白，
+ *   但仍优于旧实现「只画图标卡」。
+ */
+internal fun captureToolSnapshot(view: View?): Bitmap? {
+    val root = view ?: return null
+    if (root.width <= 0 || root.height <= 0) return null
+    return runCatching {
+        Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bitmap ->
+            root.draw(Canvas(bitmap))
+        }
+    }.getOrNull()
+}
+
+/**
+ * 覆盖层：进入 = 卡片 bounds → 全屏圆角容器；退出 = **全屏真实快照** → 卡片 bounds。
+ *
+ * 进入时覆盖层从卡片长成全屏、最后 30% 淡出露出目标页；退出时先由调用方 pop 回根页，
+ * 再让 [snapshot]（工具页真实界面）从全屏缩回卡片并淡出——动画期间/结束后都不会露出工具内部界面。
+ * [snapshot] 为 null（拍摄失败/进入方向）时退回旧图标卡视觉。
+ * 若系统开启移除动画，则本 composable 不绘制任何覆盖层（调用方直接跳转）。
  */
 @Composable
 fun ToolTransitionOverlay(
@@ -81,6 +110,7 @@ fun ToolTransitionOverlay(
     onHalfway: () -> Unit,
     onDone: () -> Unit,
     reverse: Boolean = false,
+    snapshot: Bitmap? = null,
 ) {
     if (tool == null || startBounds == null) return
     val reduceMotion = rememberReduceMotion()
@@ -106,9 +136,12 @@ fun ToolTransitionOverlay(
         }
     }
     LaunchedEffect(tool, reverse) {
-        // 进入：覆盖层先「铺开」一点再导航；退出：先 pop 露出底层，再把覆盖层收回卡片。
-        kotlinx.coroutines.delay(if (reverse) 40 else 120)
-        onHalfway()
+        // 进入：覆盖层先「铺开」一点再导航；退出：调用方已在开始动画前 pop（避免底层露出工具界面），
+        // 这里不再调用 onHalfway。
+        if (!reverse) {
+            kotlinx.coroutines.delay(120)
+            onHalfway()
+        }
     }
 
     val density = LocalDensity.current
@@ -141,38 +174,50 @@ fun ToolTransitionOverlay(
                 )
                 .graphicsLayer { alpha = fade },
         ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(corner.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                tonalElevation = 2.dp,
-            ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Surface(
-                            shape = RoundedCornerShape(18.dp),
-                            color = tool.accent.copy(alpha = 0.18f),
-                        ) {
-                            Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = tool.icon,
-                                    contentDescription = null,
-                                    tint = tool.accent,
-                                    modifier = Modifier.size(28.dp),
-                                )
+            if (reverse && snapshot != null) {
+                // 退出：真实工具页快照从全屏缩回卡片（圆角随进度收拢），最后 18% 淡出与底层卡片交接。
+                Image(
+                    bitmap = snapshot.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(corner.dp)),
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(corner.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    tonalElevation = 2.dp,
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = tool.accent.copy(alpha = 0.18f),
+                            ) {
+                                Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = tool.icon,
+                                        contentDescription = null,
+                                        tint = tool.accent,
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                }
                             }
+                            androidx.compose.foundation.layout.Spacer(
+                                modifier = Modifier.size(12.dp),
+                            )
+                            Text(
+                                text = tool.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
-                        androidx.compose.foundation.layout.Spacer(
-                            modifier = Modifier.size(12.dp),
-                        )
-                        Text(
-                            text = tool.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
                     }
                 }
             }

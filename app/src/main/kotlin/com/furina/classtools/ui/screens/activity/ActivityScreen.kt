@@ -2,8 +2,12 @@ package com.furina.classtools.ui.screens.activity
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.text.format.DateFormat
 import android.util.Log
 import android.webkit.CookieManager
@@ -25,6 +29,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -65,6 +70,7 @@ import com.furina.classtools.data.activity.ActivityRepository
 import com.furina.classtools.data.activity.ActivityResult
 import com.furina.classtools.data.activity.ActivityToken
 import com.furina.classtools.data.activity.ActivityWebSession
+import com.furina.classtools.data.activity.ActivityWeChatLogin
 import com.furina.classtools.data.activity.ScActivity
 import com.furina.classtools.data.activity.ScDetail
 import com.furina.classtools.ui.components.CtTopBar
@@ -85,6 +91,14 @@ private const val LG_INFO_JS = ActivityWebSession.LG_INFO_JS
  *
  * 登录方式：内置 WebView 打开学校网页，用户在页面上用统一身份认证登录；
  * 登录成功后从 localStorage.lgInfo 读回 token（不接触密码），只存本机。
+ *
+ * 2026-11-16 用户反馈「活动需要微信身份（openId）」：H5 是微信内应用，App 内 WebView 拿不到
+ * 微信身份，因此新增**微信登录引导**（[ActivityWeChatLogin]）：
+ * - 检测微信客户端（Android 11+ 允许「无法确认」）；
+ * - 「在微信中打开」= 复制活动 H5 链接 + 尝试用微信打开 / 拉起微信，用户在微信内完成微信登录；
+ * - 「复制链接」= 手动粘贴到微信；
+ * - 明确降级：微信与 App 的 Cookie/身份不共享，微信内登录后回 App 仍需学校账号登录，**不会假装已登录**
+ *   （`lgInfo` 仍只认 H5 真实会话）；原有微信 UA + 环境桩保留，让 H5 在 App 内回落到学校登录页。
  */
 @Composable
 fun ActivityScreen(
@@ -93,6 +107,7 @@ fun ActivityScreen(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var token by remember { mutableStateOf<ActivityToken?>(null) }
     var checked by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
@@ -103,6 +118,9 @@ fun ActivityScreen(
     var detailId by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableIntStateOf(0) }
+    // 2026-11-16：微信登录引导状态（检测结果 + 操作反馈）。
+    var wechatPresence by remember { mutableStateOf(ActivityWeChatLogin.Presence.UNKNOWN) }
+    var wechatHint by remember { mutableStateOf<String?>(null) }
 
     suspend fun load() {
         loading = true
@@ -114,7 +132,31 @@ fun ActivityScreen(
         loading = false
     }
 
+    /** 复制活动 H5 链接（供微信内打开）。 */
+    fun copyActivityLink() {
+        wechatHint = if (copyLinkToClipboard(context, ActivityWeChatLogin.shareUrl())) {
+            ActivityWeChatLogin.MSG_LINK_COPIED
+        } else {
+            ActivityWeChatLogin.MSG_COPY_FAILED
+        }
+    }
+
+    /** 在微信中打开：复制链接 + 尝试微信内打开 / 拉起微信；失败明确降级（不假装已登录）。 */
+    fun openActivityInWeChat() {
+        val url = ActivityWeChatLogin.shareUrl()
+        val copied = copyLinkToClipboard(context, url)
+        val launched = launchWeChat(context, url)
+        wechatHint = when {
+            launched -> ActivityWeChatLogin.MSG_WECHAT_OPENED
+            !copied -> ActivityWeChatLogin.MSG_COPY_FAILED
+            wechatPresence == ActivityWeChatLogin.Presence.NOT_INSTALLED ->
+                ActivityWeChatLogin.MSG_WECHAT_MISSING
+            else -> ActivityWeChatLogin.MSG_WECHAT_UNKNOWN_AFTER_FAIL
+        }
+    }
+
     LaunchedEffect(Unit) {
+        wechatPresence = detectWeChatPresence(context)
         token = repository.currentToken()
         checked = true
     }
@@ -186,6 +228,10 @@ fun ActivityScreen(
                 token == null -> LoginPrompt(
                     onLogin = { showLogin = true },
                     onBack = onBack,
+                    wechatPresence = wechatPresence,
+                    wechatHint = wechatHint,
+                    onOpenInWeChat = { openActivityInWeChat() },
+                    onCopyLink = { copyActivityLink() },
                 )
                 loading && items.isEmpty() -> LoadingBox()
                 else -> ActivityList(
@@ -228,6 +274,10 @@ fun ActivityScreen(
                     refreshKey++
                 }
             },
+            wechatPresence = wechatPresence,
+            wechatHint = wechatHint,
+            onOpenInWeChat = { openActivityInWeChat() },
+            onCopyLink = { copyActivityLink() },
         )
     }
 }
@@ -240,7 +290,14 @@ private fun LoadingBox() {
 }
 
 @Composable
-private fun LoginPrompt(onLogin: () -> Unit, onBack: () -> Unit) {
+private fun LoginPrompt(
+    onLogin: () -> Unit,
+    onBack: () -> Unit,
+    wechatPresence: ActivityWeChatLogin.Presence = ActivityWeChatLogin.Presence.UNKNOWN,
+    wechatHint: String? = null,
+    onOpenInWeChat: () -> Unit = {},
+    onCopyLink: () -> Unit = {},
+) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -255,12 +312,80 @@ private fun LoginPrompt(onLogin: () -> Unit, onBack: () -> Unit) {
         )
         Spacer(Modifier.height(20.dp))
         Button(onClick = onLogin) { Text("登录学校账号") }
+
+        Spacer(Modifier.height(22.dp))
+        WeChatLoginGuide(
+            presence = wechatPresence,
+            hint = wechatHint,
+            onOpenInWeChat = onOpenInWeChat,
+            onCopyLink = onCopyLink,
+        )
         Spacer(Modifier.height(10.dp))
         Text(
             "登录信息只保存在本机，不上传任何服务器。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * 微信登录引导（2026-11-16 用户反馈：活动 H5 需要微信身份 openId）。
+ *
+ * 三件事：检测微信 → 复制链接 / 在微信中打开 → **明确降级**。
+ * 不提供任何「假装微信已登录」的能力：App 内 WebView 拿不到 openId，`lgInfo` 仍只认 H5 真实会话。
+ */
+@Composable
+private fun WeChatLoginGuide(
+    presence: ActivityWeChatLogin.Presence,
+    hint: String?,
+    onOpenInWeChat: () -> Unit,
+    onCopyLink: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            ActivityWeChatLogin.TITLE_WECHAT_LOGIN,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            ActivityWeChatLogin.statusText(presence),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(
+                onClick = onCopyLink,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text(ActivityWeChatLogin.BTN_COPY_LINK) }
+            Button(
+                onClick = onOpenInWeChat,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text(ActivityWeChatLogin.BTN_OPEN_IN_WECHAT) }
+        }
+        Text(
+            ActivityWeChatLogin.HINT_OPENID_LIMIT,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            ActivityWeChatLogin.HINT_DEGRADED,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        hint?.takeIf { it.isNotBlank() }?.let { text ->
+            Text(
+                text,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 
@@ -364,7 +489,14 @@ private fun ActivityList(
 }
 
 @Composable
-private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit) {
+private fun LoginDialog(
+    onDismiss: () -> Unit,
+    onToken: (ActivityToken) -> Unit,
+    wechatPresence: ActivityWeChatLogin.Presence = ActivityWeChatLogin.Presence.UNKNOWN,
+    wechatHint: String? = null,
+    onOpenInWeChat: () -> Unit = {},
+    onCopyLink: () -> Unit = {},
+) {
     var hint by remember { mutableStateOf<String?>(null) }
     var reloadSeq by remember { mutableIntStateOf(0) }
     var selfTestSeq by remember { mutableIntStateOf(0) }
@@ -398,6 +530,13 @@ private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit)
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
                     )
                 }
+                // 2026-11-16：登录 WebView 内也保留微信登录引导（H5 提示「请在微信打开」时可直接处理）。
+                WeChatDialogGuide(
+                    presence = wechatPresence,
+                    hint = wechatHint,
+                    onOpenInWeChat = onOpenInWeChat,
+                    onCopyLink = onCopyLink,
+                )
                 LoginWebView(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     reloadSeq = reloadSeq,
@@ -406,6 +545,43 @@ private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit)
                     onToken = onToken,
                 )
             }
+        }
+    }
+}
+
+/** 登录 WebView 顶部的微信引导条（紧凑一行：检测状态 + 复制链接 / 在微信中打开）。 */
+@Composable
+private fun WeChatDialogGuide(
+    presence: ActivityWeChatLogin.Presence,
+    hint: String?,
+    onOpenInWeChat: () -> Unit,
+    onCopyLink: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = ActivityWeChatLogin.statusText(presence),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onCopyLink) { Text(ActivityWeChatLogin.BTN_COPY_LINK) }
+            TextButton(onClick = onOpenInWeChat) {
+                Text(ActivityWeChatLogin.BTN_OPEN_IN_WECHAT)
+            }
+        }
+        hint?.takeIf { it.isNotBlank() }?.let { text ->
+            Text(
+                text,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 2,
+            )
         }
     }
 }
@@ -470,7 +646,8 @@ private fun LoginWebView(
                         }
                         return true
                     }
-                    // 2) 只允许 http(s)；weixin:// 等自定义 scheme 一律阻止（避免调起微信/其它 App）。
+                    // 2) 只允许 http(s)；weixin:// 等自定义 scheme 一律阻止（避免页面静默调起微信）。
+                    //    微信登录引导由界面上的「在微信中打开」按钮负责（复制链接 + 显式 Intent）。
                     return !(url.startsWith("http://") || url.startsWith("https://"))
                 }
 
@@ -682,7 +859,59 @@ private suspend fun WebView.evalJs(script: String): String? =
     }
 
 /** `evaluateJavascript` 返回的是 JSON 字符串，lgInfo 本身又是一段 JSON 文本。 */
-internal fun parseLgInfo(raw: String): ActivityToken? = ActivityWebSession.parseLgInfo(raw)
+internal fun parseLgInfo(raw: String?): ActivityToken? = ActivityWebSession.parseLgInfo(raw)
+
+// ---- 微信登录引导（2026-11-16）--------------------------------------------------
+
+/**
+ * 检测微信客户端（best-effort）。
+ *
+ * Android 11+ 未声明 `<queries>` 时 `getLaunchIntentForPackage` / `resolveActivity` 对非可见
+ * 包一律返回 null —— 此时返回 [ActivityWeChatLogin.Presence.UNKNOWN]（**不能**断言未安装），
+ * 由「在微信中打开」按钮实际尝试唤起（`startActivity` 不受 package visibility 限制）。
+ */
+private fun detectWeChatPresence(context: Context): ActivityWeChatLogin.Presence {
+    val manager = context.packageManager
+    val launchIntent = runCatching {
+        manager.getLaunchIntentForPackage(ActivityWeChatLogin.WECHAT_PACKAGE)
+    }.getOrNull()
+    val resolved = launchIntent != null || runCatching {
+        @Suppress("DEPRECATION")
+        manager.resolveActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(ActivityWeChatLogin.WEIXIN_SCHEME)),
+            0,
+        ) != null
+    }.getOrDefault(false)
+    return ActivityWeChatLogin.presence(resolved, Build.VERSION.SDK_INT)
+}
+
+/** 复制活动 H5 链接到剪贴板（返回是否成功）。 */
+private fun copyLinkToClipboard(context: Context, text: String): Boolean = try {
+    val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    if (manager == null) {
+        false
+    } else {
+        manager.setPrimaryClip(ClipData.newPlainText("学校活动", text))
+        true
+    }
+} catch (e: Exception) {
+    false
+}
+
+/**
+ * 尝试在微信中打开活动 H5：
+ * 1. 优先 `ACTION_VIEW` 学校 H5 + `setPackage(com.tencent.mm)`（部分微信版本用内置浏览器打开）；
+ * 2. 失败则仅拉起微信客户端（`weixin://`）——链接已复制，用户粘贴到微信打开。
+ *
+ * 只用系统 Intent，不接入微信 SDK/开放标签，不获取、不伪造 openId。
+ */
+private fun launchWeChat(context: Context, url: String): Boolean {
+    val direct = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        .setPackage(ActivityWeChatLogin.WECHAT_PACKAGE)
+    if (runCatching { context.startActivity(direct) }.isSuccess) return true
+    val openApp = Intent(Intent.ACTION_VIEW, Uri.parse(ActivityWeChatLogin.WEIXIN_SCHEME))
+    return runCatching { context.startActivity(openApp) }.isSuccess
+}
 
 private fun fmt(ms: Long?): String {
     if (ms == null || ms <= 0) return "—"

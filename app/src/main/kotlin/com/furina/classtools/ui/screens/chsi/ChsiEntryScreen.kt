@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -46,6 +45,7 @@ import com.furina.classtools.features.chsi.ChsiNavigationLogic.Mode as ChsiMode
 import com.furina.classtools.features.chsi.ChsiOfficialTool
 import com.furina.classtools.features.chsi.ChsiPagePayload
 import com.furina.classtools.features.chsi.ChsiTexts
+import com.furina.classtools.features.chsi.ChsiWebViewLogic
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import kotlinx.coroutines.delay
@@ -63,8 +63,19 @@ import kotlin.coroutines.resume
  *   由用户本人手动登录（验证码/短信/实人核验），App **不预填、不保存、不上传**账号密码；
  * - 官方登录页完成登录 → URL 回到 my.chsi.com.cn 且页面内容确认已登录 → 自动回卡片页并刷新数据卡；
  * - 点官方工具卡 = App 内 WebView 全屏打开官方页面，返回回卡片页；
- * - WebView 顶栏「桌面版/手机版」切换（UA + reload）；「退出学信网登录」清 Cookie/WebStorage/缓存；
+ * - WebView 顶栏「桌面版/手机版」切换（UA + reload）；
+ * - **CookieManager 共享 + 标准 Chrome UA + 第三方 Cookie/DOM storage**（2026-11-16，参考
+ *   HFUT-Schedule 的 WebView+Cookie 模式）：默认 UA 为标准 Chrome 移动 UA（不用系统 WebView 的
+ *   `wv` 标记）；创建 WebView 前统一开启 Cookie 接收，登录跳转页面 `flush()` 落盘；
+ *   登录态仍以**页面内容**判定（Cookie 只做辅助信号，不只看 URL）；
+ * - 卡片页/登录页都提供「清除 Cookie 重登」：**只清学信网域名 Cookie + 当前页 DOM 存储**，
+ *   再打开官方登录页；「退出学信网登录」同样只清学信网域，不再全局 `removeAllCookies` /
+ *   `WebStorage.deleteAllData`（否则会误清活动 H5 的 lgInfo 等其它工具会话）；
  * - 提取数据仅内存展示，不落盘/不上传/不打日志；展示前掩码 18 位身份证/11 位手机号。
+ *
+ * 参考实现：HFUT-Schedule（`ui/util/WebViewFactory.kt` 的 Cookie 启停/flush、
+ * `activity/util/WebViewActivity.kt` 的 WebView 承载、`xueXin/XueXin.kt` 的学信网入口）。
+ * 不复制其源码；只对齐「标准 UA + CookieManager 共享/清理 + 页面回调」的行为。
  *
  * @param sid 班级身份学号（本页不使用：学信网登录与班级身份无关，保持导航签名一致）
  * @param onBack 顶栏返回（卡片页 → 退出工具页；登录/WebView 模式 → 回卡片页）
@@ -96,6 +107,10 @@ fun ChsiEntryScreen(
                 state.loading.value = false
                 val current = url.orEmpty().ifBlank { view.url.orEmpty() }
                 state.pageUrl = current
+                // CookieManager 共享/落盘：学信网页面加载完成即 flush，避免登录跳转后会话偶发丢失。
+                if (ChsiExtractLogic.isChsiHost(current)) {
+                    runCatching { CookieManager.getInstance().flush() }
+                }
                 if (state.mode.value == ChsiMode.WEB) return
                 when {
                     // 被重定向到学信网账号登录页 = 未登录：只在用户主动点「登录学信网」时停留登录页；
@@ -131,10 +146,14 @@ fun ChsiEntryScreen(
     }
 
     val webView = remember {
+        // CookieManager 是进程级共享的：先确保接受 Cookie，再创建 WebView（HFUT WebView+Cookie 模式）。
+        runCatching { CookieManager.getInstance().setAcceptCookie(true) }
         WebView(context).apply {
             setBackgroundColor(android.graphics.Color.WHITE)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            // 2026-11-16：默认使用标准 Chrome UA（不用系统 WebView UA），避免官方站点识别为内置浏览器。
+            settings.userAgentString = ChsiWebViewLogic.defaultUserAgent()
             // 安全（规格 §3）：禁 file/content access，仅 http(s)（由 shouldOverrideUrlLoading 保证）。
             settings.allowFileAccess = false
             settings.allowContentAccess = false
@@ -142,6 +161,7 @@ fun ChsiEntryScreen(
             settings.setSupportMultipleWindows(false)
             settings.loadsImagesAutomatically = true
             webViewClient = pageClient
+            // Cookie 共享 + 第三方 Cookie + DOM storage（登录链路跨 account→my 子域，缺一不可）。
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
         }
@@ -295,41 +315,72 @@ fun ChsiEntryScreen(
         webView.loadUrl(url)
     }
 
-    /** UA 切换（桌面版/手机版 + reload，规格 §3）。 */
+    /** UA 切换（桌面版/手机版 + reload，规格 §3；默认标准 Chrome 移动 UA）。 */
     fun toggleUserAgent() {
         val desktop = !state.desktopUa.value
         state.desktopUa.value = desktop
-        webView.settings.userAgentString = if (desktop) ChsiCatalog.DESKTOP_UA else ChsiCatalog.MOBILE_UA
+        webView.settings.userAgentString = ChsiWebViewLogic.userAgentFor(desktop)
         state.loading.value = true
         webView.reload()
     }
 
-    /** 退出学信网登录：清 Cookie + WebStorage + 缓存，回登录态（不影响学信网账号本身）。 */
-    fun logout() {
-        state.logoutConfirmVisible.value = false
-        state.loginConfirmedByUser = false
-        runCatching { CookieManager.getInstance().removeAllCookies(null) }
-        runCatching { CookieManager.getInstance().flush() }
-        runCatching { WebStorage.getInstance().deleteAllData() }
-        runCatching {
-            webView.clearCache(true)
-            webView.clearHistory()
-            webView.clearFormData()
+    /**
+     * 只清理学信网域名的登录状态（Cookie + 当前页 DOM 存储 + 表单/缓存）。
+     *
+     * 2026-11-16 根因修复：旧实现 `removeAllCookies()` + `WebStorage.deleteAllData()` 是**全局**清理，
+     * 会把活动 H5 的 `lgInfo`、教务/今日校园等其它 WebView 会话一并清掉。这里：
+     * - 按 [ChsiWebViewLogic.COOKIE_URLS] 逐个域名读取 Cookie 头，再用 `setCookie` 过期同名 Cookie
+     *   （只影响 chsi.com.cn 域）；
+     * - 仅当当前页面属于学信网时注入 [ChsiWebViewLogic.CLEAR_PAGE_STORAGE_JS] 清 localStorage/
+     *   sessionStorage（不触碰其它站点）；
+     * - `clearCache(true)` 只清 HTTP 缓存（非凭据），避免登录跳转的缓存页残留。
+     */
+    fun clearChsiLoginState() {
+        val manager = CookieManager.getInstance()
+        ChsiWebViewLogic.COOKIE_URLS.forEach { cookieUrl ->
+            val header = runCatching { manager.getCookie(cookieUrl) }.getOrNull()
+            ChsiWebViewLogic.expiredCookieDirectives(header).forEach { directive ->
+                runCatching { manager.setCookie(cookieUrl, directive) }
+            }
         }
+        runCatching { manager.flush() }
+        if (ChsiExtractLogic.isChsiHost(state.pageUrl)) {
+            runCatching { webView.evaluateJavascript(ChsiWebViewLogic.CLEAR_PAGE_STORAGE_JS, null) }
+        }
+        runCatching { webView.clearFormData() }
+        runCatching { webView.clearHistory() }
+        runCatching { webView.clearCache(true) }
+        state.loginConfirmedByUser = false
+        state.desktopUa.value = false
+        runCatching { webView.settings.userAgentString = ChsiWebViewLogic.defaultUserAgent() }
         state.cards.value = ChsiExtractLogic.extractCards(null)
         state.lastUpdated.value = null
         state.loggedIn.value = false
         state.globalError.value = null
         state.refreshing.value = false
         state.extractInFlight = false
-        state.desktopUa.value = false
-        webView.settings.userAgentString = ChsiCatalog.MOBILE_UA
-        // 退出后回卡片页（10 个官方工具卡仍在），后台重新检查登录态即可，不强制停在登录页。
+    }
+
+    /** 退出学信网登录：只清学信网域登录状态（不影响其它工具），回卡片页后台重新检查。 */
+    fun logout() {
+        state.clearConfirmAction.value = null
+        clearChsiLoginState()
         state.mode.value = ChsiMode.CARDS
         state.loading.value = true
         state.refreshing.value = true
         webView.loadUrl(ChsiCatalog.ARCHIVE_ENTRY)
         Toast.makeText(context, ChsiTexts.MSG_LOGGED_OUT, Toast.LENGTH_SHORT).show()
+    }
+
+    /** 清除 Cookie 重登（登录页/卡片页都提供）：清学信网域 Cookie 后重新打开官方登录页。 */
+    fun clearCookiesAndRelogin() {
+        state.clearConfirmAction.value = null
+        clearChsiLoginState()
+        state.loading.value = true
+        state.globalError.value = null
+        state.mode.value = ChsiMode.LOGIN
+        webView.loadUrl(ChsiCatalog.LOGIN_URL)
+        Toast.makeText(context, ChsiTexts.MSG_COOKIE_CLEARED_RELOGIN, Toast.LENGTH_SHORT).show()
     }
 
     // WebView 随页面销毁（返回工具页 / 旋转重建）释放，避免内存泄漏。
@@ -346,7 +397,7 @@ fun ChsiEntryScreen(
 
     BackHandler {
         when {
-            state.logoutConfirmVisible.value -> state.logoutConfirmVisible.value = false
+            state.clearConfirmAction.value != null -> state.clearConfirmAction.value = null
             state.mode.value == ChsiMode.WEB -> state.mode.value = ChsiMode.CARDS
             state.mode.value == ChsiMode.LOGIN -> backToCards()
             else -> onBack()
@@ -416,6 +467,29 @@ fun ChsiEntryScreen(
                             }
                         }
                     }
+                    // 2026-11-16：登录页也提供「清除 Cookie 重登」（登录异常/卡登录页时的恢复入口）。
+                    if (ChsiWebViewLogic.shouldShowClearCookies(mode)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = ChsiTexts.HINT_CLEAR_COOKIE_RELOGIN,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                onClick = { state.clearConfirmAction.value = ClearCookieAction.RELOGIN },
+                            ) {
+                                Text(ChsiTexts.BTN_CLEAR_COOKIE_RELOGIN)
+                            }
+                        }
+                    }
                 }
                 state.globalError.value?.takeIf { it.isNotBlank() }?.let { message ->
                     ChsiHintBanner(message, isError = true)
@@ -444,8 +518,11 @@ fun ChsiEntryScreen(
                             onOpenArchive = {
                                 openOfficialPage(ChsiCatalog.ARCHIVE_HOME, ChsiTexts.PAGE_TITLE)
                             },
-                            onLogout = { state.logoutConfirmVisible.value = true },
+                            onLogout = { state.clearConfirmAction.value = ClearCookieAction.LOGOUT },
                             onEnterCards = { enterCardsFromLogin() },
+                            onClearCookies = {
+                                state.clearConfirmAction.value = ClearCookieAction.RELOGIN
+                            },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -462,21 +539,43 @@ fun ChsiEntryScreen(
         }
     }
 
-    if (state.logoutConfirmVisible.value) {
+    state.clearConfirmAction.value?.let { action ->
+        val isLogout = action == ClearCookieAction.LOGOUT
         AlertDialog(
-            onDismissRequest = { state.logoutConfirmVisible.value = false },
-            title = { Text(ChsiTexts.LOGOUT_CONFIRM_TITLE) },
-            text = { Text(ChsiTexts.LOGOUT_CONFIRM_TEXT) },
+            onDismissRequest = { state.clearConfirmAction.value = null },
+            title = {
+                Text(
+                    if (isLogout) ChsiTexts.LOGOUT_CONFIRM_TITLE else ChsiTexts.CLEAR_COOKIE_CONFIRM_TITLE,
+                )
+            },
+            text = {
+                Text(
+                    if (isLogout) ChsiTexts.LOGOUT_CONFIRM_TEXT else ChsiTexts.CLEAR_COOKIE_CONFIRM_TEXT,
+                )
+            },
             confirmButton = {
-                TextButton(onClick = { logout() }) { Text(ChsiTexts.BTN_LOGOUT) }
+                TextButton(onClick = { if (isLogout) logout() else clearCookiesAndRelogin() }) {
+                    Text(
+                        if (isLogout) ChsiTexts.BTN_LOGOUT else ChsiTexts.BTN_CLEAR_COOKIE_RELOGIN,
+                    )
+                }
             },
             dismissButton = {
-                TextButton(onClick = { state.logoutConfirmVisible.value = false }) {
+                TextButton(onClick = { state.clearConfirmAction.value = null }) {
                     Text("取消")
                 }
             },
         )
     }
+}
+
+/** 清理学信网登录状态的两种确认动作（都只清 chsi.com.cn 域，不影响其它工具）。 */
+private enum class ClearCookieAction {
+    /** 退出学信网登录：清 Cookie 后回卡片页后台重新检查。 */
+    LOGOUT,
+
+    /** 清除 Cookie 重登：清 Cookie 后重新打开官方登录页。 */
+    RELOGIN,
 }
 
 /** 页面运行态（集中放 Compose State，供 WebViewClient 回调与提取协程读写）。 */
@@ -492,7 +591,9 @@ private class ChsiScreenState {
     /** 后台自动恢复登录/提取进行中（首帧即 true，避免数据卡先闪「未登录」）。 */
     val refreshing = mutableStateOf(true)
     val globalError = mutableStateOf<String?>(null)
-    val logoutConfirmVisible = mutableStateOf(false)
+
+    /** 清 Cookie / 退出登录确认框动作（null = 不显示）。 */
+    val clearConfirmAction = mutableStateOf<ClearCookieAction?>(null)
     val desktopUa = mutableStateOf(false)
 
     /** 每次 +1 触发一次页面文本提取。 */

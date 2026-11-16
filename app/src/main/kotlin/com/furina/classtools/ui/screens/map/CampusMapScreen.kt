@@ -1,19 +1,12 @@
 package com.furina.classtools.ui.screens.map
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
-import android.os.Looper
 import android.net.Uri
 import android.util.Log
 import android.view.View
 import android.webkit.ConsoleMessage
-import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -21,8 +14,6 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,10 +40,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -61,24 +52,44 @@ import com.furina.classtools.ui.components.CtTopBar
 
 private const val TAG = "CampusMap"
 
-/** 地图 H5 页面（ECS IP 调试入口；备案/DNS 恢复后改同源 https）。 */
+/**
+ * 离线地图 H5（打包进 APK `assets/map/`，H5 已内置全部地图数据、无外部 fetch）——**首选加载**。
+ *
+ * 2026-11-16 根因：地图一直依赖 ECS `http://121.196.47.2/map/...`，用户网络/DNS/防火墙稍有波动即白屏。
+ * 把同一份 H5 放进 APK 后走 `file:///android_asset/`，无需任何网络请求即可渲染。
+ */
+private const val ASSET_MAP_URL = "file:///android_asset/map/campus_final_25d.html?embed=1"
+
+/** 地图 H5 网络版（ECS IP 调试入口；备案/DNS 恢复后改同源 https）：本地资源不可用时的降级。 */
 private const val MAP_BASE = "http://121.196.47.2/map/campus_final_25d.html"
 private const val MAP_VERSION = "202611160800"
 
-/** H5 已内置的 App 定位桥（HTTP 页面不能用 navigator.geolocation）。 */
-private const val JS_INTERFACE_NAME = "AndroidMap"
+/** 离线页健康检查：H5 正常渲染时 `#scene` canvas 一定有非零尺寸且正文有内容。 */
+private const val MAP_HEALTH_JS =
+    "(function(){try{var s=document.getElementById('scene');" +
+        "var t=(document.body&&document.body.innerText||'').replace(/\\s+/g,'');" +
+        "return JSON.stringify({c:document.querySelectorAll('canvas').length," +
+        "w:s?s.width:0,h:s?s.height:0,t:t.length});}catch(e){return ''}})()"
+
+/** H5 的 canvas 尺寸按布局计算；WebView 首次加载时可能还没完成布局（canvas 高 0 → 白屏）。 */
+private const val MAP_RESIZE_JS =
+    "(function(){try{window.dispatchEvent(new Event('resize'));return 'ok';}catch(e){return 'error';}})()"
+
+/** 地图页面来源：本地 asset（默认）→ ECS 网络版（降级）。 */
+private enum class MapSource {
+    ASSET,
+    NETWORK,
+}
 
 /**
- * 校内地图（网页嵌入方案，2026-11-15 用户反馈「App 打不开，改网页嵌入」）。
+ * 校内地图（网页嵌入方案）。
  *
- * 方案：
- * - 用 WebView 直接加载 ECS H5：`MAP_BASE?embed=1&v=<版本>`（唯一数据源，不在原生侧重写 canvas）；
- * - **不再**做原生 canvas 渲染依赖/复杂健康检查重试；只保留最基本的加载进度、主文档错误提示；
- * - 顶部：Compose CtTopBar 与系统状态栏保持安全距离（`statusBarsPadding`），WebView 填满顶栏以下区域；
- * - 降级：顶栏「浏览器」按钮随时可在系统浏览器打开同一 H5；主文档加载失败/白屏时错误条提供
- *   「重试」「嵌入备用」「浏览器」三个入口——「嵌入备用」用本地 data URL 包装页内嵌 iframe 指向 H5；
- * - 定位：H5 优先调用 `window.AndroidMap.requestLocation()`，本 App 读系统最近定位后回填
- *   `window.zqSetMyLocation(lat, lon, acc)`（HTTP 页面无法用浏览器 geolocation）。
+ * 2026-11-16 用户反馈「地图还是加载不出来」，本轮把方案改为**离线优先**：
+ * - **首选** `file:///android_asset/map/campus_final_25d.html?embed=1`（H5 已内置数据，无外部 fetch）；
+ * - 主文档加载失败/页面健康检查失败（无 canvas/空白）→ 自动降级到 ECS 网络版并提示；
+ * - 网络版仍失败 → 错误条提供「重试」「离线版」「在浏览器打开」三个出口；
+ * - 顶栏「浏览器」始终用网络版 URL 交给系统浏览器（浏览器打不开 APK 内 assets）。
+ *
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -89,39 +100,35 @@ fun CampusMapScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val locationPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) {}
-    LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
-    }
 
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
     var reloadSeq by remember { mutableIntStateOf(0) }
-    var iframeFallback by remember { mutableStateOf(false) }
+    var source by remember { mutableStateOf(MapSource.ASSET) }
+    // 本地 asset 已自动降级过一次就不再反复重试（避免加载失败时循环）。
+    var assetFallbackTried by remember { mutableStateOf(false) }
 
-    fun mapUrl(): String {
+    fun assetUrl(): String {
+        val base = ASSET_MAP_URL
+        return if (room.isNullOrBlank()) base else base + "&room=" + Uri.encode(room)
+    }
+
+    fun networkUrl(): String {
         val base = "$MAP_BASE?embed=1&v=$MAP_VERSION"
         return if (room.isNullOrBlank()) base else base + "&room=" + Uri.encode(room)
     }
 
-    /**
-     * 降级用本地包装页：data URL + 100% iframe 指向 H5。
-     *
-     * 某些 WebView/设备对 canvas 页面直接加载会白屏；iframe 包装常能绕过（iframe 内独立文档/合成层）。
-     * 包装页不联网、不含任何敏感数据，只是内嵌官方 H5。
-     */
-    fun iframeWrapperUrl(): String {
-        val html = """<!doctype html><html><head><meta charset="utf-8">""" +
-            """<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">""" +
-            "<style>html,body{margin:0;padding:0;height:100%;background:#F3F5EC}" +
-            "iframe{display:block;width:100%;height:100%;border:0}</style></head><body>" +
-            """<iframe src="${mapUrl()}" allow="geolocation" referrerpolicy="no-referrer"></iframe>""" +
-            "</body></html>"
-        return "data:text/html;charset=utf-8," + Uri.encode(html)
+    fun currentUrl(): String = when (source) {
+        MapSource.ASSET -> assetUrl()
+        MapSource.NETWORK -> networkUrl()
+    }
+
+    fun switchToNetwork(reason: String) {
+        source = MapSource.NETWORK
+        notice = reason
+        error = null
+        loading = true
     }
 
     val webView = remember {
@@ -130,26 +137,20 @@ fun CampusMapScreen(
             // 部分 WebView/GPU 组合对 2D canvas 页面会白屏；软件层可稳定绘制静态 2.5D 地图。
             setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             settings.javaScriptEnabled = true
+            // file:///android_asset 页面必须允许 file access；DOM storage 供 H5 保存偏好。
+            settings.allowFileAccess = true
+            settings.allowContentAccess = false
+            settings.allowFileAccessFromFileURLs = true
+            // 不开放 file 页面跨源网络能力：H5 已内置数据，无外部 fetch，也没有上网需求。
+            settings.allowUniversalAccessFromFileURLs = false
             settings.domStorageEnabled = true
             settings.loadsImagesAutomatically = true
             settings.builtInZoomControls = false
             settings.displayZoomControls = false
-            settings.setGeolocationEnabled(true)
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = false
             if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
-            addJavascriptInterface(MapLocationBridge(context) { lat, lon, acc ->
-                // JS 桥回调在 JavaBridge 线程，回 UI 线程再执行 JS。
-                post { evaluateJavascript("window.zqSetMyLocation($lat,$lon,$acc)", null) }
-            }, JS_INTERFACE_NAME)
             webChromeClient = object : WebChromeClient() {
-                override fun onGeolocationPermissionsShowPrompt(
-                    origin: String?,
-                    callback: GeolocationPermissions.Callback?,
-                ) {
-                    callback?.invoke(origin, true, false)
-                }
-
                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                     if (newProgress >= 100) loading = false
                 }
@@ -168,6 +169,27 @@ fun CampusMapScreen(
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     loading = false
+                    val target = view ?: return
+                    // 2026-11-16 根因：H5 在 WebView 首次布局完成前 boot 时 canvas 高度是 0
+                    // （`canvas.clientHeight=0` → H5 的 resize 守卫直接 return），页面之后不会再
+                    // 自动重算 → 只剩底色，表现为「地图加载不出来」。页面加载后多帧强制派发 resize。
+                    listOf(250L, 800L, 1800L).forEach { delayMs ->
+                        target.postDelayed({
+                            target.evaluateJavascript(MAP_RESIZE_JS, null)
+                        }, delayMs)
+                    }
+                    // 本地 asset 健康检查：无 canvas（加载成了错误页）→ 自动降级网络版；
+                    // 有 canvas 但尺寸为 0（布局晚于 boot）→ 已由上面的 resize 兜底，无需降级。
+                    if (source == MapSource.ASSET && !assetFallbackTried) {
+                        target.evaluateJavascript(MAP_HEALTH_JS) { raw ->
+                            val health = parseMapHealth(raw)
+                            if (health == null || health.canvasCount <= 0) {
+                                assetFallbackTried = true
+                                switchToNetwork("本地离线地图加载失败，已切换网络版")
+                                target.post { target.loadUrl(currentUrl()) }
+                            }
+                        }
+                    }
                 }
 
                 override fun onReceivedError(
@@ -179,34 +201,42 @@ fun CampusMapScreen(
                         loading = false
                         val detail = "HTTP/网络错误 ${webError?.errorCode ?: -1} " +
                             webError?.description?.toString().orEmpty()
-                        Log.w(TAG, "main frame error: $detail")
-                        error = detail
+                        Log.w(TAG, "main frame error: source=$source $detail")
+                        if (source == MapSource.ASSET && !assetFallbackTried) {
+                            assetFallbackTried = true
+                            switchToNetwork("本地离线地图加载失败，已切换网络版")
+                            view?.post { view.loadUrl(currentUrl()) }
+                        } else {
+                            error = detail
+                        }
                     }
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val u = request?.url?.toString() ?: return false
-                    // 只在本 WebView 内保留地图页；其它外链交给系统浏览器。
-                    if (u.startsWith("http://121.196.47.2/map/") || u.startsWith("https://tool.furina.fun/map/")) {
+                    // 地图页内部（离线 asset / ECS 网络版）继续留在 WebView；其它外链交给系统浏览器。
+                    if (u.startsWith("file:///android_asset/map/")) return false
+                    if (u.startsWith(MAP_BASE) || u.startsWith("https://tool.furina.fun/map/")) {
                         return false
                     }
                     if (u.startsWith("http://") || u.startsWith("https://")) {
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) }
                         return true
                     }
+                    // 非 http(s)/asset（含 H5 的「编辑地图」等 file 链接）一律拦截，避免 file 错误页。
                     return true
                 }
             }
-            loadUrl(mapUrl())
+            loadUrl(currentUrl())
         }
     }
 
-    // 重试/切换到 iframe 备用：只做一次 loadUrl，不做复杂重试状态机。
-    LaunchedEffect(reloadSeq, iframeFallback) {
-        if (reloadSeq <= 0 && !iframeFallback) return@LaunchedEffect
+    // 重试：只做一次 loadUrl，不做复杂重试状态机（线路切换由回调/错误条显式 loadUrl）。
+    LaunchedEffect(reloadSeq) {
+        if (reloadSeq <= 0) return@LaunchedEffect
         loading = true
         error = null
-        webView.loadUrl(if (iframeFallback) iframeWrapperUrl() else mapUrl())
+        webView.loadUrl(currentUrl())
     }
 
     // WebView 生命周期：权限弹窗/切后台返回后恢复，避免 canvas 不重绘。
@@ -230,8 +260,9 @@ fun CampusMapScreen(
         }
     }
 
+    /** 系统浏览器打开网络版（浏览器访问不到 APK 内 assets）。 */
     fun openInBrowser() {
-        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(mapUrl()))) }
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(networkUrl()))) }
     }
 
     Column(
@@ -243,7 +274,7 @@ fun CampusMapScreen(
     ) {
         CtTopBar(
             title = "校内地图",
-            subtitle = "2.5D · 按道路导航",
+            subtitle = if (source == MapSource.ASSET) "2.5D · 本地离线" else "2.5D · 网络版",
             onBack = onBack,
             actions = {
                 TextButton(onClick = { openInBrowser() }) {
@@ -254,14 +285,37 @@ fun CampusMapScreen(
                 }
             },
         )
+        notice?.let { message ->
+            MapNoticeBar(message = message, onRetryLocal = {
+                assetFallbackTried = true
+                source = MapSource.ASSET
+                notice = null
+                error = null
+                loading = true
+                webView.loadUrl(currentUrl())
+            })
+        }
         error?.let { message ->
             MapFallbackBanner(
                 message = message,
+                source = source,
                 onRetry = {
-                    iframeFallback = false
+                    error = null
+                    loading = true
                     reloadSeq += 1
                 },
-                onIframe = { iframeFallback = true },
+                onSwitchSource = {
+                    if (source == MapSource.ASSET) {
+                        assetFallbackTried = true
+                        switchToNetwork("已切换到网络版")
+                    } else {
+                        source = MapSource.ASSET
+                        notice = null
+                        error = null
+                        loading = true
+                        webView.loadUrl(currentUrl())
+                    }
+                },
                 onOpenBrowser = { openInBrowser() },
             )
         }
@@ -272,7 +326,12 @@ fun CampusMapScreen(
         ) {
             AndroidView(
                 factory = { webView },
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    // WebView 布局尺寸就绪后强制 H5 重算 canvas（解决「页面在布局前 boot → 白屏」）。
+                    .onSizeChanged { _ ->
+                        webView.evaluateJavascript(MAP_RESIZE_JS, null)
+                    },
             )
             if (loading) {
                 LinearProgressIndicator(
@@ -286,12 +345,33 @@ fun CampusMapScreen(
     }
 }
 
-/** 地图降级提示条：重试 / 嵌入备用 iframe / 系统浏览器打开。 */
+/** 自动降级提示条（信息性，提供「重试离线版」出口）。 */
+@Composable
+private fun MapNoticeBar(message: String, onRetryLocal: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRetryLocal) { Text("重试离线版") }
+        }
+    }
+}
+
+/** 地图降级提示条：重试 / 切换线路（离线版↔网络版）/ 在浏览器打开。 */
 @Composable
 private fun MapFallbackBanner(
     message: String,
+    source: MapSource,
     onRetry: () -> Unit,
-    onIframe: () -> Unit,
+    onSwitchSource: () -> Unit,
     onOpenBrowser: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
@@ -307,7 +387,9 @@ private fun MapFallbackBanner(
                 horizontalArrangement = Arrangement.End,
             ) {
                 TextButton(onClick = onRetry) { Text("重试") }
-                TextButton(onClick = onIframe) { Text("嵌入备用") }
+                TextButton(onClick = onSwitchSource) {
+                    Text(if (source == MapSource.ASSET) "网络版" else "离线版")
+                }
                 TextButton(onClick = onOpenBrowser) { Text("在浏览器打开") }
             }
         }
@@ -315,58 +397,35 @@ private fun MapFallbackBanner(
 }
 
 /**
- * 地图 H5 的 App 定位桥（`window.AndroidMap.requestLocation`）。
+ * 地图页健康检查结果解析：`evaluateJavascript` 回调是 JSON 字符串字面量（如
+ * `"{\"c\":2,\"w\":822,\"h\":1800,\"t\":54}"`）。
  *
- * H5 在 HTTP 页面无法使用 `navigator.geolocation`，因此优先调用本桥；
- * 这里只读取系统「最近一次已知定位」并回填 `window.zqSetMyLocation(lat, lon, acc)`，
- * 不对外暴露任何其它能力/数据。
+ * - `canvasCount <= 0` → 页面不是地图 H5（加载失败/错误页）；
+ * - `sceneWidth/Height > 0` → `#scene` canvas 已按布局尺寸初始化（能渲染）。
  */
-private class MapLocationBridge(
-    private val context: Context,
-    private val onLocation: (Double, Double, Float) -> Unit,
+private data class MapPageHealth(
+    val canvasCount: Int,
+    val sceneWidth: Int,
+    val sceneHeight: Int,
+    val textLength: Int,
 ) {
-    private var pending = false
-
-    @JavascriptInterface
-    fun requestLocation() {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-        val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
-        if (pending) return
-        pending = true
-
-        val listener = object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-                if (!pending) return
-                pending = false
-                runCatching { manager.removeUpdates(this) }
-                onLocation(location.latitude, location.longitude, location.accuracy)
-            }
-            @Deprecated("Deprecated in API 29")
-            override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
-            override fun onProviderEnabled(provider: String) {}
-            override fun onProviderDisabled(provider: String) {}
-        }
-
-        // 不用 getLastKnownLocation 直接回填：系统缓存可能是几天前（例如大门口），会看起来“一直定位在大门”。
-        runCatching { manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0L, 0f, listener, Looper.getMainLooper()) }
-        runCatching { manager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0L, 0f, listener, Looper.getMainLooper()) }
-
-        // 12 秒没有新定位时，才使用 2 分钟内的最近位置兜底；过期缓存一律丢弃。
-        android.os.Handler(Looper.getMainLooper()).postDelayed({
-            if (!pending) return@postDelayed
-            pending = false
-            runCatching { manager.removeUpdates(listener) }
-            val fallback = runCatching {
-                listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
-                    .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
-                    .filter { System.currentTimeMillis() - it.time < 120_000L }
-                    .maxByOrNull { it.time }
-            }.getOrNull() ?: return@postDelayed
-            onLocation(fallback.latitude, fallback.longitude, fallback.accuracy)
-        }, 12_000L)
-    }
+    val sized: Boolean get() = sceneWidth > 0 && sceneHeight > 0
 }
+
+private fun parseMapHealth(raw: String?): MapPageHealth? {
+    val text = raw?.trim().orEmpty()
+    if (text.isEmpty() || text == "null") return null
+    val decoded = text
+        .removeSurrounding("\"")
+        .replace("\\\"", "\"")
+        .replace("\\/", "/")
+    fun number(key: String): Int =
+        Regex("\"$key\"\\s*:\\s*(\\d+)").find(decoded)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+    return MapPageHealth(
+        canvasCount = number("c"),
+        sceneWidth = number("w"),
+        sceneHeight = number("h"),
+        textLength = number("t"),
+    )
+}
+

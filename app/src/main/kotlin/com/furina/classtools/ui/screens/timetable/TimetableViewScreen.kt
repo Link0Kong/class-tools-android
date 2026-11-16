@@ -203,6 +203,8 @@ fun TimetableViewScreen(
     var showLoginDialog by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showWeekPicker by remember { mutableStateOf(false) }
+    // 课表接入（WakeUp / ICS / 系统日历原生提醒）：独立弹层，见 TimetableLinkSheet.kt
+    var showLinkSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(loadToken, refreshToken) {
         if (skipLoad) return@LaunchedEffect
@@ -525,6 +527,17 @@ fun TimetableViewScreen(
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             )
+
+            // 课表接入入口（悬浮按钮）：导出 .ics / WakeUp 备份、写入系统日历并提醒
+            if (phase == TtPhase.READY && snapshot.c.isNotEmpty()) {
+                TimetableLinkFab(
+                    onClick = { showLinkSheet = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 16.dp, bottom = 16.dp),
+                )
+            }
         }
 
         selectedCourse?.let { course ->
@@ -577,6 +590,16 @@ fun TimetableViewScreen(
                     goThisWeek(animate = false)
                 },
                 onDismiss = { showWeekPicker = false },
+            )
+        }
+
+        // 课表接入（WakeUp 备份 / .ics / 系统日历原生写入+提醒）
+        if (showLinkSheet) {
+            TimetableLinkSheet(
+                snapshot = snapshot,
+                termStart = termStart,
+                onDismiss = { showLinkSheet = false },
+                onMessage = { text -> scope.launch { snackbar.showSnackbar(text) } },
             )
         }
 
@@ -992,9 +1015,10 @@ private fun NextSessionBar(plan: TtPlan?, dark: Boolean, nowMillis: Long) {
                     contentColor = content,
                 )
             } else {
-                val startsIn = ((session.startAt - nowMillis) / 60_000L).coerceAtLeast(0)
+                // 下一节：假期/跨周时 `plan.next` 可能在 14 天内很远的日期，统一走分档文案
+                // （分钟 / 小时 / 明天 HH:mm / 周X HH:mm / x 天 y 小时），不再输出「几千分钟」。
                 CtPill(
-                    text = if (startsIn <= 0) "即将开始" else "$startsIn 分钟后",
+                    text = NextSessionCountdown.text(session, nowMillis),
                     containerColor = content.copy(alpha = 0.14f),
                     contentColor = content,
                 )

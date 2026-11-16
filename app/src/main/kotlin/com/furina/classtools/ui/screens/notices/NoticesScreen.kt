@@ -103,6 +103,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -203,7 +204,7 @@ internal data class NoticeUiItem(
     val recurring: Boolean = false,
     /** `actionable !== false`（§2.4：false = 仅告知，不计待处理）。 */
     val actionable: Boolean = true,
-    /** 发布时间（对齐网页 pubTsOf：ts / updatedAt / 首条 item 消息时间取最大；「最新发布」排序与文案用）。 */
+    /** 真实发布时间（行 `ts` 与组 `updatedAt` 取较大；「最新发布」排序/文案与卡片 postedText 共用）。 */
     val publishedMillis: Long = 0L,
     /** 是否有任何时间锚点（§1.2 资料判定 / §2.4 待处理判定）。 */
     val hasTimeAnchor: Boolean = false,
@@ -1020,11 +1021,11 @@ private fun NoticeOverviewCards(
     )
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             firstRow.forEach { (filter, value) ->
                 NoticeStatCard(
@@ -1038,7 +1039,7 @@ private fun NoticeOverviewCards(
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             secondRow.forEach { (filter, value) ->
                 NoticeStatCard(
@@ -1053,7 +1054,7 @@ private fun NoticeOverviewCards(
     }
 }
 
-/** 单张可点数据卡（激活态 + 语义；点按区 ≥64dp）。 */
+/** 单张可点数据卡（激活态 + 语义；紧凑高度 ≥52dp，减少顶部占位）。 */
 @Composable
 private fun NoticeStatCard(
     filter: NoticeCardFilter,
@@ -1074,13 +1075,13 @@ private fun NoticeStatCard(
     Surface(
         onClick = onClick,
         modifier = modifier
-            .heightIn(min = 64.dp)
+            .heightIn(min = 52.dp)
             .semantics {
                 role = Role.Button
                 selected = active
                 stateDescription = if (active) "已筛选" else "未筛选"
             },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         color = if (active) scheme.primaryContainer else scheme.surfaceContainerLow,
         contentColor = if (active) scheme.onPrimaryContainer else scheme.onSurface,
         border = androidx.compose.foundation.BorderStroke(
@@ -1095,15 +1096,15 @@ private fun NoticeStatCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             Text(
                 text = value,
                 style = if (value.length > 5) {
                     MaterialTheme.typography.labelLarge
                 } else {
-                    MaterialTheme.typography.titleLarge
+                    MaterialTheme.typography.titleMedium
                 },
                 fontWeight = FontWeight.Bold,
                 color = valueColor,
@@ -1745,13 +1746,24 @@ private fun NoticeCard(
         expanded = expanded,
         previewPressed = previewPressed,
         pinned = item.pinned,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 NoticeCatPill(cat = item.cat, tone = item.tone)
+                // 未读点：待处理（未过期 / 非资料 / 未处理 / 有时间锚点）通知在分类徽标右侧显示小圆点。
+                if (isPendingItem(item)) {
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(scheme.primary, CircleShape)
+                            .semantics { contentDescription = "未读" },
+                    )
+                }
                 if (displayStatus != null) {
                     Spacer(Modifier.width(8.dp))
                     StatusDotLine(
@@ -1915,8 +1927,9 @@ private fun NoticeCardMeta(item: NoticeUiItem, mode: NoticeCardMode = NoticeCard
                     tint = scheme.onSurfaceVariant,
                     modifier = Modifier.size(13.dp),
                 )
+                Spacer(Modifier.width(2.dp))
                 Text(
-                    text = item.attachmentCount.toString(),
+                    text = "附件 ${item.attachmentCount}",
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.onSurfaceVariant,
                 )

@@ -4,6 +4,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import android.Manifest
 import android.content.Intent
+import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,6 +44,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,8 +76,6 @@ import com.furina.classtools.data.reminder.ReminderOneShot
 import com.furina.classtools.data.reminder.ReminderOneShotFactory
 import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.push.OppPushClick
-import com.furina.classtools.data.push.OppoPushState
-import com.furina.classtools.data.push.OppoPushStatus
 import com.furina.classtools.data.jw.JwCredentialStore
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
@@ -164,6 +164,7 @@ fun MainNavHost(
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
+    val rootView = LocalView.current
     val scope = rememberCoroutineScope()
 
     // 抽签结果 → 分组页的携带数据（共享状态，不放进导航参数）。
@@ -203,9 +204,11 @@ fun MainNavHost(
     var transitionTool by remember { mutableStateOf<AppTool?>(null) }
     var transitionStart by remember { mutableStateOf<Rect?>(null) }
     var transitionRoute by remember { mutableStateOf<String?>(null) }
-    // 返回：全屏页面收回工具卡（reverse），先 pop 再播覆盖层。
+    // 返回：全屏页面收回工具卡（reverse）。真实工具页快照由 View.draw 同步捕获，
+    // 覆盖层显示快照并从全屏缩回卡片；pop 在动画开始前完成，避免底层露出工具内部界面。
     var transitionReverse by remember { mutableStateOf(false) }
     var transitionPendingPop by remember { mutableStateOf(false) }
+    var transitionSnapshot by remember { mutableStateOf<Bitmap?>(null) }
     val reduceMotion = rememberReduceMotion()
 
     // 通知点击带入的工具（hw/tt）：登录/进入主界面后消费一次。
@@ -249,14 +252,21 @@ fun MainNavHost(
             transitionRoute = route
             transitionReverse = false
             transitionPendingPop = false
+            transitionSnapshot = null
         } else {
             navController.navigate(route)
         }
     }
 
     /**
-     * 工具页返回：有卡片锚点时播放「页面收回卡片」的一镜到底退出动画（参考 HFUT 连续性原则），
-     * 再 pop 回根页；无锚点/移除动画/已有转场进行中时直接 pop（仍使用新的 CtPageTransitions 退场）。
+     * 工具页返回：有卡片锚点时播放「真实工具页快照收回卡片」的一镜到底退出动画。
+     *
+     * 顺序（保证动画期间/结束后都不露出工具内部界面）：
+     * 1. 先在工具页仍在前台时**同步捕获当前界面 Bitmap**（覆盖层还没出现，拍到的就是工具页）；
+     * 2. 立即 `popBackStack()` 回根页（此后底层一直是根页）；
+     * 3. 覆盖层全屏显示快照，并从全屏缩回卡片 bounds，结束撤层。
+     *
+     * 无锚点/移除动画/已有转场进行中时直接 pop；快照拍摄失败时覆盖层降级为图标卡。
      */
     fun popTool(toolId: String) {
         val tool = ToolCatalog.byId(toolId)
@@ -265,11 +275,17 @@ fun MainNavHost(
             navController.popBackStack()
             return
         }
+        // 1) 快照必须在 pop 之前、覆盖层出现之前拍摄。
+        val snapshot = runCatching { captureToolSnapshot(rootView) }.getOrNull()
+        // 2) 先 pop：底层回到根页；pendingPop 仅作 onDone 兜底（pop 失败时强制再 pop 一次）。
+        val popped = runCatching { navController.popBackStack() }.getOrDefault(false)
+        transitionPendingPop = !popped
+        // 3) 覆盖层显示快照并缩回卡片。
         transitionStart = anchor
         transitionTool = tool
+        transitionSnapshot = snapshot
         transitionRoute = null
         transitionReverse = true
-        transitionPendingPop = true
     }
 
     // 统一导出：渲染 → 保存相册（Android 10+）/ 分享兜底，Toast 反馈。
@@ -949,6 +965,7 @@ fun MainNavHost(
             tool = transitionTool,
             startBounds = transitionStart,
             reverse = transitionReverse,
+            snapshot = transitionSnapshot,
             onHalfway = {
                 if (transitionPendingPop) {
                     transitionPendingPop = false
@@ -961,11 +978,16 @@ fun MainNavHost(
                 }
             },
             onDone = {
+                // 兜底：若开始返回时 pop 未成功（当前仍在工具页），动画结束后强制 pop，绝不把工具内部界面留在屏上。
+                if (transitionPendingPop) {
+                    transitionPendingPop = false
+                    runCatching { navController.popBackStack() }
+                }
                 transitionTool = null
                 transitionStart = null
+                transitionSnapshot = null
                 transitionRoute = null
                 transitionReverse = false
-                transitionPendingPop = false
             },
         )
     }
@@ -1050,11 +1072,8 @@ private fun RootTabs(
         courseLeadMinutes = reminderSettings.courseLeadMinutes,
     )
 
-    // OPPO PUSH 状态（设置页「通知与权限」行；未配置密钥时显示「未配置」）。
-    val oppoPushStatus by container.oppoPushManager.status.collectAsStateWithLifecycle(
-        initialValue = OppoPushStatus(OppoPushState.NOT_CONFIGURED),
-    )
-
+    // OPPO PUSH 状态不再在「我的」页展示（用户要求移除 OPPO 通知配置入口）；
+    // 服务端推送仍由 AppContainer 内的 OppoPushManager 在启动/会话变化时注册，UI 无入口。
 
     val showNotificationPermissionBanner = !notificationGranted && reminderSettings.enabled
     Box(modifier = Modifier.fillMaxSize()) {
@@ -1103,12 +1122,6 @@ private fun RootTabs(
                         onOpenReminderSettings = onOpenReminderSettings,
                         meStats = meStats,
                         reminderStatus = reminderStatus,
-                        oppoPushStatus = oppoPushStatus,
-                        onRetryOppoPush = {
-                            // 已配置 → 重新注册；未配置 → 重跑一次启动检测（保持「未配置」状态，无副作用）
-                            val push = container.oppoPushManager
-                            if (push.isConfigured) push.retry() else push.onAppCreated()
-                        },
                         onOpenFeedback = onOpenFeedback,
                         onOpenGuide = onOpenGuide,
                         dynamicColorEnabled = dynamicColorEnabled,

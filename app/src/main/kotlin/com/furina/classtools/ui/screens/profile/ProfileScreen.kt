@@ -85,7 +85,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.BuildConfig
-import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.settings.AppSettingsStore
 import com.furina.classtools.data.settings.LocalAppSettingsStore
@@ -106,8 +105,6 @@ import com.furina.classtools.ui.components.update.UpdateDialogHost
 import com.furina.classtools.ui.components.update.updateCheckSubtitle
 import com.furina.classtools.ui.screens.me.MeStats
 import com.furina.classtools.ui.screens.me.MeStatsBuilder
-import com.furina.classtools.data.push.OppoPushState
-import com.furina.classtools.data.push.OppoPushStatus
 import com.furina.classtools.ui.screens.me.ReminderStatus
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
@@ -165,9 +162,6 @@ fun ProfileScreen(
     adaptiveSpec: CtAdaptiveSpec? = null,
     meStats: MeStats = MeStats(),
     reminderStatus: ReminderStatus = ReminderStatus(),
-    /** OPPO PUSH 状态（未配置/不支持/注册中/已注册掩码/失败）；点击重新注册。 */
-    oppoPushStatus: OppoPushStatus = OppoPushStatus(OppoPushState.NOT_CONFIGURED),
-    onRetryOppoPush: () -> Unit = {},
     onOpenFeedback: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     /** 预览/测试注入更新检查状态；null = 使用进程内 UpdateManager 的实时状态。 */
@@ -296,10 +290,8 @@ fun ProfileScreen(
                         ) {
                             NotifySection(
                                 reminderStatus = reminderStatus,
-                                oppoPushStatus = oppoPushStatus,
                                 onOpenPermissions = onOpenPermissions,
                                 onOpenReminderSettings = onOpenReminderSettings,
-                                onRetryOppoPush = onRetryOppoPush,
                             )
                             AppearanceSection(
                                 dynamicColorEnabled = dynamicColorEnabled,
@@ -310,7 +302,6 @@ fun ProfileScreen(
                                 onHideStatusBarChange = ::changeHideStatusBar,
                             )
                             AboutSection(
-                                context = context,
                                 onOpenFeedback = onOpenFeedback,
                                 onOpenGuide = onOpenGuide,
                                 onShowPrivacy = { showPrivacy = true },
@@ -346,10 +337,8 @@ fun ProfileScreen(
                         )
                         NotifySection(
                             reminderStatus = reminderStatus,
-                            oppoPushStatus = oppoPushStatus,
                             onOpenPermissions = onOpenPermissions,
                             onOpenReminderSettings = onOpenReminderSettings,
-                            onRetryOppoPush = onRetryOppoPush,
                         )
                         AppearanceSection(
                             dynamicColorEnabled = dynamicColorEnabled,
@@ -360,7 +349,6 @@ fun ProfileScreen(
                             onHideStatusBarChange = ::changeHideStatusBar,
                         )
                         AboutSection(
-                            context = context,
                             onOpenFeedback = onOpenFeedback,
                             onOpenGuide = onOpenGuide,
                             onShowPrivacy = { showPrivacy = true },
@@ -730,10 +718,8 @@ private fun MetricCell(label: String, value: String, modifier: Modifier = Modifi
 @Composable
 private fun NotifySection(
     reminderStatus: ReminderStatus,
-    oppoPushStatus: OppoPushStatus,
     onOpenPermissions: () -> Unit,
     onOpenReminderSettings: () -> Unit,
-    onRetryOppoPush: () -> Unit,
 ) {
     SectionTitle("通知与权限")
     GroupCard {
@@ -750,15 +736,6 @@ private fun NotifySection(
             subtitle = reminderStatus.label,
             subtitleHighlight = reminderStatus.isWarning,
             onClick = onOpenReminderSettings,
-        )
-        RowDivider()
-        // OPPO PUSH（服务端推送；未配置密钥时显示「未配置」，点击重试不产生副作用）
-        ActionRow(
-            icon = Icons.Rounded.NotificationsActive,
-            title = "OPPO 推送",
-            subtitle = oppoPushStatus.label,
-            subtitleHighlight = oppoPushStatus.state == OppoPushState.FAILED,
-            onClick = onRetryOppoPush,
         )
     }
 }
@@ -854,7 +831,6 @@ private fun appearanceModeIcon(mode: AppearanceMode) = when (mode) {
 
 @Composable
 private fun AboutSection(
-    context: android.content.Context,
     onOpenFeedback: () -> Unit,
     onOpenGuide: () -> Unit,
     onShowPrivacy: () -> Unit,
@@ -902,21 +878,6 @@ private fun AboutSection(
             // v4.57.0-test1（测试版本 1）；Debug 的 -debug 后缀不展示。
             value = UpdateTestVersion.versionDisplay(BuildConfig.VERSION_NAME),
         )
-        if (BuildConfig.DEBUG) {
-            RowDivider()
-            ActionRow(
-                icon = Icons.Rounded.NotificationsActive,
-                title = "实时活动测试（Debug）",
-                subtitle = "发送 60 秒倒计时实时通知",
-                onClick = { LiveUpdateNotifier.postDebugCountdown(context, 60) },
-            )
-            RowDivider()
-            ActionRow(
-                icon = Icons.Rounded.NotificationsActive,
-                title = "关闭实时活动（Debug）",
-                onClick = { LiveUpdateNotifier.cancelDebug(context) },
-            )
-        }
     }
 }
 

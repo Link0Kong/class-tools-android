@@ -44,8 +44,8 @@ import com.furina.classtools.ui.theme.ClassToolsTheme
 /**
  * 更新弹窗（无状态渲染；状态由 [UpdateManager.dialog] 提供）。
  *
- * 标题固定带「测试版本 1」（[UpdateTestVersion.dialogTitle]）：
- * 「发现新版本 · 测试版本 1」。
+ * 标题固定带「测试版本」（[UpdateTestVersion.dialogTitle]）：
+ * 「发现新版本 · 测试版本」。
  *
  * 按钮语义：
  * - Idle：「立即更新」开始下载；非强制可「稍后」；
@@ -301,9 +301,9 @@ fun updateCheckSubtitle(status: UpdateCheckStatus): String = when (status) {
 
 private val previewInfo = UpdateInfo(
     versionCode = 79,
-    versionName = "4.57.0-test1",
-    apkUrl = "http://121.196.47.2/android/classtools-4.57.0-test1.apk",
-    notes = "1. 新增检查更新与自动更新\n2. 测试版本 1 功能验证\n3. 修复若干已知问题",
+    versionName = "1.0.0-beta1",
+    apkUrl = "http://121.196.47.2/android/classtools-1.0.0-beta1.apk",
+    notes = "1. 新增检查更新与自动更新\n2. 测试版本 功能验证\n3. 修复若干已知问题",
     force = false,
     channel = "test",
     sha256 = "a".repeat(64),

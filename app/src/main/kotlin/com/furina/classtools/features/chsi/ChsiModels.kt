@@ -84,7 +84,12 @@ object ChsiCatalog {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
-    /** 手机版 UA（「手机版」切换用；默认进入使用系统 WebView 的移动 UA）。 */
+    /**
+     * 手机版 UA（默认 UA；标准 Chrome 移动 UA）。
+     *
+     * 2026-11-16：默认不再用系统 WebView UA（含 `; wv` / `Version/4.0` / 应用名），
+     * 参考 HFUT-Schedule 的 WebView 入口固定标准浏览器 UA，避免官方站点把请求识别为内置浏览器。
+     */
     const val MOBILE_UA: String =
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
@@ -227,8 +232,31 @@ object ChsiTexts {
 
     const val LOGOUT_CONFIRM_TITLE: String = "退出学信网登录"
     const val LOGOUT_CONFIRM_TEXT: String =
-        "将清除本机保存的学信网登录状态（Cookie / 网页缓存）并回到登录页；不会影响你的学信网账号。"
+        "将只清除学信网（chsi.com.cn）域名的 Cookie 与页面存储，不影响活动/教务等其它登录；" +
+            "随后回卡片页重新检查登录态。不会影响你的学信网账号。"
+
     const val MSG_LOGGED_OUT: String = "已退出学信网登录"
+
+    // ---- 2026-11-16：CookieManager 共享 + 清理 Cookie 重登（参考 HFUT WebView+Cookie 模式）----
+
+    /** 登录页/卡片页的「清除 Cookie 重登」按钮。 */
+    const val BTN_CLEAR_COOKIE_RELOGIN: String = "清除 Cookie 重登"
+
+    /** 登录页提示：登录异常时可清 Cookie 重登。 */
+    const val HINT_CLEAR_COOKIE_RELOGIN: String =
+        "登录异常/卡在登录页？清除学信网 Cookie 后重新登录（不影响其它工具）"
+
+    /** 清除 Cookie 重登确认框。 */
+    const val CLEAR_COOKIE_CONFIRM_TITLE: String = "清除 Cookie 重登"
+    const val CLEAR_COOKIE_CONFIRM_TEXT: String =
+        "将只清除学信网（chsi.com.cn）域名的 Cookie 与页面存储，不影响其它工具的登录；" +
+            "清除后打开官方登录页。"
+
+    /** 清除完成提示。 */
+    const val MSG_COOKIE_CLEARED_RELOGIN: String = "已清除学信网 Cookie，正在重新打开官方登录页"
+
+    /** 卡片页状态条：清除 Cookie 后等待重新登录。 */
+    const val STATUS_COOKIE_CLEARED: String = "已清除学信网 Cookie · 请重新登录"
 
     /** 卡片类别（数据卡标题常量）。 */
     const val CARD_ENROLLMENT: String = "学籍信息"

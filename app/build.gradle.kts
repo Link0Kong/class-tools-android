@@ -39,9 +39,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 79
+        versionCode = 80
         // 测试版本 1：4.57.0-test1（「我的 → 关于」与更新弹窗显示「测试版本 1」）。
-        versionName = "4.57.0-test1"
+        versionName = "1.0.0-beta1"
 
         // CloudBase REST 根地址与公开 Publishable Key（role=anon，设计上公开）。
         // 值来自 gradle.properties（ct.restBaseUrl / ct.publishableKey），便于部署时替换。
@@ -57,7 +57,7 @@ android {
 
         // 测试版本标识（当前为「测试版本 1」）：App 内版本行与更新弹窗标题使用。
         buildConfigField("int", "TEST_VERSION", "1")
-        buildConfigField("String", "TEST_VERSION_LABEL", buildConfigString("测试版本 1"))
+        buildConfigField("String", "TEST_VERSION_LABEL", buildConfigString("测试版本"))
     }
 
     signingConfigs {

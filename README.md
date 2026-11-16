@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.57.0-test1**——检测更新/自动更新 + 测试版本 1；活动头像上传修复；今日校园 CAS Cookie 登录；学信网人工确认兜底。单测 **1534/0**，E2E 44/0。详见 [REPORT_ROUND66](docs/REPORT_ROUND66_20261116.md)。
+- 状态：**v1.0.0-beta1（测试版本）**——11 项反馈修复：返回快照/下一节文案/顶栏瘦身/通知排序/去 OPPO/绿卡改版/学信网 Cookie/活动微信引导/地图离线/课表接入 WakeUp+系统日历。单测 **1624/0**，E2E 44/0。详见 [REPORT_ROUND67](docs/REPORT_ROUND67_20261116.md)。
 
 ## 目录
 

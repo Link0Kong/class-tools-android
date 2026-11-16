@@ -127,11 +127,11 @@ $L = @{
     Group          = U8 '5YiG57uE'                                   # group tool / title
     Fit            = U8 '5L2T5rWL'                                   # fitness tool / title
     GroupStep1     = U8 'MSDphY3nva4='                               # group screen: step 1 config
-    FitHistory     = U8 '5Y6G5Y+y6K6w5b2V'                           # fitness screen: history
+    FitHistory     = U8 '5a6e5pe26K+E5YiG'                           # fitness screen: history
     AuthError      = U8 '6K+35YWI5a6M5oiQ6Lqr5Lu96aqM6K+B'          # please verify identity first
     NtTitle        = U8 '54+t57qn6YCa55+l'                           # notices page top bar: class notices
     PowerTitle     = U8 '5a6/6IiN55S16LS5'                           # power page top bar: dorm power
-    FitTerms       = U8 '5pyq5aGr6aG55oyJ'                           # fitness: "missing items count as 0"
+    FitTerms       = U8 '5aGr5YaZ5oiQ57up'                           # fitness: "missing items count as 0"
     WaterTitle     = U8 '5a6/6IiN5rC06YeP'                           # water page top bar: dorm water
     WaterEmpty     = U8 '6L+Y5rKh5pyJ5YWz5rOo5a6/6IiN'               # water empty: no dorm followed yet
     WaterLoading   = U8 '5Yqg6L295rC06YeP5pWw5o2u'                   # loading water data
@@ -1240,7 +1240,7 @@ function Invoke-Scenario {
     Go-Workbench
     Add-Step 'privacy_back_home' 'PASS' '' 0
 
-    # STEP 9b: profile appearance (wallpaper color switch) + about version (v2.0.0)
+    # STEP 9b: profile appearance (wallpaper color switch) + about version (v1.0.0-beta1)
     Write-Line '--- step: profile appearance + about version'
     $swStep = [Diagnostics.Stopwatch]::StartNew()
     Tap-UiText -Label $L.MyTab -Exact -TimeoutSec 10
@@ -1248,7 +1248,7 @@ function Invoke-Scenario {
     if (-not (Wait-UiTextScroll -Label $L.Appearance -ScrollTries 3 -TimeoutSec 5)) { throw 'appearance card title not visible' }
     $script:AppearanceState = Toggle-SwitchNear -Label $L.WallpaperColor
     Save-Shot '23_appearance.png'
-    if (-not (Wait-UiTextScroll -Label '4.' -ScrollTries 4 -TimeoutSec 10)) { throw 'about version (contains 4.) not visible' }
+    if (-not (Wait-UiTextScroll -Label '1.0.0-beta1' -ScrollTries 4 -TimeoutSec 10)) { throw 'about version (contains 1.0.0-beta1) not visible' }
     Add-Step 'appearance_about' 'PASS' ("wallpaperColor=" + $script:AppearanceState + "; version-family=4.x") $swStep.ElapsedMilliseconds
 
     # STEP 9c: restart the app and verify the appearance switch value persisted (DataStore)

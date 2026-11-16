@@ -23,18 +23,18 @@ import kotlinx.serialization.json.intOrNull
 
 /** 测试版本标识（Gradle buildConfigField 单一来源：app/build.gradle.kts）。 */
 object UpdateTestVersion {
-    /** 测试版本序号（当前 1 → 4.57.0-test1）。 */
+    /** 测试版本序号（当前 1 → 1.0.0-beta1）。 */
     val version: Int
         get() = BuildConfig.TEST_VERSION
 
-    /** 「测试版本 1」文案（关于页 / 更新弹窗标题）。 */
+    /** 「测试版本」文案（关于页 / 更新弹窗标题）。 */
     val label: String
         get() = BuildConfig.TEST_VERSION_LABEL
 
-    /** 更新弹窗标题：发现新版本 · 测试版本 1。 */
+    /** 更新弹窗标题：发现新版本 · 测试版本。 */
     fun dialogTitle(): String = "发现新版本 · $label"
 
-    /** 关于页版本展示：v4.57.0-test1（测试版本 1）。Debug 包名后缀 -debug 不展示。 */
+    /** 关于页版本展示：v1.0.0-beta1（测试版本）。Debug 包名后缀 -debug 不展示。 */
     fun versionDisplay(versionName: String): String = "v${UpdateVersion.normalize(versionName)}（$label）"
 }
 

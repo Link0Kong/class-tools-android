@@ -7,9 +7,9 @@ package com.furina.classtools.data.update
  * ```json
  * {
  *   "versionCode": 79,
- *   "versionName": "4.57.0-test1",
- *   "apkUrl": "http://121.196.47.2/android/classtools-4.57.0-test1.apk",
- *   "notes": "1. 检查更新与自动更新\n2. 测试版本 1",
+ *   "versionName": "1.0.0-beta1",
+ *   "apkUrl": "http://121.196.47.2/android/classtools-1.0.0-beta1.apk",
+ *   "notes": "1. 检查更新与自动更新\n2. 测试版本",
  *   "force": false,
  *   "channel": "test",
  *   "sha256": "…64 位小写 hex…"

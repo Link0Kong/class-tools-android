@@ -1,5 +1,20 @@
 # 版本记录（Android 客户端）
 
+## v1.0.0-beta1 · 2026-11-16（测试版本；11 项反馈集中修复）
+- 版本号改为 **1.0.0-beta1 / vc80**；界面显示「v1.0.0-beta1（测试版本）」，更新弹窗统称「测试版本」，渠道 `beta`；正式使用前所有版本均标测试。
+- 工具返回：改为**真实界面快照缩回卡片**（返回时截当前界面 Bitmap → 立即 pop → 快照全屏缩到卡片 bounds），不再在动画中/结束后露出工具内部页面；快照失败降级图标卡。
+- 下一节课：新增 `NextSessionCountdown` 格式化（<1h=N 分钟；≥1h=x 小时 y 分；明天/周X HH:mm；更远=x 天 y 小时），不再出现几千分钟。
+- 顶栏瘦身：`CtTopBar` 默认紧凑（56dp、单行 22sp、隐藏副标题），所有工具页统一减少顶部占位，功能按钮保留。
+- 通知：修正「最新发布」排序（max(行 ts, 组 updatedAt)，不再用只有 HH:mm 的 item time 按当天解析）；卡片/顶部 5 卡/chips 收紧、未读点、附件 N。
+- 移除 OPPO 推送入口与 Debug 实时活动测试等无用/误导按钮；保留通知权限/提醒设置。
+- 绿色 Hero 卡改版：单行 meta + 22sp 问候 + 小头像 + 紧凑课程块，高度约 190→137dp，删装饰胶囊/暗角，深色/平板不变。
+- 学信网：参考 HFUT-Schedule 的 WebView+Cookie 模式：标准 Chrome UA（无 wv）、创建前 Cookie 开启、第三方 Cookie/DOM storage、onPageFinished flush；新增「清除 Cookie 重登」（只清 chsi.com.cn 域，不误伤其它工具）；人工确认/官方入口兜底保留。
+- 活动：新增微信登录引导（检测微信三态；复制链接 / 在微信中打开；明示 openId 只能微信内获取、Cookie 不共享、不伪造登录）；头像上传文件选择器保留。
+- 地图：H5 打包 `assets/map/campus_final_25d.html` 离线优先加载（file:///android_asset），多帧 resize 强制重算 canvas，健康检查失败才走 ECS/浏览器；**飞行模式截图与在线完全相同**，零网络依赖。
+- 课表接入（新）：课表页右下「课表接入」——① 写入系统日历（CalendarContract 事件+提前 15/30 分钟提醒，可写日历选择、幂等清理/清除）；② 导出 .ics（RRULE 周次/单双周、VALARM、Asia/Shanghai）；③ WakeUp 兼容 `.wakeup_schedule` 备份文件（5 行 JSON，按 WakeUp 开源格式）；可分享/打开/下载。
+- 测试：单测 **1624/0**（120+ suites，含 NextSessionCountdown 11、通知排序 7、学信网 WebView 13、课表接入 59 等）；E2E **44 步 0 FAIL（1055.5s，导航 10/10，logcat 0 FATAL/ANR）**；Release **3,562,103 B / SHA-256 `E200C0B24BDA35B48DCE842FD30CBDC16B3054671EEE5E90F55A2AF26290ECB3`**（vc80 / 1.0.0-beta1）；更新端点 `http://121.196.47.2/android/latest.json` + beta1 APK 已部署。
+- 参考：HFUT-Schedule（CAS/WebView+Cookie/AIDL/日历）、WakeUp 开源（https://github.com/gitleon/WakeupSchedule_Kotlin）、WakeUp2XiaoAi、RFC5545 CalendarContract。
+
 ## v4.57.0-test1 · 2026-11-16（测试版本 1：更新系统 / 活动头像 / 今日校园 / 学信网）
 ### 新增：检测更新 + 自动更新
 - 「我的 → 关于」新增「检查更新」行；登录后每天最多静默检查一次；发现新版弹「发现新版本 · 测试版本 1」。
@@ -33,7 +48,7 @@
 - 学信网：登录后档案页延迟渲染/无强信号导致误判未登录；改为 2–3 次延迟提取（1.2s）+ 数据信号 + my.chsi Cookie 辅助；登录页与卡片页均提供「已登录，进入卡片页」兜底，失败不再强制跳回登录页。
 - 今日校园：/login2 是 CAS 跳板、index.html 是 Vue SPA 外壳；登录成功后显式加载门户首页，开 mixed content/缓存，加白屏检测（500ms+800ms 复核）、清缓存重载一次（不清 Cookie）、仍空白显示「融合门户/浏览器打开/重试」。
 - 教务「服务器繁忙」：改用微信 UA、第三方 Cookie/DOM storage/mixed content，自动填充延迟 700ms+提交前 300ms、自动仅 1 次；识别繁忙页即停止重试并提示手动/浏览器打开；保留直接打开/WebVPN 手动入口。
-- 单测 __TESTS__；E2E __E2E__；Release __REL__（vc76 / 4.56.2）。
+- 单测 __TESTS__；E2E **44 步 0 FAIL（1055.5s，导航 10/10，logcat 0 FATAL/ANR）**；Release __REL__（vc76 / 4.56.2）。
 
 
 ## v4.56.1 · 2026-11-16（课表课程块重叠修复）
