@@ -17,9 +17,10 @@ import kotlinx.coroutines.sync.Mutex
  * 更新流程编排（检测 → 弹窗 → 自动下载 → sha256 校验 → 拉起系统安装器）。
  *
  * 行为契约：
- * - [maybeCheckDaily]：启动登录后调用，SharedPreferences 每天最多一次（失败也写时间，离线不反复请求）；
+ * - [checkOnStart]：根级 `UpdateHost` 挂载（App 冷启动）时调用，**每次冷启动自动检查一次并直接弹窗**
+ *   （去掉每日节流；[UpdateAutoCheckGate] 保证同一进程只自动检查一次，失败退避 = 进程内不自动重试）；
  * - 自动检查发现新版：弹窗 + **默认开始下载**（自动更新；进度可见，非强制可取消）；
- * - 手动检查（我的 → 检查更新）：不受节流限制，弹窗等用户点「立即更新」；
+ * - 手动检查（我的 → 检查更新）：不受自动检查闸门限制，弹窗等用户点「立即更新」；
  * - `force=true`：弹窗不可取消（无「稍后」、下载中无「取消」）；
  * - 下载完成自动拉起系统安装器（Android 不允许静默安装，由用户确认）；
  * - 所有网络失败静默降级（仅更新 [checkStatus]，不弹错误弹窗，不打扰离线使用）。
@@ -33,7 +34,6 @@ class UpdateManager(
     private val downloader: UpdateApkDownloader,
     /** 自动（启动静默）检查发现新版时是否默认开始下载（自动更新）。 */
     private val autoDownloadOnAutomaticCheck: Boolean = true,
-    private val now: () -> Long = System::currentTimeMillis,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
 
@@ -53,6 +53,8 @@ class UpdateManager(
     val hostAttached: StateFlow<Boolean> = _hostAttached.asStateFlow()
 
     private val checkMutex = Mutex()
+    /** 冷启动自动检查闸门（同一进程只自动检查一次 → 去掉每日节流后的失败退避）。 */
+    private val autoCheckGate = UpdateAutoCheckGate()
     private var downloadJob: Job? = null
     private var downloadSession: UpdateDownloadSession? = null
     private var downloadedApk: DownloadedApk? = null
@@ -68,15 +70,16 @@ class UpdateManager(
     // ------------------------------------------------------------ 检测
 
     /**
-     * 启动登录后静默检查（每天最多一次，SharedPreferences `last_check_at`）。
-     * 不抛异常；发现新版 → 弹窗（自动升级路径默认开始下载）。
+     * App 冷启动自动检查（根级 `UpdateHost` 挂载时调用）：
+     * 去掉每日节流后改为「每次冷启动检查一次」，发现新版本直接弹窗（自动路径默认开始下载）。
+     *
+     * - [UpdateAutoCheckGate]：同一进程内只自动检查一次；失败不重置闸门 = 失败退避（下次冷启动再试）；
+     * - [checkMutex] 防并发：已有检查在运行时跳过本次自动检查（不阻塞、不重复请求）；
+     * - 不抛异常；所有失败只更新 [checkStatus]，静默降级不打扰离线使用。
      */
-    fun maybeCheckDaily() {
-        val nowMs = now()
-        if (!UpdateDailyPolicy.shouldCheck(store.lastCheckAt(), nowMs)) return
+    fun checkOnStart() {
+        if (!autoCheckGate.tryBegin()) return
         if (!checkMutex.tryLock()) return
-        // 先落盘检查时间：即使失败/离线，今天也不再反复请求。
-        store.markChecked(nowMs)
         scope.launch {
             try {
                 _checkStatus.value = UpdateCheckStatus.Checking
@@ -90,7 +93,7 @@ class UpdateManager(
         }
     }
 
-    /** 手动检查（我的 → 检查更新；不受每日节流限制）。返回结果给 UI 做 Toast/Snackbar 提示。 */
+    /** 手动检查（我的 → 检查更新；不受自动检查闸门限制）。返回结果给 UI 做 Toast/Snackbar 提示。 */
     suspend fun checkNow(manual: Boolean = true): UpdateCheckResult {
         if (!checkMutex.tryLock()) {
             return UpdateCheckResult.Failed("正在检查，请稍候")

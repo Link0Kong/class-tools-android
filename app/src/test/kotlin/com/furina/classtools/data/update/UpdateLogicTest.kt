@@ -9,7 +9,7 @@ import org.junit.Test
 
 /**
  * 更新功能纯逻辑单测（JVM，无 android.*）：
- * JSON 解析容错 / 版本比较 / URL fallback 链 / 强制更新规则 / 每日节流 /
+ * JSON 解析容错 / 版本比较 / URL fallback 链 / 冷启动自动检查闸门 / 强制更新规则 /
  * 下载状态机 / 进度 / sha256 校验 / 文件名 / 安装动作判定。
  */
 class UpdateLogicTest {
@@ -134,23 +134,27 @@ class UpdateLogicTest {
         )
     }
 
-    // ---------------------------------------------------------------- 每日节流
+    // ---------------------------------------------------------------- 冷启动自动检查闸门
 
     @Test
-    fun `每日节流 24 小时一次`() {
-        val now = 1_800_000_000_000L
-        val day = UpdateDailyPolicy.DEFAULT_INTERVAL_MS
-        assertTrue(UpdateDailyPolicy.shouldCheck(lastCheckAtMs = 0L, nowMs = now))
-        assertFalse(UpdateDailyPolicy.shouldCheck(lastCheckAtMs = now - 1_000L, nowMs = now))
-        assertFalse(UpdateDailyPolicy.shouldCheck(lastCheckAtMs = now - day + 1, nowMs = now))
-        assertTrue(UpdateDailyPolicy.shouldCheck(lastCheckAtMs = now - day, nowMs = now))
-        assertTrue(UpdateDailyPolicy.shouldCheck(lastCheckAtMs = now - day * 3, nowMs = now))
+    fun `冷启动自动检查每次进程只触发一次`() {
+        val gate = UpdateAutoCheckGate()
+        // 冷启动首次：允许自动检查（去掉每日节流后每次启动都检查）。
+        assertTrue(gate.tryBegin())
+        // 同一进程内重复调用（重组/回首页）：不再自动检查。
+        assertFalse(gate.tryBegin())
+        assertFalse(gate.tryBegin())
     }
 
     @Test
-    fun `每日节流 时钟回拨允许一次`() {
-        val now = 1_800_000_000_000L
-        assertTrue(UpdateDailyPolicy.shouldCheck(lastCheckAtMs = now + 60_000L, nowMs = now))
+    fun `自动检查失败不重置闸门 下次冷启动重新检查`() {
+        // 失败退避：同一进程内自动检查只登记一次，失败后也不会自动重试。
+        val currentProcess = UpdateAutoCheckGate()
+        assertTrue(currentProcess.tryBegin())
+        assertFalse(currentProcess.tryBegin())
+        // 下一次冷启动 = 新进程/新闸门：重新允许自动检查。
+        val nextColdStart = UpdateAutoCheckGate()
+        assertTrue(nextColdStart.tryBegin())
     }
 
     // ---------------------------------------------------------------- 强制更新/自动下载

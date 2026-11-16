@@ -76,7 +76,6 @@ import com.furina.classtools.data.reminder.ReminderOneShot
 import com.furina.classtools.data.reminder.ReminderOneShotFactory
 import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.push.OppPushClick
-import com.furina.classtools.data.jw.JwCredentialStore
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
@@ -99,8 +98,6 @@ import com.furina.classtools.ui.components.dock.CtPageTransitions
 import com.furina.classtools.ui.components.dock.CtTabPager
 import com.furina.classtools.ui.components.dock.rememberCtTabPagerState
 import com.furina.classtools.ui.screens.all.AllToolsScreen
-import com.furina.classtools.ui.screens.activity.ActivityScreen
-import com.furina.classtools.ui.screens.chsi.ChsiEntryScreen
 import com.furina.classtools.ui.screens.cloudspace.CloudSpaceScreen
 import com.furina.classtools.ui.screens.data.DataPrivacyScreen
 import com.furina.classtools.ui.screens.diag.DiagScreen
@@ -129,7 +126,6 @@ import com.furina.classtools.ui.screens.roster.RosterScreen
 import com.furina.classtools.ui.screens.settings.PermissionSettingsScreen
 import com.furina.classtools.ui.screens.settings.ReminderSettingsScreen
 import com.furina.classtools.ui.screens.timetable.TimetableViewScreen
-import com.furina.classtools.ui.screens.todaycampus.TodayCampusScreen
 import com.furina.classtools.ui.screens.vote.VoteCreateScreen
 import com.furina.classtools.ui.screens.vote.VoteDetailScreen
 import com.furina.classtools.ui.screens.vote.VoteListScreen
@@ -728,30 +724,12 @@ fun MainNavHost(
                     onBack = { popTool(toolId) },
                 )
 
-                "chsi" -> ChsiEntryScreen(
-                    sid = session.sid,
-                    onBack = { popTool(toolId) },
-                )
-
                 "file" -> CloudSpaceScreen(
                     onBack = { popTool(toolId) },
                     repository = container.cloudSpaceRepository,
                 )
 
                 "express" -> ExpressScreen(
-                    onBack = { popTool(toolId) },
-                )
-
-                "today" -> TodayCampusScreen(
-                    sid = session.sid,
-                    passwordProvider = {
-                        runCatching { JwCredentialStore(context).load(session.sid)?.password }.getOrNull()
-                    },
-                    onBack = { popTool(toolId) },
-                )
-
-                "activity" -> ActivityScreen(
-                    repository = container.activityRepository,
                     onBack = { popTool(toolId) },
                 )
 

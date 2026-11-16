@@ -76,22 +76,22 @@ fun ClassToolsRoot(
         }
     }
 
-    when (val state = sessionState) {
-        SessionState.Loading -> BootSplash()
+    Box(modifier = Modifier.fillMaxSize()) {
+        when (val state = sessionState) {
+            SessionState.Loading -> BootSplash()
 
-        SessionState.SignedOut -> IdentityScreen(
-            authRepository = container.authRepository,
-            onVerified = { session ->
-                container.updateActiveSession(session)
-                scope.launch {
-                    container.sessionStore.save(session)
-                    runCatching { container.classMembersRepository.load(force = true) }
-                }
-            },
-        )
+            SessionState.SignedOut -> IdentityScreen(
+                authRepository = container.authRepository,
+                onVerified = { session ->
+                    container.updateActiveSession(session)
+                    scope.launch {
+                        container.sessionStore.save(session)
+                        runCatching { container.classMembersRepository.load(force = true) }
+                    }
+                },
+            )
 
-        is SessionState.SignedIn -> {
-            Box(modifier = Modifier.fillMaxSize()) {
+            is SessionState.SignedIn -> {
                 MainNavHost(
                     container = container,
                     session = state.session,
@@ -108,10 +108,12 @@ fun ClassToolsRoot(
                         }
                     },
                 )
-                // App 内更新：登录进入主界面后每天最多一次静默检查（发现新版本弹窗 + 自动下载）。
-                UpdateHost(loggedIn = true)
             }
         }
+
+        // App 内更新：宿主放根级 —— 冷启动即自动检查并直接弹窗（登录后首页可见），
+        // 不依赖用户去「我的 → 检查更新」；身份门禁/加载页也能看到（未登录也检查）。
+        UpdateHost()
     }
 }
 

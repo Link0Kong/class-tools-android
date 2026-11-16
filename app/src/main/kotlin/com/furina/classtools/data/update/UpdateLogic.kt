@@ -17,7 +17,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 
 // =============================================================================
-// 纯逻辑（无 android.*）：JSON 解析 / 版本比较 / 端点 fallback / 每日节流 /
+// 纯逻辑（无 android.*）：JSON 解析 / 版本比较 / 端点 fallback / 冷启动自动检查闸门 /
 // 强制更新规则 / 下载状态机 / 文件校验 / 安装动作判定。全部可 JVM 单测。
 // =============================================================================
 
@@ -200,26 +200,25 @@ object UpdateEndpoints {
             .distinct()
 }
 
-/** 每日最多检查一次（SharedPreferences 记录 lastCheckAt；纯策略可单测）。 */
-object UpdateDailyPolicy {
-    /** 24 小时。 */
-    const val DEFAULT_INTERVAL_MS: Long = 24L * 60L * 60L * 1000L
+/**
+ * 冷启动自动检查闸门（纯 Kotlin，可 JVM 单测）。
+ *
+ * 2026-11-16 用户要求：检测到更新时在首页自动弹窗，不再依赖「我的 → 检查更新」；
+ * 同时**去掉每日节流**——每次冷启动都自动检查一次，但同一进程内只检查一次（`UpdateHost` 挂在根级）。
+ * - 进程刚启动：第一次 [tryBegin] 返回 true → 自动检查一次；
+ * - 检查失败不重置闸门 = 失败退避：同一进程内不再自动重试（手动「检查更新」不经过本闸门，随时可用）；
+ * - 下一次冷启动是新的进程/新的 Manager，自然重新检查。
+ */
+class UpdateAutoCheckGate {
 
-    /**
-     * 是否允许本次静默检查：
-     * - 从未检查过（<=0）→ 允许；
-     * - 距上次检查 >= [minIntervalMs] → 允许；
-     * - 系统时钟回拨（now < lastCheckAt）→ 允许一次（否则用户改时间后永远不再检查）。
-     */
-    fun shouldCheck(
-        lastCheckAtMs: Long,
-        nowMs: Long,
-        minIntervalMs: Long = DEFAULT_INTERVAL_MS,
-    ): Boolean {
-        if (minIntervalMs <= 0L) return true
-        if (lastCheckAtMs <= 0L) return true
-        if (nowMs < lastCheckAtMs) return true
-        return nowMs - lastCheckAtMs >= minIntervalMs
+    private var attempted = false
+
+    /** 登记本次自动检查；返回 true = 可以检查，false = 本进程已检查过，跳过。 */
+    @Synchronized
+    fun tryBegin(): Boolean {
+        if (attempted) return false
+        attempted = true
+        return true
     }
 }
 

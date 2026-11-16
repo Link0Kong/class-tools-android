@@ -355,8 +355,8 @@ class AllToolsDragGeometryTest {
 /** 17 个工具 id 的样例顺序（避免测试依赖 ToolCatalog 的 Android/Compose 依赖）。 */
 private object ToolCatalogOrder {
     fun sample17(): List<String> = listOf(
-        "draw", "group", "fit", "hw", "nt", "vote", "activity", "tt", "power",
-        "map", "ppt", "water", "roster", "roll", "diag", "jw", "chsi",
+        "draw", "group", "fit", "hw", "nt", "vote", "file", "tt", "power",
+        "map", "ppt", "water", "roster", "roll", "express", "diag", "jw",
     )
 }
 

@@ -8,7 +8,6 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.Cloud
-import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.LocalShipping
@@ -19,7 +18,6 @@ import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Slideshow
-import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -116,19 +114,6 @@ object ToolCatalog {
             features = listOf("限时/截止/不限时", "单选/多选/匿名/可见范围", "实时结果与管理"),
         ),
         AppTool(
-            id = "activity",
-            name = "活动",
-            subtitle = "第二课堂 · 名额 · 报名",
-            icon = Icons.Rounded.Event,
-            accent = plum,
-            category = ToolCategory.CLASS,
-            features = listOf(
-                "活动列表与报名时间",
-                "各角色剩余名额",
-                "一键报名 / 取消（本机登录，不上传账号）",
-            ),
-        ),
-        AppTool(
             id = "file",
             name = "文件传输",
             subtitle = "临时云空间 · 保留 3 天",
@@ -214,15 +199,6 @@ object ToolCatalog {
             features = listOf("拼多多/淘宝身份码一键打开", "菜鸟/京东查件入口", "未装 App 自动转官方网页"),
         ),
         AppTool(
-            id = "today",
-            name = "今日校园",
-            subtitle = "学工事务 · 融合门户",
-            icon = Icons.Rounded.Groups,
-            accent = teal,
-            category = ToolCategory.CLASS,
-            features = listOf("12 个学工/门户服务入口", "融合门户自动登录", "打开今日校园 App"),
-        ),
-        AppTool(
             id = "diag",
             name = "诊断",
             subtitle = "服务健康 · 设备 · AI 修复",
@@ -246,19 +222,6 @@ object ToolCatalog {
                 "成绩 · 考试 · 选课 · 公告速览",
                 "8 个官方工具入口，App 内打开",
                 "自动登录；数据只在本机内存展示",
-            ),
-        ),
-        AppTool(
-            id = "chsi",
-            name = "学信网",
-            subtitle = "学籍 · 学历 · 学位 · 官方入口",
-            icon = Icons.Rounded.Verified,
-            accent = BrandSlateBlue,
-            category = ToolCategory.STUDY,
-            features = listOf(
-                "学籍 · 学历 · 学位摘要",
-                "10 个官方工具入口，App 内打开",
-                "本人在官方页面手动登录；数据仅内存",
             ),
         ),
     )

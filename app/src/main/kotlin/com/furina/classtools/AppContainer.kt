@@ -1,7 +1,6 @@
 package com.furina.classtools
 
 import android.content.Context
-import com.furina.classtools.data.activity.ActivityRepository
 import com.furina.classtools.data.auth.ApiAuthRepository
 import com.furina.classtools.data.auth.AuthRepository
 import com.furina.classtools.data.diag.AndroidDeviceProbe
@@ -236,10 +235,6 @@ class AppContainer(context: Context) {
         api = apiClient,
         currentSid = { activeSession?.sid },
     ) }
-
-    /** 第二课堂活动：本机 token + 请求签名直连学校接口（不经过任何自建服务器）。 */
-    /** 懒加载：启动首帧不需要活动仓库。 */
-    val activityRepository: ActivityRepository by lazy { ActivityRepository(appContext) }
 
     /** 临时云空间（ECS drop 服务）：同账号跨设备；token 只放 X-Device-Id 请求头。 */
     val cloudSpaceRepository: CloudSpaceRepository by lazy {

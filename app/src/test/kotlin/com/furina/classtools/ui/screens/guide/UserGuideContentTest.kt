@@ -11,7 +11,7 @@ import org.junit.Test
  * 使用说明卡片化内容单测（契约 §5.3）。
  *
  * 只断言纯 Kotlin 数据（[UserGuideContent] 不依赖 Compose / Android），JVM 单测直接跑。
- * 覆盖：27 张卡、id 唯一、分类合法、标题 / 作用 / 步骤 / 提示非空且符合 §0 长度硬规则、
+ * 覆盖：24 张卡、id 唯一、分类合法、标题 / 作用 / 步骤 / 提示非空且符合 §0 长度硬规则、
  * VERSION 已更新、必含 Android 独有能力（提醒 / 写日历 / 权限管理）、scene / tone 合法、
  * 查找函数与分类首张下标。
  */
@@ -22,12 +22,12 @@ class UserGuideContentTest {
     // ---- 卡片清单 -----------------------------------------------------------
 
     @Test
-    fun `27 张卡片且顺序与契约一致`() {
-        assertEquals(27, cards.size)
+    fun `24 张卡片且顺序与契约一致`() {
+        assertEquals(24, cards.size)
         assertEquals(
             listOf(
-                "identity", "home", "draw", "group", "roster", "hw", "nt", "tt", "fit", "jw", "chsi", "map",
-                "power", "water", "express", "vote", "activity", "file", "today", "ppt", "reminder", "calendar", "permissions", "sort",
+                "identity", "home", "draw", "group", "roster", "hw", "nt", "tt", "fit", "jw", "map",
+                "power", "water", "express", "vote", "file", "ppt", "reminder", "calendar", "permissions", "sort",
                 "privacy", "feedback", "faq",
             ),
             cards.map { it.id },
@@ -59,9 +59,9 @@ class UserGuideContentTest {
             assertTrue("非法分类：${card.id}", card.category in GuideCategory.entries)
         }
         assertEquals(2, UserGuideContent.countOf(GuideCategory.START))
-        assertEquals(10, UserGuideContent.countOf(GuideCategory.STUDY))
+        assertEquals(9, UserGuideContent.countOf(GuideCategory.STUDY))
         assertEquals(3, UserGuideContent.countOf(GuideCategory.LIFE))
-        assertEquals(5, UserGuideContent.countOf(GuideCategory.TEAM))
+        assertEquals(3, UserGuideContent.countOf(GuideCategory.TEAM))
         assertEquals(7, UserGuideContent.countOf(GuideCategory.MORE))
     }
 
@@ -142,10 +142,10 @@ class UserGuideContentTest {
 
     @Test
     fun `内容版本已更新`() {
-        assertEquals("2026-11-16.1", UserGuideContent.VERSION)
+        assertEquals("2026-11-16.2", UserGuideContent.VERSION)
         assertFalse(
             "VERSION 仍是旧值",
-            UserGuideContent.VERSION == "2026-11-12.1",
+            UserGuideContent.VERSION == "2026-11-16.1",
         )
     }
 
@@ -205,12 +205,12 @@ class UserGuideContentTest {
         assertNull(UserGuideContent.sectionOf("missing"))
         assertEquals(-1, UserGuideContent.indexOf("missing"))
         assertEquals(2, UserGuideContent.indexOf("draw"))
-        assertEquals(5, UserGuideContent.cardsOf(GuideCategory.TEAM).size)
+        assertEquals(3, UserGuideContent.cardsOf(GuideCategory.TEAM).size)
         assertEquals(0, UserGuideContent.firstIndexOf(GuideCategory.START))
         assertEquals(2, UserGuideContent.firstIndexOf(GuideCategory.STUDY))
-        assertEquals(12, UserGuideContent.firstIndexOf(GuideCategory.LIFE))
-        assertEquals(15, UserGuideContent.firstIndexOf(GuideCategory.TEAM))
-        assertEquals(20, UserGuideContent.firstIndexOf(GuideCategory.MORE))
+        assertEquals(11, UserGuideContent.firstIndexOf(GuideCategory.LIFE))
+        assertEquals(14, UserGuideContent.firstIndexOf(GuideCategory.TEAM))
+        assertEquals(17, UserGuideContent.firstIndexOf(GuideCategory.MORE))
     }
 
     @Test

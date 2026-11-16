@@ -233,12 +233,12 @@ private fun progressText(progress: UpdateDownloadProgress): String {
 
 /**
  * 全局更新宿主（App 根挂载一次）：
- * - 登录后触发每天最多一次的静默检查（[UpdateManager.maybeCheckDaily]）；
- * - 渲染全局更新弹窗，并在挂载期间标记 [UpdateManager.attachHost]（「我的」页据此不再重复弹窗）。
+ * - App 冷启动（根级组合）即触发一次自动检查（[UpdateManager.checkOnStart]；去掉每日节流）；
+ * - 发现新版本直接弹窗渲染，首页即可看到，不再依赖「我的 → 检查更新」；
+ * - 挂载期间标记 [UpdateManager.attachHost]（「我的」页据此不再重复渲染兜底弹窗）。
  */
 @Composable
 fun UpdateHost(
-    loggedIn: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -247,9 +247,9 @@ fun UpdateHost(
         manager.attachHost()
         onDispose { manager.detachHost() }
     }
-    LaunchedEffect(loggedIn) {
-        // 「启动登录后」：已登录会话就绪（含冷启动恢复）时静默检查；退出再登录同一天不会重复请求。
-        if (loggedIn) manager.maybeCheckDaily()
+    LaunchedEffect(manager) {
+        // 冷启动（含会话 Loading / 身份页）就检查；登录后回到首页时弹窗已在栈上（若尚未稍后）。
+        manager.checkOnStart()
     }
     val dialog by manager.dialog.collectAsStateWithLifecycle()
     val ui = dialog ?: return
