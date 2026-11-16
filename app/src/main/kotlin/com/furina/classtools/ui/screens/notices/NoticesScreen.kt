@@ -811,6 +811,14 @@ fun NoticesScreen(
                                         }
                                     }
                                     val pageContentHeader: @Composable () -> Unit = {
+                                        // 数据卡恢复到通知列表上方（随内容滚动，固定头仍保持单行 56dp）。
+                                        NoticeOverviewCards(
+                                            stats = overview,
+                                            active = cardFilter,
+                                            onPick = { selectCardFilter(it) },
+                                            reduceMotion = reduceMotion,
+                                            modifier = Modifier.padding(bottom = 8.dp),
+                                        )
                                         NoticeFilterStrip(
                                             chips = pageChips,
                                             selectedKey = selectedChipKey,
