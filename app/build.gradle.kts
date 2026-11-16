@@ -39,7 +39,7 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 83
+        versionCode = 84
         // 测试版本 1：4.57.0-test1（「我的 → 关于」与更新弹窗显示「测试版本 1」）。
         versionName = "1.0.0-beta1"
 

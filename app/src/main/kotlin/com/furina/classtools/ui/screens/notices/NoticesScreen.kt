@@ -19,6 +19,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -811,21 +814,26 @@ fun NoticesScreen(
                                         }
                                     }
                                     val pageContentHeader: @Composable () -> Unit = {
-                                        // 数据卡恢复到通知列表上方（随内容滚动，固定头仍保持单行 56dp）。
-                                        NoticeOverviewCards(
-                                            stats = overview,
-                                            active = cardFilter,
-                                            onPick = { selectCardFilter(it) },
-                                            reduceMotion = reduceMotion,
-                                            modifier = Modifier.padding(bottom = 8.dp),
-                                        )
-                                        NoticeFilterStrip(
-                                            chips = pageChips,
-                                            selectedKey = selectedChipKey,
-                                            onSelect = onPageChipSelect,
-                                            reduceMotion = reduceMotion,
-                                            modifier = Modifier.padding(bottom = 8.dp),
-                                        )
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            // 数据卡与筛选按钮分块排列，中间固定 10dp 间距，避免叠在一起。
+                                            NoticeOverviewCards(
+                                                stats = overview,
+                                                active = cardFilter,
+                                                onPick = { selectCardFilter(it) },
+                                                reduceMotion = reduceMotion,
+                                            )
+                                            NoticeFilterStrip(
+                                                chips = pageChips,
+                                                selectedKey = selectedChipKey,
+                                                onSelect = onPageChipSelect,
+                                                reduceMotion = reduceMotion,
+                                            )
+                                        }
                                     }
                                     val pageBanner: (@Composable () -> Unit)? = if (offline) {
                                         {
@@ -1041,13 +1049,22 @@ private fun NoticeMinimalHeader(
     onOpenFilters: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Row(
+    // 固定头使用实色背景并抬高 zIndex：即使列表/筛选内容在极端布局下顶到边缘，
+    // 也不会与头部按钮在视觉上叠在一起。
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .zIndex(1f),
+        color = scheme.background,
+        tonalElevation = 0.dp,
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
         Surface(
             onClick = onBack,
             modifier = Modifier.size(44.dp),
@@ -1095,12 +1112,13 @@ private fun NoticeMinimalHeader(
             active = searchVisible,
             onClick = onToggleSearch,
         )
-        NoticeHeaderIconButton(
-            icon = Icons.Rounded.Tune,
-            description = "筛选通知",
-            active = filterActive,
-            onClick = onOpenFilters,
-        )
+            NoticeHeaderIconButton(
+                icon = Icons.Rounded.Tune,
+                description = "筛选通知",
+                active = filterActive,
+                onClick = onOpenFilters,
+            )
+        }
     }
 }
 
@@ -1174,8 +1192,10 @@ private fun NoticeFilterSheet(
                 }
             }
             Column(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 // 统计卡（原固定区大卡）：点选后立即筛选并关闭弹层。
                 NoticeOverviewCards(
