@@ -1,5 +1,22 @@
 # 版本记录（Android 客户端）
 
+## v4.57.0-test1 · 2026-11-16（测试版本 1：更新系统 / 活动头像 / 今日校园 / 学信网）
+### 新增：检测更新 + 自动更新
+- 「我的 → 关于」新增「检查更新」行；登录后每天最多静默检查一次；发现新版弹「发现新版本 · 测试版本 1」。
+- 自动检查默认自动下载（进度/非强制可取消），下载完成拉起系统安装器；支持 DownloadManager + OkHttp 回退、FileProvider、sha256 校验、未知来源授权跳转、force 强制更新。
+- 端点：`http://121.196.47.2/android/latest.json` → OSS fallback；服务端已部署 APK + latest.json（versionCode 79 / 4.57.0-test1）。
+### 活动登录上传头像点击无反应
+- 根因：登录 WebView 未实现 `WebChromeClient.onShowFileChooser`，`<input type=file>` 静默无响应。已补齐文件选择器（图片/文件、多选、取消回调、生命周期清理），DEBUG 顶栏新增「上传自测」；模拟器实测点击「选择图片」能拉起系统照片选择器。
+### 今日校园打不开
+- 参考 HFUT-Schedule：OkHttp 完成 CAS HTTP 登录 → Cookie 注入 WebView → 加载门户 index.html；实现学校定制 CAS 的 AES/CBC 密码加密（salt 解析、encrypt.js 同款）、MemoryCookieJar、302 跟随、CookieManager 注入。
+- 登录成功自动加载门户首页；失败回退 WebView JS 填表/手动登录；保留空白检测、清缓存重载、融合门户/浏览器打开/重试。
+### 学信网仍不行
+- 登录页与卡片页始终显示「我已登录，进入卡片页」；人工确认后即使提取为空也保留已登录展示、10 个官方入口与「打开完整学信档案」，不再卡登录页/显示未登录；延迟重试 + Cookie 辅助保留。
+### 版本与测试
+- versionCode 79 / versionName `4.57.0-test1`；界面显示「测试版本 1」。
+- 单测 **1534/0**（119 suites）；E2E **44 步 0 FAIL（1001.7s，导航 10/10，logcat 0 FATAL/ANR）**；Release **3,432,477 B / SHA-256 `0C3424D406F059AD6D063DF3900D8FBD3E0FF9BE5A05DB33BD0BCDC51E02BA9F`**；冷启动 902/476ms，稳定 474/425/523ms。
+- 手工设备验证：版本行显示「v4.57.0-test1（测试版本 1）」；检查更新显示「已是最新版本」；活动「上传自测」拉起系统选择器；今日校园打开门户登录页；学信网按钮显示「已登录·打开官方页面查看」。
+
 ## v4.56.4 · 2026-11-16（2.5D 地图白屏修复）
 - 根因（WebView DevTools 实测）：地图 H5 的 html/body/#app 在 Android WebView 中计算高度为 0，`canvas.clientHeight=0`（画布内容其实已绘制但 CSS 高 0 不可见）。
 - 修复 H5（已更新 OSS+ECS）：`#scene` 改 `position:fixed; width:100vw; height:100vh`；resize 用 innerWidth/innerHeight 兜底并显式写 canvas style 宽高；初始布局未完成时 40/120/300/700ms 多帧重试 resize，监听 resize；移动端 DPR 上限 1.25。

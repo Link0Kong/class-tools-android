@@ -69,11 +69,25 @@ object ChsiNavigationLogic {
      * - 登录页（LOGIN）空闲时始终展示（用户可能已完成登录但自动判定失败）；
      * - 卡片页（CARDS）未登录且空闲时也展示（提取失败但用户确认已登录）。
      */
+    /**
+     * 是否展示「我已登录，进入卡片页」按钮（2026-11-16：用户要求**始终可见**）。
+     *
+     * - 登录页（LOGIN）与卡片页（CARDS）都始终展示；按钮是否可点由 UI 的 enabled 控制
+     *   （提取进行中时可仍可见但禁用，避免误触）。
+     * - 参数保留以兼容调用方/单测；不再因 refreshing/loggedIn 隐藏按钮。
+     */
     fun showEnterCardsFallback(
         mode: Mode,
         refreshing: Boolean,
         loggedIn: Boolean = false,
-    ): Boolean = !refreshing && (mode == Mode.LOGIN || (mode == Mode.CARDS && !loggedIn))
+    ): Boolean = mode == Mode.LOGIN || mode == Mode.CARDS
+
+    /**
+     * 人工确认后的 Cookie 兜底：用户已明确点过「我已登录，进入卡片页」且 my.chsi 存在会话 Cookie，
+     * 即使页面提取为空/延迟也视为已登录（卡片页展示官方入口与空态兜底，不阻塞）。
+     */
+    fun confirmedLoginByCookie(pageUrl: String?, hasArchiveCookie: Boolean): Boolean =
+        hasArchiveCookie && ChsiExtractLogic.isLoggedInUrl(pageUrl)
 
     /** 页面加载完成时若命中登录页 URL：仅用户主动在登录模式时停留；卡片页后台检查不跳转。 */
     fun staysOnLoginPage(mode: Mode, pageIsLoginUrl: Boolean): Boolean = pageIsLoginUrl && mode == Mode.LOGIN

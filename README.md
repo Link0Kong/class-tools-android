@@ -6,7 +6,7 @@
 - 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v4.56.4**——2.5D 地图 WebView 白屏已修复（H5 canvas 高度 0 → fixed 100vh + resize 重试），网页 OSS/ECS 已更新。单测 **1478/0**；详见 [REPORT_ROUND65](docs/REPORT_ROUND65_20261116.md)。
+- 状态：**v4.57.0-test1**——检测更新/自动更新 + 测试版本 1；活动头像上传修复；今日校园 CAS Cookie 登录；学信网人工确认兜底。单测 **1534/0**，E2E 44/0。详见 [REPORT_ROUND66](docs/REPORT_ROUND66_20261116.md)。
 
 ## 目录
 

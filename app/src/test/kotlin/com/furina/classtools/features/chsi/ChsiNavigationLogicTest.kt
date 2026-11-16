@@ -217,21 +217,50 @@ class ChsiNavigationLogicTest {
     }
 
     @Test
-    fun `登录页兜底按钮只在 LOGIN 模式且空闲时展示`() {
-        assertTrue(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.LOGIN, refreshing = false))
-        assertFalse(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.LOGIN, refreshing = true))
-        // 2026-11-16：卡片页未登录且空闲时也显示（用户确认已登录可直接进入）。
-        assertTrue(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.CARDS, refreshing = false))
-        assertFalse(ChsiNavigationLogic.showEnterCardsFallback(ChsiNavigationLogic.Mode.CARDS, refreshing = true))
-        assertFalse(
-            ChsiNavigationLogic.showEnterCardsFallback(
-                ChsiNavigationLogic.Mode.CARDS,
-                refreshing = false,
-                loggedIn = true,
+    fun `我已登录进入卡片页按钮始终可见`() {
+        // 2026-11-16 用户要求：登录页/卡片页「始终可见」；是否可点由 UI enabled 控制。
+        listOf(ChsiNavigationLogic.Mode.LOGIN, ChsiNavigationLogic.Mode.CARDS).forEach { mode ->
+            assertTrue(
+                "mode=$mode 应始终显示兜底按钮",
+                ChsiNavigationLogic.showEnterCardsFallback(mode, refreshing = false),
+            )
+            assertTrue(
+                "mode=$mode 提取中也应可见（按钮置灰）",
+                ChsiNavigationLogic.showEnterCardsFallback(mode, refreshing = true),
+            )
+        }
+        assertEquals("我已登录，进入卡片页", ChsiTexts.BTN_ENTER_CARDS)
+        assertTrue(ChsiTexts.HINT_ENTER_CARDS_FALLBACK.contains("卡片页"))
+        assertTrue(ChsiTexts.HINT_ENTER_CARDS_FALLBACK.contains("官方入口"))
+    }
+
+    @Test
+    fun `人工确认后 Cookie 兜底判定`() {
+        assertTrue(
+            ChsiNavigationLogic.confirmedLoginByCookie(
+                pageUrl = archiveUrl,
+                hasArchiveCookie = true,
             ),
         )
-        assertEquals("已登录，进入卡片页", ChsiTexts.BTN_ENTER_CARDS)
-        assertTrue(ChsiTexts.HINT_ENTER_CARDS_FALLBACK.contains("卡片页"))
+        // 无 Cookie / 非档案域 → 不兜底
+        assertFalse(
+            ChsiNavigationLogic.confirmedLoginByCookie(
+                pageUrl = archiveUrl,
+                hasArchiveCookie = false,
+            ),
+        )
+        assertFalse(
+            ChsiNavigationLogic.confirmedLoginByCookie(
+                pageUrl = loginUrl,
+                hasArchiveCookie = true,
+            ),
+        )
+        assertFalse(
+            ChsiNavigationLogic.confirmedLoginByCookie(
+                pageUrl = null,
+                hasArchiveCookie = true,
+            ),
+        )
     }
 
     // ---- 2026-11-16：登录态延迟检测（延迟重试 + 数据信号 + Cookie 辅助）--------------

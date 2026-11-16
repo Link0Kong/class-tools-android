@@ -163,13 +163,23 @@ fun ChsiEntryScreen(
         delay(ChsiExtractLogic.EXTRACT_DELAY_MS)
         var payload: ChsiPagePayload? = null
         var loggedIn = false
+        var lastHasCookie = false
         for (attempt in 0 until ChsiNavigationLogic.EXTRACT_MAX_ATTEMPTS) {
             if (!ChsiExtractLogic.isLoggedInUrl(state.pageUrl)) {
-                // 提取时已不在档案域（会话过期/被重定向到登录）：回到卡片页未登录态，不强制跳登录页。
+                // 提取时已不在档案域（会话过期/被重定向到登录）：
+                // 用户已人工确认「我已登录」时不打回未登录态，直接按已登录展示卡片页兜底。
                 state.extractInFlight = false
                 state.refreshing.value = false
-                state.loggedIn.value = false
-                state.cards.value = ChsiExtractLogic.extractCards(null)
+                if (state.loginConfirmedByUser) {
+                    state.loggedIn.value = true
+                    state.cards.value = ChsiExtractLogic.extractCards(null)
+                    state.lastUpdated.value = ChsiExtractLogic.updatedTimeText()
+                    state.globalError.value = ChsiTexts.MSG_EXTRACT_FAILED
+                    state.mode.value = ChsiMode.CARDS
+                } else {
+                    state.loggedIn.value = false
+                    state.cards.value = ChsiExtractLogic.extractCards(null)
+                }
                 return@LaunchedEffect
             }
             val raw = runCatching {
@@ -181,6 +191,7 @@ fun ChsiEntryScreen(
                 CookieManager.getInstance().getCookie(ChsiNavigationLogic.ARCHIVE_COOKIE_URL)
             }.getOrNull()
             val hasArchiveCookie = ChsiExtractLogic.hasArchiveSessionCookie(archiveCookie)
+            lastHasCookie = hasArchiveCookie
             // 用户在登录页/卡片页点过「已登录，进入卡片页」→ 提取按登录流程的宽松判定处理，
             // 避免刚进卡片页又被营销页误判打回未登录态。
             loggedIn = ChsiNavigationLogic.loggedInAfterExtract(
@@ -194,14 +205,29 @@ fun ChsiEntryScreen(
                 delay(ChsiNavigationLogic.EXTRACT_RETRY_INTERVAL_MS)
             }
         }
+        // 人工确认兜底：用户明确点过「我已登录」且存在 my.chsi 会话 Cookie → 视为已登录（Cookie 只辅助，不阻塞）。
+        if (!loggedIn && state.loginConfirmedByUser &&
+            ChsiNavigationLogic.confirmedLoginByCookie(state.pageUrl, lastHasCookie)
+        ) {
+            loggedIn = true
+        }
         if (!loggedIn) {
             state.extractInFlight = false
             state.refreshing.value = false
-            state.loggedIn.value = false
-            state.lastUpdated.value = null
-            state.cards.value = ChsiExtractLogic.extractCards(null)
+            if (state.loginConfirmedByUser) {
+                // 用户已人工确认登录：不再显示未登录/不卡登录页，展示卡片页 + 10 个官方入口/完整档案兜底。
+                state.loggedIn.value = true
+                state.cards.value = ChsiExtractLogic.extractCards(payload)
+                state.lastUpdated.value = ChsiExtractLogic.updatedTimeText()
+                state.globalError.value = ChsiTexts.MSG_EXTRACT_FAILED
+                state.mode.value = ChsiMode.CARDS
+            } else {
+                state.loggedIn.value = false
+                state.lastUpdated.value = null
+                state.cards.value = ChsiExtractLogic.extractCards(null)
+            }
             // 不强制跳回登录页（2026-11-16 要求）：停留在当前页面，卡片页/登录页都显示
-            // 「已登录，进入卡片页」兜底按钮，由用户确认后手动进入。
+            // 「我已登录，进入卡片页」兜底按钮，由用户确认后手动进入。
             return@LaunchedEffect
         }
         state.cards.value = ChsiExtractLogic.extractCards(payload)
@@ -381,7 +407,11 @@ fun ChsiEntryScreen(
                                 maxLines = 2,
                                 modifier = Modifier.weight(1f),
                             )
-                            TextButton(onClick = { enterCardsFromLogin() }) {
+                            // 2026-11-16：按钮**始终可见**；提取进行中禁用防误触，完成后可点。
+                            TextButton(
+                                onClick = { enterCardsFromLogin() },
+                                enabled = !state.refreshing.value,
+                            ) {
                                 Text(ChsiTexts.BTN_ENTER_CARDS)
                             }
                         }

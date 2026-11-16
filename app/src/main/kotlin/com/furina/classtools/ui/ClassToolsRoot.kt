@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.AppContainer
 import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.ui.components.BrandMark
+import com.furina.classtools.ui.components.update.UpdateHost
 import com.furina.classtools.ui.navigation.MainNavHost
 import com.furina.classtools.ui.screens.identity.IdentityScreen
 import kotlinx.coroutines.launch
@@ -90,22 +91,26 @@ fun ClassToolsRoot(
         )
 
         is SessionState.SignedIn -> {
-            MainNavHost(
-            container = container,
-            session = state.session,
-            initialToolId = pendingToolId,
-            onInitialToolConsumed = onPendingToolConsumed,
-            initialNoticeId = pendingNoticeId,
-            onInitialNoticeConsumed = onPendingNoticeConsumed,
-            onSignOut = {
-                scope.launch {
-                    container.authRepository.logout()
-                    container.signOut()
-                    // M-02：退出登录给一个明确结果提示。
-                    Toast.makeText(context, "已退出登录", Toast.LENGTH_SHORT).show()
-                }
-            },
-        )
+            Box(modifier = Modifier.fillMaxSize()) {
+                MainNavHost(
+                    container = container,
+                    session = state.session,
+                    initialToolId = pendingToolId,
+                    onInitialToolConsumed = onPendingToolConsumed,
+                    initialNoticeId = pendingNoticeId,
+                    onInitialNoticeConsumed = onPendingNoticeConsumed,
+                    onSignOut = {
+                        scope.launch {
+                            container.authRepository.logout()
+                            container.signOut()
+                            // M-02：退出登录给一个明确结果提示。
+                            Toast.makeText(context, "已退出登录", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                )
+                // App 内更新：登录进入主界面后每天最多一次静默检查（发现新版本弹窗 + 自动下载）。
+                UpdateHost(loggedIn = true)
+            }
         }
     }
 }

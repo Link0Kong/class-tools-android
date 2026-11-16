@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -60,6 +61,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +75,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -86,6 +89,12 @@ import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.settings.AppSettingsStore
 import com.furina.classtools.data.settings.LocalAppSettingsStore
+import com.furina.classtools.data.update.UpdateCheckResult
+import com.furina.classtools.data.update.UpdateCheckStatus
+import com.furina.classtools.data.update.UpdateManager
+import com.furina.classtools.data.update.UpdateRuntime
+import com.furina.classtools.data.update.UpdateTestVersion
+import com.furina.classtools.data.update.UpdateVersion
 import com.furina.classtools.ui.adaptive.CtAdaptiveSpec
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.BrandMark
@@ -93,6 +102,8 @@ import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
+import com.furina.classtools.ui.components.update.UpdateDialogHost
+import com.furina.classtools.ui.components.update.updateCheckSubtitle
 import com.furina.classtools.ui.screens.me.MeStats
 import com.furina.classtools.ui.screens.me.MeStatsBuilder
 import com.furina.classtools.data.push.OppoPushState
@@ -159,11 +170,29 @@ fun ProfileScreen(
     onRetryOppoPush: () -> Unit = {},
     onOpenFeedback: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
+    /** 预览/测试注入更新检查状态；null = 使用进程内 UpdateManager 的实时状态。 */
+    updateCheckStatus: UpdateCheckStatus? = null,
+    /** 预览/测试注入更新管理器；null = 使用进程内单例 UpdateRuntime（生产）。 */
+    updateManager: UpdateManager? = null,
     initialShowSignOutConfirm: Boolean = false,
     initialShowClearCacheConfirm: Boolean = false,
 ) {
     val context = LocalContext.current
+    val inspectionMode = LocalInspectionMode.current
+    // 更新检查：生产环境用进程内单例（与全局 UpdateHost 共享弹窗状态）；
+    // 预览（InspectionMode）不创建管理器，避免触碰 SharedPreferences/网络。
+    val resolvedUpdateManager = remember(context, updateManager, inspectionMode) {
+        updateManager ?: if (inspectionMode) null else UpdateRuntime.manager(context)
+    }
+    val idleUpdateStatus = remember { mutableStateOf<UpdateCheckStatus>(UpdateCheckStatus.Idle) }
+    val updateStatusState: State<UpdateCheckStatus> =
+        resolvedUpdateManager?.checkStatus?.collectAsStateWithLifecycle() ?: idleUpdateStatus
+    val effectiveUpdateStatus = updateCheckStatus ?: updateStatusState.value
+    val updateHostState: State<Boolean> =
+        resolvedUpdateManager?.hostAttached?.collectAsStateWithLifecycle()
+            ?: remember { mutableStateOf(false) }
     var showPrivacy by remember { mutableStateOf(false) }
+
     var showAgreement by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember(initialShowSignOutConfirm) { mutableStateOf(initialShowSignOutConfirm) }
     var showClearCacheConfirm by remember(initialShowClearCacheConfirm) { mutableStateOf(initialShowClearCacheConfirm) }
@@ -203,6 +232,23 @@ fun ProfileScreen(
 
     fun requestClearCache() {
         showClearCacheConfirm = true
+    }
+
+    /** 「检查更新」：手动检查（不受每日节流限制）；发现新版由 UpdateHost 弹窗，其余结果 Snackbar 提示。 */
+    fun requestUpdateCheck() {
+        val manager = resolvedUpdateManager ?: return
+        scope.launch {
+            val result = manager.checkNow(manual = true)
+            val message = when (result) {
+                is UpdateCheckResult.UpToDate ->
+                    "已是最新版本 v${UpdateVersion.normalize(result.currentVersionName)}"
+
+                is UpdateCheckResult.Failed -> "检查更新失败：${result.reason}"
+                // 发现新版本：弹窗由全局/局部 UpdateHost 展示，不再额外 Snackbar。
+                is UpdateCheckResult.Available -> null
+            }
+            message?.let { snackbar.showSnackbar(it) }
+        }
     }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
@@ -269,9 +315,11 @@ fun ProfileScreen(
                                 onOpenGuide = onOpenGuide,
                                 onShowPrivacy = { showPrivacy = true },
                                 onShowAgreement = { showAgreement = true },
+                                updateStatus = effectiveUpdateStatus,
+                                onCheckUpdate = ::requestUpdateCheck,
                             )
                             SignOutSection(
-                                version = BuildConfig.VERSION_NAME,
+                                version = UpdateVersion.normalize(BuildConfig.VERSION_NAME),
                                 onSignOutClick = { showSignOutConfirm = true },
                             )
                         }
@@ -317,14 +365,20 @@ fun ProfileScreen(
                             onOpenGuide = onOpenGuide,
                             onShowPrivacy = { showPrivacy = true },
                             onShowAgreement = { showAgreement = true },
+                            updateStatus = effectiveUpdateStatus,
+                            onCheckUpdate = ::requestUpdateCheck,
                         )
                         SignOutSection(
-                            version = BuildConfig.VERSION_NAME,
+                            version = UpdateVersion.normalize(BuildConfig.VERSION_NAME),
                             onSignOutClick = { showSignOutConfirm = true },
                         )
                     }
                 }
             }
+        }
+        // 没有全局 UpdateHost（App 根）时，由「我的」页兜底展示更新弹窗，避免检查到新版却看不到。
+        if (resolvedUpdateManager != null && updateCheckStatus == null && !updateHostState.value) {
+            UpdateDialogHost(resolvedUpdateManager)
         }
         SnackbarHost(
             hostState = snackbar,
@@ -805,6 +859,8 @@ private fun AboutSection(
     onOpenGuide: () -> Unit,
     onShowPrivacy: () -> Unit,
     onShowAgreement: () -> Unit,
+    updateStatus: UpdateCheckStatus = UpdateCheckStatus.Idle,
+    onCheckUpdate: () -> Unit = {},
 ) {
     SectionTitle("关于与帮助")
     GroupCard {
@@ -834,9 +890,17 @@ private fun AboutSection(
             onClick = onShowPrivacy,
         )
         RowDivider()
+        ActionRow(
+            icon = Icons.Rounded.SystemUpdate,
+            title = "检查更新",
+            subtitle = updateCheckSubtitle(updateStatus),
+            onClick = onCheckUpdate,
+        )
+        RowDivider()
         ValueRow(
             title = "版本",
-            value = "v${BuildConfig.VERSION_NAME}",
+            // v4.57.0-test1（测试版本 1）；Debug 的 -debug 后缀不展示。
+            value = UpdateTestVersion.versionDisplay(BuildConfig.VERSION_NAME),
         )
         if (BuildConfig.DEBUG) {
             RowDivider()

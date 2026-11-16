@@ -39,6 +39,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +53,9 @@ import com.furina.classtools.data.todaycampus.TodayCampusLoginLogic
 import com.furina.classtools.data.todaycampus.TodayCampusLoginLogic.FillOutcome
 import com.furina.classtools.data.todaycampus.TodayCampusLoginLogic.PageKind
 import com.furina.classtools.data.todaycampus.TodayCampusLoginLogic.VerifyOutcome
+import com.furina.classtools.features.todaycampus.CasCookie
+import com.furina.classtools.features.todaycampus.TodayCampusCasClient
+import com.furina.classtools.features.todaycampus.TodayCampusCasLogic
 import com.furina.classtools.features.todaycampus.TodayCampusWebLogic
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
@@ -59,6 +63,7 @@ import com.furina.classtools.ui.theme.CtTokens
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 /** 页面模式：首页（服务入口网格 + 搜索）⇄ App 内 WebView（融合门户）。 */
@@ -103,6 +108,8 @@ fun TodayCampusScreen(
     val context = LocalContext.current
     val state = remember { TodayCampusScreenState() }
     val latestPasswordProvider = rememberUpdatedState(passwordProvider)
+    val scope = rememberCoroutineScope()
+    val casClient = remember { TodayCampusCasClient() }
 
     val pageClient = remember {
         object : WebViewClient() {
@@ -207,8 +214,34 @@ fun TodayCampusScreen(
         }
     }
 
-    /** 打开指定官方 URL（入口 / 门户首页 / App 回退共用）。 */
-    fun openWeb(url: String, subtitle: String, manualHint: String?) {
+    /** 把 CAS HTTP 登录拿到的 Cookie 注入 WebView CookieManager（同域会话，不传密码）。 */
+    fun injectWebViewCookies(cookies: List<CasCookie>) {
+        if (cookies.isEmpty()) return
+        val manager = CookieManager.getInstance()
+        runCatching {
+            cookies.forEach { cookie ->
+                manager.setCookie(
+                    TodayCampusCasLogic.cookieUrlOf(cookie),
+                    TodayCampusCasLogic.cookieHeaderOf(cookie),
+                )
+            }
+            manager.flush()
+        }
+    }
+
+    /**
+     * 打开指定官方 URL（入口 / 门户首页 / App 回退共用）。
+     *
+     * 2026-11-16（参考 HFUT-Schedule `Starter.startWebUrlInner(cookie)`）：
+     * 打开融合门户入口时先用 **OkHttp 完成 CAS HTTP 登录**拿 Cookie → 注入 WebView →
+     * 直接加载门户首页 `index.html`；失败/无密码 → 回退原 WebView JS 填表流程。
+     */
+    fun openWeb(
+        url: String,
+        subtitle: String,
+        manualHint: String?,
+        allowCasLogin: Boolean = false,
+    ) {
         state.targetUrl.value = url
         state.webSubtitle.value = subtitle
         state.manualHint.value = manualHint
@@ -220,24 +253,59 @@ fun TodayCampusScreen(
         state.portalHomeLoaded = false
         state.status.value = TodayCampusLoginLogic.MSG_OPENING
         state.loading.value = true
+        // CAS HTTP 登录：只在打开门户入口时尝试；同一会话最多自动尝试 1 次，
+        // 已成功则直接用已有 Cookie 打开门户（不重复登录）。
+        if (allowCasLogin && TodayCampusLoginLogic.isPortalUrl(url) &&
+            !state.casLoginSucceeded && !state.casLoginDone
+        ) {
+            state.casLoginDone = true
+            state.status.value = TodayCampusCasLogic.MSG_CAS_LOGGING_IN
+            scope.launch {
+                val password = cachedPassword(state) { latestPasswordProvider.value.invoke() }
+                if (sid.isBlank() || password.isNullOrEmpty()) {
+                    state.status.value = TodayCampusCasLogic.MSG_CAS_NO_CREDENTIAL
+                    webView.loadUrl(url)
+                    return@launch
+                }
+                val result = casClient.login(sid, password)
+                // 登录请求期间用户可能已返回首页/切换入口：放弃本次结果，避免“后台跳页”。
+                if (state.mode.value != TodayCampusMode.WEB) return@launch
+                if (result.success && result.cookies.isNotEmpty()) {
+                    injectWebViewCookies(result.cookies)
+                    state.casLoginSucceeded = true
+                    state.portalHomeLoaded = true
+                    state.status.value = TodayCampusCasLogic.MSG_CAS_SUCCESS
+                    state.loading.value = true
+                    webView.loadUrl(TodayCampusCasLogic.PORTAL_HOME_URL)
+                } else {
+                    // 回退：WebView 内 JS 填表/手动登录（原流程），或浏览器入口。
+                    state.status.value = TodayCampusCasLogic.MSG_CAS_FALLBACK
+                    state.loading.value = true
+                    webView.loadUrl(url)
+                }
+            }
+            return
+        }
         webView.loadUrl(url)
     }
 
-    /** 打开一个服务入口：未知子页 → 门户首页 + 一句手动提示。 */
+    /** 打开一个服务入口：未知子页 → 门户首页 + 一句手动提示（会先尝试 CAS HTTP 登录）。 */
     fun openEntry(entry: TodayCampusEntry) {
         openWeb(
             url = TodayCampusCatalog.openUrlOf(entry),
             subtitle = entry.name,
             manualHint = TodayCampusCatalog.manualHintOf(entry),
+            allowCasLogin = true,
         )
     }
 
-    /** 打开融合门户（顶栏动作 / App 未安装回退）：统一走门户登录入口（未登录 → CAS 自动登录）。 */
+    /** 打开融合门户（顶栏动作 / App 未安装回退）：CAS HTTP 登录 + Cookie 注入 → 门户首页。 */
     fun openPortal() {
         openWeb(
             url = TodayCampusCatalog.PORTAL_ENTRY_URL,
             subtitle = TodayCampusCatalog.BTN_PORTAL,
             manualHint = null,
+            allowCasLogin = true,
         )
     }
 
@@ -256,6 +324,8 @@ fun TodayCampusScreen(
         state.password = null
         state.blankReloads = 0
         state.portalHomeLoaded = false
+        // 本轮未成功时允许下次打开重新尝试一次 CAS HTTP 登录；成功则保留 Cookie 直接进门户。
+        if (!state.casLoginSucceeded) state.casLoginDone = false
     }
 
     /** 用系统浏览器打开当前页面（白屏/错误态降级入口）。 */
@@ -288,6 +358,8 @@ fun TodayCampusScreen(
         state.blankReloads = 0
         state.portalHomeLoaded = false
         state.loading.value = true
+        // 用户显式重试：允许再尝试一次 CAS HTTP 登录（仍失败则回退页面登录）。
+        if (!state.casLoginSucceeded) state.casLoginDone = false
         val retryUrl = if (TodayCampusLoginLogic.isHttpUrl(state.pageUrl) &&
             TodayCampusWebLogic.isPortalHost(state.pageUrl)
         ) {
@@ -640,6 +712,12 @@ private class TodayCampusScreenState {
 
     /** 内存中的密码（仅自动填充时临时使用；退出 WebView / 页面销毁即清空）。 */
     var password: String? = null
+
+    /** 2026-11-16：本轮会话是否已尝试过 CAS HTTP 登录（失败后不自动循环，等用户显式重试）。 */
+    var casLoginDone: Boolean = false
+
+    /** CAS HTTP 登录是否成功（成功则后续直接带 Cookie 打开门户，不重复登录）。 */
+    var casLoginSucceeded: Boolean = false
 }
 
 /**

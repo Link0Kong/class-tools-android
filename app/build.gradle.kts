@@ -39,8 +39,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 78
-        versionName = "4.56.4"
+        versionCode = 79
+        // 测试版本 1：4.57.0-test1（「我的 → 关于」与更新弹窗显示「测试版本 1」）。
+        versionName = "4.57.0-test1"
 
         // CloudBase REST 根地址与公开 Publishable Key（role=anon，设计上公开）。
         // 值来自 gradle.properties（ct.restBaseUrl / ct.publishableKey），便于部署时替换。
@@ -53,6 +54,10 @@ android {
         // OPPO PUSH 密钥（app/oppo.properties；空串 = 未配置 → 客户端跳过注册/上传）。
         buildConfigField("String", "OPPO_PUSH_APP_KEY", buildConfigString(oppoAppKey))
         buildConfigField("String", "OPPO_PUSH_APP_SECRET", buildConfigString(oppoAppSecret))
+
+        // 测试版本标识（当前为「测试版本 1」）：App 内版本行与更新弹窗标题使用。
+        buildConfigField("int", "TEST_VERSION", "1")
+        buildConfigField("String", "TEST_VERSION_LABEL", buildConfigString("测试版本 1"))
     }
 
     signingConfigs {

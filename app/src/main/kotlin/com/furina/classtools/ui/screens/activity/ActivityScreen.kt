@@ -1,16 +1,22 @@
 package com.furina.classtools.ui.screens.activity
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.text.format.DateFormat
 import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.ConsoleMessage
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +60,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.furina.classtools.BuildConfig
+import com.furina.classtools.data.activity.ActivityFileChooserLogic
 import com.furina.classtools.data.activity.ActivityRepository
 import com.furina.classtools.data.activity.ActivityResult
 import com.furina.classtools.data.activity.ActivityToken
@@ -360,6 +367,7 @@ private fun ActivityList(
 private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit) {
     var hint by remember { mutableStateOf<String?>(null) }
     var reloadSeq by remember { mutableIntStateOf(0) }
+    var selfTestSeq by remember { mutableIntStateOf(0) }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -376,6 +384,10 @@ private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit)
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f),
                     )
+                    // DEBUG：本地 `<input type=file>` data URL 自测（验证 onShowFileChooser 生效）。
+                    if (BuildConfig.DEBUG) {
+                        TextButton(onClick = { selfTestSeq += 1 }) { Text("上传自测") }
+                    }
                     TextButton(onClick = { reloadSeq += 1 }) { Text("重新加载") }
                 }
                 hint?.let { text ->
@@ -389,6 +401,7 @@ private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit)
                 LoginWebView(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     reloadSeq = reloadSeq,
+                    selfTestSeq = selfTestSeq,
                     onHint = { hint = it },
                     onToken = onToken,
                 )
@@ -402,6 +415,7 @@ private fun LoginDialog(onDismiss: () -> Unit, onToken: (ActivityToken) -> Unit)
 private fun LoginWebView(
     modifier: Modifier = Modifier,
     reloadSeq: Int = 0,
+    selfTestSeq: Int = 0,
     onHint: (String?) -> Unit = {},
     onToken: (ActivityToken) -> Unit,
 ) {
@@ -409,6 +423,26 @@ private fun LoginWebView(
     var routeRecovered by remember { mutableStateOf(false) }
     var oauthRecovered by remember { mutableStateOf(false) }
     var stubInjected by remember { mutableStateOf(false) }
+    // 2026-11-16：WebView 内 `<input type=file>`（上传头像）需要 onShowFileChooser + 系统选择器；
+    // 回调必须只回传一次（选中/取消都要回调，否则 input 永久卡住）。
+    var pendingFileCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val callback = pendingFileCallback
+        pendingFileCallback = null
+        if (callback == null) return@rememberLauncherForActivityResult
+        val picked = ActivityFileChooserLogic.urisFromResult(
+            resultOk = result.resultCode == Activity.RESULT_OK,
+            singleUri = result.data?.data?.toString(),
+            clipUris = result.data?.clipData?.let { clip ->
+                (0 until clip.itemCount).mapNotNull { index -> clip.getItemAt(index).uri?.toString() }
+            },
+        )
+        runCatching {
+            callback.onReceiveValue(picked?.map { Uri.parse(it) }?.toTypedArray())
+        }
+    }
     val webView = remember {
         WebView(context).apply {
             settings.javaScriptEnabled = true
@@ -485,12 +519,65 @@ private fun LoginWebView(
                     }
                     return true
                 }
+
+                /**
+                 * 2026-11-16 修复「上传头像点击无反应」：WebView 内 `<input type=file>` 默认不处理，
+                 * 必须返回 true 并调起系统文件选择器；结果（含取消）必须回传 filePathCallback。
+                 */
+                override fun onShowFileChooser(
+                    webView: WebView?,
+                    filePathCallback: ValueCallback<Array<Uri>>?,
+                    fileChooserParams: FileChooserParams?,
+                ): Boolean {
+                    // 防御：上一次未回调的请求先取消，避免 input 卡死。
+                    runCatching { pendingFileCallback?.onReceiveValue(null) }
+                    pendingFileCallback = filePathCallback
+                    if (filePathCallback == null) return false
+                    val acceptTypes = ActivityFileChooserLogic.normalizeAcceptTypes(
+                        fileChooserParams?.acceptTypes?.toList(),
+                    )
+                    val multiple = ActivityFileChooserLogic.isMultiple(fileChooserParams?.mode)
+                    val mime = ActivityFileChooserLogic.primaryMimeType(acceptTypes)
+                    fun buildIntent(): Intent =
+                        (runCatching { fileChooserParams?.createIntent() }.getOrNull()
+                            ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = mime
+                            }).apply {
+                            if (type.isNullOrBlank()) type = mime
+                            putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes.toTypedArray())
+                            if (multiple) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        }
+                    val launched = runCatching { filePickerLauncher.launch(buildIntent()) }.isSuccess
+                    if (!launched) {
+                        // 选择器不可用：回退 ACTION_GET_CONTENT；仍失败则回传 null（不阻塞页面）。
+                        val fallback = Intent(Intent.ACTION_GET_CONTENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = mime
+                            if (multiple) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        }
+                        val fallbackOk = runCatching { filePickerLauncher.launch(fallback) }.isSuccess
+                        if (!fallbackOk) {
+                            pendingFileCallback = null
+                            runCatching { filePathCallback.onReceiveValue(null) }
+                            if (BuildConfig.DEBUG) Log.w(TAG, "file chooser unavailable (no activity)")
+                            return false
+                        }
+                    }
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "file chooser shown: mime=$mime multiple=$multiple")
+                    }
+                    return true
+                }
             }
             loadUrl(SPA_URL)
         }
     }
     DisposableEffect(Unit) {
         onDispose {
+            // 页面销毁时取消未完成的文件选择回调，避免 input/filePathCallback 泄漏。
+            runCatching { pendingFileCallback?.onReceiveValue(null) }
+            pendingFileCallback = null
             runCatching { CookieManager.getInstance().flush() }
             runCatching { webView.destroy() }
         }
@@ -501,6 +588,12 @@ private fun LoginWebView(
         webView.evalJs(ActivityWebSession.SEED_WX_SESSION_JS)
         webView.evalJs(ActivityWebSession.WX_ENV_STUB_JS)
         webView.loadUrl(SPA_URL)
+    }
+    // DEBUG 自测：加载本地 data URL `<input type=file>` 页面，验证 onShowFileChooser 生效。
+    LaunchedEffect(selfTestSeq) {
+        if (selfTestSeq <= 0) return@LaunchedEffect
+        onHint("上传自测：点击页面里的「选择文件」应弹出系统选择器")
+        webView.loadUrl(FILE_SELF_TEST_DATA_URL)
     }
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -562,6 +655,26 @@ private const val WECHAT_PROMPT_JS = """
 """
 
 private const val TAG = "ActivityLogin"
+
+/**
+ * DEBUG 专用：本地 data URL 的 `<input type=file>` 自测页（不联网、无账号数据）。
+ *
+ * 用于设备上验证「上传头像点击无反应」修复：点「上传自测」→ 点页面里的选择文件 →
+ * 应弹出系统文件选择器；选择后页面显示文件名/大小（即 onShowFileChooser 回调链路正常）。
+ */
+private val FILE_SELF_TEST_DATA_URL: String by lazy {
+    val html = "<!doctype html><html><head><meta charset='utf-8'>" +
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
+        "<style>body{font-family:sans-serif;padding:16px}h3{margin:0 0 8px}" +
+        "input,button{font-size:16px;margin-top:12px}#out{color:#4E9082;margin-top:12px}</style></head><body>" +
+        "<h3>上传自测（onShowFileChooser）</h3><p>点击下面按钮选择图片（与活动头像上传同款 input）：</p>" +
+        "<input id='pick' type='file' accept='image/*'><p id='out'>（尚未选择）</p>" +
+        "<script>var p=document.getElementById('pick');p.addEventListener('change',function(){" +
+        "var f=p.files&&p.files.length?p.files[0]:null;" +
+        "document.getElementById('out').textContent=f?'已选择：'+f.name+'（'+f.size+' B）':'（未选择）';});</script>" +
+        "</body></html>"
+    "data:text/html;charset=utf-8," + Uri.encode(html)
+}
 
 private suspend fun WebView.evalJs(script: String): String? =
     suspendCancellableCoroutine { cont ->

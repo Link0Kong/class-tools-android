@@ -5,7 +5,10 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Looper
 import android.net.Uri
 import android.util.Log
 import android.view.View
@@ -322,6 +325,8 @@ private class MapLocationBridge(
     private val context: Context,
     private val onLocation: (Double, Double, Float) -> Unit,
 ) {
+    private var pending = false
+
     @JavascriptInterface
     fun requestLocation() {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
@@ -329,13 +334,39 @@ private class MapLocationBridge(
         ) {
             return
         }
-        val location = runCatching {
-            val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-                ?: return@runCatching null
-            listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
-                .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
-                .maxByOrNull { it.time }
-        }.getOrNull() ?: return
-        onLocation(location.latitude, location.longitude, location.accuracy)
+        val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
+        if (pending) return
+        pending = true
+
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                if (!pending) return
+                pending = false
+                runCatching { manager.removeUpdates(this) }
+                onLocation(location.latitude, location.longitude, location.accuracy)
+            }
+            @Deprecated("Deprecated in API 29")
+            override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
+            override fun onProviderEnabled(provider: String) {}
+            override fun onProviderDisabled(provider: String) {}
+        }
+
+        // 不用 getLastKnownLocation 直接回填：系统缓存可能是几天前（例如大门口），会看起来“一直定位在大门”。
+        runCatching { manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0L, 0f, listener, Looper.getMainLooper()) }
+        runCatching { manager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0L, 0f, listener, Looper.getMainLooper()) }
+
+        // 12 秒没有新定位时，才使用 2 分钟内的最近位置兜底；过期缓存一律丢弃。
+        android.os.Handler(Looper.getMainLooper()).postDelayed({
+            if (!pending) return@postDelayed
+            pending = false
+            runCatching { manager.removeUpdates(listener) }
+            val fallback = runCatching {
+                listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
+                    .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
+                    .filter { System.currentTimeMillis() - it.time < 120_000L }
+                    .maxByOrNull { it.time }
+            }.getOrNull() ?: return@postDelayed
+            onLocation(fallback.latitude, fallback.longitude, fallback.accuracy)
+        }, 12_000L)
     }
 }

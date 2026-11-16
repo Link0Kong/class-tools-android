@@ -16,6 +16,15 @@
     <!-- 重启后重新调度本地提醒（WorkManager 自身已声明，此处显式保留可读性） -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!--
+      App 内更新（检测更新 → 下载 APK → 系统安装器确认安装）：
+      - Android 8.0+ 安装 APK 需要用户授予「安装未知应用」；声明 REQUEST_INSTALL_PACKAGES 才能
+        用 packageManager.canRequestPackageInstalls() 检测并跳转授权（不在前台静默安装）。
+      - 下载优先系统 DownloadManager（写公共 Downloads，无需存储权限）；不可用时回退应用内
+        OkHttp 下载到 cache/updates/，两条路径都经 FileProvider 交给系统安装器。
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name=".ClassToolsApp"
         android:allowBackup="false"

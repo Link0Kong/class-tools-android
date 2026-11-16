@@ -5,4 +5,12 @@
     <cache-path name="notice_attachments" path="notice_attachments/" />
     <!-- 演示下载（DownloadManager → 应用外部下载目录 → FileProvider 打开/分享，契约 §12.4.2） -->
     <external-files-path name="ppt_downloads" path="Download/" />
+    <!--
+      App 内更新（APK 下载 / 安装）：
+      - update_public_downloads：DownloadManager 写公共 Downloads/ClassTools/（FileProvider 兜底安装）；
+      - update_cache：DownloadManager 不可用时 OkHttp 回退下载到 cache/updates/（FileProvider 安装）。
+      安装 Intent 见 data/update/UpdateInstaller.kt（ACTION_VIEW + application/vnd.android.package-archive）。
+    -->
+    <external-path name="update_public_downloads" path="Download/ClassTools/" />
+    <cache-path name="update_cache" path="updates/" />
 </paths>

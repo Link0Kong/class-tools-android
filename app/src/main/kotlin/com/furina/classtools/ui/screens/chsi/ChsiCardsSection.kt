@@ -114,6 +114,8 @@ fun ChsiCardsContent(
                         )
                         TextButton(
                             onClick = onEnterCards,
+                            // 始终可见；提取/刷新进行中禁用防误触（2026-11-16）。
+                            enabled = !refreshing,
                             modifier = Modifier.heightIn(min = 48.dp),
                         ) {
                             Text(ChsiTexts.BTN_ENTER_CARDS)
