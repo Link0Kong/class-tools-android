@@ -23,6 +23,13 @@
     -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- OPPO 账号 OAuth：官方要求在 application 节点配置 MSP 开放平台生成的 APPID。
+         1.1.3 AAR 虽未直接读取该 meta-data，但系统账号服务/H5 兜底可能通过宿主清单识别应用；
+         值由 Gradle manifestPlaceholders 从 app/oppo.properties 的 oppo.accountAppId 注入。 -->
+    <queries>
+        <provider android:authorities="com.platform.usercenter.account.ams.provider" />
+    </queries>
+
     <application
         android:name=".ClassToolsApp"
         android:allowBackup="false"
@@ -33,6 +40,12 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ClassTools">
+
+        <!-- OPPO 账号服务 APPID（官方文档：MSP 开放平台生成的 APPID；Authing 文档键名）。
+             未配置时 manifestPlaceholders 为空串，不崩溃；账号入口由 BuildConfig 判定隐藏。 -->
+        <meta-data
+            android:name="com.heytap.msp.client.appid"
+            android:value="${oppoAccountAppId}" />
 
         <activity
             android:name=".MainActivity"

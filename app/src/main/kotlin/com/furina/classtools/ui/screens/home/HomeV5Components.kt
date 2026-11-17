@@ -3,8 +3,8 @@ package com.furina.classtools.ui.screens.home
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,71 +23,57 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
-import androidx.compose.ui.semantics.progressBarRangeInfo
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.data.tool.AppTool
-import com.furina.classtools.ui.navigation.ctToolTransitionSource
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.glass.CtGlassCard
+import com.furina.classtools.ui.navigation.ctToolTransitionSource
 import com.furina.classtools.ui.theme.CtMotion
-import com.furina.classtools.ui.theme.CtShapeTokens
-import com.furina.classtools.ui.theme.LocalCtDarkTheme
-import com.furina.classtools.ui.theme.rememberCtHeroColors
+import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.theme.HarmonyTokens
+import com.furina.classtools.ui.theme.harmonyTint
+import com.furina.classtools.ui.theme.rememberHarmonyColors
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import kotlinx.coroutines.delay
 
 // =============================================================================
-// 工作台 v5 · 表达性组件（只在本包内复用；不修改 ui/components 公共组件）
+// 工作台组件（2026-11-17 按鸿蒙 HomeScreen.ets 重做）
 //
-// 设计参照（只借鉴视觉语言，不复制素材/代码）：
-// - xiaoying「我的」页：顶部渐变 hero + 重叠/半透明头像 + 四图标快捷行 + 2 列卡片；
-// - HFUT-Schedule：卡片柔和分类色、图标气泡、大圆角与克制阴影。
-// 现有品牌约束不变：暖白底 / 雾青 / 灰蓝 / 暖沙，卡片圆角 16–20dp，文字仍走
-// MaterialTheme.colorScheme（深浅色对比度由主题保证）。
+// - hero：「莫奈纸面」浅色卡（#F1F6F2 / 1px #DCE7E2 / 24 圆角 / 顶部三色 3px 条 /
+//   「今日」#FFFCF6 胶囊 / 问候 24 Bold #303A35 / 副行 12 #5C6860 / 摘要分割线 #D8E4DE）；
+// - 信息卡：白 18 圆角 + 浅阴影 + 40dp tint 图标块 + 15 标题 + 12 说明；
+// - 常用工具：白卡 + 4 列 tint 图标块（46dp）+ 12 名称；
+// - 深色模式自动映射到中性深底（见 harmonyColors）。
 // =============================================================================
 
-/** 工作台 v5 卡片圆角（比旧 16dp 更柔和，仍小于 hero 的 28dp）。 */
-internal val HomeCardShape = RoundedCornerShape(20.dp)
+/** 工作台卡片圆角（鸿蒙 18）。 */
+internal val HomeCardShape = RoundedCornerShape(HarmonyTokens.RadiusCard)
 
-/** 工作台 v5 hero 圆角（2026-11-16 改版：24dp，比旧 28dp 更轻）。 */
-internal val HomeHeroShape = RoundedCornerShape(24.dp)
+/** 工作台 hero 圆角（鸿蒙 24）。 */
+internal val HomeHeroShape = RoundedCornerShape(HarmonyTokens.RadiusHero)
 
 /**
- * 顶部「今日」hero（2026-11-16 轻量化改版）：日期/周次/角色一行 + 问候标题 + 今日课程摘要。
+ * 工作台 hero（鸿蒙 HomeScreen.heroCard 同款「莫奈纸面」浅色卡）。
  *
- * 设计口径（用户反馈「最上面绿色卡片过于繁重」）：
- * - **降低高度**：单行 meta（去掉「今日」胶囊与多层装饰）、标题 22sp、课程块紧凑，整体约 150dp；
- * - **减少装饰**：只保留右上角一层极轻径向高光（删掉左下暗角/多余圆点），圆形头像缩到 34dp；
- * - **层级清楚**：日期/周次/角色（label）→ 问候 + 姓名（标题）→ 课程信息块（内容）；
- * - 颜色仍用品牌雾青（浅色 primary→secondary 深渐变 + 白字；深色中性 tonal），不引入外部资源；
- * - 深色模式、平板（父级限宽）沿用既有自适应。
- *
- * 数据来自 [HomeWorkbenchLogic.heroState]（纯逻辑可单测）；点击整卡打开课表。
+ * 结构：三色 3px 顶条 → 「今日」奶白胶囊 + 周次 → 问候 24 Bold → 副行 12 →
+ * 摘要行（上分割线）：今日课程摘要 + 「课表 ›」；整卡点击打开课表。
  */
 @Composable
 internal fun HomeHeroCard(
@@ -100,6 +85,7 @@ internal fun HomeHeroCard(
     reduceMotion: Boolean,
     onOpenTimetable: () -> Unit,
 ) {
+    val colors = rememberHarmonyColors()
     val zone = remember { ZoneId.systemDefault() }
     val hour = remember(nowMillis) { Instant.ofEpochMilli(nowMillis).atZone(zone).hour }
     val greeting = HomeWorkbenchLogic.greeting(hour)
@@ -107,21 +93,32 @@ internal fun HomeHeroCard(
         HomeWorkbenchLogic.heroState(plan, loading, nowMillis)
     }
     val dateText = remember(date) { HomeWorkbenchLogic.dateText(date) }
-    val weekText = remember(plan?.week) { HomeWorkbenchLogic.weekText(plan?.week) }
-    val roleText = session.role.trim()
-    val metaText = remember(dateText, weekText, roleText) {
-        listOf(dateText, weekText, roleText).filter { it.isNotBlank() }.joinToString(" · ")
+    val weekText = remember(plan?.week) {
+        HomeWorkbenchLogic.weekText(plan?.week).ifBlank { "课表未同步" }
     }
-
-    val dark = LocalCtDarkTheme.current
-    val heroColors = rememberCtHeroColors()
-    val content = heroColors.content
-    val accent = heroColors.accent
-
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val roleText = session.role.trim()
+    val subLine = remember(dateText, roleText, plan?.hasData) {
+        buildList {
+            add(dateText)
+            if (roleText.isNotBlank()) add(roleText)
+            if (plan?.hasData != true) add("课表未同步")
+        }.joinToString(" · ")
+    }
+    val summary = remember(hero, plan) {
+        when {
+            plan == null || !plan.hasData -> "打开课表即可拉取本周课程"
+            plan.today.isEmpty() -> "今天没课" + (plan.next?.let { " · 下次 ${it.label} ${it.name}" } ?: "")
+            else -> buildString {
+                if (hero.tag.isNotBlank()) append(hero.tag).append(" · ")
+                append(hero.title)
+                if (hero.detail.isNotBlank()) append(" · ").append(hero.detail)
+            }
+        }
+    }
+    val int = remember { MutableInteractionSource() }
+    val pressed by int.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.992f else 1f,
+        targetValue = if (pressed) 0.99f else 1f,
         animationSpec = if (reduceMotion) snap() else CtMotion.spatialFast,
         label = "homeHeroPress",
     )
@@ -130,245 +127,110 @@ internal fun HomeHeroCard(
         onClick = onOpenTimetable,
         modifier = Modifier
             .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 20.dp)
+            .shadow(
+                elevation = 6.dp,
+                shape = HomeHeroShape,
+                clip = false,
+                ambientColor = Color(0x144E9082),
+                spotColor = Color(0x144E9082),
+            )
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
             },
         shape = HomeHeroShape,
-        color = Color.Transparent,
-        contentColor = content,
-        border = BorderStroke(1.dp, heroColors.border),
-        interactionSource = interaction,
+        color = colors.heroPaper,
+        contentColor = colors.heroTitle,
+        border = BorderStroke(1.dp, colors.heroBorder),
+        interactionSource = int,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Brush.linearGradient(colors = listOf(heroColors.start, heroColors.end))),
-        ) {
-            // 单层极轻高光（右上）：保留品牌渐变的呼吸感，不再叠加左下暗角等装饰。
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            content.copy(alpha = if (dark) 0.06f else 0.10f),
-                            Color.Transparent,
-                        ),
-                        center = Offset(size.width * 0.92f, -size.height * 0.15f),
-                        radius = size.width * 0.62f,
-                    ),
-                    size = size,
-                )
+        Column(modifier = Modifier.padding(18.dp)) {
+            // 顶部青/蓝/沙三色 3px 条
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+            ) {
+                Box(modifier = Modifier.weight(1f).fillMaxSize().background(HarmonyTokens.MistTeal))
+                Box(modifier = Modifier.weight(1f).fillMaxSize().background(HarmonyTokens.SlateBlue))
+                Box(modifier = Modifier.weight(1f).fillMaxSize().background(HarmonyTokens.WarmSand))
             }
-
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = metaText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = content.copy(alpha = 0.86f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    HomeAvatar(
-                        initial = session.name.trim().take(1).ifBlank { "同" },
-                        tint = accent,
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "$greeting，${session.name.trim().ifBlank { "同学" }}",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = content,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                HeroCourseBlock(
-                    hero = hero,
-                    contentColor = content,
-                    chipTint = accent,
-                    innerFill = heroColors.innerFill,
-                    reduceMotion = reduceMotion,
-                )
-            }
-        }
-    }
-}
-
-/** hero 内课程区（上课中 / 下一节 / 空态 + 进度；紧凑版：padding/间距收紧、进度条 5dp）。 */
-@Composable
-private fun HeroCourseBlock(
-    hero: HomeHeroState,
-    contentColor: Color,
-    chipTint: Color,
-    innerFill: Color,
-    reduceMotion: Boolean,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(innerFill)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            HeroChip(text = hero.tag, tint = chipTint)
-            Spacer(modifier = Modifier.width(7.dp))
-            Text(
-                text = hero.title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (hero.detail.isNotBlank()) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = hero.detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = contentColor.copy(alpha = 0.86f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        val progress = hero.progress
-        if (progress != null) {
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = hero.progressText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = contentColor.copy(alpha = 0.90f),
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                if (hero.hint.isNotBlank()) {
+                Surface(
+                    shape = CircleShape,
+                    color = colors.heroPill,
+                    contentColor = colors.heroAccent,
+                ) {
                     Text(
-                        text = hero.hint,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = contentColor.copy(alpha = 0.90f),
+                        text = "今日",
+                        style = CtText.caption,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
                     )
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = weekText,
+                    style = CtText.caption,
+                    color = colors.heroSub,
+                )
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            HomeHeroProgressBar(progress = progress, color = chipTint, reduceMotion = reduceMotion)
-        } else if (hero.hint.isNotBlank()) {
-            Spacer(modifier = Modifier.height(3.dp))
             Text(
-                text = hero.hint,
-                style = MaterialTheme.typography.labelSmall,
-                color = contentColor.copy(alpha = 0.90f),
+                text = "$greeting，${session.name.trim().ifBlank { "同学" }}",
+                style = CtText.title.copy(fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold),
+                color = colors.heroTitle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 12.dp),
             )
-        }
-    }
-}
-
-/** hero 进度条：细胶囊轨道 + 弹簧填充；reduceMotion 下直接切换（不做长动画）。 */
-@Composable
-private fun HomeHeroProgressBar(progress: Float, color: Color, reduceMotion: Boolean) {
-    val clamped = progress.coerceIn(0f, 1f)
-    val animated by animateFloatAsState(
-        targetValue = clamped,
-        animationSpec = if (reduceMotion) snap() else CtMotion.spatialFast,
-        label = "homeHeroProgress",
-    )
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(5.dp)
-            .clip(CircleShape)
-            .background(color.copy(alpha = 0.24f))
-            .semantics { progressBarRangeInfo = ProgressBarRangeInfo(clamped, 0f..1f) },
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(animated.coerceIn(0f, 1f))
-                .clip(CircleShape)
-                .background(color.copy(alpha = 0.95f)),
-        )
-    }
-}
-
-/** hero 小胶囊（今日 / 周次 / 上课中…）。 */
-@Composable
-private fun HeroChip(text: String, tint: Color) {
-    Surface(
-        shape = CircleShape,
-        color = tint.copy(alpha = 0.18f),
-        contentColor = tint,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
-        )
-    }
-}
-
-/** 半透明头像（轻量版：首字 + 圆形玻璃底；34dp，减少 hero 装饰体积）。 */
-@Composable
-private fun HomeAvatar(initial: String, tint: Color) {
-    Surface(
-        shape = CircleShape,
-        color = tint.copy(alpha = 0.20f),
-        contentColor = tint,
-        border = BorderStroke(1.dp, tint.copy(alpha = 0.28f)),
-    ) {
-        Box(modifier = Modifier.size(34.dp), contentAlignment = Alignment.Center) {
             Text(
-                text = initial,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                text = subLine,
+                style = CtText.caption,
+                color = colors.heroSub,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 6.dp),
             )
+            // 摘要分割线（#D8E4DE；鸿蒙 heroCard 摘要行上边框）
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+                    .height(0.5.dp)
+                    .background(colors.heroDivider),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = summary,
+                        style = CtText.label,
+                        color = colors.heroTitle,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = "课表 ›",
+                    style = CtText.caption,
+                    color = colors.heroLink,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .clickable { onOpenTimetable() },
+                )
+            }
         }
     }
 }
 
 /**
- * 首次进入错峰淡入（Hero → 今日课程 → 电费 → 作业 → 通知 → 常用工具）。
- *
- * - 每块延迟 [index] × 55ms、淡入 300ms + 上移 18dp（spring）；
- * - [enabled] = false（系统「移除动画」/ 预览渲染）时直接呈现，无动画、无延迟；
- * - 仅首帧播放一次，数据刷新/重组不重播（remember 状态在组合内存活）。
- */
-@Composable
-internal fun HomeReveal(enabled: Boolean, index: Int, content: @Composable () -> Unit) {
-    if (!enabled) {
-        content()
-        return
-    }
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(index.coerceAtLeast(0) * 55L)
-        visible = true
-    }
-    val alpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = CtMotion.fadeIn,
-        label = "homeRevealAlpha",
-    )
-    val offsetY by animateFloatAsState(
-        targetValue = if (visible) 0f else 18f,
-        animationSpec = CtMotion.spatial,
-        label = "homeRevealOffset",
-    )
-    Box(
-        modifier = Modifier.graphicsLayer {
-            this.alpha = alpha
-            translationY = offsetY
-        },
-    ) {
-        content()
-    }
-}
-
-/**
- * 信息卡统一外壳（v5）：玻璃底 + 分类色图标气泡 + 标题 + 可选徽标 + 尾部动作。
- * 内容区保持各卡自己的状态逻辑（loading/empty/error 行内展示）。
+ * 信息卡统一外壳（鸿蒙白卡）：tint 图标块 40dp + 标题 15 Medium + 可选徽标 + 尾部动作 + 内容。
  */
 @Composable
 internal fun HomeInfoCard(
@@ -381,24 +243,35 @@ internal fun HomeInfoCard(
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    CtGlassCard(
-        modifier = modifier,
+    val colors = rememberHarmonyColors()
+    Surface(
         onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = HarmonyTokens.CardShadowElevation,
+                shape = HomeCardShape,
+                clip = false,
+                ambientColor = HarmonyTokens.CardShadowColor,
+                spotColor = HarmonyTokens.CardShadowColor,
+            ),
         shape = HomeCardShape,
+        color = colors.card,
+        contentColor = colors.textPrimary,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 HomeIconBadge(icon = icon, accent = accent)
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = CtText.bodyMedium,
+                    color = colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -406,7 +279,7 @@ internal fun HomeInfoCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     CtPill(
                         text = badge,
-                        containerColor = accent.copy(alpha = 0.14f),
+                        containerColor = harmonyTint(accent),
                         contentColor = accent,
                     )
                 }
@@ -418,7 +291,7 @@ internal fun HomeInfoCard(
     }
 }
 
-/** 分类色图标气泡（40dp，柔和底 + 强调色图标）。 */
+/** 分类色图标块（40dp tint 底 12 圆角；鸿蒙 ToolTile 同款）。 */
 @Composable
 internal fun HomeIconBadge(
     icon: ImageVector,
@@ -429,8 +302,8 @@ internal fun HomeIconBadge(
 ) {
     Surface(
         modifier = modifier.size(size.dp),
-        shape = CtShapeTokens.iconTile,
-        color = accent.copy(alpha = 0.14f),
+        shape = RoundedCornerShape(HarmonyTokens.RadiusTile),
+        color = harmonyTint(accent),
         contentColor = accent,
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -444,10 +317,7 @@ internal fun HomeIconBadge(
     }
 }
 
-/**
- * 快捷工具行单格（xiaoying 四图标行）：图标气泡 + 名称，弹簧按压收缩 + 底色加深。
- * 点按整格打开工具；无选中概念（选中态在编辑网格里用勾选表达）。
- */
+/** 常用工具单格（鸿蒙：46dp tint 块 + 12 名称；弹簧按压缩放）。 */
 @Composable
 internal fun QuickToolTile(
     tool: AppTool,
@@ -455,17 +325,13 @@ internal fun QuickToolTile(
     modifier: Modifier = Modifier,
     reduceMotion: Boolean = false,
 ) {
+    val colors = rememberHarmonyColors()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.92f else 1f,
+        targetValue = if (pressed) 0.94f else 1f,
         animationSpec = if (reduceMotion) snap() else CtMotion.spatialFast,
         label = "quickToolScale",
-    )
-    val tintAlpha by animateFloatAsState(
-        targetValue = if (pressed) 0.30f else 0.16f,
-        animationSpec = if (reduceMotion) snap() else CtMotion.effectsFast,
-        label = "quickToolTint",
     )
     val transitionSource = Modifier.ctToolTransitionSource(tool.id)
     Surface(
@@ -476,24 +342,24 @@ internal fun QuickToolTile(
                 scaleX = scale
                 scaleY = scale
             },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(HarmonyTokens.RadiusCard),
         color = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        contentColor = colors.textPrimary,
         interactionSource = interaction,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = tool.accent.copy(alpha = tintAlpha),
+                shape = RoundedCornerShape(HarmonyTokens.RadiusInput),
+                color = harmonyTint(tool.accent),
                 contentColor = tool.accent,
             ) {
-                Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.size(46.dp), contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = tool.icon,
                         contentDescription = null,
@@ -504,8 +370,8 @@ internal fun QuickToolTile(
             }
             Text(
                 text = tool.name,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = CtText.caption,
+                color = colors.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -513,10 +379,7 @@ internal fun QuickToolTile(
     }
 }
 
-/**
- * 常用工具编辑模式单格：点击加入/移出（逻辑由调用方 [onClick] 保持原样）。
- * 选中 = 强调色描边 + 浅色底 + 右上角勾选；按压缩放走 spring。
- */
+/** 常用工具编辑模式单格（白卡 + 选中描边 + 右上角 ✓）。 */
 @Composable
 internal fun EditableToolTile(
     tool: AppTool,
@@ -525,18 +388,14 @@ internal fun EditableToolTile(
     modifier: Modifier = Modifier,
     reduceMotion: Boolean = false,
 ) {
+    val colors = rememberHarmonyColors()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.94f else 1f,
+        targetValue = if (pressed) 0.96f else 1f,
         animationSpec = if (reduceMotion) snap() else CtMotion.spatialFast,
         label = "editToolScale",
     )
-    val borderColor = if (selected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-    }
     Box(modifier = modifier.height(96.dp)) {
         Surface(
             onClick = onClick,
@@ -546,16 +405,16 @@ internal fun EditableToolTile(
                     scaleX = scale
                     scaleY = scale
                 },
-            shape = RoundedCornerShape(16.dp),
-            color = if (selected) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.92f)
-            },
-            contentColor = MaterialTheme.colorScheme.onSurface,
+            shape = HomeCardShape,
+            color = colors.card,
+            contentColor = colors.textPrimary,
             border = BorderStroke(
-                width = if (selected) 2.dp else 1.dp,
-                color = borderColor,
+                width = if (selected) 1.5.dp else 1.dp,
+                color = if (selected) {
+                    androidx.compose.material3.MaterialTheme.colorScheme.primary
+                } else {
+                    colors.divider
+                },
             ),
             interactionSource = interaction,
         ) {
@@ -567,24 +426,24 @@ internal fun EditableToolTile(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = tool.accent.copy(alpha = 0.16f),
+                    shape = RoundedCornerShape(HarmonyTokens.RadiusTile),
+                    color = harmonyTint(tool.accent),
                     contentColor = tool.accent,
                 ) {
-                    Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
                             tint = tool.accent,
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = tool.name,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = CtText.label,
+                    color = colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -594,12 +453,38 @@ internal fun EditableToolTile(
             Icon(
                 imageVector = Icons.Rounded.CheckCircle,
                 contentDescription = "已选",
-                tint = MaterialTheme.colorScheme.primary,
+                tint = androidx.compose.material3.MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(7.dp)
+                    .padding(6.dp)
                     .size(18.dp),
             )
         }
+    }
+}
+
+/** 首屏错峰入场（保留原能力；reduceMotion/预览时直接终态）。 */
+@Composable
+internal fun HomeReveal(
+    enabled: Boolean,
+    index: Int,
+    content: @Composable () -> Unit,
+) {
+    if (!enabled) {
+        content()
+        return
+    }
+    val progress = androidx.compose.animation.core.Animatable(0f)
+    androidx.compose.runtime.LaunchedEffect(index) {
+        kotlinx.coroutines.delay(index * 40L)
+        progress.animateTo(1f, androidx.compose.animation.core.tween(durationMillis = 260))
+    }
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier.graphicsLayer {
+            alpha = 0.3f + 0.7f * progress.value
+            translationY = (1f - progress.value) * 20f
+        },
+    ) {
+        content()
     }
 }

@@ -105,9 +105,9 @@ class UpdateLogicTest {
             "v4.57.0-test1（测试版本）",
             UpdateTestVersion.versionDisplay("4.57.0-test1-debug"),
         )
-        assertEquals(1, UpdateTestVersion.version)
+        assertEquals(4, UpdateTestVersion.version)
         assertEquals("测试版本", UpdateTestVersion.label)
-        assertEquals("发现新版本 · 测试版本", UpdateTestVersion.dialogTitle())
+        assertEquals("发现新版本", UpdateTestVersion.dialogTitle())
     }
 
     // ---------------------------------------------------------------- URL fallback
@@ -170,12 +170,48 @@ class UpdateLogicTest {
     }
 
     @Test
-    fun `自动检查默认开始下载 手动检查等用户确认`() {
-        val info = UpdateInfo(80, "4.58.0", "https://example.com/a.apk")
-        assertTrue(UpdateDialogPolicy.shouldAutoDownload(info, manualCheck = false))
-        assertFalse(UpdateDialogPolicy.shouldAutoDownload(info, manualCheck = true))
-        // 强制版本自动检查同样自动下载（但不可取消）。
-        assertTrue(UpdateDialogPolicy.shouldAutoDownload(info.copy(force = true), manualCheck = false))
+    fun `parse sizeBytes 支持数字与数字字符串`() {
+        val number = UpdateJsonParser.parse(
+            """{"versionCode":86,"apkUrl":"https://example.com/a.apk","sizeBytes":6120000}""",
+        )
+        assertEquals(6_120_000L, number!!.sizeBytes)
+        val asString = UpdateJsonParser.parse(
+            """{"versionCode":86,"apkUrl":"https://example.com/a.apk","sizeBytes":"6120000"}""",
+        )
+        assertEquals(6_120_000L, asString!!.sizeBytes)
+    }
+
+    @Test
+    fun `parse sizeBytes 缺省或非法为 null`() {
+        assertNull(
+            UpdateJsonParser.parse(
+                """{"versionCode":86,"apkUrl":"https://example.com/a.apk"}""",
+            )!!.sizeBytes,
+        )
+        assertNull(
+            UpdateJsonParser.parse(
+                """{"versionCode":86,"apkUrl":"https://example.com/a.apk","sizeBytes":"abc"}""",
+            )!!.sizeBytes,
+        )
+        assertNull(
+            UpdateJsonParser.parse(
+                """{"versionCode":86,"apkUrl":"https://example.com/a.apk","sizeBytes":0}""",
+            )!!.sizeBytes,
+        )
+    }
+
+    @Test
+    fun `更新弹窗文案 标题 版本递进 包大小 渠道`() {
+        val info = UpdateInfo(versionCode = 86, versionName = "1.0.0-beta3", apkUrl = "https://example.com/a.apk", channel = "test", sizeBytes = 6_120_000L)
+        assertEquals("发现新版本", UpdateDialogText.title())
+        assertEquals("当前 v1.0.0-beta2 → 新版本 v1.0.0-beta3", UpdateDialogText.subtitle("1.0.0-beta2", info))
+        assertEquals("新版本 v1.0.0-beta3", UpdateDialogText.subtitle("  ", info))
+        assertTrue(UpdateDialogText.sizeText(info)!!.contains("MB"))
+        assertEquals("渠道：test", UpdateDialogText.channelText(info))
+        assertNull(UpdateDialogText.sizeText(info.copy(sizeBytes = null)))
+        assertNull(UpdateDialogText.channelText(info.copy(channel = " ")))
+        assertEquals("下载完成，点击「立即安装」。", UpdateDialogText.readyText(false))
+        assertTrue(UpdateDialogText.readyText(true).contains("系统安装器"))
     }
 
     // ---------------------------------------------------------------- 下载状态

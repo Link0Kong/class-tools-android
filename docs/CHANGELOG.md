@@ -1,5 +1,25 @@
 # 版本记录（Android 客户端）
 
+## v1.0.0-beta3 / vc86（2026-11-17 晚）· 用户 4 项反馈修复（ColorOS-only / 快捷登录免填 / 授权错误诊断 / 更新弹窗手动选择）
+
+1. **OPPO 账号只在 ColorOS 手机显示**：`OppoAccountDeviceSupport` 改为**严格 ColorOS ROM 判定**（`ro.build.version.oplusrom` / `opporom` / `oplusos` 任一非空），不再仅凭 manufacturer/brand 含 oppo/oneplus/realme/oplus/heytap；非 ColorOS（含 OPPO 品牌但非 ColorOS、模拟器）身份页快捷登录与「我的 → 账号」入口**完全不显示**（无空占位）。
+2. **未填学号/姓名也能 OPPO 快捷登录**：入口从表单下方移到身份卡标题下方、学号/姓名输入框之前，独立于表单；按钮只依赖「协议勾选 + 未授权中」（纯规则 `OppoQuickLoginRule`，与学号/姓名/表单校验无关）；未勾选协议点击在按钮下方提示「请先勾选同意《用户协议》《隐私政策》」，不再静默禁用；新增规则单测 + UI 静态断言（入口位于学号表单之前、不依赖表单状态）。
+3. **OPPO 授权失败可诊断**：SDK 回调错误提示保留中文原因并显示 `code=xxx`（如 `请先在系统设置登录 OPPO 账号（code=-2015）`、未知码 `OPPO 授权失败（code=xxx）`）；ECS `oppo_exchange_failed`（如 message=`invalid_client`）提示「OPPO 账号服务未开通或凭证不匹配（invalid_client），请联系管理员」；登录/绑定/非 2xx 三条路径均映射，新增错误映射单测。
+4. **更新改为弹窗手动选择 + 卡片优化**：自动检查/手动检查发现新版本**只弹窗，不自动下载**；下载完成**不自动拉起安装器**，等用户点「立即安装」；弹窗标题「发现新版本」、副标题「当前 vX → 新版本 vY」、更新说明滚动区、包大小（`latest.json` 可选 `sizeBytes`，缺省不显示）、渠道；按钮未下载「立即更新/稍后」、下载中进度+「取消下载」、完成「立即安装/稍后」、失败「重试」、force 无「稍后/取消下载」；`UpdateManager` 移除 `autoDownloadOnAutomaticCheck`、新增可注入安装器；新增 `UpdateManagerTest`（13 项：自动/手动检查均不下载、点击后才 enqueue、Ready 不自动安装、用户点装才调用、force/取消下载/失败/稍后、sizeBytes）。
+- **测试**：全量 `:app:testDebugUnitTest` **1566/0**（117 suites；账号 78、更新 49）；新增 `UpdateManagerTest` 13 项。
+- **构建**：`assembleRelease` 成功 → `app/build/outputs/apk/release/app-release.apk` **5,787,701 B / SHA-256 `11C121C8ACC6E94B561A7784E3EAAB98F05613EC20A536F537A3A584A52BBD93`**（vc86 / 1.0.0-beta3，v2 签名；aapt2 复核版本；release dex 已核对 ColorOS 属性/新错误文案/「立即安装」等新逻辑字符串）。本机 `oppo.properties` 已填账号服务凭证（不入库、不打印），故 ColorOS 真机会显示入口；**真实 OAuth 仍受服务端 `invalid_client`（账号服务未开通/凭证不匹配）阻塞**，待服务端修复后复测。
+- 文档 `docs/OPPO_ACCOUNT.md` 同步更新（严格 ColorOS/快捷登录独立/错误码可诊断）。**不 commit**（工作区改动，供 Lead 发布 vc86 更新通道与桌面规范包）。
+## v1.0.0-beta2 / vc85（2026-11-17）· OPPO 账号绑定学号（≤3）+ OPPO 账号快捷登录
+
+用户 2026-11-17 要求：一个学号最多绑定 3 个 OPPO 账号 + 允许 OPPO 账号快捷登录。服务端验证由 Lead 在 ECS 新接口实现（客户端只传 authCode，不自行验证 OPPO token/openid）。
+
+- **依赖/配置**：接入 OPPO 账号服务 OAuth SDK `com.heytap.accountsdk:account-oauth-web-sdk:1.1.3`（Maven Central，版本走 `gradle/libs.versions.toml`；传递依赖 appcompat/viewbinding 等由 Gradle 解析，`settings.gradle.kts` 已有 mavenCentral）。`app/oppo.properties` 新增 `oppo.accountAppId` / `oppo.accountAppKey` / `oppo.accountScope`（模板 `.example` 已更新并注明账号服务凭据与推送凭据是两套；真实值不入库）；BuildConfig 新增 `OPPO_ACCOUNT_APP_ID/APP_KEY/SCOPE` 与 `ACCOUNT_BASE_URL`（默认 `http://121.196.47.2/account`，gradle 属性 `ct.accountBaseUrl` 可覆盖）。**未配置/非 OPPO 系设备 → 快捷登录与绑定入口隐藏，其余功能无影响**。
+- **客户端流程**：身份页新增「OPPO 账号快捷登录」（需先勾选协议）→ `AcOAuthSdkManager` 授权拿 authCode → `POST /oppo/login` → 服务端返回班级 token → 与学号+姓名核验完全一致的会话流程（Session/落盘/预热名单）；未绑定（`unbound`）弹简短提示引导先学号+姓名登录再绑定。「我的 → 账号」新增「OPPO 账号 · 已绑定 N/3」，底部弹层管理：已绑定列表（昵称+绑定日期+解绑）/「绑定 OPPO 账号」/已达上限 3/3 禁用/错误重试；绑定 `POST /oppo/bind`、列表 `GET /oppo/bindings`、解绑 `POST /oppo/unbind`（均带 `X-Class-Token`），解绑二次确认；退出/切号清空内存绑定列表。
+- **SDK 事实核对**：1.1.3 AAR 自动合并 `OAuthWebActivity`/`AcOAuthAccountOperateReceiver`/OPPO 账号 App `<queries>`；**无需宿主 Manifest APPID meta-data**（appId/appKey/state/scope 由 `AcOauthRequest.Builder` 运行时传入，字节码核实必需四项非空）；明文网络 `121.196.47.2` 已在既有 network_security_config 放行，无需改。
+- **测试**：新增纯逻辑单测 **72 项**（配置/设备支持/state/authCode；登录/绑定/列表/解绑/健康检查的 URL+headers+body+解析；15s 超时/网络/非 2xx/坏 JSON 降级；manager 编排/Session 构造/未配置安全跳过/绑定上限与错误分支），全量 `:app:testDebugUnitTest` **1545/0**（116 suites）；授权 SDK 全以假实现隔离，不依赖真机与真实密钥。
+- **构建**：`assembleRelease` 成功 → `app-release.apk` **5,787,701 B / SHA-256 `CE861934E606E5B408505C133BDAB8ABFA2D39DD5C705D313D89D0DB78055C78`**（vc85 / 1.0.0-beta2，v2 签名；aapt2 复核版本与合并组件、dex 含账号 SDK 类）。**当前 APK 未配置账号服务凭证**（BuildConfig 为空串）→ 入口隐藏；填 `oppo.accountAppId/accountAppKey` 后重构建即启用。
+- **文档** `docs/OPPO_ACCOUNT.md`（配置/流程/ECS 契约/错误码/SDK 事实/测试/构建/回滚/未验证项）。
+- **未验证（如实）**：真实 OPPO 账号 OAuth 授权/静默授权未联调（无账号服务凭据、未上 ColorOS 真机）；ECS `/account` 接口由 Lead 实现，真实 unbound/limit/openid_bound_else 行为以服务端为准（客户端已按契约+容错实现）；昵称展示依赖开放平台 scope 申请。**未提交 commit（工作区改动）**。
 ## v1.0.0-beta1 热修 vc83（2026-11-16 晚）
 - **删除工具**：活动 / 今日校园 / 学信网（Android 20→17、使用说明 27→24；相关 screen/data/features/route/测试 33 文件删除，非隐藏）。小程序端本就没有这三项；鸿蒙端删除 chsi/today（活动从未移植），工具 18→16、版本 1.0.7；网页端删除 chsi（活动/今日校园本来无入口）并已部署 OSS+ECS。
 - **更新自动弹窗**：UpdateHost 移到根级，冷启动即调用 `checkOnStart()`，发现新版本直接弹窗并自动下载，不再依赖「我的→检查更新」。临时服务端 vc84 实测：启动 10s 内自动弹窗/自动下载（artifacts/auto-update-popup.png），随后恢复 latest vc83。

@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,21 +29,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.ui.navigation.ctToolTransitionSource
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.theme.HarmonyTokens
+import com.furina.classtools.ui.theme.harmonyTint
+import com.furina.classtools.ui.theme.rememberHarmonyColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 
 /**
- * 「全部工具」卡片 v7：横向结构（图标 chip + 名称/副标题）不变，副标题最多 **2 行**，
- * 网格卡高由调用方的 `itemHeight`（96dp）固定；2 列 48.6% 宽。
+ * 「全部工具」磁贴（2026-11-17 按鸿蒙 `ToolTile.ets` 重做）：
  *
- * task-58：副标单行会被截断成「公平随机 · 可导…」，改为 2 行后常见描述可完整显示
- * （超长仍 ellipsis）；按压缩放（0.96）/16dp 圆角/转场锚点/读屏语义保持不变。
+ * - 白色（深色 surface）18dp 圆角 + 轻阴影，最小高度 **96dp**、内边距 **12dp**；
+ * - 左侧 **40dp 淡色 tint 单字/图标块（12dp 圆角）**：Android 用现有图标保持辨识度；
+ * - 名称 **15sp Medium**、副标题 **12sp 最多 2 行（行高 17）**；
+ * - 按压 scale **0.97**；
+ * - 编辑首页模式：右上角 22dp 雾青 ✓ 角标（选中首页快捷时显示）。
+ *
+ * 转场锚点 / 读屏语义 / 拖动能力保持不变（参数向后兼容，预览无需改调用）。
  */
 @Composable
 internal fun AllToolCard(
@@ -51,7 +59,10 @@ internal fun AllToolCard(
     contentSemantics: Modifier = Modifier,
     pressable: Boolean = true,
     reduceMotion: Boolean = false,
+    editing: Boolean = false,
+    selected: Boolean = false,
 ) {
+    val colors = rememberHarmonyColors()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pressProgress by animateFloatAsState(
@@ -59,77 +70,93 @@ internal fun AllToolCard(
         animationSpec = if (reduceMotion) snap() else CtMotion.spatialFast,
         label = "allToolPress",
     )
-    val scale = 1f - 0.04f * pressProgress
-    val cornerDp = 16f + (14f - 16f) * pressProgress
-    val effectiveReduceMotion = reduceMotion || rememberReduceMotion()
-    val shape = RoundedCornerShape(cornerDp.dp)
+    val scale = 1f - 0.03f * pressProgress
     val transitionSource = Modifier.ctToolTransitionSource(tool.id)
+    val shape = RoundedCornerShape(HarmonyTokens.RadiusCard)
 
-    Surface(
-        onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            // 网格由调用方以固定 96dp 测量；此处 min 只兜底预览/独立使用，避免两行副标被压扁。
-            .heightIn(min = 88.dp)
-            .then(transitionSource)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            },
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        interactionSource = interaction,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .then(contentSemantics)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    Box {
+        Surface(
+            onClick = onClick,
+            modifier = modifier
+                .fillMaxWidth()
+                .heightIn(min = HarmonyTokens.TileMinHeight)
+                .then(transitionSource)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                },
+            shape = shape,
+            color = colors.card,
+            contentColor = colors.textPrimary,
+            shadowElevation = HarmonyTokens.CardShadowElevation,
+            tonalElevation = 0.dp,
+            interactionSource = interaction,
         ) {
-            // 与 mp 一致的彩色圆角 chip（2026-11-16 统一到 36dp / 12dp 圆角，克制的图标底色）。
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = tool.accent.copy(alpha = if (effectiveReduceMotion) 0.17f else 0.17f),
-                contentColor = tool.accent,
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(contentSemantics)
+                    .padding(HarmonyTokens.TilePadding),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = tool.icon,
-                        contentDescription = null,
-                        tint = tool.accent,
-                        modifier = Modifier.size(19.dp),
+                // 40dp 淡色底单字/图标块（鸿蒙 tint(accent, 0.12)）
+                Surface(
+                    shape = RoundedCornerShape(HarmonyTokens.RadiusTile),
+                    color = harmonyTint(tool.accent),
+                    contentColor = tool.accent,
+                ) {
+                    Box(modifier = Modifier.size(HarmonyTokens.GlyphBox), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = tool.icon,
+                            contentDescription = null,
+                            tint = tool.accent,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = tool.name,
+                        style = CtText.bodyMedium,
+                        color = colors.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = tool.subtitle,
+                        style = CtText.caption,
+                        color = colors.textSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+        }
+        if (editing && selected) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialThemePrimary(),
+                contentColor = androidx.compose.ui.graphics.Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(22.dp),
             ) {
-                Text(
-                    text = tool.name,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = tool.subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    // task-58：常见描述（如「公平随机 · 可导出」）2 行内不折叠；超长仍省略。
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = "已加入首页快捷",
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
         }
     }
 }
+
+@Composable
+private fun MaterialThemePrimary() = androidx.compose.material3.MaterialTheme.colorScheme.primary

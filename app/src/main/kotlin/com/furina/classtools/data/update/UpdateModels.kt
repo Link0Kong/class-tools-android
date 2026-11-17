@@ -28,6 +28,8 @@ data class UpdateInfo(
     val force: Boolean = false,
     val channel: String = DEFAULT_CHANNEL,
     val sha256: String = "",
+    /** 安装包大小（字节；latest.json 可选 `sizeBytes`，缺省/非法 → null = 弹窗不显示）。 */
+    val sizeBytes: Long? = null,
 ) {
     /** 是否带 APK 完整性校验值（sha256 允许缺省：老服务端还没算）。 */
     val hasSha256: Boolean
@@ -101,6 +103,8 @@ sealed interface UpdateDownloadEvent {
 /** 更新弹窗的完整 UI 状态（由 [UpdateManager] 持有，弹窗只做无状态渲染）。 */
 data class UpdateDialogUi(
     val info: UpdateInfo,
+    /** 当前安装版本名（弹窗副标题「当前 vX → 新版本 vY」；从 BuildConfig 注入便于测试/预览）。 */
+    val currentVersionName: String = "",
     val download: UpdateDownloadState = UpdateDownloadState.Idle,
     /** 系统「安装未知应用」未授权：弹窗提示并给「去授权」按钮。 */
     val installPermissionBlocked: Boolean = false,

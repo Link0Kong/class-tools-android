@@ -32,24 +32,24 @@ import androidx.compose.ui.unit.dp
 //   L3 完全动态：暂不提供（会丢失功能语义色与品牌）。
 // =============================================================================
 
-/** Material Theme 之外的语义间距/可点区 token（组件与页面共用）。 */
+/** Material Theme 之外的语义间距/可点区 token（组件与页面共用；2026-11-17 对齐鸿蒙 PAGE_PADDING 20 / GAP 12）。 */
 data class CtSpacing(
     /** 页面左右边距。 */
-    val screenHorizontal: Dp = 16.dp,
+    val screenHorizontal: Dp = 20.dp,
     /** 大区块之间的垂直间距。 */
-    val sectionGap: Dp = 24.dp,
+    val sectionGap: Dp = 20.dp,
     /** 卡片之间的间距。 */
     val cardGap: Dp = 12.dp,
     /** 最小触控目标（无障碍硬线 48dp）。 */
     val minTouchTarget: Dp = 48.dp,
     /** 卡片内边距。 */
-    val cardPadding: Dp = 16.dp,
+    val cardPadding: Dp = 14.dp,
     /** medium 宽度下的页面边距。 */
     val pageHorizontalMedium: Dp = 24.dp,
     /** expanded 宽度下的页面边距。 */
     val pageHorizontalExpanded: Dp = 32.dp,
     /** 大屏内容最大宽度（居中留白）。 */
-    val contentMaxWidth: Dp = 1200.dp,
+    val contentMaxWidth: Dp = 960.dp,
 )
 
 val LocalCtSpacing = staticCompositionLocalOf { CtSpacing() }

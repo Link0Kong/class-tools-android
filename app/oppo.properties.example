@@ -9,3 +9,14 @@
 # 因此这两个值会被编译进 BuildConfig（仅存在于本机构建产物；仓库与远端只有本模板）。
 oppo.appKey=
 oppo.appSecret=
+
+# OPPO 账号服务 OAuth（账号快捷登录 / 一个学号最多绑定 3 个 OPPO 账号）
+# 获取位置：OPPO 开放平台 → 账号服务 → 应用详情（AppID / AppKey）。
+# 注意：账号服务凭证与推送凭证是两套（可能不同），不要混用。
+# 未配置（任一为空）时：身份页不显示「OPPO 账号快捷登录」，「我的 → 账号」不显示 OPPO 账号入口；
+# 其它功能不受影响。
+oppo.accountAppId=
+oppo.accountAppKey=
+# 授权范围 scope（空格分隔；默认仅 openid=静默授权最小权限）。
+# 如需昵称/unionid，先在开放平台为应用申请对应权限，再在下面填写平台要求的 scope。
+# oppo.accountScope=openid

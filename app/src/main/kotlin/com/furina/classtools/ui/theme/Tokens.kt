@@ -22,21 +22,26 @@ object CtTokens {
         val xxl = 32.dp
         val xxxl = 48.dp
 
-        /** 页面左右边距（compact / medium / expanded）。 */
+        /**
+         * 页面左右边距。
+         *
+         * 注意：`CtAdaptive` 的自适应框架单测以 16/24/32 为契约（AdaptiveLayoutTest），
+         * 这里保持原值；鸿蒙重做后的页面显式使用 `HarmonyTokens.PagePadding = 20dp`。
+         */
         val pageHorizontalCompact = 16.dp
         val pageHorizontalMedium = 24.dp
         val pageHorizontalExpanded = 32.dp
 
-        /** 区块间距。 */
-        val sectionGapCompact = 16.dp
+        /** 区块间距（鸿蒙 section 间 20）。 */
+        val sectionGapCompact = 20.dp
         val sectionGapExpanded = 24.dp
 
-        /** 卡片间距（2026-11-16 统一到 8dp 栅格）。 */
-        val cardGapCompact = 8.dp
-        val cardGapExpanded = 12.dp
+        /** 卡片间距（鸿蒙 GAP=12）。 */
+        val cardGapCompact = 12.dp
+        val cardGapExpanded = 16.dp
 
-        /** 卡片内边距。 */
-        val cardPaddingCompact = 16.dp
+        /** 卡片内边距（鸿蒙卡片 14；ToolTile 12 见 Radius/Size）。 */
+        val cardPaddingCompact = 14.dp
         val cardPaddingExpanded = 20.dp
 
         /** 语义别名（v2 新页面通用）：随窗口自适应的默认值（见 ui/adaptive 的 spec 覆盖）。 */
@@ -44,22 +49,23 @@ object CtTokens {
         val cardGap: androidx.compose.ui.unit.Dp get() = cardGapCompact
     }
 
-    /** 圆角数值（需要动画插值/自定义 RoundedCornerShape 时用；2026-11-16 统一 16/20/24）。 */
+    /** 圆角数值（需要动画插值/自定义 RoundedCornerShape 时用；2026-11-17 对齐鸿蒙 18/14/24/26）。 */
     object Radius {
         val extraSmall = 4.dp
         val small = 8.dp
         val medium = 12.dp
-        val large = 16.dp
+        val large = 18.dp
         val largeIncreased = 20.dp
         val extraLarge = 24.dp
         val extraLargeIncreased = 24.dp
         val extraExtraLarge = 48.dp
 
-        val card = 16.dp
-        val cardLarge = 20.dp
+        val card = 18.dp
+        val cardLarge = 18.dp
         val hero = 24.dp
         val cardPressed = 12.dp
-        val sheetTop = 28.dp
+        val input = 14.dp
+        val sheetTop = 26.dp
         val dialog = 28.dp
     }
 
@@ -96,9 +102,17 @@ object CtTokens {
         val searchBarHeight = 56.dp
 
         /** 列表项高度（1/2/3 行）。 */
-        val listItemOneLine = 56.dp
-        val listItemTwoLine = 72.dp
+        val listItemOneLine = 52.dp
+        val listItemTwoLine = 64.dp
         val listItemThreeLine = 88.dp
+
+        /** 鸿蒙卡片/工具磁贴。 */
+        val cardMinHeight = 96.dp
+        val cardPadding = 14.dp
+        val tilePadding = 12.dp
+        val tileGlyph = 40.dp
+        val pageHeaderHeight = 60.dp
+        val harmonyButtonHeight = 48.dp
 
         /** Chip / FAB / 图标。 */
         val chipHeight = 32.dp

@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.all
 
+import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,11 +18,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -44,12 +42,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -57,9 +55,13 @@ import androidx.compose.ui.zIndex
 import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
-import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
+import com.furina.classtools.data.tool.ToolCategory
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.SectionHeader
 import com.furina.classtools.ui.components.reorderableSemantics
+import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.theme.HarmonyTokens
+import com.furina.classtools.ui.theme.rememberHarmonyColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -70,45 +72,23 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * 全部工具 v7：渐变页头 + 2 列分类色卡片 + 长按拖动排序。
+ * 「全部工具」页（2026-11-17 按鸿蒙 `AllScreen.ets` 重做）：
  *
- * 交互（与 `mp-class-tools/pages/all/all.js` 拖动 v2 同口径，**task-58 修复后**）：
- * - **长按 350ms** 进入拖动（[AllToolsDragGeometry.LONG_PRESS_TIMEOUT_MS]，与 mp 一致）；
- * - ghost 以指针为中心跟手；网格按「行 + x 中线」计算插入位置；
- * - 拖动中实时让位（被拖卡片半透明、ghost 覆盖）；靠近上下边缘**连续**自动滚动
- *   （[AllToolsDragGeometry.autoScrollDirection] + 80ms 节流，不再只在移动事件里滚一次）；
- * - 松手落位：**只有顺序真的变化时才**回调 [onToolOrderChange] 并（传入仓库时）写
- *   `userdata v6 prefs.toolOrder`（`at.prefs` 提升，等价 mp `toolOrderSetAt` 语义）；默认自然顺序不写；
- * - 拖动结束后 350ms 内的点击被抑制（拖动不触发打开工具，对齐 mp `_supTapUntil`）。
+ * 视觉/结构：
+ * - 标题 26 Bold「全部工具」+ 右侧「编辑首页 / 完成」（13 雾青文字操作）；
+ * - 副标题 12：`N 个工具 · X 列`（编辑态换成「点工具加入或移出首页快捷（最多 4 个）」）；
+ * - **按分类分组**：学习 / 班级事务 / 系统（只有存在工具的分类才显示），SectionHeader 19 Medium；
+ * - ToolTile 网格：<600dp 2 列 / 600–899dp 3 列 / ≥900dp 4 列；卡片白 18 圆角、浅阴影、
+ *   40dp tint 单字/图标块、15 名称、12 副标最多 2 行、minHeight 96、padding 12、按压 0.97；
+ * - 内容最大宽 880（<900dp）/ 960（≥900），页面左右 20dp，顶部呼吸 8dp。
  *
- * 视觉（v7）：
- * - 页头渐变（品牌雾青→灰蓝）+ 工具数量（拖动中同一胶囊换成「松手保存」，**页头高度不变**，
- *   避免拖动开始瞬间把网格整体下推导致落位几何跳变）；
- * - 卡片 2/3/4 列随窗口（手机 2 列），图标 chip + 主标题 + **副标题最多 2 行**，按压缩放；
- * - 网格用自定义 [Layout] + `key(tool.id)` 保证拖动重排时卡片节点 identity 稳定
- *   （不会因顺序变化重建 `pointerInput` 而中断手势）。
+ * 交互：
+ * - 普通态：点卡片打开工具；
+ * - **编辑态**（点右上「编辑首页」）：点卡片加入/移出首页快捷（≤4，✓ 角标，第 5 个 toast）；
+ * - 编辑态同时保留**长按拖动排序**（原有 task-58/v8 能力）：拖动松手写 `prefs.toolOrder`；
+ *   普通态按分类展示，分类内顺序 = 用户拖动后的顺序。
  *
- * 拖动几何契约（task-58 根因，详见 [AllToolsDragGeometry]）：
- * - `gridLeft/gridTop` 是 `onGloballyPositioned` 上报的**实时视口坐标**（滚动已包含）；
- *   视口 ↔ 内容换算**不再加减 scroll**，否则页面滚动后幽灵偏移、跨行落位错一行；
- * - 指针 → 落位 → `ToolOrderLogic.gridTarget/moveToIndex`；顺序变化时 `key(tool.id)` 保持
- *   被拖卡片节点存活，手势不会在第一次重排时被取消。
- *
- * 接线（Lead 负责 MainNavHost）：
- * ```kotlin
- * AllToolsScreen(
- *     onOpenTool = { tool -> navController.navigate(Routes.tool(tool.id)) },
- *     userDataRepository = container.userDataRepository,
- *     onToolOrderChange = { order -> /* 可选：Lead 自行写 prefs.toolOrder */ },
- * )
- * ```
- * 若同时传了 [userDataRepository] 与 [onToolOrderChange]，屏幕会先写 userdata 再回调；
- * 只传回调时由 Lead 用 [ToolOrderPrefs.apply] 写（见 docs/api/NOTICE_DRAG_TT_IMPL.md）。
- *
- * @param initialOrder 预览/测试注入顺序（非空时不读 userdata）
- * @param skipRestore 预览/测试：跳过 userdata 读取
- * @param previewDraggingToolId 预览注入：渲染「拖动中」态（ghost + 半透明卡片）
- * @param previewDragOffset 预览注入：ghost 中心在容器内的位置（**dp**，与屏幕密度无关）
+ * 原有的顺序恢复/持久化、转场锚点、读屏语义、拖动几何全部保留。
  */
 @Composable
 fun AllToolsScreen(
@@ -120,24 +100,39 @@ fun AllToolsScreen(
     skipRestore: Boolean = false,
     previewDraggingToolId: String? = null,
     previewDragOffset: Offset = Offset(190f, 340f),
+    /** 当前首页快捷工具 id（编辑态 ✓ 角标；≤4）。 */
+    quickToolIds: List<String> = emptyList(),
+    /** 编辑态点卡片后回调新的快捷列表（由调用方写 userdata.homeTools）。 */
+    onQuickToolsChange: ((List<String>) -> Unit)? = null,
+    /** 预览/测试：初始进入编辑态。 */
+    initialEditing: Boolean = false,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     val reduceMotion = rememberReduceMotion()
+    val colors = rememberHarmonyColors()
     val naturalIds = remember { ToolCatalog.tools.map { it.id } }
-    val spec = rememberCtAdaptiveSpec()
-    val columns = spec.gridColumns
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    // 鸿蒙断点：<600 → 2 列；600–899 → 3 列；≥900 → 4 列。
+    val columns = when {
+        screenWidthDp >= 900 -> 4
+        screenWidthDp >= 600 -> 3
+        else -> 2
+    }
+    val contentMaxWidth = if (screenWidthDp >= 900) HarmonyTokens.ContentMaxWidthWide else HarmonyTokens.ContentMaxWidthPhone
+    val pagePadding = HarmonyTokens.PagePadding
+
+    var editing by remember { mutableStateOf(initialEditing) }
+    var quickDraft by remember { mutableStateOf(quickToolIds) }
+    LaunchedEffect(quickToolIds) { quickDraft = quickToolIds }
 
     var order by remember { mutableStateOf(ToolOrderLogic.normalize(initialOrder, naturalIds)) }
     var restored by remember { mutableStateOf(skipRestore || initialOrder.isNotEmpty()) }
-    // 本次会话内用户是否已经手动改过顺序（拖动 / 读屏上移下移）——晚到的本机恢复不得覆盖。
     var userReordered by remember { mutableStateOf(false) }
 
-    // 1) 恢复 prefs.toolOrder（只读；没有基线就显示自然顺序，绝不盲写）。
-    //    与 ClassToolsRoot 的 hydrateFromLocal 都是启动首帧 LaunchedEffect，本页可能先读到空
-    //    sections；此时等首个非空快照（最多 STARTUP_RESTORE_WAIT_MS），否则「松手保存」的顺序
-    //    在重启后会退回自然序（task-58 实测发现）。
+    // 恢复 prefs.toolOrder（只读；无基线保持自然顺序）。
     LaunchedEffect(Unit) {
         if (restored) return@LaunchedEffect
         runCatching {
@@ -157,7 +152,7 @@ fun AllToolsScreen(
         restored = true
     }
 
-    // 2) 拖动状态
+    // ---- 拖动状态（编辑态使用；几何逻辑保持 task-58/v8 口径） ----
     var draggingId by remember { mutableStateOf<String?>(null) }
     var dragPointer by remember { mutableStateOf(Offset.Zero) }
     var dragStartOrder by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -169,8 +164,6 @@ fun AllToolsScreen(
     var containerHeightPx by remember { mutableFloatStateOf(0f) }
     val scrollState = rememberScrollState()
 
-    // 长按阈值：Compose 默认 500ms，与微信小程序不一致（mp = 350ms）→ 局部覆盖 LocalViewConfiguration，
-    // 只作用于本页子树，不改变其它页面的手势含义（滚动/点击不读取 longPressTimeout）。
     val baseViewConfiguration = LocalViewConfiguration.current
     val dragViewConfiguration = remember(baseViewConfiguration) {
         object : ViewConfiguration by baseViewConfiguration {
@@ -178,9 +171,8 @@ fun AllToolsScreen(
         }
     }
 
-    // v8：统一 8dp 栅格间距（原 10dp）；卡高仍 96dp（副标最多 2 行）；2 列 48.6% 宽。
-    val itemHeightDp = 96.dp
-    val spacingDp = 8.dp
+    val itemHeightDp = HarmonyTokens.TileMinHeight
+    val spacingDp = HarmonyTokens.Gap
     val itemHeightPx = with(density) { itemHeightDp.toPx() }
     val spacingPx = with(density) { spacingDp.toPx() }
     val autoScrollTopEdgePx = with(density) { AllToolsDragGeometry.AUTO_SCROLL_TOP_EDGE_DP.dp.toPx() }
@@ -188,11 +180,11 @@ fun AllToolsScreen(
     val autoScrollStepPx = with(density) { AllToolsDragGeometry.AUTO_SCROLL_STEP_DP.dp.toPx() }
 
     val effectiveDraggingId = draggingId ?: previewDraggingToolId
-    // previewDragOffset 以 dp 计（与预览/设备密度无关），渲染「拖动中」态时 ghost 位置一致。
     val previewGhostPointer = with(density) {
         Offset(previewDragOffset.x.dp.toPx(), previewDragOffset.y.dp.toPx())
     }
     val effectiveGhostPointer = if (draggingId != null) dragPointer else previewGhostPointer
+    val dragMode = editing || previewDraggingToolId != null
 
     fun persistOrder(newOrder: List<String>) {
         onToolOrderChange?.invoke(newOrder)
@@ -224,12 +216,10 @@ fun AllToolsScreen(
             order = dragStartOrder
             draggingId = null
             dragStartOrder = emptyList()
-            // 被动取消（来电/系统打断）后同样抑制一次点击，避免「取消拖动反而打开工具」。
             lastDragEndAt = System.currentTimeMillis()
         }
     }
 
-    /** TalkBack / 无障碍「上移 / 下移」：不依赖手势，走与拖动相同的排序 + 持久化路径。 */
     fun moveCardBy(id: String, delta: Int) {
         val newOrder = ToolOrderLogic.moveBy(order, id, delta)
         if (newOrder == order) return
@@ -239,12 +229,6 @@ fun AllToolsScreen(
         persistOrder(newOrder)
     }
 
-    /**
-     * 用「当前视口指针」重算落位并实时让位。
-     *
-     * 视口 → 网格内容坐标只减实时 `gridLeft/gridTop`（**不再 +scroll**：gridTop 已含滚动偏移，
-     * 旧实现会重复计算导致页面滚动后跨行落位错一行）。
-     */
     fun updateDropTarget() {
         val id = draggingId ?: return
         val draggedIndex = order.indexOf(id)
@@ -275,8 +259,7 @@ fun AllToolsScreen(
         updateDropTarget()
     }
 
-    // 边缘自动滚动：拖动中每 80ms 连续滚一小步（不是只在 MOVE 事件里滚一次）；
-    // 每帧先按最新 gridTop（滚动后 onGloballyPositioned 已更新）重算落位，再决定是否继续滚。
+    // 边缘自动滚动（拖动中每 80ms 连续滚一小步）。
     LaunchedEffect(draggingId) {
         if (draggingId == null) return@LaunchedEffect
         while (isActive) {
@@ -299,7 +282,18 @@ fun AllToolsScreen(
         order.mapNotNull { id -> ToolCatalog.byId(id) }
     }
 
-    // 长按 350ms 的局部 ViewConfiguration（只包本页子树，影响 pointerInput 的长按判定）。
+    fun toggleQuick(tool: AppTool) {
+        val current = quickDraft
+        val next = if (current.contains(tool.id)) current - tool.id else current + tool.id
+        if (next.size > HomeToolsEditorMax) {
+            Toast.makeText(context, "首页最多 4 个", Toast.LENGTH_SHORT).show()
+            return
+        }
+        quickDraft = next
+        onQuickToolsChange?.invoke(next)
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
+
     CompositionLocalProvider(LocalViewConfiguration provides dragViewConfiguration) {
         ExpressiveBackground(modifier = modifier.fillMaxSize()) {
             Box(
@@ -312,130 +306,155 @@ fun AllToolsScreen(
             ) {
                 Column(
                     modifier = Modifier
-                        .widthIn(max = spec.contentMaxWidth)
+                        .widthIn(max = contentMaxWidth)
                         .fillMaxWidth()
                         .fillMaxHeight()
                         .statusBarsPadding()
+                        .padding(horizontal = pagePadding)
                         .verticalScroll(scrollState),
                 ) {
-                    AllToolsHeader(
-                        modifier = Modifier.padding(
-                            start = spec.horizontalPadding,
-                            end = spec.horizontalPadding,
-                            top = 0.dp,
-                            bottom = 0.dp,
-                        ),
+                    HarmonyAllToolsHeader(
+                        editing = editing,
                         toolCount = toolsInOrder.size,
+                        columns = columns,
                         dragging = effectiveDraggingId != null,
-                    )
-
-                    // 2/3/4 列网格：自定义 Layout 让卡片全量布局；每张卡 key(tool.id) 保持拖动重排时
-                    // 节点 identity 稳定 —— 否则顺序一变，pointerInput(tool.id) 会在重排瞬间重建，
-                    // 正在进行的拖动被取消（task-58 根因之一：第一次跨列就弹回）。
-                    Layout(
-                        content = {
-                            toolsInOrder.forEachIndexed { displayIndex, tool ->
-                                key(tool.id) {
-                                    Box(
-                                        modifier = Modifier
-                                            .alpha(if (tool.id == effectiveDraggingId) 0.22f else 1f)
-                                            .pointerInput(tool.id, columns) {
-                                                detectDragGesturesAfterLongPress(
-                                                    onDragStart = { local ->
-                                                        if (draggingId != null) return@detectDragGesturesAfterLongPress
-                                                        if (itemWidthPx <= 0f) return@detectDragGesturesAfterLongPress
-                                                        val index = order.indexOf(tool.id)
-                                                        if (index < 0) return@detectDragGesturesAfterLongPress
-                                                        draggingId = tool.id
-                                                        dragStartOrder = order
-                                                        // 实时 gridLeft/gridTop 是视口坐标（已含滚动偏移），直接相加；
-                                                        // 不能像旧实现那样再减 scroll（会把滚动量算两次）。
-                                                        val (pointerX, pointerY) = AllToolsDragGeometry.pointerForItem(
-                                                            index = index,
-                                                            localX = local.x,
-                                                            localY = local.y,
-                                                            columns = columns,
-                                                            itemWidth = itemWidthPx,
-                                                            itemHeight = itemHeightPx,
-                                                            spacing = spacingPx,
-                                                            gridLeft = gridLeftPx,
-                                                            gridTop = gridTopPx,
-                                                        )
-                                                        dragPointer = Offset(pointerX, pointerY)
-                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    },
-                                                    onDrag = { change, dragAmount ->
-                                                        change.consume()
-                                                        if (draggingId != null) onDragDelta(dragAmount)
-                                                    },
-                                                    onDragEnd = { finishDrag() },
-                                                    onDragCancel = { cancelDrag() },
-                                                )
-                                            },
-                                    ) {
-                                        AllToolCard(
-                                            tool = tool,
-                                            onClick = {
-                                                val now = System.currentTimeMillis()
-                                                // 拖动中 / 刚松手（350ms 内，对齐 mp）不触发打开
-                                                if (draggingId == null &&
-                                                    now - lastDragEndAt > AllToolsDragGeometry.TAP_SUPPRESSION_MS
-                                                ) {
-                                                    onOpenTool(tool)
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentSemantics = Modifier.reorderableSemantics(
-                                                index = displayIndex,
-                                                total = toolsInOrder.size,
-                                                itemLabel = tool.name,
-                                                dragging = tool.id == effectiveDraggingId,
-                                                onMoveUp = { moveCardBy(tool.id, -1) },
-                                                onMoveDown = { moveCardBy(tool.id, +1) },
-                                            ),
-                                            reduceMotion = reduceMotion,
-                                        )
-                                    }
-                                }
+                        onToggleEdit = {
+                            editing = !editing
+                            if (!editing) {
+                                draggingId = null
                             }
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = spec.horizontalPadding, vertical = 8.dp)
-                            .onGloballyPositioned { coordinates ->
-                                // 实时视口坐标：页面滚动后这里会重新上报（滚动偏移已包含在 positionInRoot 里）。
-                                gridLeftPx = coordinates.positionInRoot().x - containerOrigin.x
-                                gridTopPx = coordinates.positionInRoot().y - containerOrigin.y
+                    )
+
+                    if (dragMode) {
+                        // 编辑态：平铺网格 + 长按拖动排序 + 点选首页快捷（✓ 角标）。
+                        Layout(
+                            content = {
+                                toolsInOrder.forEachIndexed { displayIndex, tool ->
+                                    key(tool.id) {
+                                        Box(
+                                            modifier = Modifier
+                                                .alpha(if (tool.id == effectiveDraggingId) 0.22f else 1f)
+                                                .pointerInput(tool.id, columns) {
+                                                    detectDragGesturesAfterLongPress(
+                                                        onDragStart = { local ->
+                                                            if (draggingId != null) return@detectDragGesturesAfterLongPress
+                                                            if (itemWidthPx <= 0f) return@detectDragGesturesAfterLongPress
+                                                            val index = order.indexOf(tool.id)
+                                                            if (index < 0) return@detectDragGesturesAfterLongPress
+                                                            draggingId = tool.id
+                                                            dragStartOrder = order
+                                                            val (pointerX, pointerY) = AllToolsDragGeometry.pointerForItem(
+                                                                index = index,
+                                                                localX = local.x,
+                                                                localY = local.y,
+                                                                columns = columns,
+                                                                itemWidth = itemWidthPx,
+                                                                itemHeight = itemHeightPx,
+                                                                spacing = spacingPx,
+                                                                gridLeft = gridLeftPx,
+                                                                gridTop = gridTopPx,
+                                                            )
+                                                            dragPointer = Offset(pointerX, pointerY)
+                                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        },
+                                                        onDrag = { change, dragAmount ->
+                                                            change.consume()
+                                                            if (draggingId != null) onDragDelta(dragAmount)
+                                                        },
+                                                        onDragEnd = { finishDrag() },
+                                                        onDragCancel = { cancelDrag() },
+                                                    )
+                                                },
+                                        ) {
+                                            AllToolCard(
+                                                tool = tool,
+                                                onClick = {
+                                                    val now = System.currentTimeMillis()
+                                                    if (draggingId == null &&
+                                                        now - lastDragEndAt > AllToolsDragGeometry.TAP_SUPPRESSION_MS
+                                                    ) {
+                                                        toggleQuick(tool)
+                                                    }
+                                                },
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentSemantics = Modifier.reorderableSemantics(
+                                                    index = displayIndex,
+                                                    total = toolsInOrder.size,
+                                                    itemLabel = tool.name,
+                                                    dragging = tool.id == effectiveDraggingId,
+                                                    onMoveUp = { moveCardBy(tool.id, -1) },
+                                                    onMoveDown = { moveCardBy(tool.id, +1) },
+                                                ),
+                                                reduceMotion = reduceMotion,
+                                                editing = editing,
+                                                selected = quickDraft.contains(tool.id),
+                                            )
+                                        }
+                                    }
+                                }
                             },
-                    ) { measurables, constraints ->
-                        val width = constraints.maxWidth
-                        val cols = columns.coerceAtLeast(1)
-                        itemWidthPx = ((width - spacingPx * (cols - 1)) / cols).coerceAtLeast(1f)
-                        val placeables = measurables.map { measurable ->
-                            measurable.measure(
-                                Constraints.fixed(
-                                    width = itemWidthPx.roundToInt().coerceAtLeast(1),
-                                    height = itemHeightPx.roundToInt(),
-                                ),
-                            )
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp, bottom = 8.dp)
+                                .onGloballyPositioned { coordinates ->
+                                    gridLeftPx = coordinates.positionInRoot().x - containerOrigin.x
+                                    gridTopPx = coordinates.positionInRoot().y - containerOrigin.y
+                                },
+                        ) { measurables, constraints ->
+                            val width = constraints.maxWidth
+                            val cols = columns.coerceAtLeast(1)
+                            itemWidthPx = ((width - spacingPx * (cols - 1)) / cols).coerceAtLeast(1f)
+                            val placeables = measurables.map { measurable ->
+                                measurable.measure(
+                                    Constraints.fixed(
+                                        width = itemWidthPx.roundToInt().coerceAtLeast(1),
+                                        height = itemHeightPx.roundToInt(),
+                                    ),
+                                )
+                            }
+                            val rows = (placeables.size + cols - 1) / cols
+                            val height = max(0, rows * itemHeightPx.roundToInt() + max(0, rows - 1) * spacingPx.roundToInt())
+                            layout(width, height) {
+                                placeables.forEachIndexed { index, placeable ->
+                                    placeable.place(
+                                        x = ((index % cols) * (itemWidthPx + spacingPx)).roundToInt(),
+                                        y = ((index / cols) * (itemHeightPx + spacingPx)).roundToInt(),
+                                    )
+                                }
+                            }
                         }
-                        val rows = (placeables.size + cols - 1) / cols
-                        val height = max(0, rows * itemHeightPx.roundToInt() + max(0, rows - 1) * spacingPx.roundToInt())
-                        layout(width, height) {
-                            placeables.forEachIndexed { index, placeable ->
-                                placeable.place(
-                                    x = ((index % cols) * (itemWidthPx + spacingPx)).roundToInt(),
-                                    y = ((index / cols) * (itemHeightPx + spacingPx)).roundToInt(),
+                    } else {
+                        // 普通态：按鸿蒙分类分组展示（学习 / 班级事务 / 系统）。
+                        val grouped = HarmonyAllToolCategories.mapNotNull { category ->
+                            val list = toolsInOrder.filter { it.category == category }
+                            if (list.isEmpty()) null else category to list
+                        }
+                        grouped.forEachIndexed { groupIndex, (category, tools) ->
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                SectionHeader(
+                                    title = category.label,
+                                    modifier = Modifier.padding(top = if (groupIndex == 0) 4.dp else 12.dp),
+                                )
+                                CategoryGrid(
+                                    tools = tools,
+                                    columns = columns,
+                                    spacing = spacingDp,
+                                    itemHeight = itemHeightDp,
+                                    reduceMotion = reduceMotion,
+                                    editing = editing,
+                                    quickIds = quickDraft,
+                                    onOpenTool = onOpenTool,
+                                    onToggleQuick = { toggleQuick(it) },
                                 )
                             }
                         }
                     }
 
-                    // 底部留白：让最后一行卡片能滚到悬浮 dock 上方（不是被 dock 挡住）；统一 120dp。
                     Spacer(modifier = Modifier.height(120.dp))
                 }
 
-                // 跟手 ghost（拖动中 / 预览注入）：以指针为中心，尺寸 = 与网格相同的 itemWidth/itemHeight。
+                // 跟手 ghost（编辑态拖动/预览注入）
                 val ghostTool = effectiveDraggingId?.let { ToolCatalog.byId(it) }
                 if (ghostTool != null && itemWidthPx > 0f) {
                     val (ghostX, ghostY) = AllToolsDragGeometry.ghostTopLeft(
@@ -470,45 +489,130 @@ fun AllToolsScreen(
     }
 }
 
-/**
- * v8 页头（2026-11-16 视觉统一）：去大色块/装饰圆点，改为轻量标题行 + 计数胶囊。
- *
- * task-58 约束保留：拖动提示仍复用同一胶囊文案（「N 个」⇄「松手保存」），页头高度不变，
- * 避免拖动首帧落位几何跳变。
- */
+/** 首页快捷上限（与 userdata.homeTools 契约一致）。 */
+private const val HomeToolsEditorMax: Int = 4
+
+/** 鸿蒙端「全部工具」分类顺序：学习 → 班级事务 → 系统（无工具的分类不显示）。 */
+private val HarmonyAllToolCategories = listOf(
+    ToolCategory.STUDY,
+    ToolCategory.CLASS,
+    ToolCategory.SYSTEM,
+)
+
+/** 普通态分类网格（2/3/4 列，无拖动，点击打开工具）。 */
 @Composable
-private fun AllToolsHeader(
-    toolCount: Int,
-    dragging: Boolean,
-    modifier: Modifier = Modifier,
+private fun CategoryGrid(
+    tools: List<AppTool>,
+    columns: Int,
+    spacing: androidx.compose.ui.unit.Dp,
+    itemHeight: androidx.compose.ui.unit.Dp,
+    reduceMotion: Boolean,
+    editing: Boolean,
+    quickIds: List<String>,
+    onOpenTool: (AppTool) -> Unit,
+    onToggleQuick: (AppTool) -> Unit,
 ) {
-    Row(
-        modifier = modifier
+    val spacingPx = with(LocalDensity.current) { spacing.toPx() }
+    val itemHeightPx = with(LocalDensity.current) { itemHeight.toPx() }
+    Layout(
+        content = {
+            tools.forEach { tool ->
+                key(tool.id) {
+                    AllToolCard(
+                        tool = tool,
+                        onClick = {
+                            if (editing) onToggleQuick(tool) else onOpenTool(tool)
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        reduceMotion = reduceMotion,
+                        editing = editing,
+                        selected = quickIds.contains(tool.id),
+                    )
+                }
+            }
+        },
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "全部工具",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        ) {
-            Text(
-                // 拖动中同一胶囊换成「松手保存」：页头高度不变（几何不跳）。
-                text = if (dragging) "松手保存" else "$toolCount 个",
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(bottom = 4.dp),
+    ) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val cols = columns.coerceAtLeast(1)
+        val itemWidth = ((width - spacingPx * (cols - 1)) / cols).coerceAtLeast(1f)
+        val placeables = measurables.map { measurable ->
+            measurable.measure(
+                Constraints.fixed(
+                    width = itemWidth.roundToInt().coerceAtLeast(1),
+                    height = itemHeightPx.roundToInt(),
+                ),
             )
         }
+        val rows = (placeables.size + cols - 1) / cols
+        val height = max(0, rows * itemHeightPx.roundToInt() + max(0, rows - 1) * spacingPx.roundToInt())
+        layout(width, height) {
+            placeables.forEachIndexed { index, placeable ->
+                placeable.place(
+                    x = ((index % cols) * (itemWidth + spacingPx)).roundToInt(),
+                    y = ((index / cols) * (itemHeightPx + spacingPx)).roundToInt(),
+                )
+            }
+        }
+    }
+}
+
+/** 鸿蒙 AllScreen 页头：标题 26 Bold + 右侧「编辑首页/完成」13 雾青 + 副标题 12。 */
+@Composable
+private fun HarmonyAllToolsHeader(
+    editing: Boolean,
+    toolCount: Int,
+    columns: Int,
+    dragging: Boolean,
+    onToggleEdit: () -> Unit,
+) {
+    val colors = rememberHarmonyColors()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = HarmonyTokens.BreathTop),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "全部工具",
+                style = CtText.title,
+                color = colors.textPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = if (editing) "完成" else "编辑首页",
+                style = CtText.label,
+                color = if (dragging) colors.textTertiary else colors.heroAccent,
+                modifier = Modifier
+                    .clickable { onToggleEdit() }
+                    .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (editing) {
+                    "点工具加入或移出首页快捷（最多 4 个）"
+                } else {
+                    "$toolCount 个工具 · $columns 列"
+                },
+                style = CtText.caption,
+                color = if (editing) colors.heroAccent else colors.textTertiary,
+                modifier = Modifier.weight(1f),
+            )
+            if (dragging) {
+                Text(
+                    text = "松手保存",
+                    style = CtText.caption,
+                    color = colors.heroAccent,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
     }
 }

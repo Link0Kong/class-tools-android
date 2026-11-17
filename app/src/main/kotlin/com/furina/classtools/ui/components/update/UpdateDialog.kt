@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.data.update.DownloadedApk
 import com.furina.classtools.data.update.UpdateCheckStatus
 import com.furina.classtools.data.update.UpdateDialogPolicy
+import com.furina.classtools.data.update.UpdateDialogText
 import com.furina.classtools.data.update.UpdateDialogUi
 import com.furina.classtools.data.update.UpdateDownloadProgress
 import com.furina.classtools.data.update.UpdateDownloadState
@@ -37,22 +38,17 @@ import com.furina.classtools.data.update.UpdateFormat
 import com.furina.classtools.data.update.UpdateInfo
 import com.furina.classtools.data.update.UpdateManager
 import com.furina.classtools.data.update.UpdateRuntime
-import com.furina.classtools.data.update.UpdateTestVersion
 import com.furina.classtools.data.update.UpdateVersion
 import com.furina.classtools.ui.theme.ClassToolsTheme
 
 /**
  * 更新弹窗（无状态渲染；状态由 [UpdateManager.dialog] 提供）。
  *
- * 标题固定带「测试版本」（[UpdateTestVersion.dialogTitle]）：
- * 「发现新版本 · 测试版本」。
- *
- * 按钮语义：
- * - Idle：「立即更新」开始下载；非强制可「稍后」；
- * - Downloading：进度条 + 「取消下载」（force 版本不可取消）；
- * - Ready：「立即安装」/「重新安装」（下载完成 Manager 已自动拉起系统安装器）；
- * - 未授权「安装未知应用」：显示说明 + 「去授权」；
- * - force=true：不可取消（无「稍后」、无「取消下载」）。
+ * 用户 2026-11-17 晚要求：检测到新版本**只弹窗**，不自动下载、下载完成也不自动拉起安装器。
+ * - 标题「发现新版本」；副标题「当前 vX → 新版本 vY」；
+ * - 内容：更新说明（滚动区）+ 包大小（latest.json 可选 `sizeBytes`，缺省不显示）+ 渠道；
+ * - 按钮：未下载「立即更新」/「稍后」；下载中进度 +「取消下载」（非强制）；
+ *   下载完成「立即安装」/「稍后」；失败「重试」；force 版本无「稍后」/「取消下载」。
  */
 @Composable
 fun UpdateDialog(
@@ -72,12 +68,12 @@ fun UpdateDialog(
         title = {
             Column {
                 Text(
-                    text = UpdateTestVersion.dialogTitle(),
+                    text = UpdateDialogText.title(),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "v${UpdateVersion.normalize(info.versionName)} · 版本号 ${info.versionCode}",
+                    text = UpdateDialogText.subtitle(ui.currentVersionName, info),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
@@ -92,18 +88,23 @@ fun UpdateDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                // 元信息行：包大小（latest.json 可选 sizeBytes）+ 渠道（缺省不显示）。
+                val metaText = listOfNotNull(
+                    UpdateDialogText.sizeText(info),
+                    UpdateDialogText.channelText(info),
+                ).joinToString(" · ")
+                if (metaText.isNotEmpty()) {
+                    Text(
+                        text = metaText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (info.notes.isNotBlank()) {
                     Text(
                         text = info.notes,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                if (info.channel.isNotBlank() && info.channel != UpdateInfo.DEFAULT_CHANNEL) {
-                    Text(
-                        text = "渠道：${info.channel}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 DownloadStatus(ui = ui)
@@ -202,11 +203,8 @@ private fun DownloadStatus(ui: UpdateDialogUi) {
 
         is UpdateDownloadState.Ready -> {
             Text(
-                text = if (ui.installLaunched) {
-                    "已打开系统安装器，请在系统界面确认安装。"
-                } else {
-                    "下载完成，正在打开系统安装器…"
-                },
+                // 下载完成不自动安装：提示用户点「立即安装」。
+                text = UpdateDialogText.readyText(ui.installLaunched),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -234,7 +232,7 @@ private fun progressText(progress: UpdateDownloadProgress): String {
 /**
  * 全局更新宿主（App 根挂载一次）：
  * - App 冷启动（根级组合）即触发一次自动检查（[UpdateManager.checkOnStart]；去掉每日节流）；
- * - 发现新版本直接弹窗渲染，首页即可看到，不再依赖「我的 → 检查更新」；
+ * - 发现新版本直接弹窗渲染（**只弹窗，不自动下载**），首页即可看到，不再依赖「我的 → 检查更新」；
  * - 挂载期间标记 [UpdateManager.attachHost]（「我的」页据此不再重复渲染兜底弹窗）。
  */
 @Composable
@@ -300,23 +298,24 @@ fun updateCheckSubtitle(status: UpdateCheckStatus): String = when (status) {
 // =============================================================================
 
 private val previewInfo = UpdateInfo(
-    versionCode = 79,
-    versionName = "1.0.0-beta1",
-    apkUrl = "http://121.196.47.2/android/classtools-1.0.0-beta1.apk",
-    notes = "1. 新增检查更新与自动更新\n2. 测试版本 功能验证\n3. 修复若干已知问题",
+    versionCode = 86,
+    versionName = "1.0.0-beta3",
+    apkUrl = "http://121.196.47.2/android/classtools-1.0.0-beta3.apk",
+    notes = "1. OPPO 账号仅在 ColorOS 手机显示\n2. 快捷登录无需先填学号姓名\n3. 授权失败可诊断\n4. 更新改为弹窗手动选择",
     force = false,
     channel = "test",
     sha256 = "a".repeat(64),
+    sizeBytes = 6_120_000L,
 )
 
-private val previewForceInfo = previewInfo.copy(force = true, versionName = "4.58.0-test1")
+private val previewForceInfo = previewInfo.copy(force = true)
 
 @Preview(name = "301 更新弹窗 · 发现新版本", showBackground = true, widthDp = 412)
 @Composable
 private fun UpdateDialogAvailablePreview() {
     ClassToolsTheme(darkTheme = false) {
         UpdateDialog(
-            ui = UpdateDialogUi(info = previewInfo),
+            ui = UpdateDialogUi(info = previewInfo, currentVersionName = "1.0.0-beta2"),
             onDownload = {},
             onCancelDownload = {},
             onInstall = {},
@@ -333,8 +332,9 @@ private fun UpdateDialogDownloadingPreview() {
         UpdateDialog(
             ui = UpdateDialogUi(
                 info = previewInfo,
+                currentVersionName = "1.0.0-beta2",
                 download = UpdateDownloadState.Downloading(
-                    UpdateDownloadProgress(8_388_608L, 24_117_248L, 35),
+                    UpdateDownloadProgress(4_194_304L, 6_120_000L, 68),
                 ),
             ),
             onDownload = {},
@@ -346,15 +346,16 @@ private fun UpdateDialogDownloadingPreview() {
     }
 }
 
-@Preview(name = "303 更新弹窗 · 强制更新深色", showBackground = true, widthDp = 412)
+@Preview(name = "303 更新弹窗 · 下载完成待安装 · 强制", showBackground = true, widthDp = 412)
 @Composable
-private fun UpdateDialogForcePreview() {
+private fun UpdateDialogForceReadyPreview() {
     ClassToolsTheme(darkTheme = true) {
         UpdateDialog(
             ui = UpdateDialogUi(
                 info = previewForceInfo,
+                currentVersionName = "1.0.0-beta2",
                 download = UpdateDownloadState.Ready(
-                    DownloadedApk(fileName = "classtools-4.58.0-test1.apk"),
+                    DownloadedApk(fileName = "classtools-1.0.0-beta3.apk"),
                 ),
             ),
             onDownload = {},

@@ -1,40 +1,41 @@
 package com.furina.classtools.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.theme.HarmonyTokens
+import com.furina.classtools.ui.theme.rememberHarmonyColors
 
 /**
- * 轻量顶栏 v6：圆形玻璃返回 + 标题（+ 可选副标题）+ 右侧动作胶囊。
+ * 工具页统一顶栏（2026-11-17 按鸿蒙 `PageHeader.ets` 重做）：
  *
- * 不再铺满半透明底条：直接落在 [com.furina.classtools.ui.components.ExpressiveBackground] 的新背景上，
- * 与「我的」hero / 工作台 hero 的层级一致；滚动行为仍由各页面自己控制。
+ * - 高度 **60dp**、标题 **19sp Medium**、返回 **44dp 热区**（无圆形玻璃底）、右侧动作保持调用方；
+ * - 背景透明（页面纯色底），副标题参数保留兼容但不再渲染（鸿蒙 PageHeader 只有标题+动作）。
  *
- * [compact]（默认 true，工具页统一口径）：**单行 56dp 紧凑顶栏**——标题 22sp（titleLarge）、
- * 不显示副标题与多余装饰，把首屏垂直空间留给内容。需要大标题 + 副标题的页面显式传 `compact = false`。
+ * 旧调用方无需改写签名；需要「右侧文字操作」的页面在 `actions` 里传 TextButton/Text 即可。
  */
 @Composable
 fun CtTopBar(
@@ -45,133 +46,54 @@ fun CtTopBar(
     actions: @Composable () -> Unit = {},
     compact: Boolean = true,
 ) {
-    // 平板横屏（≥840dp）收紧左右/上下 padding（P2：大屏信息密度/留白）
-    val widthDp = LocalConfiguration.current.screenWidthDp
-    val tight = widthDp >= 840
-    if (compact) {
-        CompactTopBarRow(title = title, onBack = onBack, actions = actions, modifier = modifier)
-        return
-    }
+    val colors = rememberHarmonyColors()
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = if (tight) 56.dp else 60.dp)
-            .padding(
-                start = if (tight) 12.dp else 12.dp,
-                end = if (tight) 12.dp else 12.dp,
-                top = if (tight) 6.dp else 8.dp,
-                bottom = if (tight) 4.dp else 6.dp,
-            ),
+            .height(HarmonyTokens.PageHeaderHeight)
+            .padding(start = 4.dp, end = 8.dp, top = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (onBack != null) {
             Surface(
                 onClick = onBack,
                 modifier = Modifier.size(44.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                tonalElevation = 1.dp,
+                color = Color.Transparent,
+                contentColor = colors.textPrimary,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "返回",
-                        modifier = Modifier.size(21.dp),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
         } else {
-            Box(modifier = Modifier.size(4.dp))
+            Spacer(modifier = Modifier.width(44.dp))
         }
-
-        androidx.compose.foundation.layout.Column(
-            modifier = Modifier.weight(1f),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                // 读屏「按标题导航」可定位到页面标题。
-                modifier = Modifier.semantics { heading() },
-            )
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        actions()
-    }
-}
-
-/**
- * 紧凑单行顶栏：44dp 圆形返回 + 22sp 单行标题 + 右侧动作，整体约 56dp。
- *
- * 不显示副标题（工具页首屏更轻）；标题过长省略，动作区保持原样（页面自己决定图标/文字按钮）。
- */
-@Composable
-private fun CompactTopBarRow(
-    title: String,
-    onBack: (() -> Unit)?,
-    actions: @Composable () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (onBack != null) {
-            Surface(
-                onClick = onBack,
-                modifier = Modifier.size(44.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                tonalElevation = 1.dp,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "返回",
-                        modifier = Modifier.size(21.dp),
-                    )
-                }
-            }
-        } else {
-            Box(modifier = Modifier.size(4.dp))
-        }
-
+        Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
+            style = CtText.heading,
+            color = colors.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
                 .semantics { heading() },
         )
-
-        actions()
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            actions()
+        }
     }
 }
 
-/** 圆形图标按钮（统一触控与视觉）。 */
+/** 圆形图标按钮（保留旧 API；鸿蒙风为无底色 44dp 图标按钮）。 */
 @Composable
 fun CtIconAction(
     icon: ImageVector,
@@ -179,24 +101,27 @@ fun CtIconAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    IconButton(
+    val colors = rememberHarmonyColors()
+    Surface(
         onClick = onClick,
         modifier = modifier.size(44.dp),
-        colors = IconButtonDefaults.iconButtonColors(
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
+        shape = CircleShape,
+        color = Color.Transparent,
+        contentColor = colors.textSecondary,
     ) {
-        Icon(imageVector = icon, contentDescription = contentDescription)
+        Box(contentAlignment = Alignment.Center) {
+            Icon(imageVector = icon, contentDescription = contentDescription, modifier = Modifier.size(22.dp))
+        }
     }
 }
 
-/** 顶部品牌条：图标 + 站名 + 右侧动作。 */
+/** 顶部品牌条（身份页/启动页用）：图标 + 站名 + 右侧动作。 */
 @Composable
 fun BrandBar(
     modifier: Modifier = Modifier,
     actions: @Composable () -> Unit = {},
 ) {
+    val colors = rememberHarmonyColors()
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -204,25 +129,25 @@ fun BrandBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        BrandMark(size = 34.dp)
+        BrandMark(size = 28.dp)
         Box(modifier = Modifier.weight(1f)) {
             Text(
                 text = "班级工具站",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = CtText.bodyMedium,
+                color = colors.textPrimary,
             )
         }
         actions()
     }
 }
 
-/** 小胶囊标签。 */
+/** 小胶囊标签（鸿蒙 pill：品牌雾青 12% 底 + 雾青文字）。 */
 @Composable
 fun CtPill(
     text: String,
     modifier: Modifier = Modifier,
-    containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    contentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    containerColor: Color = harmonyTintLocal(),
+    contentColor: Color = MaterialTheme.colorScheme.primary,
 ) {
     Surface(
         modifier = modifier,
@@ -232,9 +157,18 @@ fun CtPill(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = CtText.caption,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
         )
     }
 }
 
+@Composable
+private fun harmonyTintLocal(): Color {
+    val colors = rememberHarmonyColors()
+    return if (colors.dark) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+    } else {
+        com.furina.classtools.ui.theme.HarmonyTokens.TintTeal
+    }
+}

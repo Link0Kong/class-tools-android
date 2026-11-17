@@ -1,6 +1,11 @@
 package com.furina.classtools
 
 import android.content.Context
+import com.furina.classtools.data.account.EcsOppoAccountApi
+import com.furina.classtools.data.account.HeytapOppoOAuthSdk
+import com.furina.classtools.data.account.OppoAccountConfig
+import com.furina.classtools.data.account.OppoAccountDeviceSupport
+import com.furina.classtools.data.account.OppoAccountManager
 import com.furina.classtools.data.auth.ApiAuthRepository
 import com.furina.classtools.data.auth.AuthRepository
 import com.furina.classtools.data.diag.AndroidDeviceProbe
@@ -31,6 +36,7 @@ import com.furina.classtools.data.member.DefaultClassLeagueRepository
 import com.furina.classtools.data.member.DefaultClassMembersRepository
 import com.furina.classtools.data.member.FileClassMemberCache
 import com.furina.classtools.data.network.ApiClient
+import com.furina.classtools.data.network.OkHttpTransport
 import com.furina.classtools.data.notices.DefaultNoticesRepository
 import com.furina.classtools.data.notices.NoticesRepository
 import com.furina.classtools.data.power.DefaultPowerRepository
@@ -120,6 +126,8 @@ class AppContainer(context: Context) {
             runCatching { oppoPushManager.onSessionChanged() }
             // 云空间会话绑定班级身份；切号/退出时丢弃内存会话与游标，避免串号。
             runCatching { cloudSpaceRepository.reset() }
+            // OPPO 账号绑定列表按学号区分：切号/退出时丢弃内存列表，避免显示上一个账号的绑定。
+            runCatching { oppoAccountManager.clearBindings() }
         }
     }
 
@@ -382,6 +390,39 @@ class AppContainer(context: Context) {
         return parts.joinToString(" ").ifBlank { "Android" }
     }
 
+    /**
+     * OPPO 账号服务（OPPO 账号绑定学号 ≤3 个 + OPPO 账号快捷登录）：
+     * - 凭证来自 `app/oppo.properties`（BuildConfig；空 = 未配置 → 身份页/「我的」入口隐藏）；
+     * - 客户端只把 OPPO SDK 的 authCode 交给 ECS `/account` 服务端验证，**不自行验证** OPPO token/openid；
+     * - 仅 ColorOS 手机展示入口（严格按 ColorOS/OPPO ROM 系统属性判断；非 ColorOS 隐藏）。
+     * 懒加载：未进入身份页/「我的」前不创建。
+     */
+    val oppoAccountManager: OppoAccountManager by lazy {
+        OppoAccountManager(
+            config = OppoAccountConfig.of(
+                appId = BuildConfig.OPPO_ACCOUNT_APP_ID,
+                appKey = BuildConfig.OPPO_ACCOUNT_APP_KEY,
+                scope = BuildConfig.OPPO_ACCOUNT_SCOPE,
+                baseUrl = BuildConfig.ACCOUNT_BASE_URL,
+            ),
+            api = EcsOppoAccountApi(transport = OkHttpTransport()),
+            oauth = HeytapOppoOAuthSdk(),
+            // 严格 ColorOS：只认 ColorOS/OPPO ROM 系统属性（用户 2026-11-17 晚要求，不再看品牌名）。
+            deviceSupported = OppoAccountDeviceSupport.isSupported(hasColorOsRom = hasColorOsRom()),
+        )
+    }
+
+    /** ColorOS 系系统属性探测（用户要求：只有 ColorOS 手机才显示 OPPO 账号入口；探测异常按「非 ColorOS」处理）。 */
+    private fun hasColorOsRom(): Boolean = runCatching {
+        val systemProperties = Class.forName("android.os.SystemProperties")
+        val get = systemProperties.getMethod("get", String::class.java)
+        OppoAccountDeviceSupport.COLOR_OS_ROM_PROPERTIES
+            .any { key ->
+                (runCatching { get.invoke(null, key) as? String }.getOrNull())
+                    ?.trim().orEmpty().isNotEmpty()
+            }
+    }.getOrDefault(false)
+
     init {
         // 启动不阻塞主线程：WorkManager 初始化与 ensureScheduled 放到后台作用域。
         appScope.launch { runCatching { reminderScheduler.ensureScheduled() } }
@@ -410,6 +451,7 @@ class AppContainer(context: Context) {
 
     /** 退出登录：清内存会话、名单缓存（本机业务数据按账号隔离，下次登录同账号仍可用）。 */
     suspend fun signOut() {
+        runCatching { oppoAccountManager.clearBindings() }
         activeSession = null
         sessionStore.clear()
         classMembersRepository.clear()

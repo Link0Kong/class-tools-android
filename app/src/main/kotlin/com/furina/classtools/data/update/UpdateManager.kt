@@ -14,15 +14,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 
 /**
- * 更新流程编排（检测 → 弹窗 → 自动下载 → sha256 校验 → 拉起系统安装器）。
+ * 更新流程编排（检测 → 弹窗 → 用户选择「立即更新」→ 下载 → sha256 校验 → 用户点「立即安装」拉起系统安装器）。
  *
- * 行为契约：
- * - [checkOnStart]：根级 `UpdateHost` 挂载（App 冷启动）时调用，**每次冷启动自动检查一次并直接弹窗**
- *   （去掉每日节流；[UpdateAutoCheckGate] 保证同一进程只自动检查一次，失败退避 = 进程内不自动重试）；
- * - 自动检查发现新版：弹窗 + **默认开始下载**（自动更新；进度可见，非强制可取消）；
- * - 手动检查（我的 → 检查更新）：不受自动检查闸门限制，弹窗等用户点「立即更新」；
- * - `force=true`：弹窗不可取消（无「稍后」、下载中无「取消」）；
- * - 下载完成自动拉起系统安装器（Android 不允许静默安装，由用户确认）；
+ * 行为契约（用户 2026-11-17 晚要求）：
+ * - [checkOnStart]：根级 `UpdateHost` 挂载（App 冷启动）时调用，**每次冷启动自动检查一次并只弹窗**，
+ *   **不自动下载**（[UpdateAutoCheckGate] 保证同一进程只自动检查一次）；
+ * - 手动检查（我的 → 检查更新）：同样只弹窗，等用户点「立即更新」；
+ * - 下载完成**不自动拉起安装器**：弹窗显示「立即安装」，由用户点击决定；
+ * - `force=true`：弹窗不可取消（无「稍后」、下载中无「取消下载」）；
  * - 所有网络失败静默降级（仅更新 [checkStatus]，不弹错误弹窗，不打扰离线使用）。
  *
  * 线程：公开方法主线程安全；网络/下载在 [scope]（IO）执行，UI 通过 [dialog]/[checkStatus] StateFlow 消费。
@@ -32,8 +31,12 @@ class UpdateManager(
     private val store: UpdateCheckStore,
     private val checker: UpdateChecker,
     private val downloader: UpdateApkDownloader,
-    /** 自动（启动静默）检查发现新版时是否默认开始下载（自动更新）。 */
-    private val autoDownloadOnAutomaticCheck: Boolean = true,
+    /** 当前安装版本名（弹窗副标题「当前 vX → 新版本 vY」；生产 = BuildConfig.VERSION_NAME）。 */
+    private val currentVersionName: String = UpdateVersion.normalize(BuildConfig.VERSION_NAME),
+    /** 拉起系统安装器（单测注入假实现，断言「下载完成不自动安装」）。 */
+    private val installLauncher: (Context, DownloadedApk) -> UpdateInstallLaunch = { ctx, apk ->
+        UpdateInstaller.launch(ctx, apk)
+    },
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
 
@@ -86,7 +89,7 @@ class UpdateManager(
                 val result = runCatching { checker.check() }.getOrElse { error ->
                     UpdateCheckResult.Failed(failureReason(error))
                 }
-                applyCheckResult(result, manual = false)
+                applyCheckResult(result)
             } finally {
                 checkMutex.unlock()
             }
@@ -94,7 +97,7 @@ class UpdateManager(
     }
 
     /** 手动检查（我的 → 检查更新；不受自动检查闸门限制）。返回结果给 UI 做 Toast/Snackbar 提示。 */
-    suspend fun checkNow(manual: Boolean = true): UpdateCheckResult {
+    suspend fun checkNow(): UpdateCheckResult {
         if (!checkMutex.tryLock()) {
             return UpdateCheckResult.Failed("正在检查，请稍候")
         }
@@ -103,21 +106,19 @@ class UpdateManager(
             val result = runCatching { checker.check() }.getOrElse { error ->
                 UpdateCheckResult.Failed(failureReason(error))
             }
-            applyCheckResult(result, manual = manual)
+            applyCheckResult(result)
             return result
         } finally {
             checkMutex.unlock()
         }
     }
 
-    private fun applyCheckResult(result: UpdateCheckResult, manual: Boolean) {
+    private fun applyCheckResult(result: UpdateCheckResult) {
         when (result) {
             is UpdateCheckResult.Available -> {
+                // 只弹窗：自动检查/手动检查都等用户点「立即更新」（用户 2026-11-17 晚要求）。
                 _checkStatus.value = UpdateCheckStatus.Available(result.info)
                 openDialog(result.info)
-                if (!manual && autoDownloadOnAutomaticCheck) {
-                    startDownload()
-                }
             }
 
             is UpdateCheckResult.UpToDate -> {
@@ -134,7 +135,7 @@ class UpdateManager(
         val current = _dialog.value
         if (current != null && current.info.versionCode == info.versionCode) return
         downloadedApk = null
-        _dialog.value = UpdateDialogUi(info = info)
+        _dialog.value = UpdateDialogUi(info = info, currentVersionName = currentVersionName)
     }
 
     // ------------------------------------------------------------ 下载
@@ -144,10 +145,7 @@ class UpdateManager(
         val ui = _dialog.value ?: return
         when (ui.download) {
             is UpdateDownloadState.Downloading -> return
-            is UpdateDownloadState.Ready -> {
-                install()
-                return
-            }
+            is UpdateDownloadState.Ready -> return
 
             else -> Unit
         }
@@ -201,13 +199,12 @@ class UpdateManager(
                     }
                 }
                 downloadedApk = event.apk
+                // 下载完成只更新状态：**不自动拉起安装器**，弹窗显示「立即安装」由用户点击。
                 _dialog.value = current.copy(
                     download = UpdateDownloadState.Ready(event.apk),
                     installPermissionBlocked = false,
                     installLaunched = false,
                 )
-                // 下载完成自动拉起系统安装器（仍需用户确认；不静默安装）。
-                install()
             }
 
             is UpdateDownloadEvent.Failed -> {
@@ -242,7 +239,7 @@ class UpdateManager(
     fun install() {
         val ui = _dialog.value ?: return
         val apk = downloadedApk ?: (ui.download as? UpdateDownloadState.Ready)?.apk ?: return
-        when (UpdateInstaller.launch(context, apk)) {
+        when (installLauncher(context, apk)) {
             UpdateInstallLaunch.LAUNCHED -> {
                 _dialog.value = _dialog.value?.copy(
                     installPermissionBlocked = false,
@@ -311,6 +308,7 @@ class UpdateManager(
                     preferred = DownloadManagerUpdateDownloader(appContext),
                     fallback = OkHttpUpdateDownloader(appContext),
                 ),
+                currentVersionName = currentVersionName,
             )
         }
     }

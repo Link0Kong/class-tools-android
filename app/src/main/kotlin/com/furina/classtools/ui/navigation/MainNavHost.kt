@@ -75,6 +75,10 @@ import com.furina.classtools.data.reminder.OneShotScheduleResult
 import com.furina.classtools.data.reminder.ReminderOneShot
 import com.furina.classtools.data.reminder.ReminderOneShotFactory
 import com.furina.classtools.data.reminder.ReminderSettings
+import com.furina.classtools.data.account.OppoAccountText
+import com.furina.classtools.data.account.OppoBindResult
+import com.furina.classtools.data.account.OppoBindingsUiState
+import com.furina.classtools.data.account.OppoUnbindResult
 import com.furina.classtools.data.push.OppPushClick
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
@@ -120,6 +124,7 @@ import com.furina.classtools.ui.screens.power.PowerScreen
 import com.furina.classtools.ui.screens.ppt.PptDownloadDetailScreen
 import com.furina.classtools.ui.screens.ppt.PptListScreen
 import com.furina.classtools.ui.screens.ppt.PptPlayerScreen
+import com.furina.classtools.ui.screens.profile.OppoAccountSheet
 import com.furina.classtools.ui.screens.profile.ProfileScreen
 import com.furina.classtools.ui.screens.roster.RollCallScreen
 import com.furina.classtools.ui.screens.roster.RosterScreen
@@ -132,6 +137,7 @@ import com.furina.classtools.ui.screens.vote.VoteListScreen
 import com.furina.classtools.ui.screens.vote.VoteMemberSource
 import com.furina.classtools.ui.screens.tools.ToolPlaceholderScreen
 import com.furina.classtools.ui.screens.water.WaterScreen
+import com.furina.classtools.ui.theme.findActivity
 import kotlinx.coroutines.launch
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.serialization.json.JsonArray
@@ -1061,6 +1067,69 @@ private fun RootTabs(
     // OPPO PUSH 状态不再在「我的」页展示（用户要求移除 OPPO 通知配置入口）；
     // 服务端推送仍由 AppContainer 内的 OppoPushManager 在启动/会话变化时注册，UI 无入口。
 
+    // OPPO 账号（绑定学号 ≤3 个）：入口仅在已配置账号服务 + **严格 ColorOS 设备**时展示。
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val activity = remember(context) { context.findActivity() }
+    val oppoAccountManager = container.oppoAccountManager
+    val oppoBindingsState by oppoAccountManager.bindingsState.collectAsStateWithLifecycle()
+    var showOppoAccountSheet by remember { mutableStateOf(false) }
+    var oppoAccountBusy by remember { mutableStateOf(false) }
+    val oppoAccountLabel = when (val state = oppoBindingsState) {
+        is OppoBindingsUiState.Ready -> OppoAccountText.bindingsLabel(state.page.count, state.page.max)
+        is OppoBindingsUiState.Loading, is OppoBindingsUiState.Error -> "读取中…"
+        OppoBindingsUiState.Idle -> ""
+    }
+
+    /** 拉取 OPPO 绑定列表（进入「我的」/打开弹层时；失败静默，列表内有「重试」）。 */
+    fun refreshOppoBindings() {
+        if (!oppoAccountManager.bindingsAvailable || session.token.isBlank()) return
+        scope.launch { runCatching { oppoAccountManager.refreshBindings(session.token) } }
+    }
+
+    LaunchedEffect(pagerState.currentPage, showOppoAccountSheet) {
+        // 进入「我的」页或打开账号弹层时刷新一次（1 个轻量请求；失败静默）。
+        if (pagerState.currentPage == 2 || showOppoAccountSheet) refreshOppoBindings()
+    }
+
+    /** 绑定：拉起 OPPO 授权 → `POST /oppo/bind`（带当前班级 token）；结果 Toast（简洁，不写长文）。 */
+    fun bindOppoAccount() {
+        val host = activity ?: run {
+            android.widget.Toast.makeText(context, "当前环境不支持 OPPO 账号授权", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (oppoAccountBusy) return
+        oppoAccountBusy = true
+        scope.launch {
+            val result = runCatching { oppoAccountManager.bind(host, session.token) }
+                .getOrElse { OppoBindResult.Failure("unexpected", "绑定失败，请重试") }
+            oppoAccountBusy = false
+            val message = when (result) {
+                is OppoBindResult.Success -> "已绑定 OPPO 账号"
+                is OppoBindResult.Limit -> result.message
+                is OppoBindResult.BoundElsewhere -> "该 OPPO 账号已绑定其他学号"
+                is OppoBindResult.Failure -> result.message
+            }
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** 解绑：`POST /oppo/unbind`；成功后列表自动刷新。 */
+    fun unbindOppoAccount(bindingId: Long) {
+        if (oppoAccountBusy) return
+        oppoAccountBusy = true
+        scope.launch {
+            val result = runCatching { oppoAccountManager.unbind(session.token, bindingId) }
+                .getOrElse { OppoUnbindResult.Failure("unexpected", "解绑失败，请重试") }
+            oppoAccountBusy = false
+            val message = when (result) {
+                is OppoUnbindResult.Success -> "已解绑"
+                is OppoUnbindResult.Failure -> result.message
+            }
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val showNotificationPermissionBanner = !notificationGranted && reminderSettings.enabled
     Box(modifier = Modifier.fillMaxSize()) {
         CtTabPager(
@@ -1092,6 +1161,8 @@ private fun RootTabs(
                     AllToolsScreen(
                         onOpenTool = onOpenTool,
                         userDataRepository = container.userDataRepository,
+                        quickToolIds = quickToolIds,
+                        onQuickToolsChange = onHomeToolsChange,
                     )
                 }
 
@@ -1108,6 +1179,9 @@ private fun RootTabs(
                         onOpenReminderSettings = onOpenReminderSettings,
                         meStats = meStats,
                         reminderStatus = reminderStatus,
+                        oppoAccountAvailable = oppoAccountManager.bindingsAvailable,
+                        oppoAccountLabel = oppoAccountLabel,
+                        onOpenOppoAccount = { showOppoAccountSheet = true },
                         onOpenFeedback = onOpenFeedback,
                         onOpenGuide = onOpenGuide,
                         dynamicColorEnabled = dynamicColorEnabled,
@@ -1115,6 +1189,20 @@ private fun RootTabs(
                     )
                 }
             }
+        }
+
+        // OPPO 账号绑定管理弹层（列表/绑定/解绑；入口在「我的 → 账号」）。
+        if (showOppoAccountSheet) {
+            OppoAccountSheet(
+                bindingsState = oppoBindingsState,
+                busy = oppoAccountBusy,
+                maxBindings = (oppoBindingsState as? OppoBindingsUiState.Ready)?.page?.max
+                    ?: OppoAccountText.DEFAULT_MAX_BINDINGS,
+                onDismiss = { if (!oppoAccountBusy) showOppoAccountSheet = false },
+                onRefresh = { refreshOppoBindings() },
+                onBind = { bindOppoAccount() },
+                onUnbind = { binding -> unbindOppoAccount(binding.id) },
+            )
         }
 
         // 底部安全区背景：与页面底色一致，避免部分 ROM（ColorOS 等）在导航栏区域留下黑色系统条。

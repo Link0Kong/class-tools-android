@@ -13,17 +13,22 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,11 +49,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.BuildConfig
 import com.furina.classtools.data.auth.AuthRepository
+import com.furina.classtools.data.account.OppoQuickLoginClick
+import com.furina.classtools.data.account.OppoQuickLoginRule
 import com.furina.classtools.data.auth.VerifyResult
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.ui.components.BrandMark
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -70,6 +78,14 @@ fun IdentityScreen(
     authRepository: AuthRepository,
     onVerified: (Session) -> Unit,
     modifier: Modifier = Modifier,
+    /** 是否展示「OPPO 账号快捷登录」（已配置账号服务 + **严格 ColorOS 设备**；由调用方决定）。 */
+    oppoQuickLoginAvailable: Boolean = false,
+    /** OPPO 授权进行中（按钮转圈并禁用，防重复拉起授权页）。 */
+    oppoLoginInProgress: Boolean = false,
+    /** 非空时弹简洁提示（未绑定/授权失败等）；确认后由调用方清空。 */
+    oppoLoginError: String? = null,
+    onOppoQuickLogin: () -> Unit = {},
+    onDismissOppoError: () -> Unit = {},
 ) {
     var studentId by rememberSaveable { mutableStateOf("") }
     var name by rememberSaveable { mutableStateOf("") }
@@ -77,6 +93,8 @@ fun IdentityScreen(
     var consentAccepted by rememberSaveable { mutableStateOf(false) }
     var showPrivacy by rememberSaveable { mutableStateOf(false) }
     var showAgreement by rememberSaveable { mutableStateOf(false) }
+    // 未勾选协议时点快捷登录 → 按钮下方简短提示（用户 2026-11-17 晚要求，不静默禁用）。
+    var consentHint by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     // 360×640dp 等矮屏：压缩顶部品牌区与卡片间距，保证「进入工具站」首屏可见（P2 适配）。
     val compactHeight = LocalConfiguration.current.screenHeightDp < 720
@@ -107,24 +125,24 @@ fun IdentityScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
-                .padding(horizontal = if (compactHeight) 16.dp else 24.dp),
+                .padding(horizontal = com.furina.classtools.ui.theme.HarmonyTokens.PagePadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(modifier = Modifier.height(if (compactHeight) 18.dp else 56.dp))
 
-            BrandMark(size = if (compactHeight) 46.dp else 68.dp)
+            BrandMark(size = if (compactHeight) 48.dp else 56.dp)
 
             Spacer(modifier = Modifier.height(if (compactHeight) 10.dp else 20.dp))
 
             Text(
                 text = "班级工具站",
-                style = MaterialTheme.typography.headlineLarge,
+                style = com.furina.classtools.ui.theme.CtText.title,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "学号 + 姓名核验后使用",
-                style = MaterialTheme.typography.bodyMedium,
+                style = com.furina.classtools.ui.theme.CtText.body,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
@@ -140,22 +158,96 @@ fun IdentityScreen(
 
             Spacer(modifier = Modifier.height(if (compactHeight) 12.dp else 28.dp))
 
-            Surface(
+            CtGlassCard(
                 modifier = Modifier.widthIn(max = 520.dp),
-                shape = CtShapeTokens.hero,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = CtShapeTokens.cardLarge,
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(if (compactHeight) 14.dp else 20.dp),
+                        .padding(if (compactHeight) 14.dp else 18.dp),
                     verticalArrangement = Arrangement.spacedBy(if (compactHeight) 10.dp else 14.dp),
                 ) {
                     Text(
                         text = "身份核验",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = com.furina.classtools.ui.theme.CtText.bodyMedium,
                     )
+
+                    // OPPO 账号快捷登录：独立于学号+姓名表单，放在表单上方（用户 2026-11-17 晚反馈：
+                    // 未填学号/姓名也应能用；按钮只依赖协议勾选与授权中状态）。
+                    if (oppoQuickLoginAvailable) {
+                        OutlinedButton(
+                            onClick = {
+                                when (
+                                    OppoQuickLoginRule.onClick(
+                                        consentAccepted = consentAccepted,
+                                        authorizing = oppoLoginInProgress,
+                                        verifying = verifying,
+                                    )
+                                ) {
+                                    OppoQuickLoginClick.Trigger -> {
+                                        consentHint = false
+                                        onOppoQuickLogin()
+                                    }
+
+                                    OppoQuickLoginClick.ShowConsentHint -> consentHint = true
+                                    OppoQuickLoginClick.Ignore -> Unit
+                                }
+                            },
+                            enabled = OppoQuickLoginRule.isButtonEnabled(
+                                authorizing = oppoLoginInProgress,
+                                verifying = verifying,
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = CtShapeTokens.pill,
+                        ) {
+                            if (oppoLoginInProgress) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.AccountCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "OPPO 账号快捷登录",
+                                    style = com.furina.classtools.ui.theme.CtText.label,
+                                )
+                            }
+                        }
+                        if (consentHint && !consentAccepted) {
+                            Text(
+                                text = OppoQuickLoginRule.CONSENT_HINT,
+                                style = com.furina.classtools.ui.theme.CtText.caption,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
+                            Text(
+                                text = "或",
+                                style = com.furina.classtools.ui.theme.CtText.caption,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
+                        }
+                    }
 
                     OutlinedTextField(
                         value = studentId,
@@ -168,6 +260,13 @@ fun IdentityScreen(
                         placeholder = { Text("10 位学号") },
                         singleLine = true,
                         shape = CtShapeTokens.input,
+                        textStyle = com.furina.classtools.ui.theme.CtText.body,
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.background,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                            unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                        ),
                         isError = studentId.isNotEmpty() && studentId.length != 10,
                         supportingText = {
                             if (studentId.isNotEmpty() && studentId.length != 10) {
@@ -191,13 +290,20 @@ fun IdentityScreen(
                         placeholder = { Text("请输入姓名") },
                         singleLine = true,
                         shape = CtShapeTokens.input,
+                        textStyle = com.furina.classtools.ui.theme.CtText.body,
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.background,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                            unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                        ),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     )
 
                     if (uiState is IdentityUiState.Error) {
                         Text(
                             text = (uiState as IdentityUiState.Error).message,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = com.furina.classtools.ui.theme.CtText.caption,
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
@@ -213,7 +319,7 @@ fun IdentityScreen(
                             )
                             Text(
                                 text = "我已阅读并同意",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = com.furina.classtools.ui.theme.CtText.caption,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -236,7 +342,7 @@ fun IdentityScreen(
                         enabled = canSubmit,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(54.dp),
+                            .height(com.furina.classtools.ui.theme.HarmonyTokens.ButtonHeight),
                         shape = CtShapeTokens.pill,
                     ) {
                         if (verifying) {
@@ -248,7 +354,7 @@ fun IdentityScreen(
                         } else {
                             Text(
                                 text = "进入工具站",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = com.furina.classtools.ui.theme.CtText.bodyMedium,
                             )
                         }
                     }
@@ -263,7 +369,7 @@ fun IdentityScreen(
                     if (!canSubmit && disabledReason != null) {
                         Text(
                             text = disabledReason,
-                            style = MaterialTheme.typography.labelSmall,
+                            style = com.furina.classtools.ui.theme.CtText.caption,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -285,7 +391,7 @@ fun IdentityScreen(
                 )
                 Text(
                     text = "仅用于班级名单核验",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = com.furina.classtools.ui.theme.CtText.caption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Start,
                 )
@@ -313,7 +419,7 @@ fun IdentityScreen(
             Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "v${BuildConfig.VERSION_NAME} · Android 17 设计语言",
-                style = MaterialTheme.typography.labelSmall,
+                style = com.furina.classtools.ui.theme.CtText.caption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -322,4 +428,21 @@ fun IdentityScreen(
 
     if (showPrivacy) PrivacyPolicyDialog(onDismiss = { showPrivacy = false })
     if (showAgreement) UserAgreementDialog(onDismiss = { showAgreement = false })
+
+    // OPPO 快捷登录失败/未绑定：简短弹窗（不写长说明；确认后清空由调用方处理）。
+    oppoLoginError?.let { message ->
+        AlertDialog(
+            onDismissRequest = onDismissOppoError,
+            title = { Text("OPPO 账号登录") },
+            text = {
+                Text(
+                    text = message,
+                    style = com.furina.classtools.ui.theme.CtText.body,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onDismissOppoError) { Text("知道了") }
+            },
+        )
+    }
 }

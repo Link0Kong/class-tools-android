@@ -131,22 +131,15 @@ fun CtFloatingDock(
         label = "dockPillScaleY",
     )
 
-    // 浅色：近白 tonal 底（与页面底色同族）+ 1dp 细边框，靠边框而不是黑色投影区分层次。
-    // 深色：保持原半透明 surface 底与克制阴影。
-    val containerColor = when {
-        !translucent -> MaterialTheme.colorScheme.surfaceContainer
-        dark -> MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
-        else -> MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.92f)
-    }
-    val borderColor = if (dark) {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+    // 2026-11-17 鸿蒙对齐：底栏为浅色实底（BAR_LIGHT）#FBFCFC/深色 card，发丝线分层，不再玻璃/渐变。
+    val containerColor = if (dark) {
+        MaterialTheme.colorScheme.surfaceContainerLow
     } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.60f)
+        com.furina.classtools.ui.theme.HarmonyTokens.BarLight
     }
-    // 浅色 0dp：不产生黑色投影晕影；深色保留 6dp 克制阴影（原 12dp 过重）。
-    val dockShadowElevation = if (dark) 6.dp else 0.dp
-    // 选中药丸同理：浅色无投影，深色 2dp 轻微悬浮。
-    val pillShadowElevation = if (dark) 2.dp else 0.dp
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
+    val dockShadowElevation = 0.dp
+    val pillShadowElevation = 0.dp
 
     Box(
         modifier = modifier
@@ -158,14 +151,13 @@ fun CtFloatingDock(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 480.dp)
-                .then(glassModifier ?: Modifier),
-            shape = RoundedCornerShape(32.dp),
-            color = if (glassModifier != null) Color.Transparent else containerColor,
+                .widthIn(max = 480.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = containerColor,
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = 0.dp,
             shadowElevation = dockShadowElevation,
-            border = BorderStroke(1.dp, borderColor),
+            border = BorderStroke(0.5.dp, borderColor),
         ) {
             androidx.compose.foundation.layout.BoxWithConstraints(
                 modifier = Modifier
@@ -245,11 +237,12 @@ fun CtFloatingDock(
                             scaleY = pillScaleY
                         },
                     shape = CtShapeTokens.pill,
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.95f),
-                    border = BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.surfaceBright.copy(alpha = 0.55f),
-                    ),
+                    color = if (dark) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+                    } else {
+                        com.furina.classtools.ui.theme.HarmonyTokens.TintTeal
+                    },
+                    border = BorderStroke(0.dp, Color.Transparent),
                     shadowElevation = pillShadowElevation,
                 ) {}
 
@@ -301,7 +294,7 @@ private fun DockItem(
     )
     val contentColor by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.onSecondaryContainer
+            MaterialTheme.colorScheme.primary
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },

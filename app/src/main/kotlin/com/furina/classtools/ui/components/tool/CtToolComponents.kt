@@ -1,11 +1,11 @@
 package com.furina.classtools.ui.components.tool
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,11 +13,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -26,21 +27,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.theme.HarmonyTokens
+import com.furina.classtools.ui.theme.harmonyTint
+import com.furina.classtools.ui.theme.rememberHarmonyColors
+
+// =============================================================================
+// 工具页统一组件（2026-11-17 按鸿蒙端重做：白卡 18 圆角浅阴影 + 19/15/13/12 字号层级）
+//
+// 只改视觉，不改任何业务逻辑；各工具页继续按原 API 调用即可获得鸿蒙观感。
+// =============================================================================
 
 /**
- * 工具页 v6 设计语言（参考 HFUT-Schedule 的大圆角卡片层级 + xiaoying 的柔和卡片/胶囊，只借鉴规律）：
- *
- * - 工具页顶栏统一用 [CtTopBar]（全局已更新为透明大标题 + 圆形玻璃返回/动作）；
- * - 内容卡片统一 [CtToolCard]：20dp 圆角、surfaceContainerLow 底、1dp 软描边、16·14dp 内边距、可选标题行；
- * - 分组标题统一 [CtToolSectionHeader]：标题 + 可选说明 + 右侧动作；
- * - 表单/按钮/分段/筛选都提供轻量组件，避免各页面继续用不同风格。
- *
- * 这些组件不改变任何业务逻辑，只负责视觉与层级；各工具页按同一套组件迁移即可获得一致观感。
+ * 工具页内容卡：纯白（深色 surface）18dp 圆角 + 轻阴影；无玻璃/渐变/重描边。
+ * 可选标题行（标题 15 Medium + 说明 12）。
  */
 @Composable
 fun CtToolCard(
@@ -48,19 +54,26 @@ fun CtToolCard(
     title: String? = null,
     subtitle: String? = null,
     trailing: (@Composable () -> Unit)? = null,
-    contentPadding: androidx.compose.foundation.layout.PaddingValues =
-        androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+    contentPadding: PaddingValues = PaddingValues(
+        horizontal = HarmonyTokens.CardPadding,
+        vertical = HarmonyTokens.CardPadding,
+    ),
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val colors = rememberHarmonyColors()
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f),
-        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = HarmonyTokens.CardShadowElevation,
+                shape = RoundedCornerShape(HarmonyTokens.RadiusCard),
+                clip = false,
+                ambientColor = HarmonyTokens.CardShadowColor,
+                spotColor = HarmonyTokens.CardShadowColor,
+            ),
+        shape = RoundedCornerShape(HarmonyTokens.RadiusCard),
+        color = colors.card,
+        contentColor = colors.textPrimary,
     ) {
         Column(modifier = Modifier.padding(contentPadding)) {
             if (title != null) {
@@ -71,16 +84,16 @@ fun CtToolCard(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
+                            style = CtText.bodyMedium,
+                            color = colors.textPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                         if (subtitle != null) {
                             Text(
                                 text = subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = CtText.caption,
+                                color = colors.textSecondary,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -88,13 +101,14 @@ fun CtToolCard(
                     }
                     trailing?.invoke()
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
             }
             content()
         }
     }
 }
 
+/** 分组小标题（对齐鸿蒙 SectionHeader：19 Medium + 可选右侧文字操作）。 */
 @Composable
 fun CtToolSectionHeader(
     title: String,
@@ -102,26 +116,26 @@ fun CtToolSectionHeader(
     subtitle: String? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    val colors = rememberHarmonyColors()
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            .padding(bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = CtText.heading,
+                color = colors.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = CtText.caption,
+                    color = colors.textSecondary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -131,7 +145,7 @@ fun CtToolSectionHeader(
     }
 }
 
-/** 工具页主操作按钮：品牌色胶囊，统一高度 52dp。 */
+/** 工具页主操作按钮：品牌雾青胶囊，统一高度 48dp、15sp Medium。 */
 @Composable
 fun CtToolPrimaryButton(
     text: String,
@@ -143,7 +157,7 @@ fun CtToolPrimaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp),
+            .heightIn(min = HarmonyTokens.ButtonHeight),
         enabled = enabled,
         shape = CtShapeTokens.pill,
         colors = ButtonDefaults.buttonColors(
@@ -151,15 +165,11 @@ fun CtToolPrimaryButton(
             contentColor = MaterialTheme.colorScheme.onPrimary,
         ),
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Text(text = text, style = CtText.bodyMedium)
     }
 }
 
-/** 工具页分段选择：胶囊底 + 选中白色浮层（M3 segmented 的轻量实现）。 */
+/** 工具页分段选择：浅灰胶囊底 + 选中白色浮层（鸿蒙 segmented 轻量实现）。 */
 @Composable
 fun CtToolSegmented(
     options: List<String>,
@@ -167,10 +177,11 @@ fun CtToolSegmented(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val colors = rememberHarmonyColors()
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = CtShapeTokens.pill,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = if (colors.dark) colors.card else colors.background,
     ) {
         Row(
             modifier = Modifier.padding(4.dp),
@@ -184,23 +195,14 @@ fun CtToolSegmented(
                         .weight(1f)
                         .heightIn(min = 44.dp),
                     shape = CtShapeTokens.pill,
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.surface
-                    } else {
-                        Color.Transparent
-                    },
-                    contentColor = if (selected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    tonalElevation = if (selected) 1.dp else 0.dp,
+                    color = if (selected) colors.card else Color.Transparent,
+                    contentColor = if (selected) colors.textPrimary else colors.textSecondary,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = label,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                            style = CtText.label,
+                            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -211,15 +213,16 @@ fun CtToolSegmented(
     }
 }
 
-/** 工具页信息行：左侧标签 + 右侧数值/动作，用于卡片内列表。 */
+/** 工具页信息行：左侧标签 13 + 右侧数值 15 Medium，最小高度 44dp。 */
 @Composable
 fun CtToolInfoRow(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
-    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+    valueColor: Color = Color.Unspecified,
     leading: (@Composable () -> Unit)? = null,
 ) {
+    val colors = rememberHarmonyColors()
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -230,8 +233,8 @@ fun CtToolInfoRow(
         leading?.invoke()
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = CtText.label,
+            color = colors.textSecondary,
             modifier = Modifier.weight(1f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -239,49 +242,48 @@ fun CtToolInfoRow(
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = valueColor,
+            style = CtText.bodyMedium,
+            color = if (valueColor == Color.Unspecified) colors.textPrimary else valueColor,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
-/** 小统计块：大数字 + 标签（电费/体测/作业摘要通用）。 */
+/** 小统计块：大数字 26 Bold + 标签 12（鸿蒙 hero/电费数字层级）。 */
 @Composable
 fun CtToolStat(
     value: String,
     label: String,
     modifier: Modifier = Modifier,
-    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+    valueColor: Color = Color.Unspecified,
 ) {
+    val colors = rememberHarmonyColors()
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
+            .clip(RoundedCornerShape(HarmonyTokens.RadiusInput))
+            .background(if (colors.dark) colors.bar else colors.background)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.Start,
     ) {
         Text(
             text = value,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = valueColor,
+            style = CtText.title,
+            color = if (valueColor == Color.Unspecified) colors.textPrimary else valueColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = CtText.caption,
+            color = colors.textSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
-/** 填充式输入框：无硬描边、surfaceContainerHigh 底、18dp 圆角，标题在上方。 */
+/** 填充式输入框：14dp 圆角、BG 底、无硬描边；标题 13。 */
 @Composable
 fun CtToolField(
     label: String,
@@ -294,30 +296,39 @@ fun CtToolField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    val colors = rememberHarmonyColors()
     Column(modifier = modifier) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+            style = CtText.label,
+            color = colors.textSecondary,
+            modifier = Modifier.padding(start = 2.dp, bottom = 6.dp),
         )
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
             enabled = enabled,
             singleLine = singleLine,
-            textStyle = MaterialTheme.typography.bodyLarge,
+            textStyle = CtText.body,
             placeholder = placeholder?.let { p ->
-                { Text(text = p, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) }
+                {
+                    Text(
+                        text = p,
+                        style = CtText.body,
+                        color = colors.textTertiary,
+                    )
+                }
             },
             trailingIcon = trailing,
             keyboardOptions = keyboardOptions,
-            shape = RoundedCornerShape(18.dp),
+            shape = CtShapeTokens.input,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.4f),
+                focusedContainerColor = colors.background,
+                unfocusedContainerColor = colors.background,
+                disabledContainerColor = colors.background.copy(alpha = 0.5f),
                 focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
                 unfocusedBorderColor = Color.Transparent,
                 disabledBorderColor = Color.Transparent,
@@ -326,7 +337,7 @@ fun CtToolField(
     }
 }
 
-/** 统一筛选/选择胶囊（不依赖 M3 FilterChip 的默认描边，与 v6 卡片同语言）。 */
+/** 统一筛选/选择胶囊（鸿蒙 pill：选中雾青 12% 底 + 雾青字；未选浅灰底）。 */
 @Composable
 fun CtToolChip(
     text: String,
@@ -334,29 +345,32 @@ fun CtToolChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val colors = rememberHarmonyColors()
     Surface(
         onClick = onClick,
         modifier = modifier.heightIn(min = 40.dp),
-        shape = CtShapeTokens.pill,
+        shape = CircleShape,
         color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
+            harmonyTint(MaterialTheme.colorScheme.primary)
+        } else if (colors.dark) {
+            colors.card
         } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f)
+            colors.background
         },
         contentColor = if (selected) {
-            MaterialTheme.colorScheme.onPrimaryContainer
+            MaterialTheme.colorScheme.primary
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
+            colors.textSecondary
         },
     ) {
         Box(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                style = CtText.label,
+                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

@@ -15,6 +15,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 
 // =============================================================================
 // 纯逻辑（无 android.*）：JSON 解析 / 版本比较 / 端点 fallback / 冷启动自动检查闸门 /
@@ -23,18 +24,18 @@ import kotlinx.serialization.json.intOrNull
 
 /** 测试版本标识（Gradle buildConfigField 单一来源：app/build.gradle.kts）。 */
 object UpdateTestVersion {
-    /** 测试版本序号（当前 1 → 1.0.0-beta1）。 */
+    /** 测试版本序号（当前 3 → 1.0.0-beta3）。 */
     val version: Int
         get() = BuildConfig.TEST_VERSION
 
-    /** 「测试版本」文案（关于页 / 更新弹窗标题）。 */
+    /** 「测试版本」文案（关于页 / 更新弹窗渠道标签）。 */
     val label: String
         get() = BuildConfig.TEST_VERSION_LABEL
 
-    /** 更新弹窗标题：发现新版本 · 测试版本。 */
-    fun dialogTitle(): String = "发现新版本 · $label"
+    /** 更新弹窗标题：发现新版本（用户 2026-11-17 晚要求；测试版本号移到弹窗内容/渠道行）。 */
+    fun dialogTitle(): String = "发现新版本"
 
-    /** 关于页版本展示：v1.0.0-beta1（测试版本）。Debug 包名后缀 -debug 不展示。 */
+    /** 关于页版本展示：v1.0.0-beta3（测试版本）。Debug 包名后缀 -debug 不展示。 */
     fun versionDisplay(versionName: String): String = "v${UpdateVersion.normalize(versionName)}（$label）"
 }
 
@@ -144,6 +145,7 @@ object UpdateJsonParser {
             channel = stringField(root["channel"])?.takeIf { it.isNotEmpty() }
                 ?: UpdateInfo.DEFAULT_CHANNEL,
             sha256 = stringField(root["sha256"]).orEmpty(),
+            sizeBytes = longField(root["sizeBytes"])?.takeIf { it > 0 },
         )
     }
 
@@ -168,6 +170,11 @@ object UpdateJsonParser {
     private fun intField(element: JsonElement?): Int? {
         val primitive = element as? JsonPrimitive ?: return null
         return primitive.intOrNull ?: primitive.contentOrNull?.trim()?.toIntOrNull()
+    }
+
+    private fun longField(element: JsonElement?): Long? {
+        val primitive = element as? JsonPrimitive ?: return null
+        return primitive.longOrNull ?: primitive.contentOrNull?.trim()?.toLongOrNull()
     }
 
     private fun boolField(element: JsonElement?): Boolean {
@@ -222,15 +229,17 @@ class UpdateAutoCheckGate {
     }
 }
 
-/** 强制更新 / 自动下载规则。 */
+/**
+ * 强制更新 / 下载取消规则。
+ *
+ * 用户 2026-11-17 晚要求：检测到新版本**只弹窗**，不自动下载、下载完成也不自动拉起安装器；
+ * 由用户在弹窗里选择「立即更新 / 稍后」「立即安装」。
+ */
 object UpdateDialogPolicy {
     /** 非强制版本可以「稍后」；force=true 时不可取消（无稍后、无取消下载）。 */
     fun isDismissible(info: UpdateInfo): Boolean = !info.force
 
     fun canCancelDownload(info: UpdateInfo): Boolean = !info.force
-
-    /** 自动（启动静默）检查发现新版 → 默认开始下载（自动更新）；手动检查等用户点「立即更新」。 */
-    fun shouldAutoDownload(info: UpdateInfo, manualCheck: Boolean): Boolean = !manualCheck
 }
 
 /** 下载进度换算。 */
@@ -328,5 +337,38 @@ object UpdateFormat {
         val mb = kb / 1024.0
         if (mb < 1024.0) return "%.1f MB".format(mb)
         return "%.2f GB".format(mb / 1024.0)
+    }
+}
+
+/**
+ * 更新弹窗文案（纯函数，便于 JVM 单测；UI 只做排版）：
+ * - 标题固定「发现新版本」；
+ * - 副标题「当前 vX → 新版本 vY」（当前版本由 Manager 从 BuildConfig 注入）；
+ * - 包大小 / 渠道为可选行（缺省不显示）。
+ */
+object UpdateDialogText {
+
+    fun title(): String = "发现新版本"
+
+    /** 当前 vX → 新版本 vY（当前版本未知时只显示新版本）。 */
+    fun subtitle(currentVersionName: String, info: UpdateInfo): String {
+        val current = UpdateVersion.normalize(currentVersionName)
+        val target = UpdateVersion.normalize(info.versionName.ifBlank { info.versionCode.toString() })
+        return if (current.isBlank()) "新版本 v$target" else "当前 v$current → 新版本 v$target"
+    }
+
+    /** 包大小行（`sizeBytes` 缺省/非法 → null，不显示）。 */
+    fun sizeText(info: UpdateInfo): String? =
+        info.sizeBytes?.takeIf { it > 0L }?.let { "包大小：${UpdateFormat.bytes(it)}" }
+
+    /** 渠道行（空渠道 → null，不显示）。 */
+    fun channelText(info: UpdateInfo): String? =
+        info.channel.trim().takeIf { it.isNotEmpty() }?.let { "渠道：$it" }
+
+    /** 下载完成后的提示（不自动拉起安装器，等用户点「立即安装」）。 */
+    fun readyText(installLaunched: Boolean): String = if (installLaunched) {
+        "已打开系统安装器，请在系统界面确认安装。"
+    } else {
+        "下载完成，点击「立即安装」。"
     }
 }

@@ -27,6 +27,18 @@ val oppoProps = Properties().apply {
 val oppoAppKey = (oppoProps.getProperty("oppo.appKey") ?: "").trim()
 val oppoAppSecret = (oppoProps.getProperty("oppo.appSecret") ?: "").trim()
 
+// OPPO 账号服务 OAuth（账号快捷登录 / 学号绑定）：同一本机文件 app/oppo.properties 的
+// oppo.accountAppId / oppo.accountAppKey / oppo.accountScope（与推送 AppKey/AppSecret 可能不同；
+// 未配置 → 快捷登录入口隐藏、绑定入口隐藏，其它功能不受影响）。
+val oppoAccountAppId = (oppoProps.getProperty("oppo.accountAppId") ?: "").trim()
+val oppoAccountAppKey = (oppoProps.getProperty("oppo.accountAppKey") ?: "").trim()
+// scope 默认仅 openid（官方文档最小要求）；如需昵称/unionid 由开放平台申请权限后在此覆盖（空格分隔）。
+val oppoAccountScope = (oppoProps.getProperty("oppo.accountScope") ?: "").trim().ifBlank { "openid" }
+
+// 账号服务 ECS 接口根地址（Lead 在 ECS 实现；gradle 属性 ct.accountBaseUrl 可覆盖，便于切换 HTTPS 域名）。
+val accountBaseUrl = (project.findProperty("ct.accountBaseUrl") as String?)
+    ?: "http://121.196.47.2/account"
+
 /** 生成 BuildConfig String 字面量（转义反斜杠/引号；密钥含特殊字符也不会破坏构建脚本）。 */
 fun buildConfigString(value: String): String =
     "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
@@ -39,9 +51,13 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 84
-        // 测试版本 1：4.57.0-test1（「我的 → 关于」与更新弹窗显示「测试版本 1」）。
-        versionName = "1.0.0-beta1"
+        versionCode = 87
+        // 测试版本 4：1.0.0-beta4（「我的 → 关于」显示「测试版本 4」）。
+        versionName = "1.0.0-beta4"
+
+        // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
+        // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
+        manifestPlaceholders["oppoAccountAppId"] = oppoAccountAppId
 
         // CloudBase REST 根地址与公开 Publishable Key（role=anon，设计上公开）。
         // 值来自 gradle.properties（ct.restBaseUrl / ct.publishableKey），便于部署时替换。
@@ -55,8 +71,15 @@ android {
         buildConfigField("String", "OPPO_PUSH_APP_KEY", buildConfigString(oppoAppKey))
         buildConfigField("String", "OPPO_PUSH_APP_SECRET", buildConfigString(oppoAppSecret))
 
-        // 测试版本标识（当前为「测试版本 1」）：App 内版本行与更新弹窗标题使用。
-        buildConfigField("int", "TEST_VERSION", "1")
+        // OPPO 账号服务 OAuth（app/oppo.properties；空串 = 未配置 → 快捷登录/绑定入口隐藏）。
+        buildConfigField("String", "OPPO_ACCOUNT_APP_ID", buildConfigString(oppoAccountAppId))
+        buildConfigField("String", "OPPO_ACCOUNT_APP_KEY", buildConfigString(oppoAccountAppKey))
+        buildConfigField("String", "OPPO_ACCOUNT_SCOPE", buildConfigString(oppoAccountScope))
+        // 账号服务 ECS 接口（默认 http://121.196.47.2/account；gradle 属性 ct.accountBaseUrl 可覆盖）。
+        buildConfigField("String", "ACCOUNT_BASE_URL", buildConfigString(accountBaseUrl))
+
+        // 测试版本标识（当前为「测试版本 4」）：App 内版本行使用。
+        buildConfigField("int", "TEST_VERSION", "4")
         buildConfigField("String", "TEST_VERSION_LABEL", buildConfigString("测试版本"))
     }
 
@@ -129,6 +152,11 @@ dependencies {
     // OPPO PUSH 官方 SDK V4.0.0（本地 AAR，来自 OPPO 官方 openfs 发布；sha256 见 docs/OPPO_PUSH.md）。
     // 纯本地依赖：SDK 自包含（无 gson/okhttp/commons-codec 传递依赖，已用 javap 核对）。
     implementation(files("libs/com.heytap.msp_V4.0.0.aar"))
+
+    // OPPO 账号服务 OAuth 授权 SDK（Maven Central；账号快捷登录/绑定学号）。
+    // 传递依赖：account-oauth-sdk / account-env / account-service-ipc + appcompat(runtime) + viewbinding，
+    // 由 Gradle 解析（settings.gradle.kts 已含 mavenCentral；官方要求的 repositories 配置已满足）。
+    implementation(libs.oppo.account.oauth.web)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

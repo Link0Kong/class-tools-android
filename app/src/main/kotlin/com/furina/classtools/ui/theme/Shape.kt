@@ -29,14 +29,14 @@ val CtShapes = Shapes(
  * - pill / chip / input / sheet / dialog / listItem：按 M3 组件规范
  */
 object CtShapeTokens {
-    /** Hero 大卡：24dp（与工作台 hero 统一；2026-11-16 由 32dp 收紧）。 */
+    /** Hero 大卡：24dp（与鸿蒙 hero 24 对齐）。 */
     val hero = RoundedCornerShape(24.dp)
 
-    /** 工具卡/普通卡片：16dp（品牌卡片圆角）。 */
-    val toolCard = RoundedCornerShape(16.dp)
+    /** 工具卡/普通卡片：18dp（鸿蒙 RADIUS_CARD=18，2026-11-17 由 16 调整）。 */
+    val toolCard = RoundedCornerShape(18.dp)
 
-    /** 大卡片/分组卡：20dp（与 16dp 卡片形成克制层级）。 */
-    val cardLarge = RoundedCornerShape(20.dp)
+    /** 大卡片/分组卡：18dp（鸿蒙卡片同一圆角）。 */
+    val cardLarge = RoundedCornerShape(18.dp)
 
     /** 工具卡按压态：12dp（按下时形状收紧，配合 scale 0.97）。 */
     val toolCardPressed = RoundedCornerShape(12.dp)
@@ -47,20 +47,20 @@ object CtShapeTokens {
     /** Chip：M3 规范 8dp。 */
     val chip = RoundedCornerShape(8.dp)
 
-    /** 输入框：M3 OutlinedTextField 4dp。 */
-    val input = RoundedCornerShape(4.dp)
+    /** 输入框：14dp（鸿蒙 RADIUS_INPUT=14）。 */
+    val input = RoundedCornerShape(14.dp)
 
-    /** 底部弹层：顶部 28dp（M3 extraLarge，2026-11-16 由 30dp 统一）。 */
-    val sheet = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    /** 底部弹层：顶部 26dp（鸿蒙通知面板实测 26）。 */
+    val sheet = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)
 
     /** 对话框：28dp（M3 extraLarge）。 */
     val dialog = RoundedCornerShape(28.dp)
 
-    /** 列表项/信息块：12dp（M3 medium）。 */
-    val listItem = RoundedCornerShape(12.dp)
+    /** 列表项/信息块：14dp（鸿蒙输入/内嵌块同档）。 */
+    val listItem = RoundedCornerShape(14.dp)
 
-    /** 小图标底板（工具卡图标气泡）：15dp。 */
-    val iconTile = RoundedCornerShape(15.dp)
+    /** 小图标底板（工具卡图标气泡）：12dp（鸿蒙 ToolTile 40dp 块 12 圆角）。 */
+    val iconTile = RoundedCornerShape(12.dp)
 
     /** 悬浮工具栏：64dp 高容器 → 全圆角。 */
     val toolbar = CircleShape

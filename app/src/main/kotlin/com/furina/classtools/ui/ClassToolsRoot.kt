@@ -15,7 +15,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -23,11 +26,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.AppContainer
+import com.furina.classtools.data.account.OppoSessionLoginResult
+import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.ui.components.BrandMark
 import com.furina.classtools.ui.components.update.UpdateHost
 import com.furina.classtools.ui.navigation.MainNavHost
 import com.furina.classtools.ui.screens.identity.IdentityScreen
+import com.furina.classtools.ui.theme.findActivity
 import kotlinx.coroutines.launch
 
 /**
@@ -50,6 +56,19 @@ fun ClassToolsRoot(
     )
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    // OPPO 账号快捷登录状态（身份页；成功后的会话流程与学号+姓名核验完全一致）。
+    var oppoLoginInProgress by remember { mutableStateOf(false) }
+    var oppoLoginError by remember { mutableStateOf<String?>(null) }
+    val activity = remember(context) { context.findActivity() }
+
+    fun completeLogin(session: Session) {
+        container.updateActiveSession(session)
+        scope.launch {
+            container.sessionStore.save(session)
+            runCatching { container.classMembersRepository.load(force = true) }
+        }
+    }
 
     // 把会话同步给数据层（tokenProvider / currentSid 读取），并做 29 天本地过期判定。
     LaunchedEffect(sessionState) {
@@ -82,13 +101,34 @@ fun ClassToolsRoot(
 
             SessionState.SignedOut -> IdentityScreen(
                 authRepository = container.authRepository,
-                onVerified = { session ->
-                    container.updateActiveSession(session)
-                    scope.launch {
-                        container.sessionStore.save(session)
-                        runCatching { container.classMembersRepository.load(force = true) }
+                onVerified = { session -> completeLogin(session) },
+                // OPPO 账号快捷登录：仅已配置账号服务 + OPPO 系设备时展示（未配置则按钮不出现）。
+                oppoQuickLoginAvailable = container.oppoAccountManager.quickLoginAvailable,
+                oppoLoginInProgress = oppoLoginInProgress,
+                oppoLoginError = oppoLoginError,
+                onOppoQuickLogin = {
+                    val host = activity
+                    if (host == null) {
+                        oppoLoginError = "当前环境不支持 OPPO 快捷登录"
+                    } else if (!oppoLoginInProgress) {
+                        oppoLoginError = null
+                        oppoLoginInProgress = true
+                        scope.launch {
+                            val result = runCatching { container.oppoAccountManager.login(host) }
+                                .getOrElse {
+                                    OppoSessionLoginResult.Failure("unexpected", "OPPO 登录失败，请重试")
+                                }
+                            oppoLoginInProgress = false
+                            when (result) {
+                                // 与学号+姓名成功一致：更新 active session → 落盘 → 预热名单。
+                                is OppoSessionLoginResult.Success -> completeLogin(result.session)
+                                is OppoSessionLoginResult.Unbound -> oppoLoginError = result.message
+                                is OppoSessionLoginResult.Failure -> oppoLoginError = result.message
+                            }
+                        }
                     }
                 },
+                onDismissOppoError = { oppoLoginError = null },
             )
 
             is SessionState.SignedIn -> {

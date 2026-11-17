@@ -34,6 +34,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.Article
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -110,9 +111,12 @@ import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
 import com.furina.classtools.ui.theme.AppearanceMode
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtText
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import com.furina.classtools.ui.theme.rememberProfileHeroColors
+import com.furina.classtools.ui.theme.harmonyTint
+import com.furina.classtools.ui.theme.rememberHarmonyColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
 
@@ -162,6 +166,11 @@ fun ProfileScreen(
     adaptiveSpec: CtAdaptiveSpec? = null,
     meStats: MeStats = MeStats(),
     reminderStatus: ReminderStatus = ReminderStatus(),
+    /** OPPO 账号（绑定学号）入口：已配置账号服务 + OPPO 系设备时才展示。 */
+    oppoAccountAvailable: Boolean = false,
+    /** 「我的」行副标题（如「已绑定 1/3」；空 = 尚未读取）。 */
+    oppoAccountLabel: String = "",
+    onOpenOppoAccount: () -> Unit = {},
     onOpenFeedback: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     /** 预览/测试注入更新检查状态；null = 使用进程内 UpdateManager 的实时状态。 */
@@ -232,7 +241,7 @@ fun ProfileScreen(
     fun requestUpdateCheck() {
         val manager = resolvedUpdateManager ?: return
         scope.launch {
-            val result = manager.checkNow(manual = true)
+            val result = manager.checkNow()
             val message = when (result) {
                 is UpdateCheckResult.UpToDate ->
                     "已是最新版本 v${UpdateVersion.normalize(result.currentVersionName)}"
@@ -249,118 +258,63 @@ fun ProfileScreen(
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
                 modifier = Modifier
-                    .widthIn(max = spec.contentMaxWidth)
+                    .widthIn(max = 720.dp)
                     .fillMaxWidth()
                     .fillMaxHeight()
                     .statusBarsPadding()
-                    .padding(horizontal = spec.horizontalPadding),
+                    .padding(horizontal = com.furina.classtools.ui.theme.HarmonyTokens.PagePadding),
             ) {
                 ProfileHeader()
-                if (twoPane) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .weight(0.55f)
-                                .verticalScroll(rememberScrollState())
-                                .padding(top = 8.dp, bottom = 120.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            IdentitySection(session)
-                            NotificationPermissionBanner(
-                                visible = showNotificationPermissionBanner,
-                                onOpenPermissions = onOpenPermissions,
-                            )
-                            DataSection(
-                                stats = meStats,
-                                syncEnabled = syncEnabled,
-                                onSyncEnabledChange = onSyncEnabledChange,
-                                onOpenDataPrivacy = onOpenDataPrivacy,
-                                onClearCache = ::requestClearCache,
-                            )
-                        }
-                        Column(
-                            modifier = Modifier
-                                .weight(0.45f)
-                                .verticalScroll(rememberScrollState())
-                                .padding(top = 8.dp, bottom = 120.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            NotifySection(
-                                reminderStatus = reminderStatus,
-                                onOpenPermissions = onOpenPermissions,
-                                onOpenReminderSettings = onOpenReminderSettings,
-                            )
-                            AppearanceSection(
-                                dynamicColorEnabled = dynamicColorEnabled,
-                                onDynamicColorChange = onDynamicColorChange,
-                                appearanceMode = effectiveAppearanceMode,
-                                onAppearanceModeChange = ::changeAppearanceMode,
-                                hideStatusBar = effectiveHideStatusBar,
-                                onHideStatusBarChange = ::changeHideStatusBar,
-                            )
-                            AboutSection(
-                                onOpenFeedback = onOpenFeedback,
-                                onOpenGuide = onOpenGuide,
-                                onShowPrivacy = { showPrivacy = true },
-                                onShowAgreement = { showAgreement = true },
-                                updateStatus = effectiveUpdateStatus,
-                                onCheckUpdate = ::requestUpdateCheck,
-                            )
-                            SignOutSection(
-                                version = UpdateVersion.normalize(BuildConfig.VERSION_NAME),
-                                onSignOutClick = { showSignOutConfirm = true },
-                            )
-                        }
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(top = 8.dp, bottom = 120.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        IdentitySection(session)
-                        NotificationPermissionBanner(
-                            visible = showNotificationPermissionBanner,
-                            onOpenPermissions = onOpenPermissions,
-                        )
-                        DataSection(
-                            stats = meStats,
-                            syncEnabled = syncEnabled,
-                            onSyncEnabledChange = onSyncEnabledChange,
-                            onOpenDataPrivacy = onOpenDataPrivacy,
-                            onClearCache = ::requestClearCache,
-                        )
-                        NotifySection(
-                            reminderStatus = reminderStatus,
-                            onOpenPermissions = onOpenPermissions,
-                            onOpenReminderSettings = onOpenReminderSettings,
-                        )
-                        AppearanceSection(
-                            dynamicColorEnabled = dynamicColorEnabled,
-                            onDynamicColorChange = onDynamicColorChange,
-                            appearanceMode = effectiveAppearanceMode,
-                            onAppearanceModeChange = ::changeAppearanceMode,
-                            hideStatusBar = effectiveHideStatusBar,
-                            onHideStatusBarChange = ::changeHideStatusBar,
-                        )
-                        AboutSection(
-                            onOpenFeedback = onOpenFeedback,
-                            onOpenGuide = onOpenGuide,
-                            onShowPrivacy = { showPrivacy = true },
-                            onShowAgreement = { showAgreement = true },
-                            updateStatus = effectiveUpdateStatus,
-                            onCheckUpdate = ::requestUpdateCheck,
-                        )
-                        SignOutSection(
-                            version = UpdateVersion.normalize(BuildConfig.VERSION_NAME),
-                            onSignOutClick = { showSignOutConfirm = true },
-                        )
-                    }
+                // 鸿蒙 MeScreen：单列滚动（内容最大宽 720，居中留白）。
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 120.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                ) {
+                    IdentitySection(session)
+                    NotificationPermissionBanner(
+                        visible = showNotificationPermissionBanner,
+                        onOpenPermissions = onOpenPermissions,
+                    )
+                    DataSection(
+                        stats = meStats,
+                        syncEnabled = syncEnabled,
+                        onSyncEnabledChange = onSyncEnabledChange,
+                        onOpenDataPrivacy = onOpenDataPrivacy,
+                        onClearCache = ::requestClearCache,
+                    )
+                    OppoAccountSection(
+                        available = oppoAccountAvailable,
+                        label = oppoAccountLabel,
+                        onOpen = onOpenOppoAccount,
+                    )
+                    NotifySection(
+                        reminderStatus = reminderStatus,
+                        onOpenPermissions = onOpenPermissions,
+                        onOpenReminderSettings = onOpenReminderSettings,
+                    )
+                    AppearanceSection(
+                        dynamicColorEnabled = dynamicColorEnabled,
+                        onDynamicColorChange = onDynamicColorChange,
+                        appearanceMode = effectiveAppearanceMode,
+                        onAppearanceModeChange = ::changeAppearanceMode,
+                        hideStatusBar = effectiveHideStatusBar,
+                        onHideStatusBarChange = ::changeHideStatusBar,
+                    )
+                    AboutSection(
+                        onOpenFeedback = onOpenFeedback,
+                        onOpenGuide = onOpenGuide,
+                        onShowPrivacy = { showPrivacy = true },
+                        onShowAgreement = { showAgreement = true },
+                        updateStatus = effectiveUpdateStatus,
+                        onCheckUpdate = ::requestUpdateCheck,
+                    )
+                    SignOutSection(
+                        version = UpdateVersion.normalize(BuildConfig.VERSION_NAME),
+                        onSignOutClick = { showSignOutConfirm = true },
+                    )
                 }
             }
         }
@@ -387,7 +341,7 @@ fun ProfileScreen(
             text = {
                 Text(
                     "将清除本机缓存的名单 / 课表 / 演示等数据；身份与云端数据保留，下次打开会重新同步。",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = CtText.body,
                 )
             },
             confirmButton = {
@@ -414,7 +368,7 @@ fun ProfileScreen(
             text = {
                 Text(
                     "将清除本机会话与名单缓存；云端数据（作业完成 / 通知已处理 / 体测历史等）不受影响，重新核验后恢复。",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = CtText.body,
                 )
             },
             confirmButton = {
@@ -439,15 +393,17 @@ fun ProfileScreen(
 @Composable
 private fun ProfileHeader() {
     Row(
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 20.dp, bottom = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        BrandMark(size = 32.dp)
         Text(
             text = "我的",
-            style = MaterialTheme.typography.titleLarge,
+            style = CtText.title,
             color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -456,9 +412,9 @@ private fun ProfileHeader() {
 private fun SectionTitle(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.labelLarge,
+        style = CtText.label,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+        modifier = Modifier.padding(start = 2.dp, top = 16.dp, bottom = 6.dp),
     )
 }
 
@@ -472,7 +428,8 @@ private fun GroupCard(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 private fun RowDivider() {
     HorizontalDivider(
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outlineVariant,
         modifier = Modifier.padding(start = 16.dp),
     )
 }
@@ -498,87 +455,54 @@ private fun IdentitySection(session: Session) {
 }
 
 /**
- * 「我的」顶部身份 hero（v5，参考 xiaoying 渐变 banner + 重叠圆形标识的层级感；不复制样式/素材）。
+ * 「我的」身份卡（2026-11-17 按鸿蒙 MeScreen 重做）：白卡 18 圆角 + 浅阴影；
+ * 56dp 雾青 tint 圆形首字 + 姓名 19 Medium + 角色/身份胶囊（品牌绿小面积）；无渐变/装饰圆。
  *
- * 隐私：不展示头像与学号，只用姓名首字圆形标识 + 姓名/身份胶囊；右上角放品牌三圆点（BrandMark）呼应启动图标。
- * 配色：浅色保持既有深青→灰蓝固定渐变 + 白字；深色改为中性 tonal 深色 + onSurface 文字
- * （品牌绿只出现在胶囊/图标的小面积 accent），见 [rememberProfileHeroColors]。
+ * 隐私：不展示头像与完整学号，只用姓名首字 + 姓名/身份胶囊。
  */
 @Composable
 private fun ProfileHeroCard(session: Session) {
     val scheme = MaterialTheme.colorScheme
-    val dark = LocalCtDarkTheme.current
-    val hero = rememberProfileHeroColors()
+    val colors = rememberHarmonyColors()
     val initial = session.name.trim().take(1).ifBlank { "班" }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 152.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(Brush.linearGradient(listOf(hero.start, hero.end))),
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            // 只保留一层极轻柔光（2026-11-16：去掉第二层装饰圆，减少重装饰）。
-            drawCircle(
-                color = if (dark) scheme.primary.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.06f),
-                radius = size.minDimension * 0.42f,
-                center = Offset(size.width * 0.94f, size.height * 0.10f),
-            )
-        }
+    CtGlassCard(shape = CtShapeTokens.cardLarge) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+                .padding(16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(
-                            if (dark) {
-                                scheme.surfaceContainerHighest
-                            } else {
-                                Color.White.copy(alpha = 0.16f)
-                            },
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = if (dark) {
-                                scheme.outlineVariant.copy(alpha = 0.55f)
-                            } else {
-                                Color.White.copy(alpha = 0.26f)
-                            },
-                            shape = CircleShape,
-                        ),
+                        .background(colors.heroPaper),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = initial,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = hero.content,
+                        style = CtText.heading,
+                        fontWeight = FontWeight.Medium,
+                        color = scheme.primary,
                     )
                 }
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "班级工具站",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = hero.content.copy(alpha = if (dark) 0.72f else 0.74f),
-                    )
-                    Text(
                         text = session.name.ifBlank { "班级成员" },
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = hero.content,
+                        style = CtText.heading,
+                        color = colors.textPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    Text(
+                        text = "班级工具站" + if (session.isAdmin) " · 管理员" else "",
+                        style = CtText.caption,
+                        color = colors.textTertiary,
+                    )
                 }
-                BrandMark(size = 38.dp, container = hero.innerFill)
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -592,31 +516,22 @@ private fun ProfileHeroCard(session: Session) {
     }
 }
 
-/** hero 胶囊：浅色为白字白底半透明（原视觉）；深色强调胶囊用品牌绿小面积点缀，普通胶囊用中性面。 */
+/** 身份胶囊（鸿蒙 MeScreen：角色/身份用雾青 12% 底 + 雾青字，中性胶囊浅灰底）。 */
 @Composable
 private fun HeroPill(text: String, emphasis: Boolean = false) {
-    val dark = LocalCtDarkTheme.current
     val scheme = MaterialTheme.colorScheme
-    val container = when {
-        dark && emphasis -> scheme.primary.copy(alpha = 0.18f)
-        dark -> scheme.onSurface.copy(alpha = 0.08f)
-        emphasis -> Color.White.copy(alpha = 0.22f)
-        else -> Color.White.copy(alpha = 0.13f)
-    }
-    val content = when {
-        dark && emphasis -> scheme.primary
-        dark -> scheme.onSurfaceVariant
-        else -> Color.White
-    }
+    val colors = rememberHarmonyColors()
+    val container = if (emphasis) harmonyTint(scheme.primary) else colors.background
+    val content = if (emphasis) scheme.primary else colors.textSecondary
     Text(
         text = text,
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
+        style = CtText.caption,
+        fontWeight = if (emphasis) FontWeight.Medium else FontWeight.Normal,
         color = content,
         modifier = Modifier
             .clip(CircleShape)
             .background(container)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 9.dp, vertical = 3.dp),
     )
 }
 
@@ -637,7 +552,7 @@ private fun DataSection(
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(
                 text = "我的数据",
-                style = MaterialTheme.typography.titleSmall,
+                style = CtText.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -656,7 +571,7 @@ private fun DataSection(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = extras.joinToString(" · ") { (label, value) -> "$label $value" },
-                    style = MaterialTheme.typography.labelSmall,
+                    style = CtText.caption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -692,14 +607,14 @@ private fun MetricCell(label: String, value: String, modifier: Modifier = Modifi
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = value,
-            style = MaterialTheme.typography.headlineSmall,
+            style = CtText.title,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = CtText.caption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )
@@ -707,7 +622,30 @@ private fun MetricCell(label: String, value: String, modifier: Modifier = Modifi
 }
 
 // =============================================================================
-// 3) 通知与权限
+// 3) 账号（OPPO 账号绑定）
+// =============================================================================
+
+/** 「我的 → 账号」：OPPO 账号绑定入口（已绑定 N/3；点开底部弹层管理）。 */
+@Composable
+private fun OppoAccountSection(
+    available: Boolean,
+    label: String,
+    onOpen: () -> Unit,
+) {
+    if (!available) return
+    SectionTitle("账号")
+    GroupCard {
+        ActionRow(
+            icon = Icons.Rounded.AccountCircle,
+            title = "OPPO 账号",
+            subtitle = label.ifBlank { "—" },
+            onClick = onOpen,
+        )
+    }
+}
+
+// =============================================================================
+// 4) 通知与权限
 // =============================================================================
 
 @Composable
@@ -736,7 +674,7 @@ private fun NotifySection(
 }
 
 // =============================================================================
-// 4) 外观
+// 5) 外观
 // =============================================================================
 
 @Composable
@@ -804,7 +742,7 @@ private fun AppearanceModeRows(
                 )
                 Text(
                     text = item.label,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = CtText.body,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
@@ -821,7 +759,7 @@ private fun appearanceModeIcon(mode: AppearanceMode) = when (mode) {
 }
 
 // =============================================================================
-// 5) 关于与帮助
+// 6) 关于与帮助
 // =============================================================================
 
 @Composable
@@ -877,7 +815,7 @@ private fun AboutSection(
 }
 
 // =============================================================================
-// 6) 退出 + 页脚
+// 7) 退出 + 页脚
 // =============================================================================
 
 @Composable
@@ -899,13 +837,13 @@ private fun SignOutSection(
     ) {
         Text(
             text = "退出登录",
-            style = MaterialTheme.typography.labelLarge,
+            style = CtText.label,
             color = MaterialTheme.colorScheme.error,
         )
     }
     Text(
         text = "退出后需重新验证姓名 + 学号才能使用班级数据",
-        style = MaterialTheme.typography.labelSmall,
+        style = CtText.caption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
         modifier = Modifier
@@ -914,7 +852,7 @@ private fun SignOutSection(
     )
     Text(
         text = "v$version · 班级工具站",
-        style = MaterialTheme.typography.labelSmall,
+        style = CtText.caption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
         modifier = Modifier
@@ -938,9 +876,9 @@ private fun ActionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = 52.dp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -953,7 +891,7 @@ private fun ActionRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
+                style = CtText.body,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -961,7 +899,7 @@ private fun ActionRow(
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = CtText.caption,
                     color = if (subtitleHighlight) {
                         MaterialTheme.colorScheme.error
                     } else {
@@ -992,8 +930,8 @@ private fun SwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -1008,13 +946,13 @@ private fun SwitchRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
+                style = CtText.body,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = CtText.caption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -1034,20 +972,20 @@ private fun ValueRow(title: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.bodyLarge,
+            style = CtText.body,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium,
+            style = CtText.body,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

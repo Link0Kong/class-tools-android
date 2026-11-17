@@ -43,3 +43,13 @@
 -keep class com.mcs.aidl.** { *; }
 -dontwarn com.heytap.**
 -dontwarn com.mcs.**
+
+# -----------------------------------------------------------------------------
+# OPPO 账号服务 OAuth SDK（com.heytap.accountsdk:account-oauth-web-sdk:1.1.3）
+# - AAR 内含 OAuthWebActivity（AppCompat）/ ResultReceiver / ContentProvider 客户端；
+# - SDK 内部通过反射调用账号 App 与 IPC（AcOauthRefInvokeUtil / AcOauthBinderProvider），需保留类名。
+# -----------------------------------------------------------------------------
+-keep class com.platform.account.** { *; }
+-keep class com.platform.usercenter.** { *; }
+-dontwarn com.platform.**
+-dontwarn com.heytap.accountsdk.**
