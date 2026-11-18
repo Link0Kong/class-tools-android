@@ -10,7 +10,7 @@
 - **接线**：`MainNavHost` 的 `"stats"` 路由 → `StatsScreen`；`AppContainer.visitsRepository`。
 - **版本**：`versionCode 88` / `versionName 1.0.0-beta5`（测试版本 5）。
 - **测试**：`:app:testDebugUnitTest` **1627/0（2 skipped）**；新增 `VisitStatsTest` 5、`VisitsRepositoryTest` 3、`ToolCatalogStatsTest` 2；`compileDebugKotlin` 通过；Release APK 安装到模拟器启动无 FATAL/ANR。
-- **产物**：`artifacts/classtools-1.0.0-beta5-vc88-release-signed.apk`（**5,804,121 B / SHA-256 `6197242ED0FB80D1956B894F29F169FE432418453CC7BD07B9007D73D12F8CEB`**）；桌面 `班级工具站_v1.0.0-beta5_安卓.apk` 同字节。更新通道 latest.json 未改（当前仍 beta4；如需推送更新另发）。
+- **产物**：`artifacts/classtools-1.0.0-beta5-vc88-release-signed.apk`（**5,804,121 B / SHA-256 `6EE6E7AB078FB27A0E96A2B017153C3150057A1DF8294CB83AE794047E57EFB1`**）；桌面 `班级工具站_v1.0.0-beta5_安卓.apk` 同字节。更新通道 latest.json 未改（当前仍 beta4；如需推送更新另发）。
 
 ## 2026-11-18 · 访问统计上报记录登录端 android（源码；未发版）
 
@@ -627,3 +627,4 @@ otices?select=* 全表 13.9MB 超 10s 超时；改为最新 20 条分页首屏 +
 - 隐私合规：同意门禁 + 用户协议/隐私政策 + 数据与隐私页（导出我的数据/清除云端/清除本机）。
 - 修复：底部导航吞点击、抽签/分组返回状态丢失、课表空态文案三态、通知附件按需加载。
 - 交付：签名 Release APK（2.26 MB）+ 安装说明（桌面）。
+
