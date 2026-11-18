@@ -53,7 +53,7 @@ class VisitStatsTest {
     }
 
     @Test
-    fun build_week_sortsByLatestLoginAndShowsClientAndMinutes() {
+    fun build_week_sortsByCountThenLatestVisitAndShowsClientAndMinutes() {
         val snapshot = VisitStats.build(rows(), VisitRange.WEEK, nowMillis = now, zoneId = zone)
 
         assertEquals(3, snapshot.accounts.size)
@@ -64,9 +64,48 @@ class VisitStatsTest {
         assertEquals(2, snapshot.accounts[0].count)
         assertEquals("11/18 11:05", snapshot.accounts[0].lastText)
         assertEquals("安卓", snapshot.accounts[0].clientText)
-        assertEquals("李四", snapshot.accounts[1].name)
+        assertEquals("次数相同（1 次）时今天访问更晚的排前", "李四", snapshot.accounts[1].name)
         assertEquals("王五", snapshot.accounts[2].name)
         assertTrue(snapshot.accounts[2].detail.contains("Windows"))
+    }
+
+    @Test
+    fun build_countIsPrimaryEvenIfLatestVisitIsOlder() {
+        val old = ts(today, 8, 0)
+        val recent = ts(today, 20, 0)
+        val snapshot = VisitStats.build(
+            listOf(
+                VisitRow("$today-08", "9000000001", "甲", old, "web"),
+                VisitRow("$today-08", "9000000001", "甲", old + 60_000, "web"),
+                VisitRow("$today-20", "9000000002", "乙", recent, "mp"),
+            ),
+            VisitRange.TODAY,
+            nowMillis = now,
+            zoneId = zone,
+        )
+
+        assertEquals(2, snapshot.accounts.size)
+        assertEquals("访问次数优先", "9000000001", snapshot.accounts[0].sid)
+        assertEquals(2, snapshot.accounts[0].count)
+        assertEquals("9000000002", snapshot.accounts[1].sid)
+        assertEquals(1, snapshot.accounts[1].count)
+    }
+
+    @Test
+    fun build_equalCountBreaksByLatestVisit() {
+        val snapshot = VisitStats.build(
+            listOf(
+                VisitRow("$today-09", "9000000001", "甲", ts(today, 9, 0), "web"),
+                VisitRow("$today-20", "9000000002", "乙", ts(today, 20, 0), "mp"),
+            ),
+            VisitRange.TODAY,
+            nowMillis = now,
+            zoneId = zone,
+        )
+
+        assertEquals(1, snapshot.accounts[0].count)
+        assertEquals(1, snapshot.accounts[1].count)
+        assertEquals("次数相同按最近访问", "9000000002", snapshot.accounts[0].sid)
     }
 
     @Test

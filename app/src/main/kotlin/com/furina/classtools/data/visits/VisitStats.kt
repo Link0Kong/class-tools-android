@@ -10,7 +10,7 @@ import java.util.Locale
 /**
  * 统计页纯逻辑（唯一口径：`web/统计多端_最新登录_契约_20261118.md` §2）。
  *
- * - 按每个账号 `max(ts)` 倒序（次数只做副指标）；
+ * - 按访问次数倒序（次数相同再按最近访问时间倒序）；
  * - 时间显示 `MM/dd HH:mm`；旧行 `ts=0` 回退 `slot` 整点；
  * - 账号行显示最近登录端（web/mp/android/win/harmony）；
  * - 过滤官方测试身份 `3260799999`、9999 段 10 位 QA 身份与匿名行；
@@ -113,8 +113,8 @@ object VisitStats {
                 detail = detail,
             )
         }.sortedWith(
-            compareByDescending<VisitAccount> { it.lastTs }
-                .thenByDescending { it.count }
+            compareByDescending<VisitAccount> { it.count }
+                .thenByDescending { it.lastTs }
                 .thenBy { it.name },
         )
 

@@ -217,13 +217,13 @@ object ToolCatalog {
         AppTool(
             id = "stats",
             name = "统计",
-            subtitle = "按最近登录 · 仅管理员",
+            subtitle = "按访问次数 · 仅管理员",
             icon = Icons.Rounded.Insights,
             accent = plum,
             category = ToolCategory.SYSTEM,
             adminOnly = true,
             features = listOf(
-                "按最近登录倒序、默认今天",
+                "按访问次数排序，次数相同按最近访问",
                 "时间到分钟、显示登录端",
                 "忽略测试账号，不显示学号",
             ),

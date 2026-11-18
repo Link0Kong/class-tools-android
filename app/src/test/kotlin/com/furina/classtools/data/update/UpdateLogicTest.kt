@@ -105,7 +105,7 @@ class UpdateLogicTest {
             "v4.57.0-test1（测试版本）",
             UpdateTestVersion.versionDisplay("4.57.0-test1-debug"),
         )
-        assertEquals(5, UpdateTestVersion.version)
+        assertEquals(6, UpdateTestVersion.version)
         assertEquals("测试版本", UpdateTestVersion.label)
         assertEquals("发现新版本", UpdateTestVersion.dialogTitle())
     }

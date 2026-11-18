@@ -59,7 +59,7 @@ private enum class StatsPhase { LOADING, READY, FAILED }
  *
  * 口径（唯一契约 `web/统计多端_最新登录_契约_20261118.md` §2）：
  * - 仅管理员可见（服务端 RLS 再校验 token；非管理员不发请求）；
- * - 默认今天；按每个账号最近登录 `max(ts)` 倒序；
+ * - 默认今天；按访问次数倒序（次数相同按最近访问时间倒序）；
  * - 时间 `MM/dd HH:mm`；账号行显示最近登录端；
  * - 过滤官方/9999 段测试身份与匿名行；不显示学号。
  *
@@ -256,7 +256,7 @@ private fun StatsContent(
 
         item("note") {
             Text(
-                text = "按最近登录排序；只统计完成班级身份验证后的访问，同一账号同一登录端每小时记一次；已忽略测试账号。",
+                text = "按访问次数排序（次数相同按最近访问）；只统计完成班级身份验证后的访问，同一账号同一登录端每小时记一次；已忽略测试账号。",
                 style = CtText.label,
                 color = colors.textTertiary,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),

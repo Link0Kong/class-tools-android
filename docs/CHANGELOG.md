@@ -1,11 +1,21 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-18 · v1.0.0-beta6 / vc89：统计排序改为「访问次数优先」
+
+> 用户要求：「把排序设成访问次数排序优先，访问次数相同时按访问时间排序」。与网页/小程序/Windows 同口径。
+
+- `VisitStats.build` 排序：`count` 降序 → `lastTs` 降序 → 姓名；统计页说明文案同步「按访问次数排序（次数相同按最近访问）」。
+- `ToolCatalog.stats` 副标题/功能点同步；`VisitsRepository` 注释同步。
+- 测试：`:app:testDebugUnitTest` **1629/0（2 skipped）**（新增/调整次数优先、同次数按最近访问用例）；`assembleRelease` 成功。
+- **产物**：`artifacts/classtools-1.0.0-beta6-vc89-release-signed.apk`（**5,804,121 B / SHA-256 `DD47A30183CDD8B82DC22FB86137042D1DCAF270EB39D818B678720F988B2959`**）；桌面 `班级工具站_v1.0.0-beta6_安卓.apk` 同字节。安装到模拟器启动无 FATAL/ANR。
+- 更新通道 latest.json 未改（当前仍 beta4；如需推送更新另发）。
+
 ## 2026-11-18 · v1.0.0-beta5 / vc88：新增「统计」页（管理员）
 
-> 用户要求：「安卓也加统计页」。口径与网页/小程序/Windows 一致：按最新登录排序、默认今天、分钟时间、显示登录端、忽略测试账号（契约 `web/统计多端_最新登录_契约_20261118.md`）。
+> 用户要求：「安卓也加统计页」。口径与网页/小程序/Windows 一致：默认今天、分钟时间、显示登录端、忽略测试账号；**排序初始为最近登录，beta6 起改为访问次数优先**（契约 `web/统计多端_最新登录_契约_20261118.md`）。
 
 - **入口**：`ToolCatalog` 新增 `stats`（`adminOnly=true`，图标 Insights，分类「系统」）；`AllToolsScreen` 增加 `isAdmin` 过滤，普通成员看不到；首页快捷编辑也过滤 adminOnly。非管理员即使直达路由也只显示「仅管理员可见」，不发请求。
-- **数据层**：新增 `data/visits/VisitModels.kt`、`VisitStats.kt`（纯逻辑：测试账号/匿名过滤、`max(ts)` 倒序、`MM/dd HH:mm`、`client` 标签、旧行回退 slot、今天/近 7 天）、`VisitsRepository.kt`（`select=slot,sid,name,ts,client&slot=gte.&order=ts.desc&limit=5000`）。
+- **数据层**：新增 `data/visits/VisitModels.kt`、`VisitStats.kt`（纯逻辑：测试账号/匿名过滤、排序（beta6 起访问次数优先/同次数按最近访问）、`MM/dd HH:mm`、`client` 标签、旧行回退 slot、今天/近 7 天）、`VisitsRepository.kt`（`select=slot,sid,name,ts,client&slot=gte.&order=ts.desc&limit=5000`）。
 - **页面** `ui/screens/stats/StatsScreen.kt`：顶栏返回/刷新，今天/近 7 天 chips，摘要三格（访问账号/次数/今日活跃），账号行（名次/姓名/次数/最近时间+端），加载/失败重试/空态；不显示学号。
 - **接线**：`MainNavHost` 的 `"stats"` 路由 → `StatsScreen`；`AppContainer.visitsRepository`。
 - **版本**：`versionCode 88` / `versionName 1.0.0-beta5`（测试版本 5）。

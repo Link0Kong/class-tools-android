@@ -14,7 +14,7 @@ import kotlinx.serialization.json.longOrNull
  *
  * 查询与网页/小程序/Windows 同口径：
  * `visits?select=slot,sid,name,ts,client&slot=gte.<from>&order=ts.desc&limit=5000`
- * 页面按最近登录排序、显示分钟时间和登录端；测试账号/匿名行由 [VisitStats] 过滤。
+ * 页面按访问次数排序（同次数按最近访问），显示分钟时间和登录端；测试账号/匿名行由 [VisitStats] 过滤。
  */
 class VisitsRepository(private val api: ApiClient) {
 
