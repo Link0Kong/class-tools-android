@@ -1,5 +1,17 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-18 · v1.0.0-beta5 / vc88：新增「统计」页（管理员）
+
+> 用户要求：「安卓也加统计页」。口径与网页/小程序/Windows 一致：按最新登录排序、默认今天、分钟时间、显示登录端、忽略测试账号（契约 `web/统计多端_最新登录_契约_20261118.md`）。
+
+- **入口**：`ToolCatalog` 新增 `stats`（`adminOnly=true`，图标 Insights，分类「系统」）；`AllToolsScreen` 增加 `isAdmin` 过滤，普通成员看不到；首页快捷编辑也过滤 adminOnly。非管理员即使直达路由也只显示「仅管理员可见」，不发请求。
+- **数据层**：新增 `data/visits/VisitModels.kt`、`VisitStats.kt`（纯逻辑：测试账号/匿名过滤、`max(ts)` 倒序、`MM/dd HH:mm`、`client` 标签、旧行回退 slot、今天/近 7 天）、`VisitsRepository.kt`（`select=slot,sid,name,ts,client&slot=gte.&order=ts.desc&limit=5000`）。
+- **页面** `ui/screens/stats/StatsScreen.kt`：顶栏返回/刷新，今天/近 7 天 chips，摘要三格（访问账号/次数/今日活跃），账号行（名次/姓名/次数/最近时间+端），加载/失败重试/空态；不显示学号。
+- **接线**：`MainNavHost` 的 `"stats"` 路由 → `StatsScreen`；`AppContainer.visitsRepository`。
+- **版本**：`versionCode 88` / `versionName 1.0.0-beta5`（测试版本 5）。
+- **测试**：`:app:testDebugUnitTest` **1627/0（2 skipped）**；新增 `VisitStatsTest` 5、`VisitsRepositoryTest` 3、`ToolCatalogStatsTest` 2；`compileDebugKotlin` 通过；Release APK 安装到模拟器启动无 FATAL/ANR。
+- **产物**：`artifacts/classtools-1.0.0-beta5-vc88-release-signed.apk`（**5,804,121 B / SHA-256 `6197242ED0FB80D1956B894F29F169FE432418453CC7BD07B9007D73D12F8CEB`**）；桌面 `班级工具站_v1.0.0-beta5_安卓.apk` 同字节。更新通道 latest.json 未改（当前仍 beta4；如需推送更新另发）。
+
 ## 2026-11-18 · 访问统计上报记录登录端 android（源码；未发版）
 
 > 用户要求：「将所有端的统计工具统一更新为按最近登录顺序排序、默认今天、分钟时间、记录具体登录端、忽略测试账号」。唯一契约 `web/统计多端_最新登录_契约_20261118.md`。

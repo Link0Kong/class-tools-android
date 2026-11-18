@@ -111,6 +111,7 @@ import com.furina.classtools.ui.screens.group.GroupScreen
 import com.furina.classtools.ui.screens.feedback.FeedbackScreen
 import com.furina.classtools.ui.screens.express.ExpressScreen
 import com.furina.classtools.ui.screens.guide.UserGuideScreen
+import com.furina.classtools.ui.screens.stats.StatsScreen
 import com.furina.classtools.ui.screens.home.HomeScreen
 import com.furina.classtools.ui.screens.jw.JwEntryScreen
 import com.furina.classtools.ui.screens.map.CampusMapScreen
@@ -716,6 +717,12 @@ fun MainNavHost(
                     appVersion = com.furina.classtools.BuildConfig.VERSION_NAME,
                 )
 
+                "stats" -> StatsScreen(
+                    onBack = { popTool(toolId) },
+                    isAdmin = session.isAdmin,
+                    repository = container.visitsRepository,
+                )
+
                 "ppt" -> PptListScreen(
                     onBack = { popTool(toolId) },
                     onOpenDetail = { deck -> navController.navigate(Routes.pptDetail(deck.id)) },
@@ -1160,6 +1167,7 @@ private fun RootTabs(
                 1 -> CtAdaptiveContent(spec = spec) {
                     AllToolsScreen(
                         onOpenTool = onOpenTool,
+                        isAdmin = session.isAdmin,
                         userDataRepository = container.userDataRepository,
                         quickToolIds = quickToolIds,
                         onQuickToolsChange = onHomeToolsChange,

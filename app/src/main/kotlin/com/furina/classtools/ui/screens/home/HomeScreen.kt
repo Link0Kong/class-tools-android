@@ -365,7 +365,7 @@ fun HomeScreen(
     val quickTools = remember(quickToolIds, forceEmptyQuickTools) {
         if (forceEmptyQuickTools) emptyList() else ToolCatalog.quickTools(quickToolIds)
     }
-    val editableTools = remember { ToolCatalog.tools.filter { it.id != "settings" } }
+    val editableTools = remember { ToolCatalog.tools.filter { !it.adminOnly && it.id != "settings" } }
 
     fun toggleTool(id: String) {
         draft = if (id in draft) {

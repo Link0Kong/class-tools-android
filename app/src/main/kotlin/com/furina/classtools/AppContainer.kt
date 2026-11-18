@@ -61,6 +61,7 @@ import com.furina.classtools.data.vote.DefaultVoteRepository
 import com.furina.classtools.data.vote.VoteRepository
 import com.furina.classtools.data.visits.VisitDeviceId
 import com.furina.classtools.data.visits.VisitReporter
+import com.furina.classtools.data.visits.VisitsRepository
 import com.furina.classtools.data.permission.AndroidPermissionController
 import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.privacy.CallbackLocalCleaner
@@ -239,6 +240,9 @@ class AppContainer(context: Context) {
             clock = { System.currentTimeMillis() },
         )
     }
+
+    /** 访问统计页读取（仅管理员；RLS 再校验 token）。 */
+    val visitsRepository: VisitsRepository by lazy { VisitsRepository(apiClient) }
 
     /**
      * 回前台补报访问（同一账号同一小时只会写一行，reporter 内部去重）：

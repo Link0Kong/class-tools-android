@@ -94,6 +94,8 @@ import kotlin.math.roundToInt
 fun AllToolsScreen(
     onOpenTool: (AppTool) -> Unit,
     modifier: Modifier = Modifier,
+    /** 当前身份是否管理员：统计工具仅管理员可见（不进入普通成员「全部工具」/首页快捷）。 */
+    isAdmin: Boolean = false,
     userDataRepository: UserDataRepository? = null,
     onToolOrderChange: ((List<String>) -> Unit)? = null,
     initialOrder: List<String> = emptyList(),
@@ -113,7 +115,7 @@ fun AllToolsScreen(
     val density = LocalDensity.current
     val reduceMotion = rememberReduceMotion()
     val colors = rememberHarmonyColors()
-    val naturalIds = remember { ToolCatalog.tools.map { it.id } }
+    val naturalIds = remember(isAdmin) { ToolCatalog.visibleTools(isAdmin).map { it.id } }
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     // 鸿蒙断点：<600 → 2 列；600–899 → 3 列；≥900 → 4 列。
     val columns = when {
@@ -278,8 +280,10 @@ fun AllToolsScreen(
         }
     }
 
-    val toolsInOrder = remember(order) {
-        order.mapNotNull { id -> ToolCatalog.byId(id) }
+    val toolsInOrder = remember(order, isAdmin) {
+        order.mapNotNull { id ->
+            ToolCatalog.byId(id)?.takeIf { isAdmin || !it.adminOnly }
+        }
     }
 
     fun toggleQuick(tool: AppTool) {

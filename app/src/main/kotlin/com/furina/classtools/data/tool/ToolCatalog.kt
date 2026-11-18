@@ -14,6 +14,7 @@ import androidx.compose.material.icons.rounded.LocalShipping
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.HowToVote
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.School
@@ -46,6 +47,8 @@ data class AppTool(
     val icon: ImageVector,
     val accent: Color,
     val category: ToolCategory,
+    /** 仅管理员可见（统计）；普通成员的「全部工具」/首页快捷编辑不展示。 */
+    val adminOnly: Boolean = false,
     val features: List<String> = emptyList(),
 )
 
@@ -212,6 +215,20 @@ object ToolCatalog {
             ),
         ),
         AppTool(
+            id = "stats",
+            name = "统计",
+            subtitle = "按最近登录 · 仅管理员",
+            icon = Icons.Rounded.Insights,
+            accent = plum,
+            category = ToolCategory.SYSTEM,
+            adminOnly = true,
+            features = listOf(
+                "按最近登录倒序、默认今天",
+                "时间到分钟、显示登录端",
+                "忽略测试账号，不显示学号",
+            ),
+        ),
+        AppTool(
             id = "jw",
             name = "教务",
             subtitle = "卡片速览 · 自动登录",
@@ -231,6 +248,10 @@ object ToolCatalog {
 
     fun byId(id: String): AppTool? = tools.firstOrNull { it.id == id }
 
+    /** 当前身份可见的工具（统计仅管理员）。 */
+    fun visibleTools(isAdmin: Boolean): List<AppTool> =
+        tools.filter { isAdmin || !it.adminOnly }
+
     val allEntry: AppTool = AppTool(
         id = "all",
         name = "全部工具",
@@ -241,5 +262,6 @@ object ToolCatalog {
     )
 
     fun quickTools(ids: List<String> = defaultQuickIds): List<AppTool> =
-        ids.mapNotNull { byId(it) }.ifEmpty { defaultQuickIds.mapNotNull { byId(it) } }
+        ids.mapNotNull { byId(it)?.takeUnless { tool -> tool.adminOnly } }
+            .ifEmpty { defaultQuickIds.mapNotNull { byId(it) } }
 }
