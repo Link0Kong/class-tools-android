@@ -93,6 +93,12 @@ class MainActivity : ComponentActivity() {
         noticeIdFrom(intent)?.let { pendingNoticeId.value = it }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 访问统计：回前台补报一次（同一账号同一小时 reporter 内部去重，失败静默）。
+        runCatching { (application as ClassToolsApp).container.reportVisitOnResume() }
+    }
+
     /**
      * 音量键翻页（DESIGN §4.9）：播放器通过 [VolumeKeyBridge] 注册处理者；
      * 未注册或未消费时照常走系统音量。音量+ = 前进、音量− = 后退。

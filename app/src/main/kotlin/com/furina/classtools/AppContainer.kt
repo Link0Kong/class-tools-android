@@ -240,6 +240,15 @@ class AppContainer(context: Context) {
         )
     }
 
+    /**
+     * 回前台补报访问（同一账号同一小时只会写一行，reporter 内部去重）：
+     * App 进程长期存活跨过整点时，仅靠登录/恢复会话不会产生新行；MainActivity.onResume 调用。
+     */
+    fun reportVisitOnResume() {
+        if (activeSession == null) return
+        appScope.launch { runCatching { visitReporter.reportOnce() } }
+    }
+
     /** 崩溃设备信息快照（启动时算一次；崩溃线程不做系统查询；v2.1 最小化白名单 JSON）。 */
     private val crashDeviceSnapshot: kotlinx.serialization.json.JsonObject by lazy {
         runCatching { deviceProbe.collectBase().deviceJson() }
