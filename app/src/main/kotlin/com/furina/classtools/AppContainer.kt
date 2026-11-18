@@ -59,6 +59,8 @@ import com.furina.classtools.data.push.PrefsOppoPushStore
 import com.furina.classtools.data.push.PushChannels
 import com.furina.classtools.data.vote.DefaultVoteRepository
 import com.furina.classtools.data.vote.VoteRepository
+import com.furina.classtools.data.visits.VisitDeviceId
+import com.furina.classtools.data.visits.VisitReporter
 import com.furina.classtools.data.permission.AndroidPermissionController
 import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.privacy.CallbackLocalCleaner
@@ -119,6 +121,11 @@ class AppContainer(context: Context) {
         // 启动/登录后在线时补报本机待发的崩溃/诊断队列（契约 §2：启动后补报）。
         if (session != null && !session.debug && previousSid != session.sid) {
             appScope.launch { runCatching { clientDiagReporter.drainPending() } }
+        }
+        // 访问上报（契约 §3 安卓：启动恢复/登录成功后 best-effort 一次，client=android）。
+        // 失败静默（reportOnce 内部吞掉），不影响登录与首屏；debug 会话由 reporter 自行跳过。
+        if (session != null && previousSid != session.sid) {
+            appScope.launch { runCatching { visitReporter.reportOnce() } }
         }
         // OPPO PUSH：登录 / 切换账号 / token 恢复后，用缓存 RegistrationID 重新上传到当前账号
         // （未登录时 manager 内部跳过，等下次 onSessionChanged；重复上传由幂等门跳过）。
@@ -210,6 +217,28 @@ class AppContainer(context: Context) {
         repository = diagRepository,
         pending = diagPendingStore,
     )
+
+    // ---------------------------------------------------------------- 访问上报
+
+    /**
+     * 本机访问去重设备码（私有 SharedPreferences；16 位 hex，不含任何个人信息）。
+     * 懒加载：启动首帧不需要读 SharedPreferences（首次上报在后台作用域触发）。
+     */
+    private val visitDeviceId: VisitDeviceId by lazy { VisitDeviceId.from(appContext) }
+
+    /**
+     * 访问上报（契约 `web/统计多端_最新登录_契约_20261118.md` §3 安卓）：
+     * `POST visits` 一行（`client=android`、`id=<sid>|<slot>|android`、小时去重），
+     * 由 [updateActiveSession] 在会话恢复/登录成功后 best-effort 触发；失败静默。
+     */
+    val visitReporter: VisitReporter by lazy {
+        VisitReporter(
+            api = apiClient,
+            currentSession = { activeSession },
+            deviceIdProvider = { visitDeviceId.get() },
+            clock = { System.currentTimeMillis() },
+        )
+    }
 
     /** 崩溃设备信息快照（启动时算一次；崩溃线程不做系统查询；v2.1 最小化白名单 JSON）。 */
     private val crashDeviceSnapshot: kotlinx.serialization.json.JsonObject by lazy {
