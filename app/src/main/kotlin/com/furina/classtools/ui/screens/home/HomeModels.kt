@@ -142,7 +142,7 @@ object HomeWorkbenchLogic {
 
     // ---- 通知 ---------------------------------------------------------------
 
-    /** 待处理通知（§2.4 口径：普通通知需有时间锚点；长期安排仅期次窗口内且该期未处理；资料/无时间不计）。 */
+    /** 待处理通知（§2.4 口径：普通通知需有时间锚点或发布时间；长期安排仅期次窗口内且该期未处理；资料/无时间兜底不计）。 */
     fun noticePendingEntries(
         entries: List<NoticeEntry>,
         marks: MarksSnapshot,
@@ -154,6 +154,7 @@ object HomeWorkbenchLogic {
                 nowMillis = nowMillis,
                 done = marks.isDone(MarkKind.NT_DONE, entry.id),
                 doneRef = { ref -> marks.isDone(MarkKind.NT_DONE, ref) },
+                publishedTs = NoticeStatusMachine.publishedTsOf(entry.group, entry.items, nowMillis) ?: 0L,
             )
         }
         .sortedWith(compareByDescending { it.ts })
@@ -170,7 +171,11 @@ object HomeWorkbenchLogic {
             null
         }
         val statusText = occurrence?.let { NoticeStatusMachine.occurrenceLabelOf(it, nowMillis) }
-            ?: NoticeStatusMachine.statusOf(entry.group, nowMillis).label
+            ?: NoticeStatusMachine.statusOf(
+                entry.group,
+                nowMillis,
+                publishedTs = NoticeStatusMachine.publishedTsOf(entry.group, entry.items, nowMillis),
+            ).label
         HomeRotationItem(
             id = entry.id,
             title = entry.title,

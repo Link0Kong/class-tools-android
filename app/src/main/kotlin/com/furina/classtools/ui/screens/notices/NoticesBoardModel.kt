@@ -59,7 +59,7 @@ internal data class NoticesViewContent(
     val expired: List<NoticeUiItem> = emptyList(),
     val longterm: List<NoticeUiItem> = emptyList(),
     val latest: List<NoticeUiItem> = emptyList(),
-    /** 是否展示「资料 / 无时间」栏（全部视图；常驻、默认展开）。 */
+    /** 是否展示「资料 / 无时间」栏（全部视图；仅当存在兜底卡时显示，契约 2026-11-18 §3）。 */
     val showMaterial: Boolean = false,
     /** 是否展示已过期区（全部 / 待处理 / 24h / 7 天视图；默认折叠）。 */
     val showExpiredSection: Boolean = false,
@@ -127,7 +127,9 @@ private fun autoUiItem(
     zone: ZoneId,
 ): NoticeUiItem {
     val group = entry.group
-    val rawStatus = NoticeStatusMachine.statusOf(group, nowMillis, zone)
+    // 发布时间（契约 2026-11-18 §1/§6）：优先组 publishedAt；旧缓存用渲染元信息里的 items[].time 兜底。
+    val publishedTs = NoticeStatusMachine.publishedTsOf(group, entry.items, nowMillis, zone)
+    val rawStatus = NoticeStatusMachine.statusOf(group, nowMillis, zone, publishedTs)
     val recurrence = NoticeStatusMachine.effectiveRecurrenceOf(group)
     // 长期安排已结束（until 到期 / 下一次超出 until）→ 归已过期区，不再产生期次（§1.1/§1.3）
     val longtermEnded = recurrence != null && rawStatus.expired
@@ -191,9 +193,10 @@ private fun autoUiItem(
         recurring = recurrence != null,
         actionable = group.actionable,
         publishedMillis = publishedMillis,
+        publishedTsMillis = publishedTs ?: 0L,
         hasTimeAnchor = hasTimeAnchor,
-        // §1.2 资料 / 无时间：非过期、无有效 recurrence、无任何时间锚点
-        material = recurrence == null && !rawStatus.expired && !hasTimeAnchor,
+        // §3（2026-11-18）：只有「既无时间锚点又无发布时间」才是资料栏兜底；发布卡进主列表
+        material = recurrence == null && !rawStatus.expired && !hasTimeAnchor && (publishedTs ?: 0L) <= 0L,
         recurrence = recurrence,
         longtermEnded = longtermEnded,
         occurrenceMillis = occurrence?.nextMillis,
@@ -216,13 +219,14 @@ private fun autoUiItem(
 /**
  * 真实发布时间（「最新发布」卡文案 / 筛选排序 / 卡片 postedText 共用同一键）：
  *
- * - 优先取组 `updatedAt`（采集端在补充/更正/合并时更新，代表该通知的最后一次有效发布）；
- * - 与行 `ts`（首次入库时间）取较大值；都缺失时回退行 `ts`（缺失时间用 ts）；
+ * - 优先契约字段 `publishedAt`（2026-11-18 §1/§5；管线对所有组统一写入）；
+ * - 旧缓存没有该字段时回退原推算：组 `updatedAt` 与行 `ts` 取较大值；都缺失时回退行 `ts`；
  * - **不再使用首条 item 的消息时间**：`item.time` 常见只有 `HH:mm`（当天时钟），按渲染日解析会
  *   把历史通知算成「今天」，导致「最新发布」排序把旧通知顶到最前（2026-11-16 用户反馈的根因）；
  * - **不使用**管理员 `edited_at`：编辑不是重新发布，不应改变发布顺序（编辑状态由「已更新」标签表达）。
  */
 internal fun publishedAtOf(entry: NoticeEntry, zone: ZoneId = ZoneId.systemDefault()): Long {
+    NoticeStatusMachine.parseTs(entry.group.publishedAt, zone)?.takeIf { it > 0L }?.let { return it }
     val ts = entry.ts
     val updated = NoticeStatusMachine.parseTs(entry.group.updatedAt, zone)?.takeIf { it > 0L }
     return when {
@@ -251,6 +255,7 @@ internal fun buildOverview(
                 group = entry.group,
                 done = marks.isDone(MarkKind.NT_DONE, entry.id),
                 ts = publishedAtOf(entry, zone),
+                publishedTs = NoticeStatusMachine.publishedTsOf(entry.group, entry.items, nowMillis, zone) ?: 0L,
             )
         }
     return NoticeStatusMachine.statsOf(
@@ -266,7 +271,7 @@ internal fun buildOverview(
 // 分类 / 排序 / 视图分区（契约 §2.2）
 // -----------------------------------------------------------------------------
 
-/** 是否待处理（§2.4：未过期、非资料、有时间锚点 / 期次窗口内且未处理、未已处理、actionable）。 */
+/** 是否待处理（§2.4 + 2026-11-18 §5：未过期、非兜底资料、有时间锚点或发布时间 / 期次窗口内且未处理、未已处理、actionable）。 */
 internal fun isPendingItem(item: NoticeUiItem): Boolean {
     if (!item.isAuto) return false
     if (item.expired || item.material) return false
@@ -274,16 +279,16 @@ internal fun isPendingItem(item: NoticeUiItem): Boolean {
         return item.occurrenceKey != null && !item.occurrenceDone
     }
     if (!item.actionable || item.done) return false
-    return item.hasTimeAnchor
+    return item.hasTimeAnchor || item.publishedTsMillis > 0L
 }
 
-/** 是否主列表条目（§2.2：非过期、非长期定义、有时间锚点的普通通知 + 窗口内未处理的期次卡 + 人工通知）。 */
+/** 是否主列表条目（§2.2 + 2026-11-18 §3：非过期、非长期定义、有时间锚点或发布时间 + 窗口内未处理的期次卡 + 人工通知）。 */
 internal fun isPrimaryItem(item: NoticeUiItem): Boolean {
     if (item.expired || item.material) return false
     if (item.recurrence != null) {
         return item.occurrenceKey != null && !item.occurrenceDone
     }
-    if (item.isAuto) return item.hasTimeAnchor
+    if (item.isAuto) return item.hasTimeAnchor || item.publishedTsMillis > 0L
     return true
 }
 
@@ -298,7 +303,8 @@ internal fun noticeCardModeOf(item: NoticeUiItem): NoticeCardMode = when {
 /**
  * 主列表档位（与网页 `orderRank` / 小程序 `listRankOf` 同口径）：
  * 置顶 -1（安卓人工通知置顶扩展）→ alert 0 → 期次卡 1（按 next 参与，视作 24h 内档）→
- * urgent/today 1 → extended 2 → soon/active 3 → 其它/长期定义 5 → 无时间 4 → 已处理 9。
+ * urgent/today 1 → extended 2 → soon/active 3 → **published / none 4** → 长期定义 5 →
+ * 延期已截止 7 → 已截止 8 → 已处理 9。
  */
 internal fun noticeRankOf(item: NoticeUiItem): Int {
     if (item.pinned) return -1
@@ -310,17 +316,39 @@ internal fun noticeRankOf(item: NoticeUiItem): Int {
         "urgent", "today" -> 1
         "extended" -> 2
         "soon", "active" -> 3
-        "none" -> 4
+        // 2026-11-18 契约 §4：发布卡排 active 之后；与无时间兜底同档，档内按发布时间倒序
+        "published", "none" -> 4
+        "extended_past" -> 7
+        "expired" -> 8
         else -> 5
     }
 }
 
-/** 主列表比较：先档位，档内按主显示时间（期次按 next）升序、无时间最后，再按发布时间倒序（稳定）。 */
-internal val noticePrimaryComparator: Comparator<NoticeUiItem> =
-    compareBy<NoticeUiItem>({ noticeRankOf(it) })
-        .thenBy { it.occurrenceMillis ?: it.whenMillis ?: Long.MAX_VALUE }
-        .thenByDescending { it.publishedMillis.takeIf { ts -> ts > 0L } ?: it.ts }
-        .thenBy { it.key }
+/**
+ * 主列表比较：先档位；**档 4 内按发布时间倒序（新的在上），无发布时间（none 兜底）排最后**；
+ * 其余档位按主显示时间（期次按 next）升序、无时间最后，再按发布时间倒序（稳定）。
+ */
+internal val noticePrimaryComparator: Comparator<NoticeUiItem> = Comparator { a, b ->
+    val rankCompare = noticeRankOf(a).compareTo(noticeRankOf(b))
+    if (rankCompare != 0) return@Comparator rankCompare
+    if (noticeRankOf(a) == 4) {
+        val pa = a.publishedTsMillis
+        val pb = b.publishedTsMillis
+        return@Comparator when {
+            pa == pb -> 0
+            pa <= 0L -> 1
+            pb <= 0L -> -1
+            else -> pb.compareTo(pa)
+        }
+    }
+    val wa = a.occurrenceMillis ?: a.whenMillis ?: Long.MAX_VALUE
+    val wb = b.occurrenceMillis ?: b.whenMillis ?: Long.MAX_VALUE
+    if (wa != wb) return@Comparator wa.compareTo(wb)
+    val pa = a.publishedMillis.takeIf { ts -> ts > 0L } ?: a.ts
+    val pb = b.publishedMillis.takeIf { ts -> ts > 0L } ?: b.ts
+    if (pa != pb) return@Comparator pb.compareTo(pa)
+    a.key.compareTo(b.key)
+}
 
 /** 已过期 / 资料栏排序：发布时间倒序（稳定）。 */
 private val noticePostedDescComparator: Comparator<NoticeUiItem> =
@@ -426,7 +454,8 @@ internal fun viewContentOf(
         primary = primary,
         material = material,
         expired = expired,
-        showMaterial = true,
+        // 2026-11-18 契约 §3：资料/无时间栏仅保留兜底卡；正常数据 0 条 → 整栏隐藏
+        showMaterial = material.isNotEmpty(),
         showExpiredSection = true,
         totalCount = primary.size,
     )

@@ -91,10 +91,10 @@ data class NoticeOccurrence(
 
 /** 列表分区（契约 §2.2；「长期通知」筛选是独立清单视图，不在此枚举）。 */
 enum class NoticeSection {
-    /** 主列表：非过期、非长期定义、有时间锚点的普通通知 + 期次卡。 */
+    /** 主列表：非过期、非长期定义、有时间锚点或发布时间的普通通知 + 期次卡。 */
     PRIMARY,
 
-    /** 资料 / 无时间（§1.2；不参与待处理统计、不进长期通知）。 */
+    /** 资料 / 无时间兜底（契约 2026-11-18 §3：仅「既无时间锚点又无发布时间」；正常数据 0 条）。 */
     MATERIAL,
 
     /** 已过期区（含「长期安排已结束」）。 */
@@ -134,13 +134,24 @@ data class NoticeGroupDto(
     val alert: Boolean = false,
     val ocr: Boolean = false,
     val updatedAt: String = "",
+    /**
+     * 发布时间（契约 `web/通知三端_发布时间统一_契约_20261118.md` §1）：
+     * 管线统一写入的 ISO 8601 带偏移字符串（如 `2026-11-16T22:15:00+08:00`），**所有组都有**。
+     * 旧缓存没有该字段 → 由 [NoticeStatusMachine.publishedTsOf] 从组内消息时间 / `updatedAt` 现场推算。
+     */
+    val publishedAt: String? = null,
+    /**
+     * 发布动作（契约 §1）：**仅**「无任何时间锚点且非长期安排」的组为 `"发布"`，其他组为 null。
+     * 卡片状态文案优先取它，缺字段/空串时按 `"发布"` 兜底（§2）。
+     */
+    val publishAction: String? = null,
     val mergedSources: List<String> = emptyList(),
     @SerialName("crossSource") val crossSource: Boolean = false,
     val items: List<JsonObject> = emptyList(),
 )
 
 /** 通知状态（由 [NoticeStatusMachine.statusOf] 计算）。 */
-enum class NoticeBucket { URGENT, TODAY, SOON, ACTIVE, EXPIRED, ALERT, RECURRING, EXTENDED, NONE }
+enum class NoticeBucket { URGENT, TODAY, SOON, ACTIVE, EXPIRED, ALERT, RECURRING, EXTENDED, NONE, PUBLISHED }
 
 data class NoticeStatus(
     val key: String,
@@ -160,9 +171,9 @@ data class NoticeWhen(
 /**
  * 简报统计（契约 §2.4；顶部 5 张可点数据卡 / 工作台同口径）。
  *
- * - [pending]：未过期、非长期定义、非资料/无时间、未已处理、`actionable !== false` 且有时间锚点的通知数
- *   （期次卡也计入，已处理的期次不计）；
- * - [urgent]/[week]：上述待处理中主显示时间剩余 ≤24h / ≤7 天的数量；
+ * - [pending]：未过期、非长期定义、未已处理、`actionable !== false` 且有时间锚点**或发布时间**的通知数
+ *   （发布卡自 2026-11-18 契约起纳入；期次卡也计入，已处理的期次不计；仅「资料 / 无时间」兜底不计）；
+ * - [urgent]/[week]：上述待处理中主显示时间剩余 ≤24h / ≤7 天的数量（发布卡无未来主显示时间 → 不计）；
  * - [expired]：已过期条数（仅「已过期」区标题使用）；
  * - [longterm]：进行中的长期安排条数（`until` 已过 / 下次超出 until → 不计）；
  * - [latestPostedMillis]/[latestPostedText]：全部未隐藏通知（含已过期/资料/长期定义/人工）中发布时间最新者。

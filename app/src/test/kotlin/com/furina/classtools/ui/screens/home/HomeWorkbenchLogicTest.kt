@@ -38,6 +38,7 @@ class HomeWorkbenchLogicTest {
         cat: String = "教务",
         ts: Long = now,
         deadline: String = "",
+        publishedAt: String? = null,
     ): NoticeEntry =
         NoticeEntry(
             row = NoticeRow(id = id, title = title, ts = ts),
@@ -46,6 +47,7 @@ class HomeWorkbenchLogicTest {
                 title = title,
                 cat = cat,
                 deadline = deadline,
+                publishedAt = publishedAt,
             ),
             items = emptyList(),
             hidden = false,
@@ -119,6 +121,19 @@ class HomeWorkbenchLogicTest {
         val marks = MarksSnapshot(ntDone = mapOf("3" to true))
         val pending = HomeWorkbenchLogic.noticePendingEntries(entries, marks, now)
         assertEquals(listOf("2", "1"), pending.map { it.id })
+    }
+
+    @Test
+    fun noticePending_includesPublishedCard() {
+        // 2026-11-18 契约 §5：发布卡（无时间锚点但有发布时间）计入待处理，兜底资料卡不计
+        val entries = listOf(
+            autoEntry("auto_pub", "发布卡", publishedAt = "2026-11-05T20:00:00+08:00"),
+            autoEntry("auto_none", "无时间资料"),
+        )
+        val pending = HomeWorkbenchLogic.noticePendingEntries(entries, MarksSnapshot(), now)
+        assertEquals(listOf("pub"), pending.map { it.id })
+        val rotation = HomeWorkbenchLogic.noticeRotation(entries, MarksSnapshot(), now)
+        assertTrue(rotation.single().sub.contains("发布"))
     }
 
     @Test

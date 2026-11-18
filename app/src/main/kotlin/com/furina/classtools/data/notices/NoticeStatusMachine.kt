@@ -11,14 +11,18 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
-/** 状态机输入：组 + 已处理（marks ntdone）+ 排序时间（行 ts）。 */
+/** 状态机输入：组 + 已处理（marks ntdone）+ 排序时间（行 ts）+ 发布时间（契约 2026-11-18）。 */
 data class NoticeDigest(
     val group: NoticeGroupDto,
     val done: Boolean = false,
     val ts: Long = 0L,
+    /** 发布时间（契约 2026-11-18 §1/§5；0 = 未提供，统计时按组字段 / 旧数据推算兜底）。 */
+    val publishedTs: Long = 0L,
 )
 
 /** 报名窗口（可只填一端）。 */
@@ -29,7 +33,8 @@ data class SignupWindow(val start: Long?, val end: Long?)
  *
  * 唯一真源：`docs/api/NOTICES.md` §3（网页 `anStatus` 简化版 + 小程序 `notice.js` 完整版口径）
  * + `web/通知三端_长期通知与时间显示_契约_20261114.md`（长期通知期次 / 时间显示 §3 / 统计 §2.4）：
- * - **时间优先级**：报名窗口 > 真实截止（extensions 最后一次延期优先）> 活动/事件 > 无时间；
+ * - **时间优先级**：报名窗口 > 真实截止（extensions 最后一次延期优先）> 活动/事件 > 发布时间 > 无时间；
+ *   （发布时间口径见 `web/通知三端_发布时间统一_契约_20261118.md`：无时间锚点的通知以发布时间为卡片时间，动作「发布」）
  * - `expireAt` 只用于「活动类自动归档」，**绝不当截止时间展示**；
  * - 有效的 `recurrence`（长期安排）存在时**永不按 deadline 判过期**；`recurrence.until` 到期（或下一次发生
  *   时间已超出 until）→ 状态归「长期安排已结束」（已过期区），不再产生期次（§1.1/§1.3）；
@@ -53,6 +58,9 @@ object NoticeStatusMachine {
 
     /** recurrence.time 合法形式 `HH:MM`（24h）。 */
     private val RECUR_TIME = Regex("^([01]?\\d|2[0-3]):[0-5]\\d$")
+
+    /** 组内消息时间 `MM-dd HH:mm`（无年份；契约 2026-11-18 §1，对齐网页 `_relAnchor`）。 */
+    private val REL_ANCHOR_TIME = Regex("^(\\d{1,2})-(\\d{1,2})\\s+(\\d{1,2}):(\\d{2})$")
 
     private val mmdd: DateTimeFormatter = DateTimeFormatter.ofPattern("MM-dd", Locale.CHINA)
     private val mmddhhmm: DateTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.CHINA)
@@ -121,6 +129,84 @@ object NoticeStatusMachine {
         } catch (_: Throwable) {
             return null
         }
+    }
+
+    /**
+     * 组内消息时间（`MM-dd HH:mm`，无年份）解析（对齐网页 `_relAnchor` / 管线 `_pub_dt_from_mmdd`）：
+     * 按当前年解释；若解析结果晚于 now+60 天，明显是跨年 → 视为上一年；非法/不足 `MM-dd HH:mm` → null
+     * （只有 `HH:mm` 的旧 item 时间**不算**发布时间，避免 2026-11-16「最新发布被当天时钟顶到最前」回归）。
+     */
+    fun parseRelAnchor(
+        raw: String?,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Long? {
+        val text = raw?.trim().orEmpty()
+        if (text.isEmpty()) return null
+        val match = REL_ANCHOR_TIME.matchEntire(text) ?: return null
+        val month = match.groupValues[1].toIntOrNull() ?: return null
+        val day = match.groupValues[2].toIntOrNull() ?: return null
+        val hour = match.groupValues[3].toIntOrNull() ?: return null
+        val minute = match.groupValues[4].toIntOrNull() ?: return null
+        if (month !in 1..12 || day !in 1..31 || hour !in 0..23 || minute !in 0..59) return null
+        val year = Instant.ofEpochMilli(nowMillis).atZone(zone).year
+        fun at(targetYear: Int): Long? = runCatching {
+            LocalDateTime.of(targetYear, month, day, hour, minute)
+                .atZone(zone).toInstant().toEpochMilli()
+        }.getOrNull()
+        val current = at(year) ?: return null
+        return if (current > nowMillis + 60 * DAY_MS) at(year - 1) ?: current else current
+    }
+
+    /**
+     * 发布时间（契约 `web/通知三端_发布时间统一_契约_20261118.md` §1/§6，对齐网页 `publishedTsOf`）：
+     * 1. 优先数据字段 [NoticeGroupDto.publishedAt]（管线对所有组统一写入的 ISO 8601）；
+     * 2. 旧缓存/旧数据没有该字段 → 回退组内最新消息时间（`items[].time` / `items[].messages[].time`）
+     *    与 `updatedAt` 的较晚者（与网页 `pubTsOf` 同口径；不把行 `ts` 当发布时间）；
+     * 3. 都解析不到 → null（维持旧的「无时间」兜底）。
+     */
+    fun publishedTsOf(
+        group: NoticeGroupDto,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Long? {
+        parseTs(group.publishedAt, zone)?.takeIf { it > 0L }?.let { return it }
+        var best = parseTs(group.updatedAt, zone)?.takeIf { it > 0L } ?: 0L
+        for (item in group.items) {
+            val time = (item["time"] as? JsonPrimitive)?.contentOrNull
+            parseRelAnchor(time, nowMillis, zone)?.let { if (it > best) best = it }
+            val messages = item["messages"] as? JsonArray ?: continue
+            for (message in messages) {
+                val obj = message as? JsonObject ?: continue
+                val msgTime = (obj["time"] as? JsonPrimitive)?.contentOrNull
+                parseRelAnchor(msgTime, nowMillis, zone)?.let { if (it > best) best = it }
+            }
+        }
+        return best.takeIf { it > 0L }
+    }
+
+    /**
+     * 发布时间（数据层已把 `group.items` 清空时用渲染元信息兜底；口径同 [publishedTsOf]）。
+     * 生产路径由 `NoticeEntry.items` 传入，保证旧缓存（无 `publishedAt`）也能推算发布时间。
+     */
+    fun publishedTsOf(
+        group: NoticeGroupDto,
+        items: List<NoticeItemMeta>,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Long? {
+        var best = publishedTsOf(group, nowMillis, zone) ?: 0L
+        fun take(raw: String?) {
+            parseRelAnchor(raw, nowMillis, zone)?.let { if (it > best) best = it }
+        }
+        for (item in items) {
+            when (item) {
+                is NoticeItemMeta.Text -> take(item.timeText)
+                is NoticeItemMeta.Merged -> item.messages.forEach { take(it.timeText) }
+                else -> Unit
+            }
+        }
+        return best.takeIf { it > 0L }
     }
 
     /** `MM-dd HH:mm`。 */
@@ -197,8 +283,10 @@ object NoticeStatusMachine {
         parseTs(group.expireAt, zone)
 
     /**
-     * 是否有任何时间锚点（`deadline`/`extensions` 最后一条/`eventAt`/`signupStart`/`signupEnd`）；
-     * 无时间锚点且非过期、无 recurrence → 「资料 / 无时间」（契约 §1.2），不参与待处理统计。
+     * 是否有任何时间锚点（`deadline`/`extensions` 最后一条/`eventAt`/`signupStart`/`signupEnd`）。
+     *
+     * **发布时间不算时间锚点**（契约 2026-11-18 §3）：无时间锚点但有发布时间的组是「发布卡」，
+     * 进主列表参与排序/统计；只有既无锚点又无发布时间的才是「资料 / 无时间」兜底。
      */
     fun hasTimeAnchor(group: NoticeGroupDto, zone: ZoneId = ZoneId.systemDefault()): Boolean =
         deadlineOf(group, zone) != null ||
@@ -240,6 +328,8 @@ object NoticeStatusMachine {
         group: NoticeGroupDto,
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
+        /** 已由调用方算出的发布时间（生产路径带 `NoticeEntry.items` 推算）；null = 按组字段/旧数据现场推算。 */
+        publishedTs: Long? = null,
     ): NoticeStatus {
         // 长期安排：有效 recurrence 且进行中 → 「长期安排」；until 到期 / 无下一次 → 已结束（§1.1/§1.3）。
         val recurrence = effectiveRecurrenceOf(group)
@@ -319,6 +409,19 @@ object NoticeStatusMachine {
                 cls = "active",
                 expired = false,
                 bucket = NoticeBucket.ACTIVE,
+            )
+        }
+
+        // 2026-11-18 契约 §2：无任何时间锚点、非长期安排、未过期 → 以发布时间为卡片时间，动作「发布」。
+        val pubTs = publishedTs?.takeIf { it > 0L } ?: publishedTsOf(group, nowMillis, zone)
+        if (pubTs != null) {
+            val action = group.publishAction?.trim().orEmpty().ifBlank { "发布" }
+            return NoticeStatus(
+                key = "published",
+                label = "${fmtWhen(pubTs, nowMillis, zone)} $action",
+                cls = "active",
+                expired = false,
+                bucket = NoticeBucket.PUBLISHED,
             )
         }
 
@@ -579,7 +682,7 @@ object NoticeStatusMachine {
     /**
      * 是否计入「待处理」（契约 §2.4；工作台/统计共用）：
      * 未过期、`actionable !== false`、未已处理（普通通知按组 id、期次按期次 key），且
-     * - 普通通知必须**有时间锚点**（资料 / 无时间不计）；
+     * - 普通通知必须**有时间锚点或发布时间**（发布卡视为有时间；资料 / 无时间兜底不计）；
      * - 长期安排只有**处于期次窗口内且该期未处理**时计入（长期定义本身不计）。
      */
     fun isPending(
@@ -588,25 +691,29 @@ object NoticeStatusMachine {
         zone: ZoneId = ZoneId.systemDefault(),
         done: Boolean = false,
         doneRef: (String) -> Boolean = { false },
+        /** 调用方已算出的发布时间（契约 2026-11-18）；0 = 未提供，按组字段/旧数据推算。 */
+        publishedTs: Long = 0L,
     ): Boolean {
         if (effectiveRecurrenceOf(group) != null) {
             if (!recurOngoingOf(group, nowMillis, zone)) return false
             val occurrence = occurrenceOf(group, nowMillis, zone) ?: return false
             return !doneRef(occurrence.key)
         }
-        if (statusOf(group, nowMillis, zone).expired) return false
+        val pubTs = publishedTs.takeIf { it > 0L } ?: publishedTsOf(group, nowMillis, zone)
+        if (statusOf(group, nowMillis, zone, pubTs).expired) return false
         if (!group.actionable || done) return false
-        // §2.4：必须有时间锚点（资料 / 无时间不计待处理；边界：只有报名开始且已过也算有时间锚点）
-        return hasTimeAnchor(group, zone)
+        // §2.4 + 2026-11-18 §5：有时间锚点或发布时间（发布卡）才计入待处理
+        return hasTimeAnchor(group, zone) || pubTs != null
     }
 
     // ------------------------------------------------------------ 简报统计（契约 §2.4）/ 最紧急
 
     /**
-     * §2.4 统计口径（顶部 5 卡 / 工作台同口径）：
-     * - 待处理：未过期、非长期定义、非资料/无时间、未已处理、`actionable !== false`、且有时间锚点；
-     *   期次卡也计入（已处理的期次不计；[doneRef] 同时用于普通通知 `gid` 与期次 key）；
-     * - 24h / 7 天：上述待处理中主显示时间（期次按 next）剩余 ≤24h / ≤7 天；
+     * §2.4 统计口径（顶部 5 卡 / 工作台同口径；2026-11-18 契约 §5 起发布卡纳入「统一计算」）：
+     * - 待处理：未过期、非长期定义、未已处理、`actionable !== false`、且有时间锚点**或发布时间**
+     *   （发布卡视为有时间；仅「资料 / 无时间」兜底不计）；期次卡也计入（已处理的期次不计；
+     *   [doneRef] 同时用于普通通知 `gid` 与期次 key）；
+     * - 24h / 7 天：上述待处理中主显示时间（期次按 next）剩余 ≤24h / ≤7 天；发布卡主显示时间不存在 → 不计；
      * - 已过期：`status.expired`（含「长期安排已结束」）；
      * - 长期通知：进行中的长期安排条数（until 已过 → 不计）；
      * - 最新发布：[extraPostedMillis]（人工通知等）+ 组发布时间（[NoticeDigest.ts]）中最新的。
@@ -641,14 +748,16 @@ object NoticeStatusMachine {
                 if (left in 0..WEEK_MS) week += 1
                 continue
             }
-            if (statusOf(group, nowMillis, zone).expired) {
+            val pubTs = digest.publishedTs.takeIf { it > 0L } ?: publishedTsOf(group, nowMillis, zone)
+            if (statusOf(group, nowMillis, zone, pubTs).expired) {
                 expired += 1
                 continue
             }
             if (digest.done || !group.actionable) continue
-            // §2.4：有时间锚点才算待处理（资料 / 无时间不计）
-            if (!hasTimeAnchor(group, zone)) continue
+            // §2.4 + 2026-11-18 §5：有时间锚点或发布时间（发布卡视为有时间）才算待处理
+            if (!hasTimeAnchor(group, zone) && pubTs == null) continue
             pending += 1
+            // 发布卡没有未来主显示时间（发布时间是过去）→ 不计入 24h / 7 天窗口
             val whenAt = whenOf(group, nowMillis, zone) ?: continue
             val left = whenAt - nowMillis
             if (left in 0..DAY_MS) urgent += 1
@@ -700,13 +809,17 @@ object NoticeStatusMachine {
                 whenOf(digest.group, nowMillis, zone)
             }
         val candidates = digests.filter { digest ->
-            isPending(digest.group, nowMillis, zone, digest.done, doneRef) &&
-                statusOf(digest.group, nowMillis, zone).bucket != NoticeBucket.EXPIRED
+            isPending(digest.group, nowMillis, zone, digest.done, doneRef, digest.publishedTs) &&
+                statusOf(digest.group, nowMillis, zone, digest.publishedTs.takeIf { it > 0L }).bucket != NoticeBucket.EXPIRED
         }
         if (candidates.isEmpty()) return null
         return candidates.sortedWith(
             compareBy<NoticeDigest> { digest ->
-                if (statusOf(digest.group, nowMillis, zone).bucket == NoticeBucket.ALERT) 0 else 1
+                if (statusOf(digest.group, nowMillis, zone, digest.publishedTs.takeIf { it > 0L }).bucket == NoticeBucket.ALERT) {
+                    0
+                } else {
+                    1
+                }
             }.thenBy { digest ->
                 effectiveWhen(digest) ?: Long.MAX_VALUE
             }.thenByDescending { it.ts },

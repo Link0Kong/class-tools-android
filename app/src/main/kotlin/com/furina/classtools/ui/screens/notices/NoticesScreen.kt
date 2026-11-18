@@ -210,11 +210,16 @@ internal data class NoticeUiItem(
     val recurring: Boolean = false,
     /** `actionable !== false`（§2.4：false = 仅告知，不计待处理）。 */
     val actionable: Boolean = true,
-    /** 真实发布时间（行 `ts` 与组 `updatedAt` 取较大；「最新发布」排序/文案与卡片 postedText 共用）。 */
+    /** 最新发布排序键（组 `publishedAt` 优先，旧缓存回退行 `ts` 与组 `updatedAt` 较大值；「最新发布」/postedText 共用）。 */
     val publishedMillis: Long = 0L,
-    /** 是否有任何时间锚点（§1.2 资料判定 / §2.4 待处理判定）。 */
+    /**
+     * 发布时间（契约 2026-11-18 §1/§2：组 `publishedAt`，旧缓存由组内消息时间 / `updatedAt` 推算；
+     * 0 = 无发布时间）。发布卡据此进入主列表、排序档 4 内倒序，并在状态胶囊显示「<时间> 发布」。
+     */
+    val publishedTsMillis: Long = 0L,
+    /** 是否有任何时间锚点（§1.2 资料判定 / §2.4 待处理判定；发布时间不算锚点）。 */
     val hasTimeAnchor: Boolean = false,
-    /** 资料 / 无时间（§1.2）：非过期、无有效 recurrence、无任何时间锚点；不进长期通知、不计待处理。 */
+    /** 资料 / 无时间兜底（2026-11-18 §3）：非过期、无有效 recurrence、无任何时间锚点**且无发布时间**；不进长期通知、不计待处理。 */
     val material: Boolean = false,
     /** 有效的长期安排（recurrence；已结束由 [longtermEnded] 标记）。 */
     val recurrence: NoticeRecurrenceDto? = null,
