@@ -7,11 +7,11 @@ import com.furina.classtools.ui.screens.stats.StatsScreen
 import com.furina.classtools.ui.theme.ClassToolsTheme
 
 private val statsPreviewRows = listOf(
-    VisitRow("2026-11-18-12", "9000000003", "王五", 1_763_447_200_000, "win"),
-    VisitRow("2026-11-18-11", "9000000001", "张三", 1_763_443_500_000, "android"),
-    VisitRow("2026-11-18-10", "9000000001", "张三", 1_763_439_500_000, "web"),
-    VisitRow("2026-11-18-09", "9000000002", "李四", 1_763_435_220_000, "mp"),
-    VisitRow("2026-11-18-08", "9000000004", "赵六", 1_763_431_800_000, "harmony"),
+    VisitRow("2026-11-18-12", "9000000003", "王五", 1_794_974_400_000, "win"),
+    VisitRow("2026-11-18-11", "9000000001", "张三", 1_794_971_100_000, "android"),
+    VisitRow("2026-11-18-10", "9000000001", "张三", 1_794_969_720_000, "web"),
+    VisitRow("2026-11-18-09", "9000000002", "李四", 1_794_964_020_000, "mp"),
+    VisitRow("2026-11-18-08", "9000000004", "赵六", 1_794_961_800_000, "harmony"),
 )
 
 @Preview(name = "统计 · 管理员（今天）", widthDp = 390, heightDp = 844, showBackground = true)
