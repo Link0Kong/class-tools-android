@@ -65,8 +65,8 @@ private const val TAG = "CampusMap"
  */
 private const val ASSET_MAP_URL = "file:///android_asset/map/campus_final_25d.html?embed=1"
 
-/** 地图 H5 网络版（ECS IP 调试入口；备案/DNS 恢复后改同源 https）：本地资源不可用时的降级。 */
-private const val MAP_BASE = "http://121.196.47.2/map/campus_final_25d.html"
+/** 地图 H5 网络版（降级用；2026-11-18 按 buildType 注入：debug=ECS IP 调试入口，release=备案后 https 正式域名）。 */
+private val MAP_BASE: String = BuildConfig.MAP_BASE_URL
 private const val MAP_VERSION = "202611160800"
 
 /** 离线页健康检查：H5 正常渲染时 `#scene` canvas 一定有非零尺寸且正文有内容。 */

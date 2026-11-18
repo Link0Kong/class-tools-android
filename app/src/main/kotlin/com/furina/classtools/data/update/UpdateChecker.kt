@@ -3,6 +3,7 @@ package com.furina.classtools.data.update
 import com.furina.classtools.data.network.ApiRequest
 import com.furina.classtools.data.network.HttpMethod
 import com.furina.classtools.data.network.HttpTransport
+import com.furina.classtools.data.network.NetworkClients
 import com.furina.classtools.data.network.OkHttpTransport
 import java.time.Duration
 import okhttp3.OkHttpClient
@@ -84,8 +85,9 @@ object UpdateHttpTransport {
 
     fun create(client: OkHttpClient = defaultClient()): HttpTransport = OkHttpTransport(client)
 
-    /** 契约：连接/读/call 均 10s（updates 检查是轻量 JSON，超时宁可静默失败）。 */
-    fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+    /** 契约：连接/读/call 均 10s（updates 检查是轻量 JSON，超时宁可静默失败）。
+     *  2026-11-18：共享全局连接池/Dispatcher（同一主机连接跨模块复用）。 */
+    fun defaultClient(): OkHttpClient = NetworkClients.builder()
         .connectTimeout(Duration.ofSeconds(10))
         .readTimeout(Duration.ofSeconds(10))
         .writeTimeout(Duration.ofSeconds(10))

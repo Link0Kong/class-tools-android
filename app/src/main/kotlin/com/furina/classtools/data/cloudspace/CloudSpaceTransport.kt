@@ -1,6 +1,6 @@
 package com.furina.classtools.data.cloudspace
 
-import java.time.Duration
+import com.furina.classtools.data.network.NetworkClients
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -88,22 +88,10 @@ class OkHttpCloudSpaceTransport(
     companion object {
         private val EMPTY_REQUEST_BODY = ByteArray(0).toRequestBody(null)
 
-        /** JSON/分片请求客户端（与项目其他网络层同一超时口径，仅放宽读/写）。 */
-        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(Duration.ofSeconds(15))
-            .readTimeout(Duration.ofSeconds(120))
-            .writeTimeout(Duration.ofSeconds(120))
-            .callTimeout(Duration.ofMinutes(10))
-            .retryOnConnectionFailure(false)
-            .build()
+        /** JSON/分片请求客户端（2026-11-18：共享全局连接池/Dispatcher，仅放宽读/写）。 */
+        fun defaultClient(): OkHttpClient = NetworkClients.cloudSpaceClient()
 
-        /** 文件下载客户端：读超时 10 分钟、不设 callTimeout（大文件由系统网络自然超时兜底）。 */
-        fun downloadClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(Duration.ofSeconds(15))
-            .readTimeout(Duration.ofMinutes(10))
-            .writeTimeout(Duration.ofMinutes(10))
-            .callTimeout(Duration.ZERO)
-            .retryOnConnectionFailure(false)
-            .build()
+        /** 文件下载客户端：读超时 10 分钟、不设 callTimeout（共享连接池）。 */
+        fun downloadClient(): OkHttpClient = NetworkClients.downloadClient()
     }
 }

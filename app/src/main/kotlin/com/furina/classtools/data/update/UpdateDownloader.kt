@@ -4,6 +4,7 @@ import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
+import com.furina.classtools.data.network.NetworkClients
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -189,8 +190,8 @@ class OkHttpUpdateDownloader(
         private const val CONNECT_TIMEOUT_MS = 10_000L
         private const val READ_TIMEOUT_MS = 30_000L
 
-        /** 下载客户端：连接 10s / 读 30s；不设 callTimeout（APK 可能较大）。 */
-        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+        /** 下载客户端：连接 10s / 读 30s；不设 callTimeout（APK 可能较大）。2026-11-18 共享全局连接池。 */
+        fun defaultClient(): OkHttpClient = NetworkClients.builder()
             .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .readTimeout(READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .retryOnConnectionFailure(true)

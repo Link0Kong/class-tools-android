@@ -1,5 +1,8 @@
 package com.furina.classtools.data.network
 
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.random.Random
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -10,7 +13,12 @@ import kotlinx.serialization.json.contentOrNull
  * CloudBase PostgREST 网关客户端（契约：docs/BACKEND_CONTRACT.md §1 + docs/api/ENDPOINTS.md）。
  *
  * 线程约定：所有方法都是 `suspend` 且主线程安全；网络 IO 在 [OkHttpTransport] 内切到 Dispatchers.IO。
- * 超时/重试：连接/读 10s；**GET 网络失败重试 1 次（约 350ms 后），写请求不重试**（防重复写入）。
+ * 超时/重试：
+ * - 连接 15s / 读 30s / 整体 60s（[NetworkClients.apiClient]）；调用方可按接口分级传 [timeoutMs]
+ *   （2026-11-18 超时分级：登录/身份验证用更宽的档，普通读写用默认档）；
+ * - **幂等只读请求（GET）网络失败重试 [maxRetries] 次（默认 1 次，约 350ms + 抖动）**，
+ *   并对 502/503/504 瞬时网关错误同样重试一次；写请求不重试（防重复写入）。
+ * - **在途合并（2026-11-18）**：同一会话下并发的相同 GET 只发一个 HTTP 请求，其它调用复用结果。
  * 请求头：`Authorization: Bearer <publishableKey>` + `X-Class-Token: <token>`（有身份才加）+ `Cache-Control: no-store`。
  * 错误：401/403 → [ApiError.TokenInvalid]（并回调 [onTokenInvalid]）；其余非 2xx → [ApiError.Http]（解析 PostgREST 错误体）。
  *
@@ -25,6 +33,12 @@ class ApiClient(
     private val json: Json = NetJson,
     private val retryDelayMs: Long = DEFAULT_RETRY_DELAY_MS,
     private val onTokenInvalid: () -> Unit = {},
+    /** GET 网络失败/瞬时 5xx 的最大重试次数（默认 1 次 = 总共 2 次尝试）。 */
+    private val maxRetries: Int = DEFAULT_MAX_RETRIES,
+    /** 重试退避抖动上限（毫秒）：避免多请求同时重试形成尖峰。 */
+    private val retryJitterMs: Long = DEFAULT_RETRY_JITTER_MS,
+    /** 幂等只读请求遇到这些网关瞬时状态码时重试一次。 */
+    private val transientStatusCodes: Set<Int> = DEFAULT_TRANSIENT_STATUS,
 ) {
     /** 规范化后的 REST 根（结尾必带 `/`；与网页 `var CB` / 小程序 `restBase` 语义一致）。 */
     val baseUrl: String = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
@@ -55,20 +69,34 @@ class ApiClient(
 
     // ------------------------------------------------------------ 原始请求
 
-    /** GET：网络失败自动重试一次（约 350ms 后）。 */
+    /**
+     * GET（幂等只读）：
+     * - 网络失败 / 502/503/504 瞬时错误自动重试 [maxRetries] 次（默认 1 次，约 350ms + 抖动）；
+     * - 同一会话下并发的相同 GET 在途合并（[coalesce]=false 可关闭）；
+     * - [timeoutMs]：本次调用整体超时（2026-11-18 超时分级；null = client 默认 60s）。
+     */
     suspend fun get(
         pathAndQuery: String,
         authenticated: Boolean = true,
         extraHeaders: Map<String, String> = emptyMap(),
-    ): ApiResult<String> = execute(
-        method = HttpMethod.GET,
-        path = pathAndQuery,
-        body = null,
-        prefer = null,
-        authenticated = authenticated,
-        extraHeaders = extraHeaders,
-        retryNetworkFailure = true,
-    )
+        timeoutMs: Long? = null,
+        coalesce: Boolean = true,
+    ): ApiResult<String> {
+        val block: suspend () -> ApiResult<String> = {
+            execute(
+                method = HttpMethod.GET,
+                path = pathAndQuery,
+                body = null,
+                prefer = null,
+                authenticated = authenticated,
+                extraHeaders = extraHeaders,
+                retryNetworkFailure = true,
+                timeoutMs = timeoutMs,
+            )
+        }
+        if (!coalesce) return block()
+        return executeCoalesced(coalesceKey(pathAndQuery, authenticated, extraHeaders), block)
+    }
 
     /** POST：不重试。 */
     suspend fun post(
@@ -77,6 +105,7 @@ class ApiClient(
         prefer: String? = null,
         authenticated: Boolean = true,
         extraHeaders: Map<String, String> = emptyMap(),
+        timeoutMs: Long? = null,
     ): ApiResult<String> = execute(
         method = HttpMethod.POST,
         path = path,
@@ -85,6 +114,7 @@ class ApiClient(
         authenticated = authenticated,
         extraHeaders = extraHeaders,
         retryNetworkFailure = false,
+        timeoutMs = timeoutMs,
     )
 
     /** PATCH：不重试。 */
@@ -94,6 +124,7 @@ class ApiClient(
         prefer: String? = null,
         authenticated: Boolean = true,
         extraHeaders: Map<String, String> = emptyMap(),
+        timeoutMs: Long? = null,
     ): ApiResult<String> = execute(
         method = HttpMethod.PATCH,
         path = path,
@@ -102,6 +133,7 @@ class ApiClient(
         authenticated = authenticated,
         extraHeaders = extraHeaders,
         retryNetworkFailure = false,
+        timeoutMs = timeoutMs,
     )
 
     // ------------------------------------------------------------ JSON 便捷助手
@@ -109,21 +141,30 @@ class ApiClient(
     suspend fun getJson(
         pathAndQuery: String,
         authenticated: Boolean = true,
-    ): ApiResult<JsonElement> = get(pathAndQuery, authenticated).flatMapJson()
+        timeoutMs: Long? = null,
+        coalesce: Boolean = true,
+    ): ApiResult<JsonElement> = get(
+        pathAndQuery,
+        authenticated,
+        timeoutMs = timeoutMs,
+        coalesce = coalesce,
+    ).flatMapJson()
 
     suspend fun postJson(
         path: String,
         body: String,
         prefer: String? = null,
         authenticated: Boolean = true,
-    ): ApiResult<JsonElement> = post(path, body, prefer, authenticated).flatMapJson()
+        timeoutMs: Long? = null,
+    ): ApiResult<JsonElement> = post(path, body, prefer, authenticated, timeoutMs = timeoutMs).flatMapJson()
 
     suspend fun patchJson(
         path: String,
         body: String,
         prefer: String? = null,
         authenticated: Boolean = true,
-    ): ApiResult<JsonElement> = patch(path, body, prefer, authenticated).flatMapJson()
+        timeoutMs: Long? = null,
+    ): ApiResult<JsonElement> = patch(path, body, prefer, authenticated, timeoutMs = timeoutMs).flatMapJson()
 
     /**
      * 诊断用：单次 GET 并返回「耗时 + 服务器 Date 头」。
@@ -176,6 +217,52 @@ class ApiClient(
         }
     }
 
+    // ------------------------------------------------------------ 在途合并（2026-11-18）
+
+    /** 在途 GET 表：key = path + 身份/头指纹 → 共享结果（不保存任何 token 明文）。 */
+    private val inFlightGets = ConcurrentHashMap<String, CompletableDeferred<ApiResult<String>>>()
+
+    /**
+     * 合并键：同一会话（token 指纹）+ 相同 path/头 → 视为同一逻辑请求。
+     * 只用于 GET（幂等只读）；写请求永不合并/重试。
+     */
+    private fun coalesceKey(
+        pathAndQuery: String,
+        authenticated: Boolean,
+        extraHeaders: Map<String, String>,
+    ): String {
+        val tokenFingerprint = if (authenticated) (tokenProvider()?.hashCode() ?: 0).toString() else "anon"
+        val headers = extraHeaders.entries.sortedBy { it.key }.joinToString(",") { it.key + "=" + it.value }
+        return pathAndQuery + "|" + authenticated + "|" + tokenFingerprint + "|" + headers
+    }
+
+    /**
+     * 在途合并：首个调用者真正发请求，其余同键调用者等待并复用同一结果。
+     * - 首个调用被取消/抛异常时，等待者收到同一异常（可读的失败语义，不会悬挂）；
+     * - 请求结束即从表里移除（不缓存旧数据，后续调用仍会真正发请求）。
+     */
+    private suspend fun executeCoalesced(
+        key: String,
+        block: suspend () -> ApiResult<String>,
+    ): ApiResult<String> {
+        while (true) {
+            inFlightGets[key]?.let { return it.await() }
+            val deferred = CompletableDeferred<ApiResult<String>>()
+            if (inFlightGets.putIfAbsent(key, deferred) == null) {
+                return try {
+                    val result = block()
+                    deferred.complete(result)
+                    result
+                } catch (t: Throwable) {
+                    deferred.completeExceptionally(t)
+                    throw t
+                } finally {
+                    inFlightGets.remove(key, deferred)
+                }
+            }
+        }
+    }
+
     // ------------------------------------------------------------ 执行/错误映射
 
     private suspend fun execute(
@@ -186,6 +273,7 @@ class ApiClient(
         authenticated: Boolean,
         extraHeaders: Map<String, String>,
         retryNetworkFailure: Boolean,
+        timeoutMs: Long? = null,
     ): ApiResult<String> {
         if (baseUrl.isBlank() || publishableKey.isBlank()) {
             return ApiResult.Failure(ApiError.Config("云端未配置（baseUrl/publishableKey 为空）"))
@@ -195,21 +283,35 @@ class ApiClient(
             url = url(path),
             headers = buildHeaders(authenticated, prefer, extraHeaders),
             body = body,
+            timeoutMs = timeoutMs,
         )
-        var attempted = 0
+        var attempt = 0
         while (true) {
             val response = try {
                 transport.execute(request)
             } catch (t: Throwable) {
-                if (retryNetworkFailure && attempted == 0 && isRetriableNetworkFailure(t)) {
-                    attempted += 1
-                    delay(retryDelayMs)
+                if (retryNetworkFailure && attempt < maxRetries && isRetriableNetworkFailure(t)) {
+                    attempt += 1
+                    delay(retryDelayOf(attempt))
                     continue
                 }
                 return ApiResult.Failure(ApiError.Network(cause = t))
             }
+            // 幂等只读请求遇到网关瞬时错误（502/503/504）重试一次（写请求 retryNetworkFailure=false 不会走到）
+            if (retryNetworkFailure && attempt < maxRetries && response.status in transientStatusCodes) {
+                attempt += 1
+                delay(retryDelayOf(attempt))
+                continue
+            }
             return interpretResponse(response)
         }
+    }
+
+    /** 重试退避：第 1 次 ≈ 350ms，第 2 次 ≈ 700ms；各加 [0, retryJitterMs] 随机抖动防尖峰。 */
+    private fun retryDelayOf(attempt: Int): Long {
+        val base = retryDelayMs * attempt
+        if (retryJitterMs <= 0) return base
+        return base + Random.nextLong(0, retryJitterMs + 1)
     }
 
     /** 取消/超时/协程取消不重试；只有真正的连接类失败才重试。 */
@@ -242,6 +344,15 @@ class ApiClient(
 
     companion object {
         const val DEFAULT_RETRY_DELAY_MS: Long = 350L
+
+        /** 幂等只读请求默认最多重试 1 次（总 2 次尝试）。 */
+        const val DEFAULT_MAX_RETRIES: Int = 1
+
+        /** 重试退避抖动上限（毫秒）。 */
+        const val DEFAULT_RETRY_JITTER_MS: Long = 120L
+
+        /** 网关瞬时错误（幂等只读请求会重试一次）。 */
+        val DEFAULT_TRANSIENT_STATUS: Set<Int> = setOf(502, 503, 504)
 
         /** 解析 PostgREST 错误体；不是 JSON 对象时返回 null。 */
         fun parsePostgrestError(json: Json, body: String?): PostgrestErrorBody? {

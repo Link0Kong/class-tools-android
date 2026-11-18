@@ -225,8 +225,16 @@ data class PptManifest(
     /** 单独下载媒体的绝对地址（相对 base 解析）。 */
     fun mediaUrl(info: PptMediaFile): String = resolveImage(info.src)
 
-    /** 资源地址解析（img/thumb/src）。 */
-    fun resolveImage(ref: String): String = com.furina.classtools.features.ppt.PptUrl.resolve(base, ref)
+    /**
+     * 资源地址解析（img/thumb/src/视频/下载文件）：
+     * 1) 相对引用按 `manifest.base` 拼绝对地址（[com.furina.classtools.features.ppt.PptUrl]）；
+     * 2) OSS 香港桶 `/ppt/` 下媒体再映射到 ECS `/pptfiles` 缓存
+     *    （[com.furina.classtools.features.ppt.PptEcsUrl]，2026-11-18 迁移优化；data:/其它域名原样）。
+     */
+    fun resolveImage(ref: String): String =
+        com.furina.classtools.features.ppt.PptEcsUrl.map(
+            com.furina.classtools.features.ppt.PptUrl.resolve(base, ref),
+        )
 
     /** 缩略图地址：优先 thumb，缺省退回第一步 img。 */
     fun thumbOf(slide: PptSlide): String {

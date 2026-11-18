@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- DEBUG 构建专用（2026-11-18 自建后端切流）：
+         * 教务系统仅 HTTP：210.34.74.77；
+         * ECS 备案前唯一公网入口 http://121.196.47.2/（staging PostgREST、账号、云空间、更新清单、地图 H5）。
+         体验版/正式版（release）不允许明文：main 的 network_security_config 不含 121.196.47.2，
+         REST 走 https://tool.furina.fun/v1/rdb/rest/（备案 + HTTPS 启用后）。 -->
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">210.34.74.77</domain>
+        <domain includeSubdomains="false">121.196.47.2</domain>
+    </domain-config>
+</network-security-config>

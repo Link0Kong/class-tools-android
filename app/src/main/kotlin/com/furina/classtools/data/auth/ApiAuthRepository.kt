@@ -31,6 +31,8 @@ class ApiAuthRepository(
     private val now: () -> Long = System::currentTimeMillis,
     private val json: Json = NetJson,
     private val sessionTtlMs: Long = SESSION_TTL_MS,
+    /** 登录/身份验证整体超时（2026-11-18 超时分级：比默认 60s 更早失败，UI 可快速提示重试）。 */
+    private val authTimeoutMs: Long = AUTH_TIMEOUT_MS,
 ) : AuthRepository {
 
     override suspend fun verify(studentId: String, name: String): VerifyResult {
@@ -48,7 +50,14 @@ class ApiAuthRepository(
             put("p_name", JsonPrimitive(nm))
         }.toString()
 
-        return when (val result = api.post(path = VERIFY_PATH, body = requestBody, authenticated = false)) {
+        return when (
+            val result = api.post(
+                path = VERIFY_PATH,
+                body = requestBody,
+                authenticated = false,
+                timeoutMs = authTimeoutMs,
+            )
+        ) {
             is ApiResult.Failure -> mapError(result.error)
             is ApiResult.Success -> parseVerifyResponse(
                 raw = result.value,
@@ -132,6 +141,9 @@ class ApiAuthRepository(
     companion object {
         const val VERIFY_PATH: String = "rpc/class_verify"
         const val SESSION_TTL_MS: Long = 30L * 24 * 60 * 60 * 1000
+
+        /** 登录/身份验证超时档（2026-11-18）：弱网下最多等 20s，超时后提示重试（默认读写档 60s）。 */
+        const val AUTH_TIMEOUT_MS: Long = 20_000L
         val STUDENT_ID_REGEX: Regex = Regex("^\\d{10}$")
     }
 }

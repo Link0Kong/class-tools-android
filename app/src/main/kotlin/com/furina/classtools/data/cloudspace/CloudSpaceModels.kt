@@ -1,5 +1,7 @@
 package com.furina.classtools.data.cloudspace
 
+import com.furina.classtools.BuildConfig
+
 /**
  * 临时云空间（与网页/小程序同一 ECS drop 服务，契约 `web/drop/CONTRACT.md` v2.2）的数据模型。
  *
@@ -13,10 +15,11 @@ package com.furina.classtools.data.cloudspace
 object CloudSpaceDefaults {
 
     /**
-     * 开发/调试地址：HTTPS 域名（tool.furina.fun）备案前直连 ECS IP
-     * （`res/xml/network_security_config.xml` 已对该 IP 放行 cleartext）。
+     * drop 服务地址（2026-11-18 按 buildType 注入，见 deploy/migration/CLIENTS.md）：
+     * - debug：http://121.196.47.2/drop（备案前唯一公网入口，debug 的 network_security_config 放行明文）；
+     * - release：https://tool.furina.fun/drop（备案 + HTTPS 启用后；不含明文 IP）。
      */
-    const val BASE_URL: String = "http://121.196.47.2/drop"
+    val BASE_URL: String = BuildConfig.CLOUDSPACE_BASE_URL
 
     /** 与服务端/网页/小程序一致的固定分片：8 MiB。 */
     const val CHUNK_SIZE: Int = 8 * 1024 * 1024

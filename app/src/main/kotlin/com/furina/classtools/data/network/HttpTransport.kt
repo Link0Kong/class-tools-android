@@ -1,6 +1,5 @@
 package com.furina.classtools.data.network
 
-import java.time.Duration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -35,6 +34,11 @@ data class ApiRequest(
     val url: String,
     val headers: Map<String, String> = emptyMap(),
     val body: String? = null,
+    /**
+     * 本次调用的整体超时（毫秒，2026-11-18 超时分级用；null = 用 client 默认）。
+     * 例：登录/身份验证在弱网冷启动首次 TLS 最慢，给更宽的档；普通读写用默认档。
+     */
+    val timeoutMs: Long? = null,
 )
 
 data class ApiResponse(
@@ -72,12 +76,19 @@ class OkHttpTransport(
                 request.body?.toRequestBody(mediaType) ?: EMPTY_REQUEST_BODY,
             )
         }
-        client.newCall(builder.build()).execute().use { response ->
-            val headers = LinkedHashMap<String, String>()
-            for (i in 0 until response.headers.size) {
-                headers[response.headers.name(i)] = response.headers.value(i)
+        client.newCall(builder.build()).let { call ->
+            // 超时分级（2026-11-18）：按调用设置整体超时（OkHttp Call.timeout，毫秒级）。
+            val timeoutMs = request.timeoutMs
+            if (timeoutMs != null && timeoutMs > 0) {
+                call.timeout().timeout(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
             }
-            ApiResponse(status = response.code, body = response.body.string(), headers = headers)
+            call.execute().use { response ->
+                val headers = LinkedHashMap<String, String>()
+                for (i in 0 until response.headers.size) {
+                    headers[response.headers.name(i)] = response.headers.value(i)
+                }
+                ApiResponse(status = response.code, body = response.body.string(), headers = headers)
+            }
         }
     }
 
@@ -85,16 +96,12 @@ class OkHttpTransport(
         private val EMPTY_REQUEST_BODY = ByteArray(0).toRequestBody(null)
 
         /**
-         * 契约：连接/读 10s（docs/BACKEND_CONTRACT.md §1.3）。
-         * `retryOnConnectionFailure(false)`：GET 的重试由 [ApiClient] 显式做一次，写请求绝不自动重试。
+         * 契约：连接 15s / 读 30s / 整体 60s（docs/BACKEND_CONTRACT.md §1.3）；
+         * 2026-11-18 起复用全局共享连接池/Dispatcher（[NetworkClients]），同一主机的 TCP/TLS/HTTP2
+         * 连接跨模块复用（REST 网关、账号、云空间、下载、图片等）。
+         * `retryOnConnectionFailure(false)`：GET 的重试由 [ApiClient] 显式做，写请求绝不自动重试。
          */
-        fun defaultClient(): okhttp3.OkHttpClient = okhttp3.OkHttpClient.Builder()
-            .connectTimeout(Duration.ofSeconds(15))
-            .readTimeout(Duration.ofSeconds(30))
-            .writeTimeout(Duration.ofSeconds(30))
-            .callTimeout(Duration.ofSeconds(60))
-            .retryOnConnectionFailure(false)
-            .build()
+        fun defaultClient(): okhttp3.OkHttpClient = NetworkClients.apiClient()
     }
 }
 

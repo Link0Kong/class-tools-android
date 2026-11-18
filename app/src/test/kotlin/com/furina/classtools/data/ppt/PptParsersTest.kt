@@ -172,7 +172,11 @@ class PptParsersTest {
     @Test
     fun resolveImage_absoluteAndRelative() {
         val manifest = PptParsers.parseManifest(NetJson, fullManifest)
-        assertEquals(manifest.base + "s1-1.webp", manifest.resolveImage("s1-1.webp"))
+        // 2026-11-18 迁移优化：OSS 香港本桶 /ppt/** 媒体统一映射到 ECS /pptfiles（debug 基址 = http IP）
+        assertEquals(
+            "http://121.196.47.2/pptfiles/ppt/a/dmg2k4x9ab12c/b_abc/s1-1.webp",
+            manifest.resolveImage("s1-1.webp"),
+        )
         assertEquals("https://cdn/x.webp", manifest.resolveImage("https://cdn/x.webp"))
         assertEquals("data:image/png;base64,AAAA", manifest.resolveImage("data:image/png;base64,AAAA"))
     }

@@ -1,5 +1,6 @@
 package com.furina.classtools.data.notices
 
+import com.furina.classtools.data.network.NetworkClients
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URLDecoder
@@ -316,13 +317,7 @@ class OkHttpNoticeAttachmentFetcher(
         /** 64KiB 读缓冲（大文件少系统调用）。 */
         private const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
 
-        /** 下载专用客户端（不复用云 API 的短超时；重试交给 OkHttp 连接层）。 */
-        fun defaultDownloadClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(Duration.ofSeconds(15))
-            .readTimeout(Duration.ofSeconds(30))
-            .writeTimeout(Duration.ofSeconds(30))
-            .callTimeout(Duration.ofSeconds(120))
-            .retryOnConnectionFailure(true)
-            .build()
+        /** 下载专用客户端（不复用云 API 的短超时；2026-11-18 共享全局连接池/Dispatcher）。 */
+        fun defaultDownloadClient(): OkHttpClient = NetworkClients.attachmentClient()
     }
 }
