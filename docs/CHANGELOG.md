@@ -1,5 +1,14 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-18 · 访问统计上报记录登录端 android（源码；未发版）
+
+> 用户要求：「将所有端的统计工具统一更新为按最近登录顺序排序、默认今天、分钟时间、记录具体登录端、忽略测试账号」。唯一契约 `web/统计多端_最新登录_契约_20261118.md`。
+
+- 新增 `data/visits/VisitReporter.kt`：`POST visits` 一行 `{id:sid|slot|android, slot, sid, name, did, client:"android", ts}`，本地小时槽、`Prefer: resolution=ignore-duplicates,return=minimal`、失败静默；did 为私有 SharedPreferences 持久化的 16 位随机 hex（不读 ANDROID_ID/IMEI）。
+- `AppContainer.updateActiveSession` 会话恢复/登录成功后上报；`MainActivity.onResume` 回前台补报（跨整点仍能刷新最近登录，同一小时 reporter 内部去重）。
+- 测试：`VisitReporterTest` **12/12**；全量 `:app:testDebugUnitTest` **1617/0（2 skipped）**；未发版、版本号未动、未新增统计页。
+- 提交：`72ac3cf`（上报）+ `a1185ca`（回前台补报），已双推 origin/gitee。
+
 ## v1.0.0-beta3 / vc86（2026-11-17 晚）· 用户 4 项反馈修复（ColorOS-only / 快捷登录免填 / 授权错误诊断 / 更新弹窗手动选择）
 
 1. **OPPO 账号只在 ColorOS 手机显示**：`OppoAccountDeviceSupport` 改为**严格 ColorOS ROM 判定**（`ro.build.version.oplusrom` / `opporom` / `oplusos` 任一非空），不再仅凭 manufacturer/brand 含 oppo/oneplus/realme/oplus/heytap；非 ColorOS（含 OPPO 品牌但非 ColorOS、模拟器）身份页快捷登录与「我的 → 账号」入口**完全不显示**（无空占位）。
