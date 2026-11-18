@@ -1,5 +1,17 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-19 · v1.0.0-beta7 / vc90：修复安卓通知工具收不到通知（release REST 指向备案暂停域名）
+
+> 用户反馈「安卓端通知工具收不到通知」。根因不是通知页本身：beta6 release APK 的 `BuildConfig.REST_BASE_URL` 实测为 `https://tool.furina.fun/v1/rdb/rest/`，而该域名备案暂停、DNS **NXDOMAIN**；release 的登录/通知/数据请求全部失败。此前的 2026-11-18 自建后端切流把 release 默认设成 selfhosted，但备案/HTTPS 尚未恢复。
+
+- **release REST 默认改回 CloudBase 网关**（`https://tool-d4...api.tcloudbasegateway.com/v1/rdb/rest/`），`REST_PROFILE=cloudbase`；备案 + HTTPS 恢复后用 `-Pct.restProfile=selfhosted` 或改回默认。`verifyReleaseEndpoints` 允许 cloudbase profile（仍要求 HTTPS、禁止明文 IP）。
+- **通知首屏自适应分页**：`DefaultNoticesRepository.load()` 首屏从固定 20 条改为 20→10→5→3→1 逐级降级（仅在超时时），避免最新页含大附件时弱网 40s 超时只显示缓存；`fetchPage` 成功时清理 `lastPageError`。
+- 版本 **vc90 / 1.0.0-beta7 / 测试版本 7**；`UpdateLogicTest` 版本断言同步 7。
+- **测试**：`:app:testDebugUnitTest` **1630/0（2 skipped）**；新增「首屏大页超时自动缩小 limit 后成功」用例；`:app:verifyReleaseEndpoints` 通过（REST=CloudBase，其余 ECS 服务仍为 tool.furina.fun）。
+- **产物**：`artifacts/classtools-1.0.0-beta7-vc90-release-signed.apk`（**5,804,121 B / SHA-256 `679262294C2A18007E36AC046B9214AABAC4B0A02726CA11E291EC9CCA979958`**）；桌面 `班级工具站_v1.0.0-beta7_安卓.apk` 同字节；模拟器 `adb install -r` 成功、启动 `v1.0.0-beta7` 无 FATAL/ANR。
+- **发布**：OSS `android/classtools-1.0.0-beta7.apk.bin`（Content-Type `application/octet-stream`，否则 OSS 以 `ApkDownloadForbidden` 拒绝公开分发）+ OSS/ECS `android/latest.json` → beta7；ECS `/var/www/tool/android/classtools-1.0.0-beta7.apk`。OSS latest 的 `apkUrl` 用 HTTPS OSS（release 不再依赖备案域名）；beta6 的更新检查可经 OSS 兜底发现 beta7。
+- **已知限制**：本次只修 REST；release 的账号服务/云空间/地图/PPT 媒体仍指向 `tool.furina.fun`，备案前这些功能仍不可用；更新主 URL 仍为该域名，靠 OSS 兜底。通知工具/登录/作业/通知数据已恢复。
+
 ## 2026-11-18 · v1.0.0-beta6 / vc89：统计排序改为「访问次数优先」
 
 > 用户要求：「把排序设成访问次数排序优先，访问次数相同时按访问时间排序」。与网页/小程序/Windows 同口径。

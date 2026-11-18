@@ -45,7 +45,8 @@ val oppoAccountScope = (oppoProps.getProperty("oppo.accountScope") ?: "").trim()
 //      → 老部署脚本/本机自定义配置行为不变。
 //   2) ct.restProfile：cloudbase | staging | selfhosted（两种 buildType 强制同档；回滚用）
 //   3) ct.restBaseUrlDebug / ct.restBaseUrlRelease：按 buildType 的显式 URL
-//   4) buildType 默认档：debug → staging（ECS 影子验证）；release → selfhosted（备案后正式域名）
+//   4) buildType 默认档：debug → staging（ECS 影子验证）；release → cloudbase（备案暂停期的可用网关；
+//      2026-11-19 修复：此前 release 默认 selfhosted，tool.furina.fun DNS 暂停导致通知/登录全失败）
 // 三档地址可用 ct.restBase.cloudbase / ct.restBase.staging / ct.restBase.selfhosted 覆盖。
 // ============================================================================
 val REST_CLOUDBASE_DEFAULT = "https://tool-d4gosudok46e0e081.api.tcloudbasegateway.com/v1/rdb/rest/"
@@ -69,11 +70,14 @@ fun restUrlOfProfile(profile: String, fallback: String): String = restUrlByProfi
 val debugRestUrl = legacyRestOverride
     ?: (if (restProfileOverride != null) restUrlOfProfile(restProfileOverride, REST_STAGING_DEFAULT)
         else (gradleProp("ct.restBaseUrlDebug") ?: REST_STAGING_DEFAULT))
+// 2026-11-19 修复：tool.furina.fun 仍处备案暂停（DNS 不解析），release 默认改回 CloudBase 网关，
+// 否则 release APK 的登录/通知/数据请求全部 DNS 失败（用户反馈安卓通知工具收不到通知）。
+// 备案 + HTTPS 恢复后：-Pct.restProfile=selfhosted，或把下面的默认改回 REST_SELFHOSTED_DEFAULT。
 val releaseRestUrl = legacyRestOverride
-    ?: (if (restProfileOverride != null) restUrlOfProfile(restProfileOverride, REST_SELFHOSTED_DEFAULT)
-        else (gradleProp("ct.restBaseUrlRelease") ?: REST_SELFHOSTED_DEFAULT))
+    ?: (if (restProfileOverride != null) restUrlOfProfile(restProfileOverride, REST_CLOUDBASE_DEFAULT)
+        else (gradleProp("ct.restBaseUrlRelease") ?: REST_CLOUDBASE_DEFAULT))
 val debugRestProfile = if (legacyRestOverride != null) "custom" else (restProfileOverride ?: "staging")
-val releaseRestProfile = if (legacyRestOverride != null) "custom" else (restProfileOverride ?: "selfhosted")
+val releaseRestProfile = if (legacyRestOverride != null) "custom" else (restProfileOverride ?: "cloudbase")
 
 // ----------------------------------------------------------------------------
 // ECS 现有服务地址（账号 / 云空间 drop / 更新清单 / 校园地图）：
@@ -124,9 +128,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 89
-        // 测试版本 6：1.0.0-beta6（「我的 → 关于」显示「测试版本 6」；统计排序改为访问次数优先）。
-        versionName = "1.0.0-beta6"
+        versionCode = 90
+        // 测试版本 7：1.0.0-beta7（「我的 → 关于」显示「测试版本 7」；修复 release REST 指向备案暂停域名导致通知收不到）。
+        versionName = "1.0.0-beta7"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -145,8 +149,8 @@ android {
         buildConfigField("String", "OPPO_ACCOUNT_APP_KEY", buildConfigString(oppoAccountAppKey))
         buildConfigField("String", "OPPO_ACCOUNT_SCOPE", buildConfigString(oppoAccountScope))
 
-        // 测试版本标识（当前为「测试版本 6」）：App 内版本行使用。
-        buildConfigField("int", "TEST_VERSION", "6")
+        // 测试版本标识（当前为「测试版本 7」）：App 内版本行使用。
+        buildConfigField("int", "TEST_VERSION", "7")
         buildConfigField("String", "TEST_VERSION_LABEL", buildConfigString("测试版本"))
     }
 
@@ -255,6 +259,17 @@ tasks.register("verifyReleaseEndpoints") {
         checks.forEach { (name, url) ->
             check(url.startsWith("https://")) { "release $name must be https: $url" }
             check(!url.contains("121.196.47.2")) { "release $name must not contain staging plaintext IP: $url" }
+        }
+        // 2026-11-19：备案暂停期 release 允许走 CloudBase 网关（HTTPS，仍禁止明文 IP）；
+        // 恢复 selfhosted 后必须回到 tool.furina.fun。
+        if (inputs.properties["releaseRestProfile"] == "cloudbase") {
+            check((inputs.properties["releaseRestUrl"] as String).contains("tcloudbasegateway.com/v1/rdb/rest/")) {
+                "release REST profile=cloudbase but REST_BASE_URL is not CloudBase gateway"
+            }
+        } else {
+            check((inputs.properties["releaseRestUrl"] as String).startsWith("https://tool.furina.fun/")) {
+                "release REST_BASE_URL must be https://tool.furina.fun/ when profile != cloudbase"
+            }
         }
         println("verifyReleaseEndpoints OK (release has no 121.196.47.2 plaintext endpoint)")
         println("  REST_PROFILE=" + (inputs.properties["releaseRestProfile"] as String))

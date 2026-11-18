@@ -76,6 +76,7 @@ class NoticesPaginationTest {
     private class PagedTransport(var rows: List<String>) {
         val pageRequests: MutableList<ApiRequest> = mutableListOf()
         var pageDelayMs: Long? = null
+        val pageDelayByLimit: MutableMap<Int, Long> = mutableMapOf()
         var pageFailures: Int = 0
         var liteFailures: Int = 0
         var pageAttempts: Int = 0
@@ -90,7 +91,8 @@ class NoticesPaginationTest {
             } else {
                 pageRequests.add(request)
                 pageAttempts += 1
-                pageDelayMs?.let { delay(it) }
+                val limitNow = limitOf(request.url).takeIf { it > 0 } ?: rows.size
+                (pageDelayByLimit[limitNow] ?: pageDelayMs)?.let { delay(it) }
                 if (pageFailures > 0) {
                     pageFailures -= 1
                     throw IOException("offline")
@@ -142,6 +144,21 @@ class NoticesPaginationTest {
         assertTrue(pageUrl.contains("order=ts.desc"))
         assertTrue(pageUrl.contains("limit=2"))
         assertTrue(pageUrl.contains("offset=0"))
+    }
+
+    @Test
+    fun `首屏大页超时自动缩小 limit 后成功（通知整表 15MB 弱网兜底）`() = runTest {
+        val paged = PagedTransport(manualRows(25))
+        // 首屏 pageSize=20 时故意让 limit=20 超时；10 条正常返回。
+        paged.pageDelayByLimit[20] = 1_000L
+        val repo = repository(paged.transport, pageSize = 20, requestTimeoutMs = 100L)
+
+        val data = (repo.load(force = true) as NoticesLoadResult.Success).data
+
+        assertEquals(10, data.manual.size)
+        assertTrue(data.hasMore)
+        assertEquals(10, data.loadedRawCount)
+        assertEquals(listOf(20, 10), paged.pageRequests.map { limitOf(it.url) }.distinct())
     }
 
     @Test

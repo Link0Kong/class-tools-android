@@ -115,11 +115,13 @@ class DefaultNoticesRepository(
             return NoticesLoadResult.Success(cache!!.copy(fromCache = true, fetchedAt = now))
         }
 
-        // 第二级：只拉最新一页（ts 倒序 limit=20）→ 首屏快速可见
+        // 第二级：只拉最新一页（ts 倒序 limit=20）→ 首屏快速可见。
+        // 2026-11-19：首屏也走自适应（20→10→5→3→1）；当前通知整表已 15MB，最新 20 条
+        // 可能包含多个大附件，固定 20 条会在弱网下超时，导致「通知一直收不到」。
         resetPages()
         cachedSignature = signature
         totalRawCount = liteRows.size
-        val firstPage = fetchPage(offset = 0)
+        val firstPage = fetchFirstPageAdaptive()
             ?: return fallbackOrFailure(lastPageError ?: PAGE_PARSE_MESSAGE)
         appendPage(firstPage)
         return publish(now = clock(), fromCache = false)
@@ -219,11 +221,33 @@ class DefaultNoticesRepository(
                 null
             }
 
-            is ApiResult.Success -> parseRows(json, page.value) ?: run {
-                lastPageError = PAGE_PARSE_MESSAGE
-                null
+            is ApiResult.Success -> {
+                lastPageError = null
+                parseRows(json, page.value) ?: run {
+                    lastPageError = PAGE_PARSE_MESSAGE
+                    null
+                }
             }
         }
+    }
+
+    /**
+     * 首屏自适应分页（2026-11-19）：先按 pageSize 拉；超时则降到 10/5/3/1 条重试。
+     * 通知正文已从全表 13.9MB 增长到约 15MB，最新 20 条可能包含多个大附件；
+     * 固定 20 条在弱网下会超时，页面只剩缓存，表现为「收不到新通知」。
+     */
+    private suspend fun fetchFirstPageAdaptive(): List<NoticeRow>? {
+        val limits = if (pageSize <= 5) {
+            listOf(pageSize)
+        } else {
+            listOf(pageSize, 10, 5, 3, 1).distinct().filter { it <= pageSize }
+        }
+        for (limit in limits) {
+            val page = fetchPage(offset = 0, limit = limit)
+            if (page != null) return page
+            if (lastPageError != TIMEOUT_MESSAGE) return null
+        }
+        return null
     }
 
     /**
