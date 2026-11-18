@@ -85,6 +85,18 @@ class PptEcsUrlTest {
     }
 
     @Test
+    fun `封面 cover_url 与媒体同一映射规则`() {
+        assertEquals(
+            "$ecs/ppt/a/dmwalrdlgevz90l/c0e5834805/cover.webp",
+            PptEcsUrl.map("$oss/ppt/a/dmwalrdlgevz90l/c0e5834805/cover.webp", ecs),
+        )
+        // data:/外域/空封面 原样（列表占位图/兼容旧数据）
+        assertEquals("data:image/webp;base64,AAAA", PptEcsUrl.map("data:image/webp;base64,AAAA", ecs))
+        assertEquals("https://cdn.example.com/cover.webp", PptEcsUrl.map("https://cdn.example.com/cover.webp", ecs))
+        assertEquals("", PptEcsUrl.map("", ecs))
+    }
+
+    @Test
     fun `回滚开关 enabled=false → 原样返回 OSS 直链`() {
         assertEquals(
             "$oss/ppt/a/x.webp",

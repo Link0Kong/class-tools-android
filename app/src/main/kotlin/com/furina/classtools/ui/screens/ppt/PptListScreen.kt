@@ -602,7 +602,7 @@ private fun PptDeckCard(
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             ) {
                 PptAsyncImage(
-                    url = deck.coverUrl,
+                    url = deck.coverDisplayUrl,
                     loader = imageLoader,
                     modifier = Modifier.fillMaxSize(),
                     targetWidth = 400,

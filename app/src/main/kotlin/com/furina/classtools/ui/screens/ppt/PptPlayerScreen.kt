@@ -316,7 +316,7 @@ fun PptPlayerContent(
             title = detail.title,
             video = video,
             videoUrl = manifest.videoUrl,
-            coverUrl = detail.coverUrl,
+            coverUrl = detail.coverDisplayUrl,
             imageLoader = imageLoader,
             initialPositionSec = videoStartSec,
             autoPlay = true,
@@ -434,9 +434,9 @@ private fun PptStepsPlayer(
 
     // ------------------------------------------------------------ 图片加载 / 预加载
 
-    LaunchedEffect(detail.coverUrl, imageLoader) {
-        if (detail.coverUrl.isNotBlank()) {
-            cover = imageLoader.load(detail.coverUrl, PptImageLoader.DISPLAY_TARGET_WIDTH)
+    LaunchedEffect(detail.coverDisplayUrl, imageLoader) {
+        if (detail.coverDisplayUrl.isNotBlank()) {
+            cover = imageLoader.load(detail.coverDisplayUrl, PptImageLoader.DISPLAY_TARGET_WIDTH)
         }
     }
 

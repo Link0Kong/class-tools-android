@@ -1,5 +1,7 @@
 package com.furina.classtools.data.ppt
 
+import com.furina.classtools.features.ppt.PptEcsUrl
+
 /**
  * PPT 演示数据层模型（契约唯一真源：`web/ppt/CONTRACT.md` §3/§4/§5）。
  *
@@ -33,6 +35,9 @@ data class PptDeck(
     /** v2.0 列表小标签：PDF 兼容副本是否存在。 */
     val hasPdfFile: Boolean = false,
 ) {
+    /** 封面展示地址：OSS 香港 `/ppt/` 下 cover 映射到 ECS `/pptfiles`（2026-11-18 P4；data:/外域/空原样）。 */
+    val coverDisplayUrl: String get() = PptEcsUrl.map(coverUrl)
+
     companion object {
         const val STATUS_UPLOADING = "uploading"
         const val STATUS_QUEUED = "queued"
@@ -290,6 +295,9 @@ data class PptDeckDetail(
     val sourceSize: Long = 0L,
 ) {
     val isPlayable: Boolean get() = manifest.isPlayable
+
+    /** 封面展示地址：OSS 香港 `/ppt/` 下 cover 映射到 ECS `/pptfiles`（2026-11-18 P4；data:/外域/空原样）。 */
+    val coverDisplayUrl: String get() = PptEcsUrl.map(coverUrl)
 
     /** 原件下载地址（manifest.src 优先；空 = 转换机未保留原件）。 */
     val sourceUrl: String get() = manifest.resolveImage(manifest.src).ifBlank { manifest.src }

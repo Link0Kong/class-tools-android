@@ -415,7 +415,7 @@ private fun DetailHeader(detail: PptDeckDetail, imageLoader: PptImageLoader) {
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             ) {
                 PptAsyncImage(
-                    url = detail.coverUrl,
+                    url = detail.coverDisplayUrl,
                     loader = imageLoader,
                     modifier = Modifier.fillMaxSize(),
                     targetWidth = 400,

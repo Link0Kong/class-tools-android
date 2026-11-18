@@ -62,6 +62,37 @@ class PptEcsMappingTest {
     }
 
     @Test
+    fun `列表与详情 cover_url 经同一 helper 映射到 ECS pptfiles`() {
+        val ossCover = "$oss/ppt/a/dmwalrdlgevz90l/c0e5834805/cover.webp"
+        val mappedCover = "$ecsBase/ppt/a/dmwalrdlgevz90l/c0e5834805/cover.webp"
+
+        // 列表行（§4.4 轻字段）：coverUrl 保留原值，渲染用 coverDisplayUrl
+        val deck = PptParsers.parseDeckRow(
+            kotlinx.serialization.json.buildJsonObject {
+                put("id", kotlinx.serialization.json.JsonPrimitive("dmwalrdlgevz90l"))
+                put("title", kotlinx.serialization.json.JsonPrimitive("演示"))
+                put("status", kotlinx.serialization.json.JsonPrimitive("ready"))
+                put("cover_url", kotlinx.serialization.json.JsonPrimitive(ossCover))
+            },
+        )!!
+        assertEquals(ossCover, deck.coverUrl)
+        assertEquals(mappedCover, deck.coverDisplayUrl)
+
+        // 播放详情行（§4.5）：同样映射
+        val detail = PptParsers.parseDeckDetail(
+            NetJson,
+            """[{"title":"演示","status":"ready","cover_url":"$ossCover","manifest":"{}"}]""",
+        )!!
+        assertEquals(ossCover, detail.coverUrl)
+        assertEquals(mappedCover, detail.coverDisplayUrl)
+
+        // data:/外域/空封面 原样（不误伤）
+        assertEquals("data:image/webp;base64,AAAA", PptDeck(id = "d", coverUrl = "data:image/webp;base64,AAAA").coverDisplayUrl)
+        assertEquals("https://cdn.example.com/c.webp", PptDeck(id = "d", coverUrl = "https://cdn.example.com/c.webp").coverDisplayUrl)
+        assertEquals("", PptDeck(id = "d", coverUrl = "").coverDisplayUrl)
+    }
+
+    @Test
     fun `外域 base 与 data 内嵌资源保持原样（兼容旧 deck 与第三方地址）`() {
         val other = PptParsers.parseManifest(
             NetJson,

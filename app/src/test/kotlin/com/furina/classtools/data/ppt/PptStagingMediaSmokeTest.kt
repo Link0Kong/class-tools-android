@@ -67,7 +67,7 @@ class PptStagingMediaSmokeTest {
 
         // 2) 取 staging 最近一个 ready deck 的 manifest
         val listResult = api.get(
-            "ppt_decks?select=id,title,status,manifest&deleted=eq.false&status=eq.ready&order=converted_at.desc&limit=1",
+            "ppt_decks?select=id,title,status,manifest,cover_url&deleted=eq.false&status=eq.ready&order=converted_at.desc&limit=1",
         )
         assertTrue("ppt_decks 读取失败：$listResult", listResult is ApiResult.Success)
         val rows = NetJson.parseToJsonElement((listResult as ApiResult.Success).value) as? JsonArray
@@ -87,8 +87,17 @@ class PptStagingMediaSmokeTest {
         val videoUrl = manifest.videoUrl
         assertTrue("视频应映射到 ECS：$videoUrl", videoUrl.startsWith(ecsPrefix))
 
-        // 4) 真实请求 ECS 缓存：图片 HEAD 200；视频 Range GET 206（边下边播依赖）
+        // 3b) 封面 cover_url（P4）：列表/详情/播放器首帧同一 helper 映射到 ECS
+        val coverUrl = detail.coverDisplayUrl
+        assertTrue("staging deck 应有 cover_url", detail.coverUrl.isNotBlank())
+        assertTrue("封面应映射到 ECS：$coverUrl", coverUrl.startsWith(ecsPrefix))
+
+        // 4) 真实请求 ECS 缓存：封面/图片 HEAD 200；视频 Range GET 206（边下边播依赖）
         val client = NetworkClients.attachmentClient()
+        client.newCall(Request.Builder().url(coverUrl).head().build()).execute().use { resp ->
+            assertEquals(200, resp.code)
+            assertTrue("封面 content-type=${resp.header("Content-Type")}", (resp.header("Content-Type") ?: "").startsWith("image/"))
+        }
         client.newCall(Request.Builder().url(images.first()).head().build()).execute().use { resp ->
             assertEquals(200, resp.code)
             assertTrue("图片 content-type=${resp.header("Content-Type")}", (resp.header("Content-Type") ?: "").startsWith("image/"))
@@ -104,7 +113,7 @@ class PptStagingMediaSmokeTest {
         // 只打印非敏感指标
         println(
             "PPT_STAGING_MEDIA_SMOKE_OK slides=${manifest.slides.size} " +
-                "img=$ecsPrefix… video=$ecsPrefix… range=206 base=" + BuildConfig.WEB_BASE_URL,
+                "img=$ecsPrefix… video=$ecsPrefix… cover=$ecsPrefix… range=206 base=" + BuildConfig.WEB_BASE_URL,
         )
     }
 
