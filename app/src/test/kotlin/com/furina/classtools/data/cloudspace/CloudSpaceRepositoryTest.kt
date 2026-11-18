@@ -57,6 +57,27 @@ class CloudSpaceRepositoryTest {
     private fun stateJson(events: String, cursor: Long, sessionId: String = "s1"): String =
         """{"ok":true,"session":{"id":"$sessionId"},"events":[$events],"cursor":$cursor}"""
 
+    /** v2.5：带服务端文件清单 files[] 的 /state 响应 */
+    private fun stateAllJson(
+        files: List<String>,
+        cursor: Long,
+        events: String = "",
+        expiredNotice: Int = 0,
+        sessionId: String = "s1",
+    ): String =
+        """{"ok":true,"session":{"id":"$sessionId"},"events":[$events],"cursor":$cursor,""" +
+            """"files":[${files.joinToString(",")}],"expiredNotice":$expiredNotice}"""
+
+    /** v2.5 files[] 单项（字段名 id / at，与事件 payload 的 fileId 不同） */
+    private fun listFileJson(
+        id: String,
+        name: String = "$id.bin",
+        size: Long = 1024L,
+        at: Long = 1000L,
+    ): String =
+        """{"id":"$id","name":"$name","size":$size,"mime":"application/octet-stream",""" +
+            """"at":$at,"downloadUrl":"https://example.invalid/drop/file/$id"}"""
+
     // ---------------------------------------------------------------- 会话 / 列表
 
     @Test
@@ -86,7 +107,7 @@ class CloudSpaceRepositoryTest {
         assertEquals("s1", snapshot.session?.id)
         assertEquals(1, snapshot.count)
         assertEquals("讲义.pdf", snapshot.files[0].name)
-        assertEquals(listOf("/mine", "/open", "/state?sessionId=s1&since=0"), transport.paths())
+        assertEquals(listOf("/mine", "/open", "/state?sessionId=s1&all=1&since=0"), transport.paths())
     }
 
     @Test
@@ -129,12 +150,54 @@ class CloudSpaceRepositoryTest {
         assertTrue(result is CloudSpaceResult.Success)
         val snapshot = (result as CloudSpaceResult.Success).value
         assertEquals(listOf("keep"), snapshot.files.map { it.id })
-        assertEquals("/state?sessionId=s1&since=2", transport.paths().last())
+        assertEquals("/state?sessionId=s1&all=1&since=2", transport.paths().last())
     }
 
     @Test
-    fun `refresh 失败保留上次列表`() = runTest {
-        var failState = false
+    fun `refresh 优先使用服务端文件清单（事件为空也看得到文件）`() = runTest {
+        var stateCalls = 0
+        val transport = FakeCloudSpaceTransport { request ->
+            when {
+                request.url.endsWith("/mine") ->
+                    CloudSpaceResponse(200, """{"ok":true,"session":{"id":"s1"}}""")
+
+                request.url.contains("/state") -> {
+                    stateCalls += 1
+                    if (stateCalls == 1) {
+                        CloudSpaceResponse(
+                            200,
+                            stateAllJson(files = listOf(listFileJson("old", at = 100L)), cursor = 5),
+                        )
+                    } else {
+                        // 增量轮询：since 之后没有新事件（事件表已截断），但服务端清单仍有 2 个文件
+                        CloudSpaceResponse(
+                            200,
+                            stateAllJson(
+                                files = listOf(listFileJson("new", at = 300L), listFileJson("old", at = 100L)),
+                                cursor = 9,
+                                expiredNotice = 2,
+                            ),
+                        )
+                    }
+                }
+
+                else -> CloudSpaceResponse(200, """{"ok":true}""")
+            }
+        }
+        val repository = repository(transport)
+        repository.ensureSpace()
+
+        val result = repository.refresh(force = false)
+
+        assertTrue(result is CloudSpaceResult.Success)
+        val snapshot = (result as CloudSpaceResult.Success).value
+        assertEquals(listOf("new", "old"), snapshot.files.map { it.id })
+        assertEquals(2, snapshot.expiredCount)
+        assertTrue(transport.paths().last().contains("all=1"))
+    }
+
+    @Test
+    fun `refresh 失败保留上次列表`() = runTest {        var failState = false
         val transport = FakeCloudSpaceTransport { request ->
             when {
                 request.url.endsWith("/mine") ->
@@ -402,7 +465,7 @@ class CloudSpaceRepositoryTest {
         val file = (result as CloudSpaceResult.Success).value
         assertTrue(file.downloadUrl.contains("sig=new"))
         // findFreshFile 内部强制全量刷新（since=0）
-        assertEquals("/state?sessionId=s1&since=0", transport.paths().last())
+        assertEquals("/state?sessionId=s1&all=1&since=0", transport.paths().last())
     }
 
     @Test

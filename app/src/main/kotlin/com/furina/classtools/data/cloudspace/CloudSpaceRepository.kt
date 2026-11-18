@@ -34,6 +34,10 @@ class CloudSpaceRepository(
     @Volatile
     private var expiredIds: Set<String> = emptySet()
 
+    /** 服务端 `expiredNotice`（会话里曾上传、现已过期的文件数；仅用于「已过期」提示）。 */
+    @Volatile
+    private var knownExpiredCount: Int = 0
+
     @Volatile
     private var cursor: Long = 0L
 
@@ -41,7 +45,7 @@ class CloudSpaceRepository(
     fun snapshot(): CloudSpaceSnapshot = CloudSpaceSnapshot(
         session = session,
         files = files,
-        expiredCount = expiredIds.size,
+        expiredCount = if (knownExpiredCount != 0) knownExpiredCount else expiredIds.size,
         cursor = cursor,
     )
 
@@ -275,6 +279,7 @@ class CloudSpaceRepository(
             session = null
             files = emptyList()
             expiredIds = emptySet()
+            knownExpiredCount = 0
             cursor = 0L
         }
         return ensureSpace()
@@ -285,6 +290,7 @@ class CloudSpaceRepository(
         session = null
         files = emptyList()
         expiredIds = emptySet()
+        knownExpiredCount = 0
         cursor = 0L
     }
 
@@ -307,14 +313,27 @@ class CloudSpaceRepository(
             is CloudSpaceResult.Failure -> stateResult
             is CloudSpaceResult.Success -> {
                 val state = stateResult.value
-                val merged = CloudSpaceLogic.applyEvents(
-                    currentFiles = if (force) emptyList() else files,
-                    currentExpiredIds = if (force) emptySet() else expiredIds,
-                    events = state.events,
-                )
+                val listed = state.files
+                if (listed != null) {
+                    /* drop v2.5：服务端随 /state 返回当前有效文件清单 → 列表以它为准。
+                       事件表只保留最近 500 条，只按事件合并会在「事件被截断 / since 之后无新事件」时丢文件。 */
+                    files = listed.sortedByDescending { it.uploadedAt }
+                    if (force || state.expiredCount != 0) {
+                        expiredIds = emptySet()
+                        knownExpiredCount = state.expiredCount
+                    }
+                } else {
+                    /* 旧服务端（无 files）：退回按事件增量合并 */
+                    val merged = CloudSpaceLogic.applyEvents(
+                        currentFiles = if (force) emptyList() else files,
+                        currentExpiredIds = if (force) emptySet() else expiredIds,
+                        events = state.events,
+                    )
+                    files = merged.files
+                    expiredIds = merged.expiredIds
+                    knownExpiredCount = expiredIds.size
+                }
                 session = state.session ?: currentSession
-                files = merged.files
-                expiredIds = merged.expiredIds
                 cursor = if (force) state.cursor else maxOf(cursor, state.cursor)
                 CloudSpaceResult.Success(snapshot())
             }

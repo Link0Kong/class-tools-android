@@ -88,9 +88,15 @@ class CloudSpaceApi(
         }
     }
 
-    /** 拉取事件（`since` 为已收到的最大 seq；0 = 全量）。 */
+    /**
+     * 拉取事件（`since` 为已收到的最大 seq；0 = 全量）。
+     *
+     * drop v2.5：请求带 `all=1`，服务端随事件返回**当前有效文件清单** `files`（未过期全量，
+     * 每次重签 downloadUrl）与 `expiredNotice`。事件表只保留最近 500 条，
+     * 且「since 之后没有新事件」≠「没有文件」——文件列表必须以 files 为准。
+     */
     suspend fun state(sessionId: String, since: Long = 0L): CloudSpaceResult<CloudSpaceState> {
-        val path = "/state?sessionId=${encode(sessionId)}&since=${since.coerceAtLeast(0L)}"
+        val path = "/state?sessionId=${encode(sessionId)}&all=1&since=${since.coerceAtLeast(0L)}"
         return when (val result = callGet(path)) {
             is CloudSpaceResult.Failure -> result
             is CloudSpaceResult.Success -> {
@@ -101,15 +107,26 @@ class CloudSpaceApi(
                 val cursor = obj["cursor"].asLongOrNull()
                     ?: events.maxOfOrNull { it.seq }
                     ?: 0L
+                val files = (obj["files"] as? JsonArray)?.mapNotNull { parseFile(it) }
                 CloudSpaceResult.Success(
                     CloudSpaceState(
                         session = parseSession(obj["session"]),
                         events = events,
                         cursor = cursor,
+                        files = files,
+                        expiredCount = obj["expiredNotice"].asIntOrNull() ?: 0,
                     ),
                 )
             }
         }
+    }
+
+    /** v2.5 `/state?all=1` 的 files[] → CloudSpaceFile（fileId 字段名为 id）。
+     *  服务端已过滤过期文件；这里再兜一层：没有下载链接的条目不进列表。 */
+    private fun parseFile(element: JsonElement): CloudSpaceFile? {
+        val obj = element as? JsonObject ?: return null
+        return parseFileObject(obj, uploadedAt = obj["at"].asLongOrNull() ?: 0L)
+            ?.takeIf { !it.expired }
     }
 
     /** 分片上传初始化；`totalChunks` 必须等于 `ceil(size / 8MiB)`（至少 1）。 */

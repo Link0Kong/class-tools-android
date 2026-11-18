@@ -94,11 +94,18 @@ sealed interface CloudSpaceEvent {
     data class FileDeleted(val fileId: String, override val seq: Long) : CloudSpaceEvent
 }
 
-/** `/state` 一次响应（events 尚未合并进列表）。 */
+/** `/state` 一次响应（events 尚未合并进列表）。
+ *
+ *  v2.5：`files` = 服务端返回的**当前有效文件清单**（未过期全量，每次重签下载 URL）；
+ *  事件表只保留最近 500 条、且「since 之后没有新事件」不等于没有文件，
+ *  文件列表必须以 `files` 为准（`null` 表示旧服务端没有该字段，回退按事件合并）。
+ */
 data class CloudSpaceState(
     val session: CloudSpaceSession?,
     val events: List<CloudSpaceEvent>,
     val cursor: Long,
+    val files: List<CloudSpaceFile>? = null,
+    val expiredCount: Int = 0,
 )
 
 /** `/upload/init` 响应。 */

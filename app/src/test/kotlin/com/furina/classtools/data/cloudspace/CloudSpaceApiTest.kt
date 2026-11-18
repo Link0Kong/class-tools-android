@@ -135,9 +135,39 @@ class CloudSpaceApiTest {
         assertEquals("f3", deleted[0].fileId)
 
         assertEquals(
-            "/state?sessionId=s1&since=0",
+            "/state?sessionId=s1&all=1&since=0",
             transport.pathOf(0),
         )
+    }
+
+    @Test
+    fun `state all=1 解析服务端文件清单`() = runTest {
+        val body = """
+            {"ok":true,
+             "session":{"id":"s1","code":"000001","createdAt":1,"expiresAt":2},
+             "events":[],
+             "cursor":42,
+             "files":[
+               {"id":"f9","name":"清单也有.txt","size":10,"mime":"text/plain",
+                "at":1762860009234,"downloadUrl":"http://x/drop/file/f9?s=x&exp=1&sig=y"},
+               {"id":"f8","name":"已过期.bin","size":5,"mime":"","at":1762860000234,"expired":true}
+             ],
+             "expiredNotice":3}
+        """.trimIndent()
+        val transport = FakeCloudSpaceTransport { CloudSpaceResponse(200, body) }
+        val api = testCloudSpaceApi(transport)
+
+        val result = api.state("s1", since = 42)
+
+        assertTrue(result is CloudSpaceResult.Success)
+        val state = (result as CloudSpaceResult.Success).value
+        assertEquals(0, state.events.size)
+        val files = state.files ?: error("files 未解析")
+        assertEquals(1, files.size)
+        assertEquals("f9", files[0].id)
+        assertEquals(1762860009234L, files[0].uploadedAt)
+        assertEquals(3, state.expiredCount)
+        assertEquals("/state?sessionId=s1&all=1&since=42", transport.pathOf(0))
     }
 
     @Test
@@ -149,7 +179,7 @@ class CloudSpaceApiTest {
 
         api.state("s1", since = 9)
 
-        assertEquals("/state?sessionId=s1&since=9", transport.pathOf(0))
+        assertEquals("/state?sessionId=s1&all=1&since=9", transport.pathOf(0))
     }
 
     @Test
