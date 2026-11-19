@@ -107,6 +107,7 @@ import com.furina.classtools.ui.components.update.updateCheckSubtitle
 import com.furina.classtools.ui.screens.me.MeStats
 import com.furina.classtools.ui.screens.me.MeStatsBuilder
 import com.furina.classtools.ui.screens.me.ReminderStatus
+import com.furina.classtools.ui.screens.privacy.LegalLinks
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
 import com.furina.classtools.ui.theme.AppearanceMode
@@ -408,13 +409,17 @@ private fun ProfileHeader() {
     }
 }
 
+/**
+ * 分组小标题（2026-11-19 对齐鸿蒙 `MeScreen.notifySection`）：
+ * **12sp Medium 次级色** + 上 16 / 下 8 间距（此前是 13sp Regular + 上 16 / 下 6）。
+ */
 @Composable
 private fun SectionTitle(text: String) {
     Text(
         text = text,
-        style = CtText.label,
+        style = CtText.caption.copy(fontWeight = FontWeight.Medium),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 2.dp, top = 16.dp, bottom = 6.dp),
+        modifier = Modifier.padding(start = 2.dp, top = 16.dp, bottom = 8.dp),
     )
 }
 
@@ -790,12 +795,15 @@ private fun AboutSection(
         ActionRow(
             icon = Icons.Rounded.Description,
             title = "用户协议",
+            // 2026-11-19：摘要弹层 + 「查看完整版」入口（ECS 正式全文 V1.0 · 生效 2026-11-17）。
+            subtitle = "摘要 · 完整版 " + LegalLinks.VERSION_LABEL,
             onClick = onShowAgreement,
         )
         RowDivider()
         ActionRow(
             icon = Icons.AutoMirrored.Rounded.Article,
             title = "隐私政策",
+            subtitle = "摘要 · 完整版 " + LegalLinks.VERSION_LABEL,
             onClick = onShowPrivacy,
         )
         RowDivider()

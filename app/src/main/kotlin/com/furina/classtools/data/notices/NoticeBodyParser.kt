@@ -74,6 +74,8 @@ object NoticeBodyParser {
                             hasData = NoticeAttachmentSource.inlineOf(src) != null,
                             approxBytes = estimateDataUriBytes(src),
                             url = NoticeAttachmentSource.urlOf(src),
+                            // 服务端 light meta（class_notices_meta）把内联 data URI 置空并写 lazy=true
+                            lazy = item.bool("lazy"),
                         ),
                     )
                 }
@@ -104,6 +106,7 @@ object NoticeBodyParser {
                             archiveSummary = archive.summary,
                             url = NoticeAttachmentSource.urlOf(raw),
                             archiveFiles = archive.files,
+                            lazy = item.bool("lazy"),
                         ),
                     )
                 }
@@ -261,6 +264,7 @@ object NoticeBodyParser {
                     sizeText = obj.str("size"),
                     url = NoticeAttachmentSource.urlOf(source),
                     hasData = NoticeAttachmentSource.inlineOf(source) != null,
+                    lazy = obj.bool("lazy"),
                 ),
             )
         }

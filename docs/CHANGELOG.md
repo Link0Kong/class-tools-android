@@ -1,5 +1,33 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-19 · 通知列表 P0 收口（light meta 优先 + 懒加载附件 + 取消后台翻页）+ release 4 个 ECS 子系统可用性修复（源码；未发版，版本仍 beta7/vc90）
+
+> 承接 Lead 网络审计：通知页慢/错误率高的主因是 `notices?select=*` 分页拉整表（每页 ~0.55MB、后台自动翻完 ~28 页 / 14MB、单页 40s 超时 + 重试）；release 的账号/云空间/更新/地图仍指向 NXDOMAIN `tool.furina.fun`。详见 `docs/REPORT_ROUND70_20261119.md`。**未改版本号、未加依赖、未碰 keystore、未提交 git。**
+
+- **通知列表改走 `POST rpc/class_notices_meta`**（与网页/小程序同契约）：服务端 `notice_lite_body()` 把 `items[].url/src`、`archive.files[].url/src` 的内联 data URI 置空并写 `lazy=true`，整表 14MB → **~0.3MB**；一次拿全量 → 不再分页。**接口不存在/无权限（400/401/403/404/405/501）自动回退旧分页链路**（保留原分页/渲染/已读逻辑），回退后不再重复探测（`force` 刷新允许再探一次，云端部署后可自动切回）。
+- **取消「后台自动翻完所有页」**：删除 `NoticesAutoLoader`（含 6 项单测与 UI 循环）。只有下拉刷新或底部**「加载更早的通知（还有 N 条）」**才按需加载一页；OPPO 推送定位未命中时也只加载一页。
+- **详情懒加载**：新增 `NoticesRepository.loadRow/hydrateRow`（`notices?select=*&id=eq.<rowId>` 拉单行完整 body，合并回缓存，重开不再请求）；打开详情时触发一次，失败仅提示且图片仍有逐张按需加载兜底。`NoticeItemMeta.Image/File`、`NoticeArchiveFile` 新增 `lazy` 标记。**启动不预取任何附件**。
+- **超时 40s → 25s**，超时最多重试 1 次（不无限重试）。`ApiClient` 新增 `notifyTokenInvalid`（默认 true，主链路语义不变）：light meta 探测遇 401/403 **不清会话**。
+- **release ECS 地址修复**：新增 `ct.ecsProfile`（`ecsIp`（默认，备案暂停期）| `selfhosted`）；release 的 `ACCOUNT_BASE_URL` / `CLOUDSPACE_BASE_URL` / `UPDATE_BASE_URL` / `MAP_BASE_URL` / `WEB_BASE_URL` 由 `https://tool.furina.fun`（NXDOMAIN）改为 `http://121.196.47.2/...`；`network_security_config.xml` **只放行这一个固定 IP**（其余域名仍禁明文）；`:app:verifyReleaseEndpoints` 改为按档位校验（REST 永远 https + 无明文 IP；`ecsIp` 要求 5 个 ECS 地址落在该 IP 并打印 WARN；`selfhosted` 保持严格 https）。备案恢复后 `-Pct.ecsProfile=selfhosted` 一键回滚。
+- **401/403 分类**：主链路保留现状（401/403 → TokenInvalid + 清会话）；建议（未做）把 403 细分为 `ApiError.Forbidden`（不清会话，仅禁用该功能），属协议级调整。
+- **测试**：基线 **1652/0（2 skipped，134 suites）** → 改后 **1654/0（2 skipped，134 suites）**。新增 `NoticesMetaTest` 10 项（meta 一次拿全量 / 不再发分页请求 / `loadMore` 不发请求 / 404 回退 / 403 不清会话 / 坏 JSON 降级 / lazy 标记 / `hydrateRow` 单行合并 / 行不在列表返回缓存 / `loadRow`）；`NoticesRepositoryTest`、`NoticesPaginationTest` 显式 `metaEnabled=false` 继续守旧链路；`NoticesAutoLoaderTest` 删除。
+- **构建**：`:app:assembleDebug` 成功（`app-debug.apk` 29,522,153 B / `CFAA8738…`）；`:app:compileReleaseKotlin` 成功（未签名）；`:app:verifyReleaseEndpoints` OK（`REST_PROFILE=cloudbase ECS_PROFILE=ecsIp`）；release `BuildConfig` 实测 5 个 ECS 地址均为 `http://121.196.47.2...`、REST 仍 CloudBase HTTPS。
+- **未验证**：本机 `emulator-5562` 无外网，未做通知页真机端到端；debug 的 REST 是 staging 影子网关（可能没有该 RPC → 走回退链路）。
+
+## 2026-11-19 · 界面动效/UI 向鸿蒙对齐 + 隐私协议/用户协议全文入口 + 网络层审计（源码；未发版，版本仍 beta7/vc90）
+
+> 用户 2026-11-19 三项要求：① 按鸿蒙 HomeScreen/AppShell/主题/卡片/列表/页面切换对齐动效与 UI；② 接入已制作好的法律全文（不破坏现有摘要）；③ 网络层低风险审计。详见 `docs/REPORT_ROUND69_20261119.md`。**未改版本号、未加依赖、未提交 git**。
+
+- **令牌校正（鸿蒙源码逐项复核）**：`HarmonyTokens.PagePadding 20→16`（= `Tokens.PAGE_PADDING`，并把折叠屏 24 / 平板 32 落成令牌）、`ContentMaxWidthWide 960→1080`（= `Breakpoints.CONTENT_MAX_WIDE`）、`PageHeaderHeight 60→56`（= `PageHeader.ets`）、新增 `ToolMaxWide/FloatBarSpace/SideBarSpace/SideNavWidth/BreathTopWide/TileGlyph 24/TileTextGap 12/TextGap 2/BadgeBox 30/BadgeGlyph 17/HairlineWidth 0.5`、骨架三色、hero 阴影 `#0F4E9082`；`CtSpacing.screenHorizontal 20→16`。
+- **动效契约**：新增 `HarmonyMotion`（FAST 160 / NORMAL 260 / SLOW 380、`cubic-bezier(.4,0,.2,1)`、pageEnter 28vp+0.985、pageExit 24vp+0.99、listItem 10、popIn 0.9、按压 0.97/0.92、骨架 900ms 1↔0.55）；`CtPageTransitions` 新增 `harmonyPushEnter/harmonyPushExit/harmonyPopEnter/harmonyPopExit`，`MainNavHost` 11 个页面路由 + 工具页路由切到鸿蒙口径（工具页 pop 仍由快照收回覆盖层负责）；旧 Material 口径保留。
+- **组件/页面**：`AllToolCard` 字形 20→24、图标-文字 10→12、主次文本 3→2、按压加 opacity 0.92；工作台 hero padding 18→16 / 边框 1→0.5 / 下边距 20→12 / 阴影改鸿蒙 `#0F4E9082 y6`；工作台信息卡头部 40dp+15sp → 30dp+17 字形+13sp Medium 次级色+8 间距；`CtTopBar` 标题改 Bold（高度随令牌 56）；底栏图标 22→20、文案 11→10sp；我的页分组标题 13 Regular → 12 Medium 次级色、下间距 6→8。
+- **加载骨架**（新 `ui/components/HarmonySkeleton.kt`）：首次加载由「转圈 + 文案」改为两行灰块 + 900ms 呼吸（文案转读屏说明），「已有内容刷新中」仍保留转圈提示。
+- **法律全文入口**（新 `ui/screens/privacy/LegalLinks.kt`）：`PrivacyTexts` 摘要保留并升级到与全文一致的 **V1.0 · 生效 2026-11-17**，补齐处理者/邮箱/15 个工作日/第三方与跨境（OSS 中国香港）/保存期限/权利/重大变更重新同意/「以全文为准」；弹层新增**「查看完整版」**（`ACTION_VIEW` 系统浏览器打开 `WEB_BASE_URL + legal/android/{privacy,terms}.html`，不硬编码明文 IP、不新增权限/依赖），失败兜底 = 复制链接 + Toast + 弹层内红字提示；入口在我的页两行副标题、摘要弹层、身份页协议勾选处三处。
+- **网络层审计**：超时分级 / GET 单次重试 + 抖动 / 写不重试 / 共享连接池与 Dispatcher / 在途 GET 合并 / TTL 缓存 / 错误映射均判定正常；**修为 2 处**——协程取消不再被 `catch(Throwable)` 吞成 `ApiError.Network`（`execute`/`getTimed`）、在途合并 leader 取消时等待者改为拿 `Failure` 而不是同一个取消异常。另给 4 条「大改只建议」：超时也会重试（最坏 2× 读超时）、仓库 Mutex 跨网络持锁、附件通道 120s、不加 HTTP 缓存。
+- **测试**：基线 `:app:testDebugUnitTest` **1632/0（2 skipped，130 suites）** → 改后 **1652/0（2 skipped，134 suites）**，新增 `HarmonyTokensTest` 8、`CtPageTransitionsHarmonyTest` 3、`LegalLinksTest` 7、`ApiClientCancellationTest` 2；`:app:assembleDebug` 成功（`app-debug.apk` 29,522,153 B / `E674B4D2…`）；`:app:verifyReleaseEndpoints` 通过。
+- **模拟器实测**（`emulator-5562`，装 debug 包 `…debug`，不动机器上的 release 包）：截图确认工作台 hero/信息卡、全部工具卡、我的页分组标题与协议行副标题、摘要弹层「查看完整版」按钮均按预期渲染；点「查看完整版」成功交给系统浏览器（`mCurrentFocus=com.android.chrome`）。**真机截图暴露并修掉文案 bug**：我的页显示成 `完整版 VV1.0`（`VERSION_LABEL` 内重复 V 前缀），已修 + 单测锁「不得出现 VV1.0」。截图见 `artifacts/round69/`（gitignored）。
+- **未验证**：未逐屏回归通知/课表/投票/PPT；转场观感未录屏；release 的全文域名为备案暂停中的 `tool.furina.fun`（debug 的 `121.196.47.2` 实测 200），备案恢复前 release 点「查看完整版」会走失败兜底。
+
 ## 2026-11-19 · v1.0.0-beta7 / vc90：修复安卓通知工具收不到通知（release REST 指向备案暂停域名）
 
 > 用户反馈「安卓端通知工具收不到通知」。根因不是通知页本身：beta6 release APK 的 `BuildConfig.REST_BASE_URL` 实测为 `https://tool.furina.fun/v1/rdb/rest/`，而该域名备案暂停、DNS **NXDOMAIN**；release 的登录/通知/数据请求全部失败。此前的 2026-11-18 自建后端切流把 release 默认设成 selfhosted，但备案/HTTPS 尚未恢复。

@@ -87,6 +87,7 @@ import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtBrandDots
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.HarmonySkeletonTextBlock
 import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.theme.BrandMistTeal
@@ -593,7 +594,7 @@ private fun HomeTodayCoursesCard(
             }
         }
         if (loading && plan != null) {
-            HomeLoadingRow("更新课表…")
+            HomeRefreshingRow("更新课表…")
         }
     }
 }
@@ -1023,8 +1024,18 @@ private fun HomeEmptyHint(
     }
 }
 
+/**
+ * 卡内加载态（2026-11-19 对齐鸿蒙 skeletonPage）：两行骨架块 + 900ms 呼吸，
+ * 不再用「转圈 + 文案」；文案转为读屏说明（TalkBack 仍播报「读取课表…」）。
+ */
 @Composable
 private fun HomeLoadingRow(text: String) {
+    HarmonySkeletonTextBlock(description = text)
+}
+
+/** 卡内「已有内容、正在刷新」提示（内容还在，不用骨架替换，保持可读）。 */
+@Composable
+private fun HomeRefreshingRow(text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         CircularProgressIndicator(
             modifier = Modifier.size(14.dp),

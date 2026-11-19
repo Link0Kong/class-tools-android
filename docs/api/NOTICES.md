@@ -29,14 +29,29 @@
 
 ---
 
-## 2. 拉取策略（两阶段，避免 2 MB）
+## 2. 拉取策略（light meta 优先，两阶段兜底）
 
 ```text
 每次进入通知页 / TTL(10min) 到期 / 回前台：
   1) GET notices?select=id,ts,hidden,edited_at&order=ts.asc,id.asc&archived=eq.false   // ~2KB
   2) sig = rows.join("|")，每行 "id:ts:hidden:edited_at"
   3) sig == 本地缓存 sig → 直接用缓存（0 次大请求）
-     否则 GET notices?select=*&order=ts.asc,id.asc&archived=eq.false → 重建缓存 + 解析
+     否则 POST rpc/class_notices_meta  body={}   // 2026-11-19 起优先：整表 ~0.3MB（light body）
+           └─ 接口不存在/无权限（400/401/403/404/405/501）→ 回退旧分页链路（见下）
+```
+
+**light meta（2026-11-19，与网页/小程序同一契约）**：
+- 服务端 `notice_lite_body()` 把 `items[].url/src`、`archive.files[].url/src` 里的内联 `data:` 置空并写
+  `lazy=true`（文件名/大小/标题/时间/摘要原样保留），整表从 ~14MB 降到 ~0.3MB；`class_notices_meta()`
+  返回**全部**未归档行（`ts asc,id asc`），需要有效班级 token（`auth_ok()`）。
+- 一次拿全量 → **不再分页、不再后台自动翻页**（旧实现首屏后会连续拉 ~28 页）。
+- 用户点开卡片/图片/附件时按 `notices?select=*&id=eq.<rowId>` 拉**单行**完整 body
+  （`NoticesRepository.hydrateRow`，合并回缓存；图片另有按序号的按需加载兜底）。
+
+**旧分页兜底（light meta 不可用时）**：
+```text
+  GET notices?select=*&order=ts.desc,id.desc&archived=eq.false&limit=20&offset=0  // 首屏一页
+  更多：用户下拉刷新或点「加载更早的通知」才 loadMore（每页 20 → 超时自适应 5/3/1）
 ```
 
 `[已核实 WEB:1856-1865, 2599-2650; MP/cloud.js:534-687]`

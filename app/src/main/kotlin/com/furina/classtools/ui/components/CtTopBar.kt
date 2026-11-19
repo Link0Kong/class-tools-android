@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.theme.CtText
@@ -30,9 +31,10 @@ import com.furina.classtools.ui.theme.HarmonyTokens
 import com.furina.classtools.ui.theme.rememberHarmonyColors
 
 /**
- * 工具页统一顶栏（2026-11-17 按鸿蒙 `PageHeader.ets` 重做）：
+ * 工具页统一顶栏（2026-11-19 逐项对齐鸿蒙 `PageHeader.ets` headerBar）：
  *
- * - 高度 **60dp**、标题 **19sp Medium**、返回 **44dp 热区**（无圆形玻璃底）、右侧动作保持调用方；
+ * - 高度 **56dp**（鸿蒙 headerBar height 56）、标题 **19sp Bold**（鸿蒙 `F_HEADING` + Bold）、
+ *   返回 **44dp 热区**（鸿蒙 38vp 视觉，按安卓无障碍硬线抬到 44）、右侧动作保持调用方；
  * - 背景透明（页面纯色底），副标题参数保留兼容但不再渲染（鸿蒙 PageHeader 只有标题+动作）。
  *
  * 旧调用方无需改写签名；需要「右侧文字操作」的页面在 `actions` 里传 TextButton/Text 即可。
@@ -76,7 +78,7 @@ fun CtTopBar(
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = title,
-            style = CtText.heading,
+            style = CtText.heading.copy(fontWeight = FontWeight.Bold),
             color = colors.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

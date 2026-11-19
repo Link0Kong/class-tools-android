@@ -26,17 +26,22 @@ object NoticeSignature {
 }
 
 /**
- * 通知仓库（只读）：**两级 + 分页**拉取 + `[[CLASS_NOTICE_V1]]` 解析 + hidden 过滤 + override 白名单。
+ * 通知仓库（只读）：**light meta 优先** + 旧两级分页兜底 + `[[CLASS_NOTICE_V1]]` 解析 + hidden 过滤 + override 白名单。
  *
- * 契约：`docs/api/NOTICES.md` §2 + `docs/api/ENDPOINTS.md` E7/E8/E9。
+ * 契约：`docs/api/NOTICES.md` §2 + `docs/api/ENDPOINTS.md` E7/E8/E9；
+ * light meta 服务端实现见网页仓 `deploy/cloudbase/2026-11-17_notice_meta.sql`。
  *
- * 2026-11-13 网络修复（用户反馈「通知无法联网」根因）：
- * - CloudBase `notices?select=*` 全表响应约 **13.9MB**，旧实现每次拉整表 → App 10s 超时 → 只显示本机缓存；
- * - 现改为**按 `ts` 倒序分页**：首次只拉最新 [PAGE_SIZE] 条（~0.55MB，快速出首屏），
- *   旧数据通过 [loadMore] 每页 20 条追加；签名变化时自动重载第一页；
- *   **UI 由 [NoticesAutoLoader] 在后台自动循环 [loadMore] 直到 `hasMore=false`（用户无需点击「加载全部」）**；
- * - 每次请求加 30s 协程超时保护；超时/网络失败自动重试 1 次（ApiClient 对 GET 亦有一次网络重试）；
- * - 失败保留已加载缓存并在 UI 给出明确错误（「网络较慢或服务器无响应」）。
+ * 2026-11-19（P0 收口，本文件的核心变化）：
+ * - **列表优先 `POST rpc/class_notices_meta`**：服务端 `notice_lite_body()` 把 `items[].url/src`
+ *   的内联 data URI 置空并写 `lazy=true`，整表约 **0.3MB**（旧 `notices?select=*` 整表约 14MB）；
+ *   一次请求即可拿到**全部**行，不再分页、不再后台翻页；
+ * - **接口不存在/无权限（400/401/403/404/405/501）→ 回退旧分页链路**（保留原分页/渲染/已读逻辑），
+ *   且回退后不再每次重复探测（`force` 下拉刷新时允许重新探测一次，云端部署后可自动切回）；
+ * - **懒加载附件**：列表阶段不含大 base64；用户点开详情时才 [loadRow]/[hydrateRow]
+ *   按 `notices?select=*&id=eq.<rowId>` 拉单行完整 body，并合并回缓存（重开不再请求）；
+ * - **取消「后台自动翻完所有页」**：不再有 `NoticesAutoLoader`；只有用户下拉刷新或点
+ *   「加载更早的通知」才加载下一页（且仅旧分页链路存在下一页）；
+ * - 单请求超时 **25s**（原 40s），超时最多重试 1 次（不无限重试）。
  *
  * 其他口径不变：
  * - 第一级：`select=id,ts,hidden,edited_at` 比签名；一致 → 直接用缓存（0 次正文请求）；
@@ -50,14 +55,31 @@ interface NoticesRepository {
     suspend fun load(force: Boolean = false): NoticesLoadResult
 
     /**
-     * 加载下一页（按 ts 倒序的旧数据，每页 [DefaultNoticesRepository.PAGE_SIZE] 条）。
+     * 加载下一页（**仅旧分页链路**；按 ts 倒序的旧数据，每页 [DefaultNoticesRepository.PAGE_SIZE] 条）。
      *
-     * - 追加到已加载内容并更新缓存；签名变化时内部改为重载第一页；
+     * - light meta 链路一次拿全量 → `hasMore=false`，调用本方法直接返回缓存、不发请求；
+     * - 旧链路：追加到已加载内容并更新缓存；签名变化时内部改为重载第一页；
      * - 失败返回 [NoticesLoadResult.Failure]（调用方保留已加载内容并展示重试）。
      */
     suspend fun loadMore(): NoticesLoadResult
 
     suspend fun cached(): NoticesData?
+
+    /**
+     * 按 id 拉**单行完整 body**（懒加载图片/附件的唯一入口；不写缓存）。
+     *
+     * @return 行数据；不存在/失败/坏 JSON → null（调用方降级为占位，不崩）
+     */
+    suspend fun loadRow(rowId: String): NoticeRow?
+
+    /**
+     * 拉单行完整 body 并**合并回列表缓存**（详情弹层打开时调用一次）。
+     *
+     * - 成功：返回新的 [NoticesData]（该条目 `items` 带上真实 `url`/内联内容，重开不再请求）；
+     * - 该行不在已加载列表（已删除/被隐藏/分页重建）→ 返回当前缓存（不打断阅读）；
+     * - 失败 → [NoticesLoadResult.Failure]（UI 提示，列表保持原样）。
+     */
+    suspend fun hydrateRow(rowId: String): NoticesLoadResult
 }
 
 class DefaultNoticesRepository(
@@ -66,13 +88,15 @@ class DefaultNoticesRepository(
     private val clock: () -> Long = System::currentTimeMillis,
     private val ttlMs: Long = DEFAULT_TTL_MS,
     private val json: Json = NetJson,
-    /** 每页条数（最新 20 条约 0.55MB；分页是本次网络修复的核心）。 */
+    /** 每页条数（**仅旧分页链路**：light meta 一次拿全量，不分页）。 */
     private val pageSize: Int = PAGE_SIZE,
-    /** 单次请求的协程超时保护（毫秒）。 */
+    /** 单次请求的协程超时保护（毫秒；2026-11-19 由 40s 降到 25s）。 */
     private val requestTimeoutMs: Long = DEFAULT_REQUEST_TIMEOUT_MS,
     /** 超时后的重试次数（网络失败重试由 ApiClient 负责，避免重复放大等待）。 */
     private val timeoutRetries: Int = 1,
     private val retryDelayMs: Long = DEFAULT_RETRY_DELAY_MS,
+    /** light meta（`rpc/class_notices_meta`）开关：false 时直接走旧分页链路（回滚/测试用）。 */
+    private val metaEnabled: Boolean = true,
 ) : NoticesRepository {
 
     private val mutex = Mutex()
@@ -80,6 +104,12 @@ class DefaultNoticesRepository(
     private var cachedSignature: String? = null
     private var lastFetchAt = 0L
     private var loadedOnce = false
+
+    /**
+     * light meta 可用性：null = 尚未探测；true = 可用（一次拿全量）；false = 接口不存在/无权限 → 旧分页链路。
+     * `force` 刷新时允许对 false 重新探测一次（云端部署后可自动切回，无需重启 App）。
+     */
+    private var metaAvailable: Boolean? = null
 
     // 分页状态（按 ts 倒序已加载；跨页合并后仍走 NoticeDedupe）
     private var totalRawCount = 0
@@ -93,6 +123,10 @@ class DefaultNoticesRepository(
     override suspend fun loadMore(): NoticesLoadResult = mutex.withLock { loadMoreLocked() }
 
     override suspend fun cached(): NoticesData? = mutex.withLock { cache }
+
+    override suspend fun loadRow(rowId: String): NoticeRow? = mutex.withLock { fetchRow(rowId) }
+
+    override suspend fun hydrateRow(rowId: String): NoticesLoadResult = mutex.withLock { hydrateLocked(rowId) }
 
     // ------------------------------------------------------------ 内部：首屏 / 加载更多
 
@@ -115,9 +149,29 @@ class DefaultNoticesRepository(
             return NoticesLoadResult.Success(cache!!.copy(fromCache = true, fetchedAt = now))
         }
 
-        // 第二级：只拉最新一页（ts 倒序 limit=20）→ 首屏快速可见。
-        // 2026-11-19：首屏也走自适应（20→10→5→3→1）；当前通知整表已 15MB，最新 20 条
-        // 可能包含多个大附件，固定 20 条会在弱网下超时，导致「通知一直收不到」。
+        // 第二级（2026-11-19 P0 收口）：优先 light meta（整表 ~0.3MB，一次拿全量、可懒加载附件）。
+        if (metaEnabled && (metaAvailable != false || force)) {
+            when (val meta = fetchMeta()) {
+                is MetaResult.Rows -> {
+                    resetPages()
+                    cachedSignature = signature
+                    totalRawCount = meta.rows.size
+                    appendPage(meta.rows)
+                    metaAvailable = true
+                    return publish(now = clock(), fromCache = false)
+                }
+
+                MetaResult.Unsupported -> {
+                    // 接口不存在/无权限：本次及后续都走旧分页链路（force 刷新可再探测一次）。
+                    metaAvailable = false
+                }
+
+                is MetaResult.Failed -> return fallbackOrFailure(meta.message)
+            }
+        }
+
+        // 第三级（旧链路兜底）：只拉最新一页（ts 倒序 limit=20）→ 首屏快速可见；
+        // 其余旧数据由用户「加载更早的通知」按页追加（不再后台自动翻完所有页）。
         resetPages()
         cachedSignature = signature
         totalRawCount = liteRows.size
@@ -126,6 +180,115 @@ class DefaultNoticesRepository(
         appendPage(firstPage)
         return publish(now = clock(), fromCache = false)
     }
+
+    /**
+     * light meta 拉取结果：
+     * - [Rows]：成功（服务端把 items 里的内联 data URI 置空并写 `lazy=true`）；
+     * - [Unsupported]：接口不存在或无权限（400/401/403/404/405/501）→ 回退旧分页；
+     * - [Failed]：网络/超时/解析失败 → 交给调用方降级到缓存。
+     */
+    private sealed interface MetaResult {
+        data class Rows(val rows: List<NoticeRow>) : MetaResult
+
+        data object Unsupported : MetaResult
+
+        data class Failed(val message: String) : MetaResult
+    }
+
+    /**
+     * `POST rpc/class_notices_meta`：服务端 `class_notices_meta()` 返回**全部**未归档行
+     * （与 `notices?select=*` 同构，但 body 换成 light 版本），按 `ts asc,id asc`。
+     *
+     * 401/403 **不回调 onTokenInvalid**（notifyTokenInvalid=false）：该接口只是列表优化，
+     * 权限差异不能把用户会话清掉；真正的鉴权问题由后续旧链路请求按既有口径处理。
+     */
+    private suspend fun fetchMeta(): MetaResult {
+        val result = try {
+            withTimeout(requestTimeoutMs) {
+                api.post(
+                    path = META_PATH,
+                    body = "{}",
+                    authenticated = true,
+                    notifyTokenInvalid = false,
+                )
+            }
+        } catch (timeout: TimeoutCancellationException) {
+            return MetaResult.Failed(TIMEOUT_MESSAGE)
+        }
+        return when (result) {
+            is ApiResult.Success -> parseRows(json, result.value)
+                ?.let { MetaResult.Rows(it) }
+                ?: MetaResult.Failed(PAGE_PARSE_MESSAGE)
+
+            is ApiResult.Failure -> when (val error = result.error) {
+                is ApiError.Http ->
+                    if (error.status in META_UNSUPPORTED_STATUS) {
+                        MetaResult.Unsupported
+                    } else {
+                        MetaResult.Failed(networkMessage(error))
+                    }
+
+                // 401/403：权限/令牌口径不一致，按「不可用」回退旧链路（不清会话）。
+                is ApiError.TokenInvalid -> MetaResult.Unsupported
+
+                else -> MetaResult.Failed(networkMessage(error))
+            }
+        }
+    }
+
+    /** 单行完整 body（`notices?select=*&id=eq.<id>`）：懒加载附件/打开详情时用。 */
+    private suspend fun fetchRow(rowId: String): NoticeRow? {
+        val id = rowId.trim()
+        if (id.isEmpty()) return null
+        val encoded = encodeQueryValue(id)
+        return when (val result = fetchString("notices?select=*&id=eq.$encoded")) {
+            is ApiResult.Success -> parseRows(json, result.value)
+                ?.let { rows -> rows.firstOrNull { it.id == id } ?: rows.firstOrNull() }
+
+            is ApiResult.Failure -> null
+        }
+    }
+
+    /**
+     * 打开详情时拉单行完整 body 并合并回列表缓存：
+     * 该条目的 `items`（图片 `url`/data、文件 `url`、压缩包内文件 `url`）从此可用，重开不再请求。
+     */
+    private suspend fun hydrateLocked(rowId: String): NoticesLoadResult {
+        val row = fetchRow(rowId) ?: return NoticesLoadResult.Failure(ROW_BODY_MESSAGE)
+        val chunk = parseChunk(listOf(row), admin = isAdmin())
+        val replaced = replaceEntry(chunk)
+        val current = cache
+        if (!replaced || current == null) {
+            // 行不在已加载列表（已删除 / 被隐藏 / 分页重建）：不打断阅读，返回当前缓存。
+            return current?.let { NoticesLoadResult.Success(it.copy(fromCache = true)) }
+                ?: NoticesLoadResult.Failure(ROW_BODY_MESSAGE)
+        }
+        return publish(now = clock(), fromCache = current.fromCache)
+    }
+
+    /** 用新解析出的条目替换同 rowId 的旧条目（保持既有排序/去重结果，不重排整表）。 */
+    private fun replaceEntry(chunk: NoticeChunk): Boolean {
+        var replaced = false
+        chunk.auto.firstOrNull()?.let { fresh ->
+            val index = autoAccum.indexOfFirst { it.rowId == fresh.rowId }
+            if (index >= 0) {
+                autoAccum[index] = fresh
+                replaced = true
+            }
+        }
+        chunk.manual.firstOrNull()?.let { fresh ->
+            val index = manualAccum.indexOfFirst { it.row.id == fresh.row.id }
+            if (index >= 0) {
+                manualAccum[index] = fresh
+                replaced = true
+            }
+        }
+        return replaced
+    }
+
+    /** 查询参数值编码（`auto_xxx` 这类 id 只需处理少数保留字符；空格必须编码成 %20 而不是 +）。 */
+    private fun encodeQueryValue(value: String): String =
+        java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
     private suspend fun loadMoreLocked(): NoticesLoadResult {
         val current = cache
@@ -317,14 +480,28 @@ class DefaultNoticesRepository(
         const val LITE_PATH: String =
             "notices?select=id,ts,hidden,edited_at&order=ts.asc,id.asc&archived=eq.false"
 
-        /** 首屏每页条数：最新 20 条约 0.55MB（全表 13.9MB 会触发超时）。 */
+        /** light meta（网页/小程序同一契约）：服务端把 `items[].url/src` 的 data URI 置空并写 `lazy=true`。 */
+        const val META_PATH: String = "rpc/class_notices_meta"
+
+        /**
+         * 视为「接口不存在/无权限」→ 回退旧分页链路的 HTTP 状态：
+         * 404/405（未部署）、400（签名/参数不符）、401/403（权限口径不一致）、501（未实现）。
+         */
+        val META_UNSUPPORTED_STATUS: Set<Int> = setOf(400, 401, 403, 404, 405, 501)
+
+        /** 首屏每页条数（**仅旧分页链路**；light meta 一次拿全量）。 */
         const val PAGE_SIZE: Int = 20
 
         /** 「加载更多」自适应页大小：旧通知单页可达 3–4MB，超时后逐级缩小。 */
         val MORE_PAGE_LIMITS: List<Int> = listOf(5, 3, 1)
 
-        /** 单次请求超时保护（大于传输层 10s 读超时；仅兜底卡死场景）。 */
-        const val DEFAULT_REQUEST_TIMEOUT_MS: Long = 40_000L
+        /**
+         * 单次请求超时保护（毫秒）。
+         *
+         * 2026-11-19：40s → **25s**。light meta 整表约 0.3MB，25s 足够；
+         * 旧链路单页失败时不再长时间占着「加载中」，超时最多重试 1 次（不无限重试）。
+         */
+        const val DEFAULT_REQUEST_TIMEOUT_MS: Long = 25_000L
 
         const val DEFAULT_RETRY_DELAY_MS: Long = 350L
         const val DEFAULT_TTL_MS: Long = 10L * 60 * 1000
@@ -333,6 +510,9 @@ class DefaultNoticesRepository(
         const val TIMEOUT_MESSAGE: String = "网络较慢或服务器无响应，请重试"
         const val DEFAULT_ERROR_MESSAGE: String = "网络不可用，请稍后重试"
         const val PAGE_PARSE_MESSAGE: String = "通知数据格式异常"
+
+        /** 详情懒加载失败文案（图片/附件内容未取到，列表不受影响）。 */
+        const val ROW_BODY_MESSAGE: String = "附件内容加载失败，请稍后重试"
 
         /** 首屏正文路径（测试/诊断用；offset 由分页状态决定）。 */
         fun pagePathFor(offset: Int, pageSize: Int = PAGE_SIZE): String =

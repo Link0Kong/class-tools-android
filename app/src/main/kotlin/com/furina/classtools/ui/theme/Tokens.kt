@@ -26,7 +26,8 @@ object CtTokens {
          * 页面左右边距。
          *
          * 注意：`CtAdaptive` 的自适应框架单测以 16/24/32 为契约（AdaptiveLayoutTest），
-         * 这里保持原值；鸿蒙重做后的页面显式使用 `HarmonyTokens.PagePadding = 20dp`。
+         * 这里保持原值；鸿蒙重做后的页面显式使用 `HarmonyTokens.PagePadding = 16dp`
+         * （2026-11-19 按鸿蒙 `Tokens.PAGE_PADDING` 由 20 修正）。
          */
         val pageHorizontalCompact = 16.dp
         val pageHorizontalMedium = 24.dp

@@ -32,10 +32,10 @@ import androidx.compose.ui.unit.dp
 //   L3 完全动态：暂不提供（会丢失功能语义色与品牌）。
 // =============================================================================
 
-/** Material Theme 之外的语义间距/可点区 token（组件与页面共用；2026-11-17 对齐鸿蒙 PAGE_PADDING 20 / GAP 12）。 */
+/** Material Theme 之外的语义间距/可点区 token（组件与页面共用；2026-11-19 与鸿蒙 PAGE_PADDING 16 / GAP 12 对齐）。 */
 data class CtSpacing(
-    /** 页面左右边距。 */
-    val screenHorizontal: Dp = 20.dp,
+    /** 页面左右边距（鸿蒙 `Tokens.PAGE_PADDING` = 16；2026-11-19 由 20 修正）。 */
+    val screenHorizontal: Dp = 16.dp,
     /** 大区块之间的垂直间距。 */
     val sectionGap: Dp = 20.dp,
     /** 卡片之间的间距。 */

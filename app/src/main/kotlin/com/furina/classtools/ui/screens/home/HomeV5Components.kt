@@ -127,13 +127,13 @@ internal fun HomeHeroCard(
         onClick = onOpenTimetable,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 20.dp)
+            .padding(top = 4.dp, bottom = HarmonyTokens.Gap)
             .shadow(
-                elevation = 6.dp,
+                elevation = HarmonyTokens.HeroShadowElevation,
                 shape = HomeHeroShape,
                 clip = false,
-                ambientColor = Color(0x144E9082),
-                spotColor = Color(0x144E9082),
+                ambientColor = HarmonyTokens.HeroShadowColor,
+                spotColor = HarmonyTokens.HeroShadowColor,
             )
             .graphicsLayer {
                 scaleX = pressScale
@@ -142,10 +142,10 @@ internal fun HomeHeroCard(
         shape = HomeHeroShape,
         color = colors.heroPaper,
         contentColor = colors.heroTitle,
-        border = BorderStroke(1.dp, colors.heroBorder),
+        border = BorderStroke(HarmonyTokens.HairlineWidth, colors.heroBorder),
         interactionSource = int,
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(HarmonyTokens.PagePadding)) {
             // 顶部青/蓝/沙三色 3px 条
             Row(
                 modifier = Modifier
@@ -230,7 +230,10 @@ internal fun HomeHeroCard(
 }
 
 /**
- * 信息卡统一外壳（鸿蒙白卡）：tint 图标块 40dp + 标题 15 Medium + 可选徽标 + 尾部动作 + 内容。
+ * 信息卡统一外壳（鸿蒙白卡）：tint 图标块 30dp + 标题 13 Medium 次级色 + 可选徽标 + 尾部动作 + 内容。
+ *
+ * 2026-11-19 对照鸿蒙 `HomeScreen.cardTitleRow`：`iconBadge(symbol, accent, 30, 17)` +
+ * 标题 `F_LABEL(13) Medium TEXT_SECONDARY` + 间距 `SPACE_8`。
  */
 @Composable
 internal fun HomeInfoCard(
@@ -262,16 +265,16 @@ internal fun HomeInfoCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 14.dp),
+                .padding(horizontal = HarmonyTokens.CardPadding, vertical = HarmonyTokens.CardPadding),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 HomeIconBadge(icon = icon, accent = accent)
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = title,
-                    style = CtText.bodyMedium,
-                    color = colors.textPrimary,
+                    style = CtText.labelMedium,
+                    color = colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -291,18 +294,18 @@ internal fun HomeInfoCard(
     }
 }
 
-/** 分类色图标块（40dp tint 底 12 圆角；鸿蒙 ToolTile 同款）。 */
+/** 分类色图标块（鸿蒙 `HomeScreen.iconBadge`：30dp tint 底 9dp 圆角 + 17dp 字形）。 */
 @Composable
 internal fun HomeIconBadge(
     icon: ImageVector,
     accent: Color,
     modifier: Modifier = Modifier,
-    size: Int = 40,
-    iconSize: Int = 20,
+    size: Int = 30,
+    iconSize: Int = 17,
 ) {
     Surface(
         modifier = modifier.size(size.dp),
-        shape = RoundedCornerShape(HarmonyTokens.RadiusTile),
+        shape = RoundedCornerShape((size * 0.3f).dp),
         color = harmonyTint(accent),
         contentColor = accent,
     ) {

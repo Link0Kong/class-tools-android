@@ -118,6 +118,8 @@ class NoticesPaginationTest {
         pageSize = pageSize,
         requestTimeoutMs = requestTimeoutMs,
         retryDelayMs = 1L,
+        // 本文件覆盖**旧分页兜底链路**（light meta 不存在时的行为）；meta 优先见 NoticesMetaTest。
+        metaEnabled = false,
     )
 
     private fun manualRows(count: Int): List<String> =
@@ -336,52 +338,4 @@ class NoticesPaginationTest {
         assertEquals(2_000L, data.auto.first { it.id == "g1" }.ts)
     }
 
-    // ------------------------------------------------------------ 自动全部加载（task-56 B）
-
-    @Test
-    fun `自动全部加载在签名变化时重置基线并加载到底`() = runTest {
-        val paged = PagedTransport(manualRows(6))
-        val repo = repository(paged.transport, pageSize = 2)
-        val first = (repo.load(force = true) as NoticesLoadResult.Success).data
-        assertEquals(2, first.manual.size)
-        assertTrue(first.hasMore)
-
-        // 云端新增一条（签名变化）→ loadMore 内部必须重载第一页（offset=0），不能拼接旧页。
-        paged.rows = listOf(manualRow("m9", 9_000L)) + manualRows(6)
-        var callbacks = 0
-        val loader = NoticesAutoLoader(repository = repo, retryDelayMs = 1L, maxSleep = { })
-        val result = loader.loadAll { callbacks += 1 }
-
-        assertTrue(result is NoticesAutoLoadResult.Completed)
-        assertTrue(callbacks >= 1)
-        val done = repo.cached()!!
-        assertFalse(done.hasMore)
-        assertEquals(0, done.remainingCount)
-        // 新行 + 全部旧行都在，无重复（跨页去重不得回退）。
-        val ids = done.manual.map { it.row.id }
-        assertEquals(7, ids.size)
-        assertEquals(ids.size, ids.distinct().size)
-        assertTrue(ids.contains("m9"))
-        // 首次加载 + 签名变化后各一次 offset=0 请求。
-        assertEquals(2, paged.pageRequests.count { offsetOf(it.url) == 0 })
-    }
-
-    @Test
-    fun `自动全部加载失败重试一次仍失败时保留首屏`() = runTest {
-        val paged = PagedTransport(manualRows(6))
-        val repo = repository(paged.transport, pageSize = 2)
-        repo.load(force = true)
-
-        paged.pageFailures = 99 // 正文持续失败（含 ApiClient 自动重试）
-        val loader = NoticesAutoLoader(
-            repository = repo,
-            retryDelayMs = 1L,
-            maxSleep = { },
-        )
-        val result = loader.loadAll { }
-
-        assertTrue(result is NoticesAutoLoadResult.Failed)
-        assertEquals(2, repo.cached()!!.manual.size) // 首屏未丢
-        assertTrue(repo.cached()!!.hasMore)
-    }
 }

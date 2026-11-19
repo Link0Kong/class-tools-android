@@ -2,8 +2,10 @@ package com.furina.classtools.ui.components.dock
 
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -27,6 +29,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.HarmonyMotion
 import kotlin.math.abs
 
 /**
@@ -208,6 +211,69 @@ object CtPageTransitions {
         slideOutHorizontally(animationSpec = exitSpec<IntOffset>()) { full -> (full * POP_SLIDE_FRACTION).toInt() } +
             fadeOut(animationSpec = CtMotion.fadeOut) +
             scaleOut(animationSpec = exitSpec<Float>(), targetScale = POP_EXIT_SCALE)
+
+    // -------------------------------------------------------------------------
+    // 鸿蒙转场（2026-11-19，对照 harmony `ui/theme/Motion.ets`）
+    //
+    // 鸿蒙 `Motion.pageEnter()`  = 透明度 + 右移 28vp + 0.985 缩放；
+    // 鸿蒙 `Motion.pageExit()`   = 透明度 + 右移 24vp + 0.99 缩放；
+    // 时长 `Motion.SLOW = 380ms`，标准缓动 cubic-bezier(.4,0,.2,1)。
+    //
+    // 与 [pushEnter]/[pushExit] 的差别：位移是**绝对值**（28/24vp，不随屏宽放大），
+    // 且被覆盖页与进入页**同向右移**（鸿蒙 Navigation Stack 的层叠语言），不再左移。
+    // 转场函数在 NavHost 的 transitionSpec（非 @Composable）里调用，读不到 LocalDensity，
+    // 因此按 360vp 手机折算为屏宽比例（28/360≈7.8%，24/360≈6.7%；平板略小于 28vp，观感更收敛）。
+    // -------------------------------------------------------------------------
+
+    /** 鸿蒙页面进入位移（屏宽比例，≈28vp @360vp）。 */
+    const val HARMONY_ENTER_FRACTION: Float = 0.078f
+
+    /** 鸿蒙页面退出位移（屏宽比例，≈24vp @360vp）。 */
+    const val HARMONY_EXIT_FRACTION: Float = 0.067f
+
+    /** 鸿蒙页面转场时长（Motion.SLOW）。 */
+    const val HARMONY_PAGE_MS: Int = 380
+
+    /** 鸿蒙淡入淡出时长（Motion.NORMAL 近似；与位移同时长会让淡入过慢）。 */
+    const val HARMONY_FADE_MS: Int = 260
+
+    private fun harmonyPageSpec(): FiniteAnimationSpec<Float> =
+        tween(durationMillis = HARMONY_PAGE_MS, easing = HarmonyMotion.ease)
+
+    private fun harmonyFadeSpec(): FiniteAnimationSpec<Float> =
+        tween(durationMillis = HARMONY_FADE_MS, easing = HarmonyMotion.ease)
+
+    private fun harmonyPageSpecInt(): FiniteAnimationSpec<IntOffset> =
+        tween(durationMillis = HARMONY_PAGE_MS, easing = HarmonyMotion.ease)
+
+    /** 鸿蒙「进入」：右移 28vp → 0 + 淡入 + 0.985 → 1。 */
+    fun harmonyPushEnter(): EnterTransition =
+        slideInHorizontally(animationSpec = harmonyPageSpecInt()) { full ->
+            (full * HARMONY_ENTER_FRACTION).toInt()
+        } +
+            fadeIn(animationSpec = harmonyFadeSpec()) +
+            scaleIn(animationSpec = harmonyPageSpec(), initialScale = HarmonyMotion.PageEnterScale)
+
+    /** 鸿蒙「被覆盖页退出」：右移 0 → 24vp + 淡出 + 1 → 0.99。 */
+    fun harmonyPushExit(): ExitTransition =
+        slideOutHorizontally(animationSpec = harmonyPageSpecInt()) { full ->
+            (full * HARMONY_EXIT_FRACTION).toInt()
+        } +
+            fadeOut(animationSpec = harmonyFadeSpec()) +
+            scaleOut(animationSpec = harmonyPageSpec(), targetScale = HarmonyMotion.PageExitScale)
+
+    /** 鸿蒙「返回时恢复页」：不做位移（鸿蒙只对退出页做位移），从 0.99 淡入到 1。 */
+    fun harmonyPopEnter(): EnterTransition =
+        fadeIn(animationSpec = harmonyFadeSpec()) +
+            scaleIn(animationSpec = harmonyPageSpec(), initialScale = HarmonyMotion.PageExitScale)
+
+    /** 鸿蒙「返回时当前页退出」：右移 24vp + 淡出 + 缩到 0.99。 */
+    fun harmonyPopExit(): ExitTransition =
+        slideOutHorizontally(animationSpec = harmonyPageSpecInt()) { full ->
+            (full * HARMONY_EXIT_FRACTION).toInt()
+        } +
+            fadeOut(animationSpec = harmonyFadeSpec()) +
+            scaleOut(animationSpec = harmonyPageSpec(), targetScale = HarmonyMotion.PageExitScale)
     /** 供预览/测试：给定滑动进度 (0..1) 的页面参数（与 pager 插值一致）。 */
     fun progressTransform(progress: Float): CtDockLogic.PageTransform =
         CtDockLogic.pageTransform(

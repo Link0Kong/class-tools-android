@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.theme
 
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -59,24 +60,64 @@ object HarmonyTokens {
     val HeroPaperAccent = Color(0xFF3F6F66)
     val HeroPaperLink = Color(0xFF4E6D8C)
 
-    // ---- 形状 / 间距（鸿蒙同值） ----
+    // ---- 形状 / 间距（鸿蒙同值；2026-11-19 逐项复核 Tokens.ets / Breakpoints.ets） ----
     val BreathTop = 8.dp
+    /** 宽屏顶部呼吸区（鸿蒙 Breakpoints.BREATH_TOP_WIDE=12）。 */
+    val BreathTopWide = 12.dp
     val RadiusCard = 18.dp
     val RadiusInput = 14.dp
     val RadiusHero = 24.dp
     val RadiusSheet = 26.dp
     val RadiusTile = 12.dp
     val Gap = 12.dp
-    val PagePadding = 20.dp
+
+    /**
+     * 页面左右边距：**16dp**（鸿蒙 `Tokens.PAGE_PADDING` / `Breakpoints.PAGE_PADDING_PHONE`）。
+     *
+     * 2026-11-19 修正：此前误取 20dp，比鸿蒙宽 4dp，与 `CtAdaptiveSpec`（16/24/32）也不一致；
+     * 现按鸿蒙规范 phone=16 / 折叠屏=24 / 平板=32 三档给出，页面默认用 [PagePadding]。
+     */
+    val PagePadding = 16.dp
+    val PagePaddingFold = 24.dp
+    val PagePaddingTablet = 32.dp
     val CardPadding = 14.dp
     val TilePadding = 12.dp
     val TileMinHeight = 96.dp
     val GlyphBox = 40.dp
-    val PageHeaderHeight = 60.dp
+    /** 工具卡字形图标尺寸（鸿蒙 ToolTile 非紧凑态 24vp）。 */
+    val TileGlyph = 24.dp
+    /** 工具卡图标块与文字间距（鸿蒙 ToolTile `margin({ left: Tokens.GAP })` = 12）。 */
+    val TileTextGap = 12.dp
+    /** 主次文本上下间距（鸿蒙 `Tokens.TEXT_GAP` = 2）。 */
+    val TextGap = 2.dp
+    /** 卡片小标题图标块（鸿蒙 HomeScreen.iconBadge(box=30, glyph=17)）。 */
+    val BadgeBox = 30.dp
+    val BadgeGlyph = 17.dp
+    /** 顶栏高度（鸿蒙 `PageHeader.ets` headerBar 高 56vp；2026-11-19 由 60 修正）。 */
+    val PageHeaderHeight = 56.dp
     val ButtonHeight = 48.dp
     val SectionGap = 20.dp
+    /** 发丝线宽度（鸿蒙 `border({width: 0.5})`）。 */
+    val HairlineWidth = 0.5.dp
     val ContentMaxWidthPhone = 880.dp
-    val ContentMaxWidthWide = 960.dp
+    /** 大屏内容最大宽度（鸿蒙 `Breakpoints.CONTENT_MAX_WIDE` = 1080；2026-11-19 由 960 修正）。 */
+    val ContentMaxWidthWide = 1080.dp
+    /** 大屏工具页内容最大宽度（鸿蒙 `Breakpoints.TOOL_MAX_WIDE` = 960）。 */
+    val ToolMaxWide = 960.dp
+    /** 悬浮底部页签占位（鸿蒙 `Breakpoints.FLOAT_BAR_SPACE` = 96）。 */
+    val FloatBarSpace = 96.dp
+    /** 侧边导航底部留白（鸿蒙 `Breakpoints.SIDE_BAR_SPACE` = 32）。 */
+    val SideBarSpace = 32.dp
+    /** 侧边导航宽度（鸿蒙 `Breakpoints.SIDE_NAV_WIDTH` = 104）。 */
+    val SideNavWidth = 104.dp
+
+    // ---- 加载骨架（鸿蒙 HomeScreen.skeletonPage 实测色：块 #E6ECEE / #E9EEEF / #EDF1F2） ----
+    val SkeletonStrong = Color(0xFFE6ECEE)
+    val SkeletonBase = Color(0xFFE9EEEF)
+    val SkeletonSoft = Color(0xFFEDF1F2)
+    val DarkSkeletonStrong = Color(0xFF273235)
+    val DarkSkeletonBase = Color(0xFF222C2F)
+    val DarkSkeletonSoft = Color(0xFF1D2629)
 
     // ---- 字号（鸿蒙 F_TITLE/F_HEADING/F_BODY/F_LABEL/F_CAPTION） ----
     val TitleSize = 26.sp
@@ -89,6 +130,66 @@ object HarmonyTokens {
     // Compose 的 elevation 阴影无法逐像素复刻大半径柔光：用 2dp elevation + 低 alpha 墨色近似。
     val CardShadowElevation = 2.dp
     val CardShadowColor = Color(0x1A1C2629)
+
+    // ---- hero 阴影（鸿蒙 HomeScreen.heroCard：radius 16 / y6 / #0F4E9082 雾青柔光） ----
+    val HeroShadowElevation = 6.dp
+    val HeroShadowColor = Color(0x0F4E9082)
+}
+
+/**
+ * 鸿蒙动效令牌（2026-11-19 对照 `harmony ui/theme/Motion.ets` 逐项落地）。
+ *
+ * - 时长：快 160ms（按压/勾选）、常规 260ms（弹层/切换）、慢 380ms（页面转场）；
+ * - 缓动：标准 cubic-bezier(.4,0,.2,1)（[HarmonyTokens] 的 ease），弹性 spring(.72,1,220,26)；
+ * - 页面转场：进入 = 透明度 + 右移 28vp + 0.985 缩放；退出 = 透明度 + 右移 24vp + 0.99 缩放；
+ * - 列表项进入 = 透明度 + 上移 10vp；卡片出现（popIn）= 透明度 + 0.9 缩放。
+ *
+ * Compose 无法直接复用 ArkUI 的 TransitionEffect，故这里只给**数值契约**，
+ * 由 [com.furina.classtools.ui.components.dock.CtPageTransitions] / 组件各自按同一数值实现。
+ */
+object HarmonyMotion {
+
+    /** 快（按压/勾选/切换高亮）。 */
+    const val FAST_MS = 160
+
+    /** 常规（弹层、tab 切换、卡片重排）。 */
+    const val NORMAL_MS = 260
+
+    /** 慢（页面转场）。 */
+    const val SLOW_MS = 380
+
+    /** 标准缓动 cubic-bezier(0.4, 0, 0.2, 1)。 */
+    val ease = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
+
+    /** 页面进入：右移距离（vp）。 */
+    val PageEnterShift = 28.dp
+
+    /** 页面退出：右移距离（vp）。 */
+    val PageExitShift = 24.dp
+
+    /** 页面进入起始缩放（鸿蒙 0.985）。 */
+    const val PageEnterScale = 0.985f
+
+    /** 页面退出结束缩放（鸿蒙 0.99）。 */
+    const val PageExitScale = 0.99f
+
+    /** 列表项进入：上移距离（vp）。 */
+    val ListItemRise = 10.dp
+
+    /** 卡片出现 popIn 起始缩放（鸿蒙 0.9）。 */
+    const val PopInScale = 0.9f
+
+    /** 卡片按压缩放（鸿蒙 ToolTile pressed 0.97）。 */
+    const val PressScale = 0.97f
+
+    /** 卡片按压透明度（鸿蒙 ToolTile pressed 0.92）。 */
+    const val PressAlpha = 0.92f
+
+    /** 骨架 shimmer 呼吸的最低不透明度（鸿蒙 skeletonPage `this.shimmer ? 0.55 : 1`）。 */
+    const val SkeletonDimAlpha = 0.55f
+
+    /** 骨架呼吸周期（毫秒，单程）。 */
+    const val SkeletonPulseMs = 900
 }
 
 /** 当前明/暗下的鸿蒙中性色 + 纸面 hero 色（全部来自 [HarmonyTokens]）。 */
@@ -109,6 +210,10 @@ data class HarmonyColors(
     val heroDivider: Color,
     val heroAccent: Color,
     val heroLink: Color,
+    /** 骨架屏三档色（鸿蒙 HomeScreen.skeletonPage）。 */
+    val skeletonStrong: Color = HarmonyTokens.SkeletonStrong,
+    val skeletonBase: Color = HarmonyTokens.SkeletonBase,
+    val skeletonSoft: Color = HarmonyTokens.SkeletonSoft,
 )
 
 fun harmonyColors(dark: Boolean): HarmonyColors = if (dark) {
@@ -129,6 +234,9 @@ fun harmonyColors(dark: Boolean): HarmonyColors = if (dark) {
         heroDivider = Color(0xFF364448),
         heroAccent = Color(0xFF8FD0C3),
         heroLink = Color(0xFFA9C4DA),
+        skeletonStrong = HarmonyTokens.DarkSkeletonStrong,
+        skeletonBase = HarmonyTokens.DarkSkeletonBase,
+        skeletonSoft = HarmonyTokens.DarkSkeletonSoft,
     )
 } else {
     HarmonyColors(

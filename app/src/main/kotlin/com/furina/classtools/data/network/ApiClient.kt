@@ -98,7 +98,13 @@ class ApiClient(
         return executeCoalesced(coalesceKey(pathAndQuery, authenticated, extraHeaders), block)
     }
 
-    /** POST：不重试。 */
+    /**
+     * POST：不重试。
+     *
+     * @param notifyTokenInvalid 401/403 是否回调 [onTokenInvalid]（默认 true = 清会话）。
+     *   2026-11-19：新增的**可选/探测类**接口（如 `rpc/class_notices_meta` 的可用性探测）传 false，
+     *   避免「接口不存在/权限不同」把用户会话清掉；列表主链路仍用默认 true。
+     */
     suspend fun post(
         path: String,
         body: String,
@@ -106,6 +112,7 @@ class ApiClient(
         authenticated: Boolean = true,
         extraHeaders: Map<String, String> = emptyMap(),
         timeoutMs: Long? = null,
+        notifyTokenInvalid: Boolean = true,
     ): ApiResult<String> = execute(
         method = HttpMethod.POST,
         path = path,
@@ -115,6 +122,7 @@ class ApiClient(
         extraHeaders = extraHeaders,
         retryNetworkFailure = false,
         timeoutMs = timeoutMs,
+        notifyTokenInvalid = notifyTokenInvalid,
     )
 
     /** PATCH：不重试。 */
@@ -125,6 +133,7 @@ class ApiClient(
         authenticated: Boolean = true,
         extraHeaders: Map<String, String> = emptyMap(),
         timeoutMs: Long? = null,
+        notifyTokenInvalid: Boolean = true,
     ): ApiResult<String> = execute(
         method = HttpMethod.PATCH,
         path = path,
@@ -134,6 +143,7 @@ class ApiClient(
         extraHeaders = extraHeaders,
         retryNetworkFailure = false,
         timeoutMs = timeoutMs,
+        notifyTokenInvalid = notifyTokenInvalid,
     )
 
     // ------------------------------------------------------------ JSON 便捷助手
@@ -189,6 +199,10 @@ class ApiClient(
         val startedNanos = System.nanoTime()
         val response = try {
             transport.execute(request)
+        } catch (c: kotlinx.coroutines.CancellationException) {
+            // 2026-11-19 审计修复：协程取消必须继续向上传播（以前被当成普通网络错误吞掉，
+            // 会让「离开页面」后的协程看起来仍在加载，也会让上层 unable to cancel）。
+            throw c
         } catch (t: Throwable) {
             return ApiResult.Failure(ApiError.Network(cause = t))
         }
@@ -253,8 +267,13 @@ class ApiClient(
                     val result = block()
                     deferred.complete(result)
                     result
+                } catch (c: kotlinx.coroutines.CancellationException) {
+                    // 2026-11-19 审计修复：首个调用被取消时，等待者要拿到「失败结果」而不是同一个取消异常
+                    // （否则一个页面的取消会连带取消其它页面的独立请求）。
+                    deferred.complete(ApiResult.Failure(ApiError.Network(cause = c)))
+                    throw c
                 } catch (t: Throwable) {
-                    deferred.completeExceptionally(t)
+                    deferred.complete(ApiResult.Failure(ApiError.Network(cause = t)))
                     throw t
                 } finally {
                     inFlightGets.remove(key, deferred)
@@ -274,6 +293,7 @@ class ApiClient(
         extraHeaders: Map<String, String>,
         retryNetworkFailure: Boolean,
         timeoutMs: Long? = null,
+        notifyTokenInvalid: Boolean = true,
     ): ApiResult<String> {
         if (baseUrl.isBlank() || publishableKey.isBlank()) {
             return ApiResult.Failure(ApiError.Config("云端未配置（baseUrl/publishableKey 为空）"))
@@ -289,6 +309,9 @@ class ApiClient(
         while (true) {
             val response = try {
                 transport.execute(request)
+            } catch (c: kotlinx.coroutines.CancellationException) {
+                // 2026-11-19 审计修复：取消/超时（协程层）不吞成 ApiError.Network，原样抛出。
+                throw c
             } catch (t: Throwable) {
                 if (retryNetworkFailure && attempt < maxRetries && isRetriableNetworkFailure(t)) {
                     attempt += 1
@@ -303,7 +326,7 @@ class ApiClient(
                 delay(retryDelayOf(attempt))
                 continue
             }
-            return interpretResponse(response)
+            return interpretResponse(response, notifyTokenInvalid)
         }
     }
 
@@ -321,12 +344,13 @@ class ApiClient(
         return t.cause is java.io.IOException
     }
 
-    private fun interpretResponse(response: ApiResponse): ApiResult<String> {
+    private fun interpretResponse(response: ApiResponse, notifyTokenInvalid: Boolean = true): ApiResult<String> {
         val status = response.status
         return when {
             status in 200..299 -> ApiResult.Success(response.body)
             status == 401 || status == 403 -> {
-                onTokenInvalid()
+                // 探测类调用（notifyTokenInvalid=false）只返回 TokenInvalid，不清会话。
+                if (notifyTokenInvalid) onTokenInvalid()
                 ApiResult.Failure(ApiError.TokenInvalid(status))
             }
             else -> ApiResult.Failure(httpError(status, response.body))

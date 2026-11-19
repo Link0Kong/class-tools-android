@@ -3,11 +3,19 @@
     <!-- 全部域名默认禁止明文（含 WebView / OkHttp / DownloadManager 等本 App 网络栈）。 -->
     <base-config cleartextTrafficPermitted="false" />
 
-    <!-- 教务系统仅 HTTP（契约 §5.1）：只对教务主机放行 cleartext，不全局打开。
-         2026-11-18 自建后端切流：release 构建的 REST/ECS 服务（tool.furina.fun）全部走 HTTPS；
-         ECS 备案前调试 IP 的明文入口只在 debug 构建放行（见 src/debug/res/xml/network_security_config.xml），
-         release APK 不含该 IP 的明文放行。 -->
+    <!-- 教务系统仅 HTTP（契约 §5.1）：只对教务主机放行 cleartext，不全局打开。 -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">210.34.74.77</domain>
+    </domain-config>
+
+    <!-- 2026-11-19 网络审计 P0 收口（备案暂停期）：
+         tool.furina.fun 仍 NXDOMAIN，release 的 ECS 服务（账号 / 云空间 drop / 更新清单 /
+         校园地图 H5 / PPT 媒体缓存 / 法律全文）只能走 ECS 公网 IP 的明文入口。
+         这里**只放行这一个固定 IP**（其余域名仍禁明文），与 `ct.ecsProfile=ecsIp`（默认）配对；
+         备案 + HTTPS 恢复后执行 `-Pct.ecsProfile=selfhosted`（或改 build.gradle.kts 默认值），
+         服务端地址回到 https://tool.furina.fun，这条豁免即可删除。
+         debug 构建有自己的 res/xml/network_security_config.xml（同样放行该 IP + staging 网关）。 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">121.196.47.2</domain>
     </domain-config>
 </network-security-config>

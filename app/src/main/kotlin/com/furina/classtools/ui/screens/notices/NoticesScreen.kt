@@ -130,8 +130,6 @@ import com.furina.classtools.data.notices.NoticeRecurrenceDto
 import com.furina.classtools.data.notices.NoticeStatus
 import com.furina.classtools.data.notices.NoticeStatusMachine
 import com.furina.classtools.data.notices.NoticeStats
-import com.furina.classtools.data.notices.NoticesAutoLoadResult
-import com.furina.classtools.data.notices.NoticesAutoLoader
 import com.furina.classtools.data.notices.NoticesData
 import com.furina.classtools.data.notices.NoticesLoadResult
 import com.furina.classtools.data.notices.NoticesRepository
@@ -435,13 +433,10 @@ fun NoticesScreen(
     var reloadToken by remember { mutableIntStateOf(0) }
     var isLoadingMore by remember { mutableStateOf(false) }
     var loadMoreError by remember { mutableStateOf<String?>(null) }
-    // 自动全部加载（task-56 B）：首屏成功后后台连续拉完剩余页，用户无需点「加载更多/加载全部」。
-    val autoLoader = remember(noticesRepository) {
-        noticesRepository?.let { NoticesAutoLoader(it) }
-    }
-    var autoLoadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    // 自动加载代号：取消/重启旧循环后，旧循环迟到的 onPage 不再覆盖新数据（防一闪而过的旧页）。
-    var autoLoadEpoch by remember { mutableIntStateOf(0) }
+    // 2026-11-19 P0 收口：取消「后台自动翻完所有页」。
+    // light meta 一次拿全量（hasMore=false）；只有旧分页兜底链路才需要用户按需「加载更早的通知」。
+    // 详情懒加载：记录已尝试拉单行 body 的 rowId，避免重复请求/失败后无限重试。
+    val hydratedRowIds = remember { mutableStateMapOf<String, Boolean>() }
     var filterKey by rememberSaveable { mutableStateOf(initialFilter.name) }
     // 顶部 5 张可点数据卡的筛选口径（null = 未激活；与 chips 互斥，契约 §2.1）
     var cardFilterKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -517,46 +512,25 @@ fun NoticesScreen(
     }
 
     /**
-     * 自动全部加载（task-56 B）：首屏成功后**在后台连续加载剩余所有页**，用户不需要点「加载更多/加载全部」。
+     * 按需加载一页更早的通知（**仅旧分页兜底链路**会真的有下一页）。
      *
-     * - 每页到来即更新 [data]（列表逐页出现新内容），不阻塞首屏；
-     * - 某页失败 → [NoticesAutoLoader] 自动重试一次；仍失败保留已加载页并展示「重试」行；
-     * - 并发去重：同一时刻只跑一个后台循环（[autoLoadJob] 活跃时直接返回；切页/刷新前会取消旧循环）；
-     * - 无 `hasMore`（或签名变化重载第一页后重新到底）即停止。
+     * 2026-11-19 P0 收口：删除了后台「自动翻完所有页」的循环（旧行为会在首屏后连续拉 ~28 页 / 14MB）。
+     * 现在只有用户下拉刷新或点底部「加载更早的通知」才发一次请求；
+     * light meta 可用时 `hasMore=false`，本函数直接返回缓存不发请求。
      */
-    fun startAutoLoad() {
+    fun loadMoreOnce() {
         if (skipLoad) return
-        val loader = autoLoader ?: return
-        if (autoLoadJob?.isActive == true) return
-        val epoch = autoLoadEpoch + 1
-        autoLoadEpoch = epoch
-        autoLoadJob = scope.launch {
+        val repository = noticesRepository ?: return
+        if (isLoadingMore) return
+        scope.launch {
             isLoadingMore = true
             loadMoreError = null
             try {
-                when (
-                    val result = loader.loadAll { page ->
-                        if (autoLoadEpoch == epoch) {
-                            data = page
-                            errorMessage = null
-                        }
-                    }
-                ) {
-                    is NoticesAutoLoadResult.Completed -> if (autoLoadEpoch == epoch) loadMoreError = null
-                    is NoticesAutoLoadResult.Failed -> if (autoLoadEpoch == epoch) loadMoreError = result.message
-                }
+                applyResult(repository.loadMore())
             } finally {
-                if (autoLoadEpoch == epoch) isLoadingMore = false
+                isLoadingMore = false
             }
         }
-    }
-
-    /** 停止后台全部加载（刷新/重载前调用，避免旧循环与新分页状态交叉）。 */
-    fun stopAutoLoad() {
-        autoLoadEpoch += 1
-        autoLoadJob?.cancel()
-        autoLoadJob = null
-        isLoadingMore = false
     }
 
     LaunchedEffect(reloadToken) {
@@ -571,11 +545,10 @@ fun NoticesScreen(
             phase = Phase.READY
             return@LaunchedEffect
         }
-        stopAutoLoad()
+        loadMoreError = null
         if (data == null) phase = Phase.LOADING
         applyResult(repository.load(force = reloadToken > 0))
-        // 首屏成功后立即在后台自动拉完剩余所有页（用户不需要点「加载更多/加载全部」）。
-        startAutoLoad()
+        // 不再后台自动翻页：light meta 一次拿全量；旧链路交给用户「加载更早的通知」。
         runCatching { marksRepository?.refresh() }
     }
 
@@ -592,10 +565,9 @@ fun NoticesScreen(
         scope.launch {
             isRefreshing = true
             try {
-                stopAutoLoad()
+                loadMoreError = null
                 noticesRepository?.let { applyResult(it.load(force = true)) }
-                // 下拉刷新回到第一页后，同样自动把剩余页在后台拉完。
-                startAutoLoad()
+                // 不再后台自动翻页（light meta 一次拿全量；旧链路由用户按需加载）。
                 runCatching { marksRepository?.refresh(force = true) }
             } finally {
                 isRefreshing = false
@@ -665,8 +637,8 @@ fun NoticesScreen(
     val twoColumn = spec.widthDp >= 600
 
     // OPPO PUSH 点击定位：数据就绪后按组 id / rowId / 期次 key 找卡片 → 打开详情；
-    // 首页未命中且还有更多旧通知时触发后台自动全部加载，加载中的每页都会让本 effect 重跑继续找，
-    // 仍找不到则静默放弃（停留在通知页）。
+    // 仍未命中且旧分页链路还有更多时，**只按需加载一页**（不再后台翻完所有页），
+    // 加载后本 effect 会重跑再找一次，仍找不到则静默放弃（停留在通知页）。
     var focusLoadMoreTried by remember(initialFocusNoticeId) { mutableStateOf(false) }
     LaunchedEffect(initialFocusNoticeId, phase, allItems, data?.hasMore) {
         val target = initialFocusNoticeId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
@@ -685,9 +657,27 @@ fun NoticesScreen(
         }
         if (!focusLoadMoreTried && data?.hasMore == true) {
             focusLoadMoreTried = true
-            startAutoLoad()
+            loadMoreOnce()
         } else {
             onFocusConsumed()
+        }
+    }
+
+    // 详情懒加载（2026-11-19）：light meta 把 items 里的内联图片/附件置空并写 lazy=true，
+    // 用户点开卡片时按 id 拉单行完整 body 合并回缓存（一次请求，重开不再请求）；
+    // 失败只提示一次，图片仍有逐张的按需加载兜底，文件显示「待获取」。
+    val selectedRowId = selectedItem?.auto?.rowId ?: selectedItem?.manual?.row?.id
+    LaunchedEffect(selectedKey, selectedRowId) {
+        val item = selectedItem ?: return@LaunchedEffect
+        val rowId = selectedRowId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        val entry = item.auto ?: return@LaunchedEffect
+        if (!entry.hasLazyContent) return@LaunchedEffect
+        if (hydratedRowIds[rowId] == true) return@LaunchedEffect
+        val repository = noticesRepository ?: return@LaunchedEffect
+        hydratedRowIds[rowId] = true
+        when (val result = repository.hydrateRow(rowId)) {
+            is NoticesLoadResult.Success -> data = result.data
+            is NoticesLoadResult.Failure -> notify(result.message)
         }
     }
 
@@ -885,7 +875,7 @@ fun NoticesScreen(
                                                             remainingCount = remaining,
                                                             loading = isLoadingMore,
                                                             error = loadMoreError,
-                                                            onRetryLoadAll = { startAutoLoad() },
+                                                            onLoadMore = { loadMoreOnce() },
                                                         )
                                                     }
                                                 }
@@ -910,7 +900,7 @@ fun NoticesScreen(
                                                 remainingCount = remaining,
                                                 loadingMore = isLoadingMore,
                                                 loadMoreError = loadMoreError,
-                                                onRetryLoadAll = { startAutoLoad() },
+                                                onLoadMore = { loadMoreOnce() },
                                                 header = pageContentHeader,
                                                 banner = pageBanner,
                                                 modifier = Modifier.fillMaxSize(),
@@ -935,7 +925,7 @@ fun NoticesScreen(
                                                 remainingCount = remaining,
                                                 loadingMore = isLoadingMore,
                                                 loadMoreError = loadMoreError,
-                                                onRetryLoadAll = { startAutoLoad() },
+                                                onLoadMore = { loadMoreOnce() },
                                                 header = pageContentHeader,
                                                 banner = pageBanner,
                                                 modifier = Modifier.fillMaxSize(),
@@ -1580,7 +1570,7 @@ private fun NoticeList(
     remainingCount: Int = 0,
     loadingMore: Boolean = false,
     loadMoreError: String? = null,
-    onRetryLoadAll: () -> Unit = {},
+    onLoadMore: () -> Unit = {},
     /** 滚动内容第一项：单行筛选 chips（固定头不放筛选 chips）。 */
     header: (@Composable () -> Unit)? = null,
     /** 滚动内容顶部提示条（离线/缓存）；滚动而非固定在头部。 */
@@ -1722,7 +1712,7 @@ private fun NoticeList(
                     remainingCount = remainingCount,
                     loading = loadingMore,
                     error = loadMoreError,
-                    onRetryLoadAll = onRetryLoadAll,
+                    onLoadMore = onLoadMore,
                 )
             }
         }
@@ -1750,7 +1740,7 @@ private fun NoticeGrid(
     remainingCount: Int = 0,
     loadingMore: Boolean = false,
     loadMoreError: String? = null,
-    onRetryLoadAll: () -> Unit = {},
+    onLoadMore: () -> Unit = {},
     /** 滚动内容第一项：单行筛选 chips（固定头不放筛选 chips）。 */
     header: (@Composable () -> Unit)? = null,
     /** 滚动内容顶部提示条（离线/缓存）；滚动而非固定在头部。 */
@@ -1890,7 +1880,7 @@ private fun NoticeGrid(
                     remainingCount = remainingCount,
                     loading = loadingMore,
                     error = loadMoreError,
-                    onRetryLoadAll = onRetryLoadAll,
+                    onLoadMore = onLoadMore,
                 )
             }
         }
@@ -1919,25 +1909,28 @@ private fun NoticeTotalCountRow(count: Int) {
 }
 
 /**
- * 底部「自动全部加载」状态行（task-56 B；分页：最新 20 + 旧数据按页追加）。
+ * 底部「加载更早的通知」行（**按需加载**，2026-11-19 取代原「后台自动加载全部」）。
  *
- * - 加载中：`正在加载全部…（剩余 N 条）`，此时整行不可点（后台循环进行中）；
- * - 失败：展示错误 +「点此重试」（自动重试一次后仍失败才会走到这里），点按重新开始后台循环；
- * - 待加载（循环刚启动的间隙）：同样显示进度文案，但不转圈。
+ * - 常态（还有更早数据）：`加载更早的通知（还有 N 条）`，点按加载一页；不点就不请求；
+ * - 加载中：`正在加载…（还有 N 条）`，整行不可点；
+ * - 失败：错误文案 +「点此重试」，点按重新加载这一页；
+ * - light meta（一次拿全量）链路下 `hasMore=false`，这一行不会出现。
  *
- * 用户不再需要点「加载更多/加载全部」。触控 ≥52dp。
+ * 触控 ≥52dp。
  */
 @Composable
 private fun NoticeLoadMoreRow(
     remainingCount: Int,
     loading: Boolean,
     error: String?,
-    onRetryLoadAll: () -> Unit,
+    onLoadMore: () -> Unit,
 ) {
-    val progressText = if (remainingCount > 0) "正在加载全部…（剩余 $remainingCount 条）" else "正在加载全部…"
+    val remainingText = if (remainingCount > 0) "（还有 $remainingCount 条）" else ""
+    val idleText = "加载更早的通知$remainingText"
+    val loadingText = "正在加载…$remainingText"
     Surface(
-        onClick = { if (error != null && !loading) onRetryLoadAll() },
-        enabled = error != null && !loading,
+        onClick = { if (!loading) onLoadMore() },
+        enabled = !loading,
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
         modifier = Modifier
@@ -1959,7 +1952,7 @@ private fun NoticeLoadMoreRow(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = progressText,
+                        text = loadingText,
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }
@@ -1973,7 +1966,7 @@ private fun NoticeLoadMoreRow(
                 )
 
                 else -> Text(
-                    text = progressText,
+                    text = idleText,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

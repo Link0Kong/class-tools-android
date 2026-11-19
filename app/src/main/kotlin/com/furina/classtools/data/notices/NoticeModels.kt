@@ -208,6 +208,8 @@ sealed interface NoticeItemMeta {
      *
      * @param hasData 内联 `data:image/...;base64,`（旧数据）
      * @param url 外置签名 URL（新数据：`https://<host>/att/<id>?exp=&sig=`；空 = 内联）
+     * @param lazy 服务端 `notice_lite_body()` 把内联 data URI 置空并写了 `lazy=true`
+     *   （2026-11-19 通知轻量化）：此时 [hasData]/[url] 都为空，需按 id 拉单行完整 body 才有内容。
      */
     data class Image(
         override val kind: String,
@@ -216,6 +218,7 @@ sealed interface NoticeItemMeta {
         val hasData: Boolean,
         val approxBytes: Long,
         val url: String = "",
+        val lazy: Boolean = false,
     ) : NoticeItemMeta
 
     /**
@@ -223,6 +226,7 @@ sealed interface NoticeItemMeta {
      *
      * @param url 外置签名 URL（空 = 内容仍是内联 data URI 或无内容）
      * @param archiveFiles 压缩包内文件清单（`archive.files[]`，仅保留元信息 + 各自 url）
+     * @param lazy 同 [Image.lazy]：内容被服务端置空，需按 id 拉单行完整 body。
      */
     data class File(
         override val kind: String,
@@ -237,6 +241,7 @@ sealed interface NoticeItemMeta {
         val archiveSummary: String,
         val url: String = "",
         val archiveFiles: List<NoticeArchiveFile> = emptyList(),
+        val lazy: Boolean = false,
     ) : NoticeItemMeta
 
     /** 收集表（腾讯文档类）。 */
@@ -283,6 +288,8 @@ data class NoticeArchiveFile(
     val url: String = "",
     /** 旧数据内联 `data:` 内容（不保留原文，只标记存在）。 */
     val hasData: Boolean = false,
+    /** 服务端轻量化置空（`lazy=true`）→ 需按 id 拉单行完整 body。 */
+    val lazy: Boolean = false,
 )
 
 data class MergedMessage(
@@ -306,6 +313,19 @@ data class NoticeEntry(
     val ts: Long get() = row.ts
     val title: String get() = group.title.ifBlank { row.title.ifBlank { "班级通知" } }
     val cat: String get() = group.cat.ifBlank { "通知" }
+
+    /**
+     * 是否有被服务端轻量化（`lazy=true`）的图片/附件内容：
+     * 打开详情时按 id 拉单行完整 body 后才有 `url`/data（见 `NoticesRepository.hydrateRow`）。
+     */
+    val hasLazyContent: Boolean
+        get() = items.any { meta ->
+            when (meta) {
+                is NoticeItemMeta.Image -> meta.lazy
+                is NoticeItemMeta.File -> meta.lazy || meta.archiveFiles.any { it.lazy }
+                else -> false
+            }
+        }
 }
 
 /** 人工通知（无 CLASS_NOTICE_V1 前缀；本轮只读展示，发布/编辑不做）。 */

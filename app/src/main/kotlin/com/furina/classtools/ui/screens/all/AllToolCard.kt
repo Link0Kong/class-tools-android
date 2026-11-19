@@ -35,18 +35,20 @@ import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.ui.navigation.ctToolTransitionSource
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.theme.HarmonyMotion
 import com.furina.classtools.ui.theme.HarmonyTokens
 import com.furina.classtools.ui.theme.harmonyTint
 import com.furina.classtools.ui.theme.rememberHarmonyColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 
 /**
- * 「全部工具」磁贴（2026-11-17 按鸿蒙 `ToolTile.ets` 重做）：
+ * 「全部工具」磁贴（2026-11-19 逐项对齐鸿蒙 `ToolTile.ets`）：
  *
  * - 白色（深色 surface）18dp 圆角 + 轻阴影，最小高度 **96dp**、内边距 **12dp**；
- * - 左侧 **40dp 淡色 tint 单字/图标块（12dp 圆角）**：Android 用现有图标保持辨识度；
+ * - 左侧 **40dp 淡色 tint 图标块（12dp 圆角）**：图标 **24dp**（鸿蒙 fontSize 24）；
+ * - 图标块与文字间距 **12dp**（鸿蒙 `margin({left: GAP})`）、主次文本间距 **2dp**（鸿蒙 `TEXT_GAP`）；
  * - 名称 **15sp Medium**、副标题 **12sp 最多 2 行（行高 17）**；
- * - 按压 scale **0.97**；
+ * - 按压 **scale 0.97 + opacity 0.92**（鸿蒙 `stateStyles.pressed`），快 160ms；
  * - 编辑首页模式：右上角 22dp 雾青 ✓ 角标（选中首页快捷时显示）。
  *
  * 转场锚点 / 读屏语义 / 拖动能力保持不变（参数向后兼容，预览无需改调用）。
@@ -70,7 +72,8 @@ internal fun AllToolCard(
         animationSpec = if (reduceMotion) snap() else CtMotion.spatialFast,
         label = "allToolPress",
     )
-    val scale = 1f - 0.03f * pressProgress
+    val scale = 1f - (1f - HarmonyMotion.PressScale) * pressProgress
+    val alpha = 1f - (1f - HarmonyMotion.PressAlpha) * pressProgress
     val transitionSource = Modifier.ctToolTransitionSource(tool.id)
     val shape = RoundedCornerShape(HarmonyTokens.RadiusCard)
 
@@ -84,6 +87,7 @@ internal fun AllToolCard(
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
+                    this.alpha = alpha
                 },
             shape = shape,
             color = colors.card,
@@ -99,7 +103,7 @@ internal fun AllToolCard(
                     .padding(HarmonyTokens.TilePadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // 40dp 淡色底单字/图标块（鸿蒙 tint(accent, 0.12)）
+                // 40dp 淡色底图标块（鸿蒙 tint(accent, 0.12) / 24vp 字形）
                 Surface(
                     shape = RoundedCornerShape(HarmonyTokens.RadiusTile),
                     color = harmonyTint(tool.accent),
@@ -110,14 +114,14 @@ internal fun AllToolCard(
                             imageVector = tool.icon,
                             contentDescription = null,
                             tint = tool.accent,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(HarmonyTokens.TileGlyph),
                         )
                     }
                 }
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(HarmonyTokens.TileTextGap))
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalArrangement = Arrangement.spacedBy(HarmonyTokens.TextGap),
                 ) {
                     Text(
                         text = tool.name,

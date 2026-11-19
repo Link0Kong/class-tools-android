@@ -438,8 +438,8 @@ fun MainNavHost(
                     defaultValue = false
                 },
             ),
-            enterTransition = { CtPageTransitions.pushEnter() },
-            exitTransition = { CtPageTransitions.pushExit() },
+            enterTransition = { CtPageTransitions.harmonyPushEnter() },
+            exitTransition = { CtPageTransitions.harmonyPushExit() },
             // 退出由 ToolTransitionOverlay 的「收回卡片」覆盖层负责；NavHost 不再叠加 pop 动画，
             // 否则会出现「页面滑走 + 卡片收回」两重动画。
             popEnterTransition = { EnterTransition.None },
@@ -759,10 +759,10 @@ fun MainNavHost(
         composable(
             route = Routes.PPT_DETAIL,
             arguments = listOf(navArgument(Routes.PPT_DECK_ARG) { type = NavType.StringType }),
-            enterTransition = { CtPageTransitions.pushEnter() },
-            exitTransition = { CtPageTransitions.pushExit() },
-            popEnterTransition = { CtPageTransitions.popEnter() },
-            popExitTransition = { CtPageTransitions.popExit() },
+            enterTransition = { CtPageTransitions.harmonyPushEnter() },
+            exitTransition = { CtPageTransitions.harmonyPushExit() },
+            popEnterTransition = { CtPageTransitions.harmonyPopEnter() },
+            popExitTransition = { CtPageTransitions.harmonyPopExit() },
         ) { entry ->
             PptDownloadDetailScreen(
                 deckId = entry.arguments?.getString(Routes.PPT_DECK_ARG).orEmpty(),
@@ -794,10 +794,10 @@ fun MainNavHost(
 
         composable(
             route = Routes.DATA_PRIVACY,
-            enterTransition = { CtPageTransitions.pushEnter() },
-            exitTransition = { CtPageTransitions.pushExit() },
-            popEnterTransition = { CtPageTransitions.popEnter() },
-            popExitTransition = { CtPageTransitions.popExit() },
+            enterTransition = { CtPageTransitions.harmonyPushEnter() },
+            exitTransition = { CtPageTransitions.harmonyPushExit() },
+            popEnterTransition = { CtPageTransitions.harmonyPopEnter() },
+            popExitTransition = { CtPageTransitions.harmonyPopExit() },
         ) {
             // v2.1.1：本机数据快照（同步范围清单 + 8 计数），只读本机缓存，不联网。
             val sections by container.userDataRepository.currentSections.collectAsStateWithLifecycle()
@@ -832,10 +832,10 @@ fun MainNavHost(
 
         composable(
             route = Routes.PERMISSIONS,
-            enterTransition = { CtPageTransitions.pushEnter() },
-            exitTransition = { CtPageTransitions.pushExit() },
-            popEnterTransition = { CtPageTransitions.popEnter() },
-            popExitTransition = { CtPageTransitions.popExit() },
+            enterTransition = { CtPageTransitions.harmonyPushEnter() },
+            exitTransition = { CtPageTransitions.harmonyPushExit() },
+            popEnterTransition = { CtPageTransitions.harmonyPopEnter() },
+            popExitTransition = { CtPageTransitions.harmonyPopExit() },
         ) {
             val permissionController = remember {
                 com.furina.classtools.data.permission.AndroidPermissionController(context)
@@ -848,10 +848,10 @@ fun MainNavHost(
         }
         composable(
             route = Routes.REMINDER_SETTINGS,
-            enterTransition = { CtPageTransitions.pushEnter() },
-            exitTransition = { CtPageTransitions.pushExit() },
-            popEnterTransition = { CtPageTransitions.popEnter() },
-            popExitTransition = { CtPageTransitions.popExit() },
+            enterTransition = { CtPageTransitions.harmonyPushEnter() },
+            exitTransition = { CtPageTransitions.harmonyPushExit() },
+            popEnterTransition = { CtPageTransitions.harmonyPopEnter() },
+            popExitTransition = { CtPageTransitions.harmonyPopExit() },
         ) {
             val permissionController = remember {
                 com.furina.classtools.data.permission.AndroidPermissionController(context)
@@ -870,10 +870,10 @@ fun MainNavHost(
 
         composable(
             route = Routes.FEEDBACK,
-            enterTransition = { CtPageTransitions.pushEnter() },
-            exitTransition = { CtPageTransitions.pushExit() },
-            popEnterTransition = { CtPageTransitions.popEnter() },
-            popExitTransition = { CtPageTransitions.popExit() },
+            enterTransition = { CtPageTransitions.harmonyPushEnter() },
+            exitTransition = { CtPageTransitions.harmonyPushExit() },
+            popEnterTransition = { CtPageTransitions.harmonyPopEnter() },
+            popExitTransition = { CtPageTransitions.harmonyPopExit() },
         ) {
             var members by remember {
                 mutableStateOf<List<com.furina.classtools.data.member.ClassMember>>(emptyList())
@@ -892,20 +892,20 @@ fun MainNavHost(
 
         composable(
             route = Routes.GUIDE,
-            enterTransition = { CtPageTransitions.pushEnter() },
-            exitTransition = { CtPageTransitions.pushExit() },
-            popEnterTransition = { CtPageTransitions.popEnter() },
-            popExitTransition = { CtPageTransitions.popExit() },
+            enterTransition = { CtPageTransitions.harmonyPushEnter() },
+            exitTransition = { CtPageTransitions.harmonyPushExit() },
+            popEnterTransition = { CtPageTransitions.harmonyPopEnter() },
+            popExitTransition = { CtPageTransitions.harmonyPopExit() },
         ) {
             UserGuideScreen(onBack = { navController.popBackStack() })
         }
 
         composable(
             route = Routes.VOTE,
-            enterTransition = { CtPageTransitions.pushEnter() },
-            exitTransition = { CtPageTransitions.pushExit() },
-            popEnterTransition = { CtPageTransitions.popEnter() },
-            popExitTransition = { CtPageTransitions.popExit() },
+            enterTransition = { CtPageTransitions.harmonyPushEnter() },
+            exitTransition = { CtPageTransitions.harmonyPushExit() },
+            popEnterTransition = { CtPageTransitions.harmonyPopEnter() },
+            popExitTransition = { CtPageTransitions.harmonyPopExit() },
         ) {
             VoteListScreen(
                 repository = container.voteRepository,
@@ -924,10 +924,10 @@ fun MainNavHost(
                     defaultValue = null
                 },
             ),
-            enterTransition = { CtPageTransitions.pushEnter() },
-            exitTransition = { CtPageTransitions.pushExit() },
-            popEnterTransition = { CtPageTransitions.popEnter() },
-            popExitTransition = { CtPageTransitions.popExit() },
+            enterTransition = { CtPageTransitions.harmonyPushEnter() },
+            exitTransition = { CtPageTransitions.harmonyPushExit() },
+            popEnterTransition = { CtPageTransitions.harmonyPopEnter() },
+            popExitTransition = { CtPageTransitions.harmonyPopExit() },
         ) { entry ->
             VoteCreateScreen(
                 repository = container.voteRepository,
@@ -946,10 +946,10 @@ fun MainNavHost(
         composable(
             route = Routes.VOTE_DETAIL,
             arguments = listOf(navArgument(Routes.VOTE_DETAIL_ARG) { type = NavType.StringType }),
-            enterTransition = { CtPageTransitions.pushEnter() },
-            exitTransition = { CtPageTransitions.pushExit() },
-            popEnterTransition = { CtPageTransitions.popEnter() },
-            popExitTransition = { CtPageTransitions.popExit() },
+            enterTransition = { CtPageTransitions.harmonyPushEnter() },
+            exitTransition = { CtPageTransitions.harmonyPushExit() },
+            popEnterTransition = { CtPageTransitions.harmonyPopEnter() },
+            popExitTransition = { CtPageTransitions.harmonyPopExit() },
         ) { entry ->
             VoteDetailScreen(
                 pollId = entry.arguments?.getString(Routes.VOTE_DETAIL_ARG).orEmpty(),

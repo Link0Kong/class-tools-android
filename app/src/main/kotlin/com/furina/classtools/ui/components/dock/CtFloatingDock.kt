@@ -48,8 +48,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
@@ -330,13 +332,15 @@ private fun DockItem(
             imageVector = destination.icon,
             contentDescription = null, // 语义由父节点 announcement 提供（避免 TalkBack 重复播报）
             tint = contentColor,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(20.dp),
         )
         if (showLabel) {
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = destination.label,
-                style = MaterialTheme.typography.labelSmall,
+                // 鸿蒙 AppShell.tabItem：图标 20 + 文案 10 + 间距 2（安卓仅把文案色保留为可读的 primary）。
+                fontSize = 10.sp,
+                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
                 color = contentColor,
                 maxLines = 1,
             )

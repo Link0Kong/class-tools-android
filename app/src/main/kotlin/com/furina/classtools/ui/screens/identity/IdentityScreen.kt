@@ -57,6 +57,7 @@ import com.furina.classtools.ui.components.BrandMark
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.glass.CtGlassCard
+import com.furina.classtools.ui.screens.privacy.LegalFullTextLinks
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -335,6 +336,11 @@ fun IdentityScreen(
                                 Text("《隐私政策》", style = MaterialTheme.typography.bodySmall)
                             }
                         }
+                        // 2026-11-19：协议勾选处提供「完整版」入口（系统浏览器打开 ECS 正式全文，
+                        // 打不开时复制链接 + Toast；摘要弹层不受影响）。
+                        LegalFullTextLinks(
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
                     }
 
                     Button(

@@ -50,6 +50,8 @@ class NoticesRepositoryTest {
         api = testApiClient(transport),
         isAdmin = { isAdmin },
         clock = clock,
+        // 本文件覆盖**旧两级链路**（签名 → 分页正文）；light meta 优先/回退见 NoticesMetaTest。
+        metaEnabled = false,
     )
 
     private fun transportOf(fixture: Fixture): FakeTransport = FakeTransport { request ->
