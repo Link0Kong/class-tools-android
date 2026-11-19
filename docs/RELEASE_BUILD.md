@@ -40,6 +40,7 @@ cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
 - 只编译不发版：`-Pct.skipUpdateChannel=true`
 - 上传脚本：`web/deploy/android_release.py`（凭据仍只在 `web/deploy/creds.env` / 环境变量，不入库）
 - 发布后核对：`http://121.196.47.2/android/latest.json`、`.../android/classtools-<version>.apk`、OSS `android/latest.json`
+- **同 versionCode 不会静默覆盖渠道**：若渠道已有同 vc 但 sha 不同，脚本会提示 `bump versionCode` 并跳过；发新版必须先提升 versionCode（`--force` 仅用于人工补救）。
 
 ## 3. Release 验证（已实测）
 
