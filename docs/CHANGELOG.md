@@ -1,5 +1,19 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-19 13:4x · 1.0.0-beta8 / vc91：所有版本发布自动上传更新渠道
+
+> 用户原话：「安卓所有版本发布都要自动上传更新渠道」。本条把发布上传固化为构建流程，并发布当前版本。
+
+- **自动上传**：`app/build.gradle.kts` 注册 `publishUpdateChannel`，`assembleRelease` 完成后由 `finalizedBy` 自动执行；默认开启，调用 `web/deploy/android_release.py`：
+  - 计算 APK SHA-256 / size，生成 `latest.json`；
+  - 上传 OSS `android/classtools-<version>.apk.bin` + `android/latest.json`；
+  - 通过 ECS 云助手从 OSS 拉取 APK 到 `/var/www/tool/android/<version>.apk`，写 ECS `latest.json`；
+  - 回读 ECS/OSS JSON、APK 校验 200 与 sha256；同版本同 sha 幂等跳过（`--force` 可重传）。
+- **可选参数**：`-Pct.updateNotes="..."` 发布说明、`-Pct.updateChannel=beta`、`-Pct.skipUpdateChannel=true` 仅编译不发版、`-Pct.python=...`。
+- **当前发布**：`1.0.0-beta8 / vc91`，release APK **5,820,537 B / SHA-256 `4E01872E79BA786AFBC32254B4CFA937B400EBFD7CAE186F6FD212660E549D58`**；ECS/OSS latest.json 与 APK 均已 HTTP 200 且 sha 一致；`apkUrl` 指向 OSS HTTPS `.bin`，ECS 同步落 `.apk` 供手动下载。
+- **验证**：`:app:assembleRelease` 成功并自动上传；`:app:verifyReleaseEndpoints` OK；`:app:testDebugUnitTest` 仍 **1654/0（2 skipped）**。
+- **回滚**：把 `latest.json` 改回上一版本（beta7 / vc90 / `67926229…`）并重传；APK 文件保留不删即可。
+
 ## 2026-11-19 · 通知列表 P0 收口（light meta 优先 + 懒加载附件 + 取消后台翻页）+ release 4 个 ECS 子系统可用性修复（源码；未发版，版本仍 beta7/vc90）
 
 > 承接 Lead 网络审计：通知页慢/错误率高的主因是 `notices?select=*` 分页拉整表（每页 ~0.55MB、后台自动翻完 ~28 页 / 14MB、单页 40s 超时 + 重试）；release 的账号/云空间/更新/地图仍指向 NXDOMAIN `tool.furina.fun`。详见 `docs/REPORT_ROUND70_20261119.md`。**未改版本号、未加依赖、未碰 keystore、未提交 git。**

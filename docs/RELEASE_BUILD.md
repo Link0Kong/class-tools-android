@@ -31,6 +31,16 @@ cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
 .\gradlew.bat :app:testDebugUnitTest --console=plain
 ```
 
+### 2.1 自动上传更新渠道（2026-11-19 起，硬性）
+
+`assembleRelease` 完成后会由 `publishUpdateChannel` finalizer **自动上传** APK + `latest.json` 到 ECS + OSS，并回读校验 sha256；同版本同 sha 幂等跳过。
+
+- 发布说明：`-Pct.updateNotes="1. 改动一；2. 改动二"`
+- 渠道：`-Pct.updateChannel=beta`
+- 只编译不发版：`-Pct.skipUpdateChannel=true`
+- 上传脚本：`web/deploy/android_release.py`（凭据仍只在 `web/deploy/creds.env` / 环境变量，不入库）
+- 发布后核对：`http://121.196.47.2/android/latest.json`、`.../android/classtools-<version>.apk`、OSS `android/latest.json`
+
 ## 3. Release 验证（已实测）
 
 | 项 | 结果 |

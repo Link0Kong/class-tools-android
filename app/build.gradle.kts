@@ -141,9 +141,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 90
-        // 测试版本 7：1.0.0-beta7（「我的 → 关于」显示「测试版本 7」；修复 release REST 指向备案暂停域名导致通知收不到）。
-        versionName = "1.0.0-beta7"
+        versionCode = 91
+        // 测试版本 8：1.0.0-beta8（UI/动效向鸿蒙对齐；隐私/用户协议全文；通知轻量 meta；release ECS 入口恢复）。
+        versionName = "1.0.0-beta8"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -162,8 +162,8 @@ android {
         buildConfigField("String", "OPPO_ACCOUNT_APP_KEY", buildConfigString(oppoAccountAppKey))
         buildConfigField("String", "OPPO_ACCOUNT_SCOPE", buildConfigString(oppoAccountScope))
 
-        // 测试版本标识（当前为「测试版本 7」）：App 内版本行使用。
-        buildConfigField("int", "TEST_VERSION", "7")
+        // 测试版本标识（当前为「测试版本 8」）：App 内版本行使用。
+        buildConfigField("int", "TEST_VERSION", "8")
         buildConfigField("String", "TEST_VERSION_LABEL", buildConfigString("测试版本"))
     }
 
@@ -313,6 +313,51 @@ tasks.register("verifyReleaseEndpoints") {
 
 kotlin {
     jvmToolchain(17)
+}
+
+// ----------------------------------------------------------------------------
+// 2026-11-19 用户要求：安卓所有版本发布都要自动上传更新渠道。
+//
+// `assembleRelease` 完成后自动执行本任务：调用 web/deploy/android_release.py，
+// 上传 APK + latest.json 到 ECS + OSS，并回读校验 sha256。默认开启；本地只想编译
+// 不发版时加 `-Pct.skipUpdateChannel=true`。发布说明可用 `-Pct.updateNotes=...`。
+// 脚本不存在（例如只 checkout 了 Android 仓库）时跳过并打印提示，不阻断编译。
+// ----------------------------------------------------------------------------
+val publishUpdateChannel = tasks.register<Exec>("publishUpdateChannel") {
+    group = "release"
+    description = "上传 release APK + latest.json 到安卓更新渠道（ECS + OSS）"
+    notCompatibleWithConfigurationCache("发布任务会调用外部 Python 脚本并读取工作区路径")
+    val scriptFile = rootProject.projectDir.parentFile.resolve("web/deploy/android_release.py")
+    val apkFile = layout.buildDirectory.file("outputs/apk/release/app-release.apk")
+    val versionNameValue = android.defaultConfig.versionName ?: "unknown"
+    val versionCodeValue = android.defaultConfig.versionCode ?: 0
+    val updateNotes = providers.gradleProperty("ct.updateNotes")
+        .orElse("${versionNameValue}（测试版本）\n1. UI/动效向鸿蒙端对齐\n2. 隐私政策 / 用户协议全文\n3. 通知轻量 meta + 按需详情\n4. 网络与更新渠道优化")
+        .get()
+    val updateChannel = providers.gradleProperty("ct.updateChannel").orElse("beta").get()
+    val pythonExe = providers.gradleProperty("ct.python").orElse("python").get()
+    val skipUpdate = providers.gradleProperty("ct.skipUpdateChannel").orNull?.toBoolean() ?: false
+    onlyIf {
+        !skipUpdate &&
+            scriptFile.isFile &&
+            apkFile.get().asFile.isFile
+    }
+    doFirst {
+        println("==> 自动发布更新渠道：${versionNameValue} / vc${versionCodeValue}")
+        commandLine(
+            pythonExe, scriptFile.absolutePath,
+            "--apk", apkFile.get().asFile.absolutePath,
+            "--version-name", versionNameValue,
+            "--version-code", versionCodeValue.toString(),
+            "--notes", updateNotes,
+            "--channel", updateChannel,
+        )
+    }
+}
+
+// assembleRelease 由 AGP 在配置后段创建，不能在这里直接 tasks.named；用 matching 延迟绑定。
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    finalizedBy(publishUpdateChannel)
 }
 
 
