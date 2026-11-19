@@ -25,22 +25,18 @@ import com.furina.classtools.ui.theme.CtText
 import com.furina.classtools.ui.theme.rememberHarmonyColors
 
 /**
- * 页面统一背景（2026-11-17 鸿蒙对齐）：**纯色底 `Tokens.BG #F7F8F8`（深色对应中性深底）**。
+ * 页面统一背景（2026-11-19 沉浸光感）：**光感背板 = 纯色底 + 品牌柔光斑**。
  *
- * 鸿蒙端没有渐变/玻璃光斑/噪点装饰；Android 之前 v6 的「顶光+径向色块+噪点」属于重装饰，已移除。
- * 该函数是唯一背景入口，所有页面自动变干净。
+ * 光斑强度随「我的 → 外观 → 沉浸光感」三档变化；关闭光感时退化为纯色底（与旧版一致）。
+ * 该函数是唯一背景入口：所有页面自动获得全局光感，不需要逐页加装饰。
  */
 @Composable
 fun ExpressiveBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val colors = rememberHarmonyColors()
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.background),
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        com.furina.classtools.ui.components.light.CtLightBackdrop(modifier = Modifier.fillMaxSize())
         content()
     }
 }

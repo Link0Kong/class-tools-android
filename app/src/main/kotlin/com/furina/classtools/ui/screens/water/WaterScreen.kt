@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.water
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -39,7 +41,7 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Opacity
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -84,7 +86,7 @@ import com.furina.classtools.features.water.WaterRules
 import com.furina.classtools.features.water.WaterState
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
@@ -290,7 +292,7 @@ fun WaterScreen(
                     .fillMaxSize()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
+                ctTopBarRaw(
                     title = "宿舍水量",
                     subtitle = buildString {
                         val label = PowerRooms.labelOf(selectedRv)
@@ -478,13 +480,20 @@ fun WaterScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             )
+            }
         }
     }
 
@@ -514,7 +523,7 @@ fun WaterScreen(
     }
 
     if (overwriteReview != null) {
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { overwriteReview = null },
             title = { Text("该月份已有记录") },
             text = {
@@ -537,7 +546,7 @@ fun WaterScreen(
         } else {
             0.0
         }
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { largeDiffReview = null },
             title = { Text("读数差异较大") },
             text = {
@@ -558,7 +567,7 @@ fun WaterScreen(
 
     if (deletingMonth != null) {
         val target = deletingMonth
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { deletingMonth = null },
             title = { Text("删除抄表记录") },
             text = { Text("删除 ${WaterMonth.label(target.orEmpty())} 的读数？该操作会同步到云端。") },
@@ -579,7 +588,7 @@ fun WaterScreen(
     }
 
     if (showClearRoomConfirm) {
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { showClearRoomConfirm = false },
             title = { Text("清除本间水量") },
             text = { Text("清除 ${PowerRooms.labelOf(selectedRv)} 的全部抄表记录？会同步清空云端该间数据。") },
@@ -1035,7 +1044,7 @@ private fun MonthPickerDialog(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择抄表月份") },
         text = {
@@ -1059,7 +1068,7 @@ private fun RoomPickerDialog(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择关注宿舍") },
         text = {

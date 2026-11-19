@@ -33,7 +33,7 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.StopCircle
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -434,7 +434,7 @@ internal fun VoteConfirmDialog(
     onDismiss: () -> Unit,
     danger: Boolean = false,
 ) {
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Text(message) },
@@ -461,7 +461,7 @@ internal fun VoteExtendDialog(
     onExtend: (deadline: Long) -> Unit,
 ) {
     var selectedMinutes by remember { mutableStateOf(30) }
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (selectedMinutes > 0) "延长截止时间" else "重新开放") },
         text = {

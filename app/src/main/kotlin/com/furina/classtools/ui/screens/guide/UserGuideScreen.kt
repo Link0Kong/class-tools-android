@@ -55,7 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
 import com.furina.classtools.ui.components.expressive.CtBottomSheetWithState
@@ -105,9 +105,9 @@ fun UserGuideScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
-            CtTopBar(
-                title = "使用说明",
+            ctTopBarRaw(
                 subtitle = "左右滑动切换 · 一键总览",
+                title = "使用说明",
                 onBack = onBack,
                 actions = {
                     TextButton(

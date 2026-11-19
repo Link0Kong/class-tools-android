@@ -43,7 +43,7 @@ import com.furina.classtools.data.visits.VisitsRepository
 import com.furina.classtools.data.visits.VisitsResult
 import com.furina.classtools.data.visits.VisitsSnapshot
 import com.furina.classtools.ui.components.CtLoading
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtChipOption
@@ -134,7 +134,8 @@ fun StatsScreen(
                 .fillMaxSize()
                 .statusBarsPadding(),
         ) {
-            CtTopBar(
+            ctTopBarRaw(
+                subtitle = null,
                 title = "统计",
                 onBack = onBack,
                 actions = {

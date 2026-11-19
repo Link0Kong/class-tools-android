@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.roster
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,7 +70,7 @@ import com.furina.classtools.features.roster.RosterState
 import com.furina.classtools.features.roster.RosterTab
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.CtLightTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
@@ -209,6 +211,14 @@ fun RosterScreen(
 
     val committeeCount = remember(members) { members.count { it.isCommittee } }
 
+    // 沉浸光感顶栏：名册列表滚动量驱动顶栏浮层渐显。
+    val ctTopBarLazyState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val ctTopBarScrollPx = if (ctTopBarLazyState.firstVisibleItemIndex > 0) {
+        com.furina.classtools.ui.theme.CT_TOP_BAR_FULL_SCROLL_PX
+    } else {
+        ctTopBarLazyState.firstVisibleItemScrollOffset.toFloat()
+    }
+
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -216,7 +226,8 @@ fun RosterScreen(
                     .fillMaxSize()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
+                CtLightTopBar(
+                    scrollPx = ctTopBarScrollPx,
                     title = "名单 · 名册",
                     subtitle = buildString {
                         if (members.isNotEmpty()) {
@@ -339,6 +350,7 @@ fun RosterScreen(
                                     onToggleRoll = { seat ->
                                         writeRoster(RosterLogic.toggleMemberInRoll(rosterState, seat, members))
                                     },
+                                    listState = ctTopBarLazyState,
                                 )
                             }
                         }
@@ -355,13 +367,20 @@ fun RosterScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             )
+            }
         }
     }
 }
@@ -440,6 +459,7 @@ private fun RosterCategoryPage(
     leagueError: String?,
     onRetryLeague: () -> Unit,
     onToggleRoll: (Int) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -508,6 +528,7 @@ private fun RosterCategoryPage(
                 }
 
                 else -> LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
                         .widthIn(max = 720.dp),

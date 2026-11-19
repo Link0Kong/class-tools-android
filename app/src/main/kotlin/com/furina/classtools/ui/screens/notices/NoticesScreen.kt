@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.notices
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -942,13 +944,20 @@ fun NoticesScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             )
+            }
         }
     }
 

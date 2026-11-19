@@ -310,9 +310,9 @@ pwsh -File docs/design/grep_hardcode.ps1 -Verbose   # 逐条列出
 | 截图矩阵（浅/深 × 首页/全部/我的/工具页 STEP1·STEP2/结果/弹层） | `docs/design/shots/matrix_light_dark.png`（以及 `light_*.png` / `dark_*.png`） |
 | 进/返动效抽帧（4× 慢速录屏抽帧，可直接看到卡片→页面形变） | `docs/design/shots/anim_enter_slowmo.png` / `anim_back_slowmo.png` |
 | 原始录屏 | `docs/design/shots/anim_enter.mp4` / `anim_back.mp4` / `slow_enter.mp4` / `slow_back.mp4` |
-| 令牌与 AA 锁定测试 | `app/src/test/kotlin/.../ui/theme/CtDesignTokensTest.kt`、`HarmonyTokensTest.kt`、`ui/components/dock/CtPageTransitionsHarmonyTest.kt` |
-| 单测 | `gradle testDebugUnitTest`：**1669 / 0 失败**（基线 1654） |
-| 构建 | `gradle assembleDebug`：成功 |
+| 令牌与 AA 锁定测试 | `app/src/test/kotlin/.../ui/theme/CtDesignTokensTest.kt`、`HarmonyTokensTest.kt`、`ImmersiveLightTest.kt`、`ui/components/dock/CtPageTransitionsHarmonyTest.kt` |
+| 单测 | `gradle testDebugUnitTest`：**1678 / 0 失败**（基线 1654） |
+| 构建 | `gradle assembleDebug` / `assembleRelease`：成功（beta11 release 5,836,925 B） |
 
 ---
 
@@ -326,3 +326,72 @@ pwsh -File docs/design/grep_hardcode.ps1 -Verbose   # 逐条列出
 4. **容器变换的覆盖层内容**：形变过程中显示「工具图标 + 名称」作为容器内容（真实页面在半程后淡入）；
    不是逐像素的 shared-element（不引入实验性 SharedTransitionLayout，避免与 NavHost 生命周期耦合）。
 5. **透明状态栏/沉浸式**：沿用既有 `CtImmersiveStatusBar`（隐藏状态栏 + 顶部安全区），本次未改其逻辑。
+
+---
+
+## 10. 沉浸光感（Immersive Light，2026-11-19）
+
+参考：[华为 HarmonyOS 沉浸光感设计语言](https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/immersivelight-0000002612101053)。
+目标不是给页面加一层特效，而是把「交互层」从实色平面变成**有光学扩散与透光感的数字介质**：
+光在层级间柔和漫溢，内容可透过浮层隐约可见，同时正文/按钮保持清晰可读。
+
+### 10.1 令牌与映射表（唯一来源）
+
+| 层 | 文件 | 说明 |
+|---|---|---|
+| 纯数据令牌 | `ui/theme/ImmersiveLight.kt` | 5 档材质 × 3 档强度 → `CtLightSpec`（可 JVM 单测） |
+| 场景语义 | 同上 `CtLightScene` | 页面只声明「这是什么位置的浮层」，档位由映射表决定 |
+| Compose 材质 | `ui/components/light/CtLight.kt` | `Modifier.ctLightMaterial(scene, shape, …)` |
+| 场景容器 | `ui/components/light/CtLightScenarios.kt` | `CtLightPage` / `CtLightTopBar` / `CtLightBottomBar` / `CtLightBottomScrim` / `CtLightPanel` / `CtLightBackdrop` |
+| 弹层/对话框 | `ui/components/light/CtLightOverlays.kt` | `CtLightAlertDialog`、`ctLightSheetContainerColor()`、`ctLightDialogContainerColor()` |
+
+5 档材质（与鸿蒙同名）：`ULTRA_THIN / THIN / MEDIUM / THICK / ULTRA_THICK`。
+
+官方场景 → 档位（`CtLightScene.level`）：
+
+| 场景 | 档位 | 落地位置 |
+|---|---|---|
+| 顶部悬浮 | `ULTRA_THIN` | `CtTopBar` / `CtLightTopBar`（滚动 8dp 起渐显，48dp 内到位） |
+| 底部悬浮 | `THIN` | 浮岛 dock、Draw/Vote 底部操作条、`CtLightBottomScrim` |
+| 半模态/底部弹层 | `ULTRA_THICK` | `CtBottomSheet`（全部工具弹层共用） |
+| 对话框 | `ULTRA_THICK` | `CtLightAlertDialog`（全部 AlertDialog 已迁移） |
+| 菜单/临时浮层/Toast/Snackbar | `THICK` | Snackbar 包裹层、菜单、轻提示 |
+| 工具条/页面内浮层 | `MEDIUM` | 筛选条、地图浮条、统计浮卡 |
+| 媒体播放器浮层 | `THICK`（暗色媒体定制） | PPT 播放器控制条/章节/缩略图（保留媒体暗底） |
+
+强度（我的 → 外观 → 沉浸光感）：**强 / 均衡（默认）/ 弱 / 关闭**，持久化在 DataStore
+（`AppSettingsStore.immersiveLight`，冷启动镜像同步，避免首帧跳变）。强档更通透、高光更亮；
+弱档更接近实色；关闭退回既有实色材质。
+
+### 10.2 全应用覆盖点（深层页面）
+
+- **页面背景**：`ExpressiveBackground` 统一改为 `CtLightBackdrop`（品牌柔光斑 + 纯色底，强度随设置）→
+  所有使用该背景的页面自动获得全局光感，不需要逐页加装饰。
+- **顶栏**：`CtTopBar` / `CtLightTopBar` 全部走 ULTRA_THIN 材质 + 底部渐变融合带；
+  页面滚动量由 `scrollPx` 驱动（Homework / VoteCreate / VoteDetail / Roster / DataPrivacy / 权限 / 提醒 / 占位页等）。
+- **底部**：浮岛 dock、Draw/Vote 底部操作条走 THIN + 底部渐变蒙层。
+- **弹层**：`CtBottomSheet` 容器色 = 超厚档安全不透明度 + 材质 tint；`CtLightAlertDialog` 覆盖全部确认框。
+- **Snackbar**：14 个页面统一包裹 THICK 材质。
+- **PPT 播放器**：暗色媒体底保留 `CtPalette.MediaScrim*`，控制条/章节/缩略图使用媒体浮层（THICK 语义），
+  不把浅色材质铺到视频画面上。
+
+### 10.3 可读性与性能红线
+
+1. 承载正文的材质（弹层/菜单/浮卡）自动抬到 `TEXT_SAFE_ALPHA = 0.78`；
+   `ctLightContrastFloor()` 校验 WCAG 2.1 AA ≥ 4.5（浅/深色、正文三级文字，单测锁定）。
+2. 单页常驻材质最多 2 个（顶栏 + 底栏），叠加弹层最多 3 个（`CtLightBudget`）。
+3. **不采用整层 RenderEffect**：Compose 无公开 backdrop-filter，若给容器挂 `BlurEffect` 会把标题/图标一起糊掉
+   （2026-11-19 实测底部 dock 文字被糊）。当前实现 = 半透明底 + 顶部高光 + 边缘折射 + 渐变融合带，
+   视觉上是「被光柔化的薄雾」，且真机文字清晰；后续若引入可靠的 backdrop 采样库再升级为真模糊。
+4. 光斑背板为静态绘制（不逐帧动画），滚动列表不重复采样。
+5. 设备能力：API 31+ 记为 FULL、API 26–30 为 DEGRADED（本实现两者视觉一致，能力档预留给未来真模糊）；
+   关闭光感 = OFF。
+
+### 10.4 验收
+
+- 单测：`ImmersiveLightTest`（9 项：档位单调性、强度方向、场景映射、AA 对比度、顶栏阈值、能力档、预算、持久化往返）。
+- 截图：`docs/design/shots/light-01-identity.png`（身份页光晕）、`light-09-home-final.png`（首页 + 浮岛）、
+  `light-10-all.png`（全部工具）、`light-12-tool-topbar.png`（工具页顶栏材质）、`light-08-dark-home.png`（深色）、
+  `light-07-appearance.png`（外观四档设置）。
+- 构建：`assembleDebug` / `assembleRelease` 通过。
+

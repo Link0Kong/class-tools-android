@@ -1,5 +1,6 @@
 package com.furina.classtools.data.update
 
+import com.furina.classtools.BuildConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -105,7 +106,7 @@ class UpdateLogicTest {
             "v4.57.0-test1（测试版本）",
             UpdateTestVersion.versionDisplay("4.57.0-test1-debug"),
         )
-        assertEquals(10, UpdateTestVersion.version)
+        assertEquals(BuildConfig.TEST_VERSION, UpdateTestVersion.version)
         assertEquals("测试版本", UpdateTestVersion.label)
         assertEquals("发现新版本", UpdateTestVersion.dialogTitle())
     }

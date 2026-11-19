@@ -30,7 +30,7 @@ import androidx.compose.material.icons.automirrored.rounded.Assignment
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -351,7 +351,7 @@ fun HomeScreen(
     var showDiscardEdit by remember { mutableStateOf(false) }
     androidx.activity.compose.BackHandler(enabled = editing) { showDiscardEdit = true }
     if (showDiscardEdit) {
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { showDiscardEdit = false },
             title = { Text("放弃本次修改？") },
             text = { Text("首页常用工具的改动尚未保存。") },

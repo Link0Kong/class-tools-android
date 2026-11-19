@@ -2,10 +2,13 @@
 
 package com.furina.classtools.ui.screens.data
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,7 +34,7 @@ import androidx.compose.material.icons.rounded.Policy
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Storage
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,7 +71,7 @@ import com.furina.classtools.data.privacy.PrivacySummary
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.CtLightTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
@@ -76,6 +79,9 @@ import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
 import com.furina.classtools.ui.theme.CtShapeTokens
 import java.io.File
 import kotlinx.coroutines.launch
+
+/** 数据与隐私页正在进行的操作（按钮 loading / 禁用态）。 */
+enum class Working { EXPORT, CLEAR_CLOUD, CLEAR_LOCAL }
 
 /** 页面弹层种类（预览可注入初始弹层）。 */
 enum class DataPrivacyDialog {
@@ -134,6 +140,8 @@ fun DataPrivacyScreen(
     var dialog by remember { mutableStateOf(initialDialog) }
     var working by remember { mutableStateOf<Working?>(null) }
     var reloadToken by remember { mutableIntStateOf(0) }
+    // 沉浸光感顶栏「滚动 → 浮层」：顶栏固定、内容独立滚动，滚动量驱动顶栏材质渐显（8dp 起 40dp 内到位）。
+    val ctTopBarScroll = rememberScrollState()
     var phase by remember {
         mutableStateOf(
             when {
@@ -257,7 +265,8 @@ fun DataPrivacyScreen(
                     .fillMaxSize()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
+                CtLightTopBar(
+                    scrollPx = ctTopBarScroll.value.toFloat(),
                     title = "数据与隐私",
                     subtitle = session?.let { "账号 ${it.maskedSid}" } ?: "班级工具站",
                     onBack = onBack,
@@ -295,6 +304,7 @@ fun DataPrivacyScreen(
                         }
 
                         PrivacyPhase.READY -> PrivacyContent(
+                            scrollState = ctTopBarScroll,
                             summary = summary,
                             localSnapshot = localSnapshot,
                             working = working,
@@ -310,19 +320,26 @@ fun DataPrivacyScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             )
+            }
         }
     }
 
     when (dialog) {
         DataPrivacyDialog.NONE -> Unit
-        DataPrivacyDialog.CLEAR_CLOUD -> AlertDialog(
+        DataPrivacyDialog.CLEAR_CLOUD -> CtLightAlertDialog(
             onDismissRequest = { dialog = DataPrivacyDialog.NONE },
             icon = { Icon(Icons.Rounded.DeleteForever, contentDescription = null) },
             title = { Text("清除云端数据？") },
@@ -350,7 +367,7 @@ fun DataPrivacyScreen(
             },
         )
 
-        DataPrivacyDialog.CLEAR_LOCAL -> AlertDialog(
+        DataPrivacyDialog.CLEAR_LOCAL -> CtLightAlertDialog(
             onDismissRequest = { dialog = DataPrivacyDialog.NONE },
             icon = { Icon(Icons.Rounded.PhoneAndroid, contentDescription = null) },
             title = { Text("清除本机数据？") },
@@ -379,6 +396,7 @@ fun DataPrivacyScreen(
 
 @Composable
 private fun PrivacyContent(
+    scrollState: androidx.compose.foundation.ScrollState,
     summary: PrivacySummary?,
     localSnapshot: LocalDataSnapshot,
     working: Working?,
@@ -393,7 +411,7 @@ private fun PrivacyContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -673,9 +691,6 @@ private fun shareExport(context: Context, export: PrivacyExport): String? = runC
     context.startActivity(Intent.createChooser(intent, "分享我的数据"))
     null
 }.getOrElse { error -> "导出失败：${error.message ?: "无法写入分享文件"}" }
-
-/** 页面操作中的状态（按钮禁用/进度）。 */
-private enum class Working { EXPORT, CLEAR_CLOUD, CLEAR_LOCAL }
 
 /** 页面内部阶段（四态中的加载/错误/空态由它承载）。 */
 private enum class PrivacyPhase { LOADING, READY, EMPTY, ERROR }

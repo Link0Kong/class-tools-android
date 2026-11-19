@@ -59,7 +59,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -989,7 +989,7 @@ private fun PptStepsPlayer(
 
         // ---------------------------------------------------------- 退出确认
         if (exitConfirm) {
-            AlertDialog(
+            CtLightAlertDialog(
                 onDismissRequest = { exitConfirm = false },
                 title = { Text("退出演示？") },
                 text = { Text(PptNav.spokenLabel(counts, pos)) },

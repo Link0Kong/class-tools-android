@@ -34,7 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.express.ExpressCatalog
 import com.furina.classtools.data.express.ExpressTarget
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -51,7 +51,11 @@ fun ExpressScreen(
     val context = LocalContext.current
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            CtTopBar(title = "快递", onBack = onBack)
+            ctTopBarRaw(
+                title = "快递",
+                onBack = onBack,
+                subtitle = "",
+            )
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),

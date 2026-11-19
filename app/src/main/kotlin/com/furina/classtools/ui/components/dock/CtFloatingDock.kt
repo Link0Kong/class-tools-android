@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -51,6 +53,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
+import com.furina.classtools.ui.theme.LocalCtLight
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShape
@@ -136,11 +141,29 @@ fun CtFloatingDock(
         label = "dockPillScaleY",
     )
 
-    // 2026-11-17 鸿蒙对齐：底栏为浅色实底（BAR_LIGHT）#FBFCFC/深色 card，发丝线分层，不再玻璃/渐变。
+    // 2026-11-19 沉浸光感：浮岛 = THIN + 底部渐变颜色蒙层（官方「底部悬浮」规范）。
+    // - 光感开启：材质层由 CtLight 提供（API31+ 真模糊 / 旧机降级 / 关闭时自动回落实色）；
+    // - 光感关闭：保留既有浅色实底（BAR_LIGHT）+ 发丝线（用户显式选择「实色规范」）。
+    val light = LocalCtLight.current
     val containerColor = if (dark) {
         MaterialTheme.colorScheme.surfaceContainerLow
     } else {
         com.furina.classtools.ui.theme.HarmonyTokens.BarLight
+    }
+    val glass = if (light.enabled) {
+        Modifier.ctLightMaterial(
+            CtLightScene.BOTTOM_DOCK,
+            shape = RoundedCornerShape(CtRadius.hero),
+            fadeAtTop = true,
+            bodySafe = true,
+            // 浮岛文字/图标需要清楚：比官方 THIN 略厚一档，视觉仍是悬浮薄雾。
+            levelOverride = com.furina.classtools.ui.theme.CtLightLevel.THICK,
+        )
+    } else {
+        Modifier
+            .clip(RoundedCornerShape(CtRadius.hero))
+            .background(containerColor)
+            .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant), RoundedCornerShape(CtRadius.hero))
     }
     val borderColor = MaterialTheme.colorScheme.outlineVariant
     val dockShadowElevation = 0.dp
@@ -153,16 +176,11 @@ fun CtFloatingDock(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 480.dp),
-            shape = RoundedCornerShape(CtRadius.hero),
-            color = containerColor,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 0.dp,
-            shadowElevation = dockShadowElevation,
-            border = BorderStroke(0.5.dp, borderColor),
+                .widthIn(max = 480.dp)
+                .then(glass),
         ) {
             androidx.compose.foundation.layout.BoxWithConstraints(
                 modifier = Modifier

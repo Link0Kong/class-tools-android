@@ -39,7 +39,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Slideshow
 import androidx.compose.material.icons.rounded.WifiOff
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -92,7 +92,7 @@ import com.furina.classtools.features.ppt.PptLimits
 import com.furina.classtools.features.ppt.PptResumeLogic
 import com.furina.classtools.features.ppt.PptResumeRecord
 import com.furina.classtools.features.ppt.PptStatusTexts
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
@@ -345,7 +345,7 @@ fun PptListScreen(
 
     // 删除二次确认。
     deleteTarget?.let { deck ->
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text("删除演示？") },
             text = { Text("「${deck.title.ifBlank { "未命名演示" }}」将从列表移除（软删除）。") },
@@ -406,7 +406,8 @@ fun PptListContent(
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
-            CtTopBar(
+            ctTopBarRaw(
+                subtitle = null,
                 title = "演示",
                 onBack = onBack,
                 actions = {
@@ -919,7 +920,7 @@ private fun PptTitleDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("演示标题") },
         text = {

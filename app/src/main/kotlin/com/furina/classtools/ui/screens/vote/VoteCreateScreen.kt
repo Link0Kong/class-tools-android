@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.vote
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.net.Uri
@@ -83,7 +85,7 @@ import com.furina.classtools.data.vote.VoteResult
 import com.furina.classtools.data.vote.VoteValidationError
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtLoading
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.CtLightTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
@@ -342,6 +344,14 @@ fun VoteCreateScreen(
         }
     }
 
+    // 沉浸光感顶栏：列表滚动量驱动顶栏浮层渐显（首项滚出后直接满进度）。
+    val ctTopBarLazyState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val ctTopBarScrollPx = if (ctTopBarLazyState.firstVisibleItemIndex > 0) {
+        com.furina.classtools.ui.theme.CT_TOP_BAR_FULL_SCROLL_PX
+    } else {
+        ctTopBarLazyState.firstVisibleItemScrollOffset.toFloat()
+    }
+
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
@@ -350,7 +360,9 @@ fun VoteCreateScreen(
                     .fillMaxSize()
                     .padding(horizontal = spec.horizontalPadding),
             ) {
-                CtTopBar(
+                // 沉浸光感顶栏：滚动量由表单 LazyColumn 上报。
+                CtLightTopBar(
+                    scrollPx = ctTopBarScrollPx,
                     title = if (editing) "编辑投票" else "发起投票",
                     subtitle = if (editing) "仅 0 票可编辑" else null,
                     onBack = onBack,
@@ -370,6 +382,7 @@ fun VoteCreateScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
+                            state = ctTopBarLazyState,
                             contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
@@ -465,12 +478,19 @@ fun VoteCreateScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 16.dp),
             )
+            }
         }
     }
 

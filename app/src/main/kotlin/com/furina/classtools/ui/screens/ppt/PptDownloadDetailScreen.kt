@@ -74,7 +74,7 @@ import com.furina.classtools.features.ppt.PptDownloadLogic
 import com.furina.classtools.features.ppt.PptMediaDownloadLogic
 import com.furina.classtools.features.ppt.PptStatusTexts
 import com.furina.classtools.ui.components.CtLoading
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
@@ -292,9 +292,9 @@ fun PptDownloadDetailContent(
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
-            CtTopBar(
-                title = detail?.title?.ifBlank { "下载" } ?: "下载",
+            ctTopBarRaw(
                 subtitle = if (detail != null && detail.isReady) metaLine(detail) else null,
+                title = detail?.title?.ifBlank { "下载" } ?: "下载",
                 onBack = onBack,
             )
 

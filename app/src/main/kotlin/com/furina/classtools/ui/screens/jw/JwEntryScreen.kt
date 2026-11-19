@@ -28,7 +28,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,7 +59,7 @@ import com.furina.classtools.data.jw.JwCredentialStore
 import com.furina.classtools.features.jw.JwLoginLogic
 import com.furina.classtools.features.jw.JwNetworkDetector
 import com.furina.classtools.features.jw.JwWebVpn
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -753,7 +753,8 @@ fun JwEntryScreen(
                 .navigationBarsPadding(),
         ) {
             val mode = state.mode.value
-            CtTopBar(
+            ctTopBarRaw(
+                subtitle = null,
                 title = if (mode == JwMode.WEB) {
                     state.webTitle.value ?: JwLoginLogic.PAGE_TITLE
                 } else {
@@ -882,7 +883,7 @@ fun JwEntryScreen(
     }
 
     if (state.clearConfirmVisible.value) {
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { state.clearConfirmVisible.value = false },
             title = { Text(JwLoginLogic.CLEAR_CONFIRM_TITLE) },
             text = { Text(JwLoginLogic.CLEAR_CONFIRM_TEXT) },
@@ -1001,7 +1002,7 @@ private fun JwLoginPromptDialog(
         onSubmit(password, saveToDevice)
     }
 
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(JwLoginLogic.PROMPT_TITLE) },
         text = {

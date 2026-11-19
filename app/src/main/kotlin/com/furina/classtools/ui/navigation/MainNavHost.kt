@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.statusBarsPadding
 import com.furina.classtools.ui.components.CtTopBar
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.fillMaxSize
@@ -101,6 +101,7 @@ import com.furina.classtools.ui.components.dock.CtFloatingDock
 import com.furina.classtools.ui.components.dock.CtPageTransitions
 import com.furina.classtools.ui.components.dock.CtTabPager
 import com.furina.classtools.ui.components.dock.rememberCtTabPagerState
+import com.furina.classtools.ui.components.light.CtLightBottomScrim
 import com.furina.classtools.ui.screens.all.AllToolsScreen
 import com.furina.classtools.ui.screens.cloudspace.CloudSpaceScreen
 import com.furina.classtools.ui.screens.data.DataPrivacyScreen
@@ -367,7 +368,10 @@ fun MainNavHost(
         }
     }
 
+    // 沉浸光感：全应用统一「光感背板」（品牌柔光斑，强度随用户设置）+ 模糊层记账宿主；
+    // 工具页/详情页/弹层的材质都建立在这块背板之上（官方「光在层级间柔和漫溢」）。
     Box(modifier = Modifier.fillMaxSize()) {
+        com.furina.classtools.ui.components.light.CtLightBackdrop(modifier = Modifier.fillMaxSize())
         CompositionLocalProvider(LocalToolTransitionAnchors provides toolTransitionAnchors) {
             NavHost(
                 navController = navController,
@@ -1130,6 +1134,8 @@ private fun RootTabs(
     }
 
     val showNotificationPermissionBanner = !notificationGranted && reminderSettings.enabled
+    // 沉浸光感是否启用（dock 的玻璃实现二选一：CtLight 材质 or 旧 Haze）。
+    val ctLightEnabled = com.furina.classtools.ui.theme.LocalCtLight.current.enabled
     Box(modifier = Modifier.fillMaxSize()) {
         CtTabPager(
             pagerState = pagerState,
@@ -1214,19 +1220,31 @@ private fun RootTabs(
                 .background(MaterialTheme.colorScheme.background),
         )
 
-        CtFloatingDock(            destinations = destinations,
+        // 沉浸光感「底部渐变颜色蒙层」（官方：底部悬浮 = THIN + 渐变颜色蒙层延展底部）：
+        // 页面内容滚动到底部时被柔和吞没，浮岛 dock 之外不再有硬边内容压边。
+        CtLightBottomScrim(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            height = 112.dp,
+        )
+
+        CtFloatingDock(
+            destinations = destinations,
             selectedIndex = pagerState.currentPage,
             onSelect = onSelectTab,
             pagerOffsetFraction = pagerState.currentPageOffsetFraction,
             modifier = Modifier.align(Alignment.BottomCenter),
-            glassModifier = Modifier.hazeEffect(
-                state = hazeState,
-                style = HazeDefaults.style(
-                    backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
-                    blurRadius = 24.dp,
-                    noiseFactor = 0.02f,
-                ),
-            ),
+            glassModifier = if (ctLightEnabled) {
+                null
+            } else {
+                Modifier.hazeEffect(
+                    state = hazeState,
+                    style = HazeDefaults.style(
+                        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+                        blurRadius = 24.dp,
+                        noiseFactor = 0.02f,
+                    ),
+                )
+            },
         )
     }
 }
@@ -1239,7 +1257,7 @@ private fun NoticeReminderDialog(
     onPick: (OneShotPlannedTime) -> Unit,
 ) {
     val options = remember(group) { ReminderOneShot.noticePlannedTimes(group) }
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("提醒我") },
         text = {
@@ -1270,7 +1288,7 @@ private fun HomeworkReminderDialog(
     onPick: (OneShotPlannedTime) -> Unit,
 ) {
     val options = remember(row) { ReminderOneShot.homeworkPlannedTimes(row) }
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("提醒我") },
         text = {

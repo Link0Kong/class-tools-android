@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.homework
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -32,7 +35,7 @@ import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -53,9 +56,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,7 +84,7 @@ import com.furina.classtools.data.marks.MarksSnapshot
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.CtLightTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
@@ -269,6 +274,9 @@ fun HomeworkScreen(
         }
     }.trim()
 
+    // 沉浸光感顶栏「滚动 → 浮层」：滚动量由列表状态上报（列表滚动 → 顶栏材质渐显）。
+    var ctTopBarScrollPx by remember { mutableFloatStateOf(0f) }
+
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -276,7 +284,8 @@ fun HomeworkScreen(
                     .fillMaxSize()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
+                CtLightTopBar(
+                    scrollPx = ctTopBarScrollPx,
                     title = "作业",
                     subtitle = subtitle.takeIf { it.isNotBlank() },
                     onBack = onBack,
@@ -326,6 +335,7 @@ fun HomeworkScreen(
                                     onToggle = { item -> toggleDone(item) },
                                     onOpen = { item -> detail = item },
                                     onRemind = onRemindHomework?.let { cb -> { item -> cb(item.row) } },
+                                    onScrollPx = { px -> ctTopBarScrollPx = px },
                                 )
                             }
                         }
@@ -362,13 +372,20 @@ fun HomeworkScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             )
+            }
         }
     }
 
@@ -454,7 +471,20 @@ private fun HomeworkFilterPage(
     onToggle: (HomeworkItem) -> Unit,
     onOpen: (HomeworkItem) -> Unit,
     onRemind: ((HomeworkItem) -> Unit)? = null,
+    onScrollPx: (Float) -> Unit = {},
 ) {
+    val listState = rememberLazyListState()
+    // 沉浸光感顶栏：把「Lazy 列表滚动」折算成顶栏需要的滚动量（px）。
+    // 首项未滚满时用偏移量；已滚过首项给哨兵值 —— 顶栏浮层进度夹到 1（全显），不会闪烁。
+    LaunchedEffect(listState, onScrollPx) {
+        snapshotFlow {
+            if (listState.firstVisibleItemIndex > 0) {
+                com.furina.classtools.ui.theme.CT_TOP_BAR_FULL_SCROLL_PX
+            } else {
+                listState.firstVisibleItemScrollOffset.toFloat()
+            }
+        }.collect { onScrollPx(it) }
+    }
     val grouped = LinkedHashMap<String, MutableList<HomeworkItem>>()
     for (item in items) {
         val label = HomeworkDueCalculator.groupLabel(item, nowMillis)
@@ -462,6 +492,7 @@ private fun HomeworkFilterPage(
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -643,7 +674,7 @@ private fun HomeworkDetailDialog(
     onDismiss: () -> Unit,
     onRemind: (() -> Unit)? = null,
 ) {
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(

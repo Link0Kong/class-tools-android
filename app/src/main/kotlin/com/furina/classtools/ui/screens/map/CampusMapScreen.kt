@@ -53,7 +53,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.furina.classtools.BuildConfig
 import com.furina.classtools.R
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.theme.CtRadius
 
 private const val TAG = "CampusMap"
@@ -296,9 +296,9 @@ fun CampusMapScreen(
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        CtTopBar(
-            title = "校内地图",
+        ctTopBarRaw(
             subtitle = if (source == MapSource.ASSET) "2.5D · 本地离线" else "2.5D · 网络版",
+            title = "校内地图",
             onBack = onBack,
             actions = {
                 TextButton(onClick = { openInBrowser() }) {

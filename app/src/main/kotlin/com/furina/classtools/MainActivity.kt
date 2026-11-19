@@ -60,15 +60,23 @@ class MainActivity : ComponentActivity() {
             // 首帧用 SharedPreferences 镜像同步初始化，避免冷启动先按系统/默认渲染一帧再跳变。
             val initialAppearanceMode = remember { container.appSettings.startupAppearanceMode() }
             val initialHideStatusBar = remember { container.appSettings.startupHideStatusBar() }
+            val initialImmersiveLight = remember { container.appSettings.startupImmersiveLight() }
             val appearanceMode by container.appSettings.appearanceMode
                 .collectAsStateWithLifecycle(initialValue = initialAppearanceMode)
             val hideStatusBar by container.appSettings.hideStatusBar
                 .collectAsStateWithLifecycle(initialValue = initialHideStatusBar)
+            // 沉浸光感（强 / 均衡 / 弱 / 关闭）：写入后全应用即时生效（含所有深层页面与弹层）。
+            val immersiveLight by container.appSettings.immersiveLight
+                .collectAsStateWithLifecycle(initialValue = initialImmersiveLight)
             // 外观模式：跟随系统 / 强制浅色 / 强制深色（我的 → 外观 三选一）。
             val darkTheme = appearanceMode.resolveDark(isSystemInDarkTheme())
             val pendingTool by pendingToolId
             val pendingNotice by pendingNoticeId
-            ClassToolsTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
+            ClassToolsTheme(
+                darkTheme = darkTheme,
+                dynamicColor = dynamicColor,
+                immersiveLight = immersiveLight,
+            ) {
                 // 「我的 → 外观」直接读写本机设置（MainNavHost 之外的新设置项，不改导航层）。
                 CompositionLocalProvider(LocalAppSettingsStore provides container.appSettings) {
                     // 全局隐藏系统状态栏（下滑临时显示）；关闭时恢复 statusBarsPadding 的常规行为。

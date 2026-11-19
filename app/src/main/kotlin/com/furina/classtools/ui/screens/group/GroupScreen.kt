@@ -72,7 +72,7 @@ import com.furina.classtools.features.group.GroupWorkflow
 import com.furina.classtools.features.group.GroupWorkflowState
 import com.furina.classtools.features.group.SeededGroupRandom
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.components.expressive.CtBottomSheetFooter
@@ -235,7 +235,8 @@ fun GroupScreen(
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-            CtTopBar(
+            ctTopBarRaw(
+                subtitle = null,
                 title = "分组",
                 onBack = onBack,
                 actions = {

@@ -1,5 +1,11 @@
 package com.furina.classtools.ui.screens.profile
 
+import com.furina.classtools.ui.components.light.ctLightSummaryText
+import com.furina.classtools.ui.theme.CtLightSetting
+import com.furina.classtools.ui.theme.CtLightIntensity
+import kotlinx.coroutines.flow.flowOf
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -48,7 +54,7 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Wallpaper
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -214,16 +220,24 @@ fun ProfileScreen(
     val appSettings = LocalAppSettingsStore.current
     val storedAppearanceMode = rememberAppearanceMode(appSettings, appearanceMode)
     val storedHideStatusBar = rememberHideStatusBar(appSettings, hideStatusBar)
+    // 沉浸光感（强 / 均衡 / 弱 / 关闭）：DataStore Flow 实时回读，写入后全应用立刻重组。
+    val storedImmersiveLight by (appSettings?.immersiveLight ?: flowOf(CtLightSetting.Default))
+        .collectAsStateWithLifecycle(initialValue = CtLightSetting.Default)
     var pendingAppearanceMode by remember { mutableStateOf<AppearanceMode?>(null) }
     var pendingHideStatusBar by remember { mutableStateOf<Boolean?>(null) }
+    var pendingImmersiveLight by remember { mutableStateOf<CtLightSetting?>(null) }
     LaunchedEffect(storedAppearanceMode) {
         if (pendingAppearanceMode == storedAppearanceMode) pendingAppearanceMode = null
     }
     LaunchedEffect(storedHideStatusBar) {
         if (pendingHideStatusBar == storedHideStatusBar) pendingHideStatusBar = null
     }
+    LaunchedEffect(storedImmersiveLight) {
+        if (pendingImmersiveLight == storedImmersiveLight) pendingImmersiveLight = null
+    }
     val effectiveAppearanceMode = pendingAppearanceMode ?: storedAppearanceMode
     val effectiveHideStatusBar = pendingHideStatusBar ?: storedHideStatusBar
+    val effectiveImmersiveLight = pendingImmersiveLight ?: storedImmersiveLight
 
     fun changeAppearanceMode(mode: AppearanceMode) {
         pendingAppearanceMode = mode
@@ -235,6 +249,11 @@ fun ProfileScreen(
         pendingHideStatusBar = enabled
         onHideStatusBarChange(enabled)
         appSettings?.let { store -> scope.launch { runCatching { store.setHideStatusBar(enabled) } } }
+    }
+
+    fun changeImmersiveLight(setting: CtLightSetting) {
+        pendingImmersiveLight = setting
+        appSettings?.let { store -> scope.launch { runCatching { store.setImmersiveLight(setting) } } }
     }
 
     fun requestClearCache() {
@@ -306,6 +325,8 @@ fun ProfileScreen(
                         onAppearanceModeChange = ::changeAppearanceMode,
                         hideStatusBar = effectiveHideStatusBar,
                         onHideStatusBarChange = ::changeHideStatusBar,
+                        immersiveLight = effectiveImmersiveLight,
+                        onImmersiveLightChange = ::changeImmersiveLight,
                     )
                     AboutSection(
                         onOpenFeedback = onOpenFeedback,
@@ -326,20 +347,27 @@ fun ProfileScreen(
         if (resolvedUpdateManager != null && updateCheckStatus == null && !updateHostState.value) {
             UpdateDialogHost(resolvedUpdateManager)
         }
-        SnackbarHost(
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
             hostState = snackbar,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 12.dp),
         )
+            }
     }
 
     if (showPrivacy) PrivacyPolicyDialog(onDismiss = { showPrivacy = false })
     if (showAgreement) UserAgreementDialog(onDismiss = { showAgreement = false })
 
     if (showClearCacheConfirm) {
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { showClearCacheConfirm = false },
             title = { Text("清除本机缓存？") },
             text = {
@@ -366,7 +394,7 @@ fun ProfileScreen(
     }
 
     if (showSignOutConfirm) {
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { showSignOutConfirm = false },
             title = { Text("退出登录？") },
             text = {
@@ -693,10 +721,17 @@ private fun AppearanceSection(
     onAppearanceModeChange: (AppearanceMode) -> Unit,
     hideStatusBar: Boolean,
     onHideStatusBarChange: (Boolean) -> Unit,
+    immersiveLight: CtLightSetting,
+    onImmersiveLightChange: (CtLightSetting) -> Unit,
 ) {
     SectionTitle("外观")
     GroupCard {
         AppearanceModeRows(mode = appearanceMode, onModeChange = onAppearanceModeChange)
+        RowDivider()
+        ImmersiveLightRows(
+            setting = immersiveLight,
+            onSettingChange = onImmersiveLightChange,
+        )
         RowDivider()
         SwitchRow(
             title = "隐藏状态栏",
@@ -713,6 +748,79 @@ private fun AppearanceSection(
             checked = dynamicColorEnabled,
             onCheckedChange = onDynamicColorChange,
         )
+    }
+}
+
+/**
+ * 沉浸光感四选一（强 / 均衡 / 弱 / 关闭）。
+ *
+ * 对应华为「沉浸光感」三档强度 + 关闭；只在设置里选一次，材质档位（ULTRA_THIN…ULTRA_THICK）
+ * 由场景自动映射（顶部 ULTRA_THIN / 底部 THIN / 弹层 ULTRA_THICK），页面无需分别适配。
+ */
+@Composable
+private fun ImmersiveLightRows(
+    setting: CtLightSetting,
+    onSettingChange: (CtLightSetting) -> Unit,
+) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.LightMode,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = com.furina.classtools.ui.theme.HarmonyTokens.ElementGap),
+            ) {
+                Text(
+                    text = "沉浸光感",
+                    style = CtText.body,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = ctLightSummaryText(),
+                    style = CtText.label,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        CtLightSetting.choices.forEach { option ->
+            val selected = option == setting
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .selectable(
+                        selected = selected,
+                        role = Role.RadioButton,
+                        onClick = { onSettingChange(option) },
+                    )
+                    .padding(start = 44.dp, end = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = CtLightSetting.labelOf(option),
+                        style = CtText.body,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = if (option.enabled) option.intensity.hint else "实色材质 · 最省电",
+                        style = CtText.label,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                RadioButton(selected = selected, onClick = null)
+            }
+        }
     }
 }
 

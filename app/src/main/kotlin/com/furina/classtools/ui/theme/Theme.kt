@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -14,8 +17,12 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.furina.classtools.ui.theme.LocalCtLight
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -211,12 +218,16 @@ private fun brandedDynamicScheme(context: Context, dark: Boolean): ColorScheme {
  * @param darkTheme 是否深色（默认跟随系统；调用方按「外观模式」用 [AppearanceMode.resolveDark] 解析）。
  * @param dynamicColor 是否跟随系统壁纸取色（Material You）。默认关闭以保持品牌识别。
  * @param spacing 语义间距（默认 [CtSpacing]；大屏可由调用方覆盖）。
+ * @param immersiveLight 沉浸光感设置（强 / 均衡 / 弱 / 关闭；默认 [CtLightSetting.Default]）。
+ * @param lightCapabilityOverride 光感能力档覆盖（预览/测试注入；null = 按 Build.VERSION.SDK_INT + 硬件加速推导）。
  */
 @Composable
 fun ClassToolsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     spacing: CtSpacing = CtSpacing(),
+    immersiveLight: CtLightSetting = CtLightSetting.Default,
+    lightCapabilityOverride: CtLightCapability? = null,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -237,6 +248,23 @@ fun ClassToolsTheme(
         }
     }
 
+    // 沉浸光感运行期上下文：设备能力档（API31+ 才有 RenderEffect 模糊）+ 安全区高度（顶部材质向上延展）。
+    val view = LocalView.current
+    val density = LocalDensity.current
+    val statusBarHeight = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+    val navigationBarHeight = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
+    val hardwareAccelerated = remember(view) { runCatching { view.isHardwareAccelerated }.getOrDefault(true) }
+    val sdkInt = remember { Build.VERSION.SDK_INT }
+    val capability = lightCapabilityOverride ?: ctLightCapabilityOf(sdkInt, hardwareAccelerated, immersiveLight)
+    val lightContext = remember(immersiveLight, capability, statusBarHeight, navigationBarHeight) {
+        CtLightContext(
+            setting = immersiveLight,
+            capability = capability,
+            statusBarHeight = statusBarHeight,
+            navigationBarHeight = navigationBarHeight,
+        )
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
         typography = CtTypography,
@@ -249,6 +277,9 @@ fun ClassToolsTheme(
                 LocalCtAccents provides ctAccentsOf(darkTheme),
                 LocalCtBrandColors provides if (darkTheme) DarkCtBrandColors else LightCtBrandColors,
                 LocalCtDarkTheme provides darkTheme,
+                LocalCtLightSetting provides immersiveLight,
+                LocalCtLightCapability provides capability,
+                LocalCtLight provides lightContext,
                 content = content,
             )
         },
@@ -263,12 +294,14 @@ fun ClassToolsTheme(
     appearance: AppearanceMode,
     dynamicColor: Boolean = false,
     spacing: CtSpacing = CtSpacing(),
+    immersiveLight: CtLightSetting = CtLightSetting.Default,
     content: @Composable () -> Unit,
 ) {
     ClassToolsTheme(
         darkTheme = appearance.resolveDark(isSystemInDarkTheme()),
         dynamicColor = dynamicColor,
         spacing = spacing,
+        immersiveLight = immersiveLight,
         content = content,
     )
 }

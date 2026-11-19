@@ -53,6 +53,14 @@ object AppearanceSettings {
     /** DataStore（`ct_settings`）键：是否隐藏系统状态栏。 */
     const val KEY_HIDE_STATUS_BAR: String = "hide_status_bar"
 
+    /**
+     * DataStore（`ct_settings`）键：沉浸光感（强 / 均衡 / 弱 / 关闭）。
+     *
+     * 持久化值 = [CtLightSetting.storageValue]（"strong"/"balanced"/"weak"/"off"），
+     * 与 [KEY_APPEARANCE_MODE] 同级（同属「外观」）。**禁止改名**，否则用户设置会丢。
+     */
+    const val KEY_IMMERSIVE_LIGHT: String = "immersive_light"
+
     /** 「隐藏状态栏」默认开启（用户要求：app 使用时顶部通知栏隐藏）。 */
     const val DEFAULT_HIDE_STATUS_BAR: Boolean = true
 

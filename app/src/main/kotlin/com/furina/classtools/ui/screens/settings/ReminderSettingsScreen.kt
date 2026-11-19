@@ -20,7 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -51,7 +51,7 @@ import com.furina.classtools.data.reminder.ReminderDiagnostics
 import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.reminder.ReminderSettingsStore
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.CtLightTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
@@ -84,6 +84,8 @@ fun ReminderSettingsScreen(
     val notificationsGranted =
         permissionController.state(PermissionType.NOTIFICATIONS).isGranted
     var diagnostics by remember { mutableStateOf<ReminderDiagnostics?>(null) }
+    // 沉浸光感顶栏「滚动 → 浮层」：顶栏固定、内容独立滚动（8dp 起 40dp 内渐显材质）。
+    val ctTopBarScroll = rememberScrollState()
 
     fun update(transform: (ReminderSettings) -> ReminderSettings) {
         scope.launch {
@@ -96,14 +98,21 @@ fun ReminderSettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .verticalScroll(rememberScrollState()),
+                .statusBarsPadding(),
         ) {
-            CtTopBar(title = "提醒", subtitle = "本机通知 · 不联网", onBack = onBack)
+            CtLightTopBar(
+                scrollPx = ctTopBarScroll.value.toFloat(),
+                title = "提醒",
+                subtitle = "本机通知 · 不联网",
+                onBack = onBack,
+            )
 
             Column(
-                modifier = Modifier.padding(
-                    horizontal = CtTokens.Spacing.pageHorizontalCompact,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(ctTopBarScroll)
+                    .padding(
+                        horizontal = CtTokens.Spacing.pageHorizontalCompact,
                     vertical = 8.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
@@ -242,7 +251,7 @@ fun ReminderSettingsScreen(
     }
 
     diagnostics?.let { diag ->
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { diagnostics = null },
             title = { Text("通知诊断") },
             text = {

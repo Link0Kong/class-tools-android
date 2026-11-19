@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -62,7 +62,7 @@ fun UpdateDialog(
 ) {
     val info = ui.info
     val dismissible = UpdateDialogPolicy.isDismissible(info)
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = { if (dismissible) onDismiss() },
         modifier = modifier,
         title = {

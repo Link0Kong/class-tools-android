@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.roster
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +27,7 @@ import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,7 +61,7 @@ import com.furina.classtools.features.roster.RosterMember
 import com.furina.classtools.features.roster.RosterState
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
@@ -177,7 +179,7 @@ fun RollCallScreen(
                     .fillMaxSize()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
+                ctTopBarRaw(
                     title = "点名",
                     subtitle = buildString {
                         val total = rosterState.rollSel.size
@@ -371,18 +373,25 @@ fun RollCallScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             )
+            }
         }
     }
 
     if (showResetConfirm) {
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { showResetConfirm = false },
             title = { Text("重置本轮点名") },
             text = { Text("清空全部「到/假」状态，保留点名名单。") },
@@ -401,7 +410,7 @@ fun RollCallScreen(
     }
 
     if (showClearConfirm) {
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { showClearConfirm = false },
             title = { Text("清空点名名单") },
             text = { Text("清空点名名单与本轮到/假状态（不影响抽签名单）。") },

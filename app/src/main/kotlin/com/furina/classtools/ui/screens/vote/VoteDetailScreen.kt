@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.vote
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -77,7 +79,7 @@ import com.furina.classtools.data.vote.VoteResult
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.CtLightTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolSectionHeader
@@ -246,6 +248,14 @@ fun VoteDetailScreen(
         }
     }
 
+    // 沉浸光感顶栏：详情滚动量驱动顶栏浮层渐显。
+    val ctTopBarLazyState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val ctTopBarScrollPx = if (ctTopBarLazyState.firstVisibleItemIndex > 0) {
+        com.furina.classtools.ui.theme.CT_TOP_BAR_FULL_SCROLL_PX
+    } else {
+        ctTopBarLazyState.firstVisibleItemScrollOffset.toFloat()
+    }
+
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
@@ -255,7 +265,9 @@ fun VoteDetailScreen(
                     .padding(horizontal = spec.horizontalPadding),
             ) {
                 val current = detail
-                CtTopBar(
+                // 沉浸光感顶栏：滚动量由详情 LazyColumn 上报（列表滚动 → 顶栏材质渐显）。
+                CtLightTopBar(
+                    scrollPx = ctTopBarScrollPx,
                     title = "投票详情",
                     subtitle = current?.poll?.let { if (it.isClosedStatus) "已结束" else current.statusText() },
                     onBack = onBack,
@@ -308,6 +320,7 @@ fun VoteDetailScreen(
                         )
 
                         LazyColumn(
+                            state = ctTopBarLazyState,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
@@ -420,12 +433,19 @@ fun VoteDetailScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 16.dp),
             )
+            }
         }
     }
 
@@ -737,9 +757,15 @@ private fun VoteDetailActionBar(
     onSubmit: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .ctLightMaterial(
+                CtLightScene.BOTTOM_DOCK,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                bodySafe = true,
+            ),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = Color.Transparent,
     ) {
         Column(
             modifier = Modifier

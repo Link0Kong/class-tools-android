@@ -38,7 +38,7 @@ import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -81,7 +81,7 @@ import com.furina.classtools.data.cloudspace.CloudSpaceUriSource
 import com.furina.classtools.data.cloudspace.OkHttpCloudSpaceDownloader
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtIconAction
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
@@ -372,7 +372,7 @@ fun CloudSpaceScreen(
     )
 
     deleteTarget?.let { file ->
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text("删除文件？") },
             text = { Text("「${file.name}」将从云空间删除，且不可恢复。") },
@@ -391,7 +391,7 @@ fun CloudSpaceScreen(
     }
 
     if (showClearConfirm) {
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { showClearConfirm = false },
             title = { Text("清空云空间？") },
             text = { Text("将立即删除全部文件，且不可恢复。同账号其它设备也会同步清空。") },
@@ -450,9 +450,9 @@ fun CloudSpaceContent(
                     .fillMaxSize()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
-                    title = "临时云空间",
+                ctTopBarRaw(
                     subtitle = "同账号 · 跨设备 · 文件保留 3 天",
+                    title = "临时云空间",
                     onBack = onBack,
                     actions = {
                         CtIconAction(

@@ -28,7 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.CtLightTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShape
@@ -47,6 +47,8 @@ fun ToolPlaceholderScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 沉浸光感顶栏「滚动 → 浮层」：顶栏固定、内容独立滚动（8dp 起 40dp 内渐显材质）。
+    val ctTopBarScroll = rememberScrollState()
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -54,12 +56,17 @@ fun ToolPlaceholderScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
-            CtTopBar(title = tool.name, onBack = onBack)
+            CtLightTopBar(
+                scrollPx = ctTopBarScroll.value.toFloat(),
+                title = tool.name,
+                onBack = onBack,
+            )
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
+                    .weight(1f)
+                    .verticalScroll(ctTopBarScroll)
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {

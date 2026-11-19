@@ -25,7 +25,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,7 +50,7 @@ import com.furina.classtools.data.permission.PermissionState
 import com.furina.classtools.data.permission.PermissionTexts
 import com.furina.classtools.data.permission.PermissionType
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.CtLightTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.theme.CtShape
@@ -79,6 +79,9 @@ fun PermissionSettingsScreen(
     var showRationale by remember { mutableStateOf(false) }
     var showSettingsGuide by remember { mutableStateOf(false) }
 
+    // 沉浸光感顶栏「滚动 → 浮层」：顶栏固定、内容独立滚动（8dp 起 40dp 内渐显材质）。
+    val ctTopBarScroll = rememberScrollState()
+
     // refreshTick 参与读取，授权返回后强制重新检查。
     val snapshot = remember(refreshTick) { controller.snapshot() }
 
@@ -101,13 +104,20 @@ fun PermissionSettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .verticalScroll(rememberScrollState()),
+                .statusBarsPadding(),
         ) {
-            CtTopBar(title = "权限与提醒", subtitle = "通知 · 日历", onBack = onBack)
+            CtLightTopBar(
+                scrollPx = ctTopBarScroll.value.toFloat(),
+                title = "权限与提醒",
+                subtitle = "通知 · 日历",
+                onBack = onBack,
+            )
 
             Column(
-                modifier = Modifier.padding(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(ctTopBarScroll)
+                    .padding(
                     horizontal = CtTokens.Spacing.pageHorizontalCompact,
                     vertical = 8.dp,
                 ),
@@ -245,7 +255,7 @@ fun PermissionSettingsScreen(
     if (showRationale) {
         val type = pendingType
         val copy = type?.let { PermissionTexts.of(it) }
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { showRationale = false },
             title = { Text(copy?.title ?: "需要权限") },
             text = { Text(copy?.rationale ?: "") },
@@ -273,7 +283,7 @@ fun PermissionSettingsScreen(
 
     if (showSettingsGuide) {
         val copy = pendingType?.let { PermissionTexts.of(it) }
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { showSettingsGuide = false },
             title = { Text(copy?.settingsTitle ?: "权限已被关闭") },
             text = { Text(copy?.settingsMessage ?: "") },

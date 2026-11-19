@@ -21,7 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -439,7 +439,7 @@ fun IdentityScreen(
 
     // OPPO 快捷登录失败/未绑定：简短弹窗（不写长说明；确认后清空由调用方处理）。
     oppoLoginError?.let { message ->
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = onDismissOppoError,
             title = { Text("OPPO 账号登录") },
             text = {

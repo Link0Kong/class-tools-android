@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.timetable
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animate
@@ -107,7 +109,7 @@ import com.furina.classtools.features.export.ExportCardSpec
 import com.furina.classtools.ui.adaptive.CtAdaptiveSpec
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.components.expressive.CtBottomSheetFooter
@@ -386,9 +388,9 @@ fun TimetableViewScreen(
                     .fillMaxHeight()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
-                    title = "课表",
+                ctTopBarRaw(
                     subtitle = sourceLabel,
+                    title = "课表",
                     onBack = onBack,
                     actions = {
                         if (onOpenMap != null) {
@@ -525,13 +527,20 @@ fun TimetableViewScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             )
+            }
 
             // 课表接入入口（悬浮按钮）：导出 .ics / WakeUp 备份、写入系统日历并提醒
             if (phase == TtPhase.READY && snapshot.c.isNotEmpty()) {

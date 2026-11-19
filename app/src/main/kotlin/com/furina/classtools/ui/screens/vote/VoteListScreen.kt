@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.vote
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,7 +60,7 @@ import com.furina.classtools.data.vote.VoteResult
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolChip
@@ -203,9 +205,9 @@ fun VoteListScreen(
                     .padding(horizontal = spec.horizontalPadding),
             ) {
                 val current = pollList
-                CtTopBar(
-                    title = "投票",
+                ctTopBarRaw(
                     subtitle = current?.let { "进行中 ${it.openCount} · 已结束 ${it.closedCount}" },
+                    title = "投票",
                     onBack = onBack,
                     actions = {
                         IconButton(onClick = { refresh() }) {
@@ -370,12 +372,19 @@ fun VoteListScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 16.dp),
             )
+            }
         }
     }
 }

@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,7 +64,7 @@ private fun PolicyDialog(
     val context = LocalContext.current
     // 兜底提示：打开失败后把链接显示在弹层里（可长按复制），避免用户「点了没反应」。
     var fallbackNote by remember { mutableStateOf("") }
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Column {

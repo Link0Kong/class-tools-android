@@ -27,7 +27,7 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.TableChart
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -69,7 +69,7 @@ import com.furina.classtools.features.fit.FitScoring
 import com.furina.classtools.features.fit.FitSex
 import com.furina.classtools.features.fit.FitTables
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
@@ -210,9 +210,9 @@ fun FitScreen(
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-            CtTopBar(
-                title = "体测",
+            ctTopBarRaw(
                 subtitle = "国标 2014 · 未填项按 0 计",
+                title = "体测",
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = { showTable = true }) {
@@ -325,7 +325,7 @@ fun FitScreen(
             val record = history.getOrNull(index)
             if (record != null) {
                 var name by remember(record.id, index) { mutableStateOf(record.displayName()) }
-                AlertDialog(
+                CtLightAlertDialog(
                     onDismissRequest = { renameIndex = null },
                     title = { Text("历史记录名称") },
                     text = {
@@ -360,7 +360,7 @@ fun FitScreen(
             }
         }
         deleteIndex?.let { index ->
-            AlertDialog(
+            CtLightAlertDialog(
                 onDismissRequest = { deleteIndex = null },
                 title = { Text("删除记录") },
                 text = { Text("删除后可在提示条中撤销（云端会同步删除）") },
@@ -378,7 +378,7 @@ fun FitScreen(
             )
         }
         if (showClearDialog) {
-            AlertDialog(
+            CtLightAlertDialog(
                 onDismissRequest = { showClearDialog = false },
                 title = { Text("清空输入") },
                 text = { Text("清空体测输入与结果？历史记录不受影响") },

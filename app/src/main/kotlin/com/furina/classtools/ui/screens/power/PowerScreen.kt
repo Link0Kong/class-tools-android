@@ -37,7 +37,7 @@ import androidx.compose.material.icons.rounded.Apartment
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -86,7 +86,7 @@ import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.features.power.PowerCompareLogic
 import com.furina.classtools.features.power.PowerCompareResult
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.components.expressive.CtBottomSheetFooter
@@ -387,9 +387,9 @@ fun PowerScreen(
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-            CtTopBar(
-                title = "宿舍电费",
+            ctTopBarRaw(
                 subtitle = PowerRooms.labelOf(sel).takeIf { it.isNotBlank() },
+                title = "宿舍电费",
                 onBack = onBack,
                 actions = {
                     if (sel.isNotBlank()) {
@@ -461,7 +461,7 @@ fun PowerScreen(
             )
         }
         if (showCompareDetail && compareResult.available) {
-            AlertDialog(
+            CtLightAlertDialog(
                 onDismissRequest = { showCompareDetail = false },
                 title = { Text(compareResult.label) },
                 text = {

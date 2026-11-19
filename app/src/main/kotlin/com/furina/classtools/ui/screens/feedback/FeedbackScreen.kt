@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.feedback
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -57,7 +59,7 @@ import com.furina.classtools.features.feedback.FeedbackRow
 import com.furina.classtools.features.feedback.FeedbackRules
 import com.furina.classtools.features.feedback.FeedbackSubmitResult
 import com.furina.classtools.ui.components.CtLoading
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtChipOption
@@ -214,9 +216,9 @@ fun FeedbackScreen(
                     .fillMaxSize()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
-                    title = "反馈建议",
+                ctTopBarRaw(
                     subtitle = FeedbackRules.subtitle(rows.size, isAdmin),
+                    title = "反馈建议",
                     onBack = onBack,
                 )
 
@@ -266,13 +268,20 @@ fun FeedbackScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             )
+            }
         }
     }
 }

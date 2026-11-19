@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.furina.classtools.ui.theme.AppearanceMode
 import com.furina.classtools.ui.theme.AppearanceSettings
+import com.furina.classtools.ui.theme.CtLightSetting
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -49,6 +50,16 @@ class AppSettingsStore(private val context: Context) {
         AppearanceSettings.hideStatusBarOrDefault(prefs[KEY_HIDE_STATUS_BAR])
     }
 
+    /**
+     * 沉浸光感（强 / 均衡 / 弱 / 关闭；默认「均衡」）。
+     *
+     * 该 Flow 被 `ClassToolsTheme` 注入 `LocalCtLight`：写入后全应用（含所有深层页面/弹层）立即重组生效，
+     * 冷启动首帧用 [startupImmersiveLight] 同步镜像，避免「先按均衡画一帧再跳变」。
+     */
+    val immersiveLight: Flow<CtLightSetting> = store.data.map { prefs ->
+        CtLightSetting.fromStorage(prefs[KEY_IMMERSIVE_LIGHT])
+    }
+
     /** 首帧同步读取外观模式（未写入过 = 跟随系统）。 */
     fun startupAppearanceMode(): AppearanceMode =
         AppearanceMode.fromStorage(startupPrefs.getString(STARTUP_KEY_APPEARANCE_MODE, null))
@@ -58,6 +69,10 @@ class AppSettingsStore(private val context: Context) {
         STARTUP_KEY_HIDE_STATUS_BAR,
         AppearanceSettings.DEFAULT_HIDE_STATUS_BAR,
     )
+
+    /** 首帧同步读取沉浸光感（未写入过 = 均衡）。 */
+    fun startupImmersiveLight(): CtLightSetting =
+        CtLightSetting.fromStorage(startupPrefs.getString(STARTUP_KEY_IMMERSIVE_LIGHT, null))
 
     suspend fun setDynamicColor(enabled: Boolean) {
         store.edit { prefs -> prefs[KEY_DYNAMIC_COLOR] = enabled }
@@ -73,15 +88,23 @@ class AppSettingsStore(private val context: Context) {
         store.edit { prefs -> prefs[KEY_HIDE_STATUS_BAR] = enabled }
     }
 
+    /** 写沉浸光感（强/均衡/弱/关闭）；DataStore 真源 + 冷启动镜像同步写。 */
+    suspend fun setImmersiveLight(setting: CtLightSetting) {
+        startupPrefs.edit().putString(STARTUP_KEY_IMMERSIVE_LIGHT, setting.storageValue).apply()
+        store.edit { prefs -> prefs[KEY_IMMERSIVE_LIGHT] = setting.storageValue }
+    }
+
     private companion object {
         val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val KEY_APPEARANCE_MODE = stringPreferencesKey(AppearanceSettings.KEY_APPEARANCE_MODE)
         val KEY_HIDE_STATUS_BAR = booleanPreferencesKey(AppearanceSettings.KEY_HIDE_STATUS_BAR)
+        val KEY_IMMERSIVE_LIGHT = stringPreferencesKey(AppearanceSettings.KEY_IMMERSIVE_LIGHT)
 
-        /** 冷启动镜像（仅外观模式 + 隐藏状态栏；DataStore 仍是真源）。 */
+        /** 冷启动镜像（仅外观模式 + 隐藏状态栏 + 沉浸光感；DataStore 仍是真源）。 */
         const val STARTUP_PREFS = "ct_appearance_startup"
         const val STARTUP_KEY_APPEARANCE_MODE = "appearance_mode"
         const val STARTUP_KEY_HIDE_STATUS_BAR = "hide_status_bar"
+        const val STARTUP_KEY_IMMERSIVE_LIGHT = "immersive_light"
 
         val Context.settingsDataStore by preferencesDataStore(name = "ct_settings")
     }

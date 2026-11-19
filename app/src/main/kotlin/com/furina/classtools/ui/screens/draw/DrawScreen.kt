@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.draw
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -52,7 +54,7 @@ import com.furina.classtools.features.draw.UserDataDrawConfigStore
 import com.furina.classtools.features.draw.defaultDrawRandom
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.theme.CtSpace
 import kotlinx.coroutines.delay
@@ -218,7 +220,8 @@ fun DrawScreen(
                     .fillMaxSize()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
+                ctTopBarRaw(
+                    subtitle = null,
                     title = "抽签",
                     onBack = ::handleBack,
                     actions = {
@@ -310,13 +313,20 @@ fun DrawScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 92.dp),
             )
+            }
         }
     }
 }

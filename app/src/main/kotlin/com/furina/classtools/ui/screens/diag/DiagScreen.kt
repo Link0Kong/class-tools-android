@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.diag
 
+import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -89,7 +91,7 @@ import com.furina.classtools.data.diag.valueOrNull
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.theme.ClassToolsTheme
@@ -371,7 +373,8 @@ fun DiagScreen(
                     .fillMaxHeight()
                     .statusBarsPadding(),
             ) {
-                CtTopBar(
+                ctTopBarRaw(
+                    subtitle = null,
                     title = "诊断",
                     onBack = onBack,
                     actions = {
@@ -495,13 +498,20 @@ fun DiagScreen(
                 }
             }
 
-            SnackbarHost(
+            androidx.compose.foundation.layout.Box(
+            modifier = Modifier.ctLightMaterial(
+                CtLightScene.SNACKBAR,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                bodySafe = true,
+            ),
+        ) { SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             )
+            }
         }
     }
 }
