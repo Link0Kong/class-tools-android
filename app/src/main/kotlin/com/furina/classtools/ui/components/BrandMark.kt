@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.ui.theme.CtPalette
 
 /**
  * 品牌标记：暖白圆角卡 + 三圆点（雾青居中、灰蓝左上、暖沙右下）。
@@ -26,7 +27,7 @@ import androidx.compose.ui.unit.dp
 fun BrandMark(
     modifier: Modifier = Modifier,
     size: Dp = 56.dp,
-    container: Color = Color(0xFFF7F8F8),
+    container: Color = CtPalette.Bg,
 ) {
     Canvas(modifier = modifier.size(size)) {
         val s = this.size.minDimension
@@ -47,19 +48,19 @@ fun BrandMark(
         )
         // 中心点（雾青）
         drawCircle(
-            color = Color(0xFF4E9082),
+            color = CtPalette.MistTeal,
             radius = s * (9f / 64f),
             center = Offset(s * 0.5f, s * 0.5f),
         )
         // 左上点（灰蓝）
         drawCircle(
-            color = Color(0xFF6E8CA8),
+            color = CtPalette.SlateBlue,
             radius = s * (5f / 64f),
             center = Offset(s * (15f / 64f), s * (15f / 64f)),
         )
         // 右下点（暖沙）
         drawCircle(
-            color = Color(0xFFB98F63),
+            color = CtPalette.WarmSand,
             radius = s * (5f / 64f),
             center = Offset(s * (49f / 64f), s * (49f / 64f)),
         )
@@ -79,9 +80,9 @@ fun CtBrandDots(
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
         listOf(
-            Color(0xFF6E8CA8),
-            Color(0xFF4E9082),
-            Color(0xFFB98F63),
+            CtPalette.SlateBlue,
+            CtPalette.MistTeal,
+            CtPalette.WarmSand,
         ).forEach { color ->
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier

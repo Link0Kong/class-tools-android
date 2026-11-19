@@ -20,8 +20,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -68,6 +66,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -94,6 +94,9 @@ import com.furina.classtools.data.ppt.PptVideoInfo
 import com.furina.classtools.features.ppt.PptPlayerLogic
 import com.furina.classtools.features.ppt.PptVideoHealth
 import com.furina.classtools.features.ppt.PptVideoLogic
+import com.furina.classtools.ui.theme.CtPalette
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -337,7 +340,7 @@ fun PptVideoPlayer(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(CtPalette.MediaScrimSoft)
             .focusRequester(keyFocus)
             .focusable()
             .onKeyEvent { event ->
@@ -391,7 +394,7 @@ fun PptVideoPlayer(
                 modifier = Modifier
                     .size(stage.first, stage.second)
                     .align(Alignment.Center)
-                    .clip(RoundedCornerShape(0.dp))
+                    .clip(androidx.compose.ui.graphics.RectangleShape)
                     .pointerInput(Unit) {
                         detectTapGestures {
                             controlsVisible = !controlsVisible
@@ -445,7 +448,7 @@ fun PptVideoPlayer(
                                 Icon(
                                     imageVector = Icons.Rounded.PlayArrow,
                                     contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.3f),
+                                    tint = CtPalette.MediaOnScrim.copy(alpha = 0.3f),
                                     modifier = Modifier.size(64.dp),
                                 )
                             }
@@ -455,7 +458,7 @@ fun PptVideoPlayer(
 
                 if (engine != null && (!prepared || buffering)) {
                     CircularProgressIndicator(
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = CtPalette.MediaOnScrim.copy(alpha = 0.7f),
                         strokeWidth = 2.dp,
                         modifier = Modifier.align(Alignment.Center).size(30.dp),
                     )
@@ -464,7 +467,7 @@ fun PptVideoPlayer(
                 if (needsManualStart || ended) {
                     Surface(
                         shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.45f),
+                        color = CtPalette.MediaScrimSoft.copy(alpha = 0.45f),
                         modifier = Modifier
                             .align(Alignment.Center)
                             .size(76.dp)
@@ -483,13 +486,12 @@ fun PptVideoPlayer(
                             Icon(
                                 imageVector = if (ended) Icons.Rounded.Replay else Icons.Rounded.PlayArrow,
                                 contentDescription = "播放",
-                                tint = Color.White,
+                                tint = CtPalette.MediaOnScrim,
                                 modifier = Modifier.size(40.dp),
                             )
                         }
                     }
                 }
-
 
             }
         }
@@ -509,7 +511,7 @@ fun PptVideoPlayer(
             ) {
                 Text(
                     text = title.ifBlank { "演示" },
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = CtPalette.MediaOnScrim.copy(alpha = 0.75f),
                     style = MaterialTheme.typography.labelLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -519,7 +521,7 @@ fun PptVideoPlayer(
                 if (positionSec > 5.0 || ended) {
                     Surface(
                         shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.14f),
+                        color = CtPalette.MediaOnScrim.copy(alpha = 0.14f),
                         modifier = Modifier
                             .clip(CircleShape)
                             .clickable {
@@ -532,7 +534,7 @@ fun PptVideoPlayer(
                     ) {
                         Text(
                             text = "从头",
-                            color = Color.White,
+                            color = CtPalette.MediaOnScrim,
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         )
@@ -541,7 +543,7 @@ fun PptVideoPlayer(
                 }
                 Surface(
                     shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.14f),
+                    color = CtPalette.MediaOnScrim.copy(alpha = 0.14f),
                     modifier = Modifier
                         .clip(CircleShape)
                         .clickable {
@@ -551,7 +553,7 @@ fun PptVideoPlayer(
                 ) {
                     Text(
                         text = "原样",
-                        color = Color.White,
+                        color = CtPalette.MediaOnScrim,
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                     )
@@ -590,14 +592,14 @@ fun PptVideoPlayer(
                         Icon(
                             imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             contentDescription = if (isPlaying) "暂停" else "播放",
-                            tint = Color.White,
+                            tint = CtPalette.MediaOnScrim,
                         )
                     }
                     Text(
                         text = "${PptVideoLogic.formatTime(positionSec)} / " +
                             PptVideoLogic.formatTime(effectiveDurationSec.takeIf { it > 0 } ?: durationSec),
-                        color = Color.White,
-                        fontSize = 13.sp,
+                        color = CtPalette.MediaOnScrim,
+                        fontSize = CtType.labelSize,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(horizontal = 4.dp),
                     )
@@ -606,26 +608,26 @@ fun PptVideoPlayer(
                         Icon(
                             imageVector = Icons.Rounded.ChevronLeft,
                             contentDescription = "上一页",
-                            tint = Color.White.copy(alpha = 0.9f),
+                            tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                         )
                     }
                     IconButton(onClick = ::nextPage, modifier = Modifier.size(36.dp)) {
                         Icon(
                             imageVector = Icons.Rounded.ChevronRight,
                             contentDescription = "下一页",
-                            tint = Color.White.copy(alpha = 0.9f),
+                            tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                         )
                     }
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color.White.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(CtRadius.tile),
+                        color = CtPalette.MediaOnScrim.copy(alpha = 0.12f),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(CtRadius.tile))
                             .clickable { switchSpeed() },
                     ) {
                         Text(
                             text = PptVideoLogic.speedLabel(speed),
-                            color = Color.White,
+                            color = CtPalette.MediaOnScrim,
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                         )
@@ -634,7 +636,7 @@ fun PptVideoPlayer(
                         Icon(
                             imageVector = if (landscape) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
                             contentDescription = if (landscape) "退出全屏" else "全屏",
-                            tint = Color.White.copy(alpha = 0.9f),
+                            tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                         )
                     }
                     IconButton(
@@ -652,7 +654,7 @@ fun PptVideoPlayer(
                         Icon(
                             imageVector = Icons.Rounded.Download,
                             contentDescription = "下载原样视频",
-                            tint = Color.White.copy(alpha = 0.9f),
+                            tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                         )
                     }
                     IconButton(
@@ -665,7 +667,7 @@ fun PptVideoPlayer(
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "关闭",
-                            tint = Color.White.copy(alpha = 0.9f),
+                            tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                         )
                     }
                 }
@@ -731,7 +733,7 @@ private fun PptVideoProgressBar(
                 .fillMaxWidth()
                 .height(4.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.22f)),
+                .background(CtPalette.MediaOnScrim.copy(alpha = 0.22f)),
         )
         // 已播放
         Box(
@@ -740,7 +742,7 @@ private fun PptVideoProgressBar(
                 .fillMaxWidth(shown)
                 .height(4.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.9f)),
+                .background(CtPalette.MediaOnScrim.copy(alpha = 0.9f)),
         )
         // 章节刻度
         chapters.forEach { chapter ->
@@ -766,7 +768,7 @@ private fun PptVideoProgressBar(
                     if (frac > 0.001f && frac < 0.999f) {
                         val x = size.width * frac
                         drawLine(
-                            color = Color.White.copy(alpha = 0.75f),
+                            color = CtPalette.MediaOnScrim.copy(alpha = 0.75f),
                             start = androidx.compose.ui.geometry.Offset(x, h * 0.25f),
                             end = androidx.compose.ui.geometry.Offset(x, h * 0.75f),
                             strokeWidth = 2f,
@@ -777,7 +779,7 @@ private fun PptVideoProgressBar(
             // 滑块
             val x = size.width * shown
             drawCircle(
-                color = Color.White,
+                color = CtPalette.MediaOnScrim,
                 radius = h * 0.28f,
                 center = androidx.compose.ui.geometry.Offset(x, h / 2f),
             )
@@ -896,7 +898,6 @@ private class PptVideoEngine(private val context: Context) {
         runCatching { mp?.release() }
     }
 }
-
 
 private fun Context.findActivity(): Activity? {
     var current: Context? = this

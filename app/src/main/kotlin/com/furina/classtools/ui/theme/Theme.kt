@@ -16,55 +16,50 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 
 // =============================================================================
-// 班级工具站 · 主题入口
+// 主题入口（唯一）
 //
-// 用法：ClassToolsTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) { ... }
+// 用法：ClassToolsTheme(darkTheme = …, dynamicColor = false) { … }
 //
-// 取色策略（design/ANDROID17_DESIGN.md §2.1）：
-//   L1 品牌固定方案（默认）：品牌 HCT 色板生成的明/暗 48 角色，跨端一致、QA 可复现。
-//   L2 品牌种子动态（可选，Android 12+）：surface/neutral 跟随系统壁纸，
-//      primary/secondary/tertiary 仍保留品牌色（hybrid），避免失去班级工具识别。
-//   L3 完全动态：暂不提供（会丢失功能语义色与品牌）。
+// 它一次性注入：
+//   MaterialTheme.colorScheme  ← [Color.kt]（数值来自 [CtPalette]）
+//   MaterialTheme.typography   ← [CtTypeScale]/[CtType]
+//   MaterialTheme.shapes       ← [CtShapes]
+//   LocalCtColors（语义色）/ LocalCtBrandColors（品牌语义）/ LocalCtAccents（强调色）
+//   LocalCtDarkTheme / LocalCtSpacing / LocalCtEmphasizedType
+//
+// 取色策略：
+//   L1 品牌固定方案（默认）：跨端一致、QA 可复现；
+//   L2 品牌混合动态（可选）：surface/中性跟随壁纸，品牌主色保留。
 // =============================================================================
 
-/** Material Theme 之外的语义间距/可点区 token（组件与页面共用；2026-11-19 与鸿蒙 PAGE_PADDING 16 / GAP 12 对齐）。 */
+/** 语义间距（CompositionLocal；默认值 = [CtSpace]，大屏可由调用方覆盖）。 */
 data class CtSpacing(
-    /** 页面左右边距（鸿蒙 `Tokens.PAGE_PADDING` = 16；2026-11-19 由 20 修正）。 */
-    val screenHorizontal: Dp = 16.dp,
-    /** 大区块之间的垂直间距（鸿蒙元素间大间隔 16vp）。 */
-    val sectionGap: Dp = 16.dp,
-    /** 卡片之间的间距。 */
-    val cardGap: Dp = 12.dp,
-    /** 最小触控目标（无障碍硬线 48dp）。 */
-    val minTouchTarget: Dp = 48.dp,
-    /** 卡片内边距（鸿蒙有明显边界元素 16vp）。 */
-    val cardPadding: Dp = 16.dp,
-    /** 元素间大 / 普通间隔（鸿蒙 16vp / 8vp）。 */
-    val elementGapLarge: Dp = 16.dp,
-    val elementGap: Dp = 8.dp,
-    /** 主次文本纵 / 横间隔（鸿蒙 2vp / 8vp）。 */
-    val textGapVertical: Dp = 2.dp,
-    val textGapHorizontal: Dp = 8.dp,
-    /** medium 宽度下的页面边距。 */
-    val pageHorizontalMedium: Dp = 24.dp,
-    /** expanded 宽度下的页面边距。 */
-    val pageHorizontalExpanded: Dp = 32.dp,
-    /** 大屏内容最大宽度（居中留白）。 */
-    val contentMaxWidth: Dp = 960.dp,
+    val screenHorizontal: Dp = CtSpace.pagePhone,
+    val sectionGap: Dp = CtSpace.sectionGap,
+    val cardGap: Dp = CtSpace.cardGap,
+    val minTouchTarget: Dp = CtSize.minTouch,
+    val cardPadding: Dp = CtSpace.cardPadding,
+    val elementGapLarge: Dp = CtSpace.lg,
+    val elementGap: Dp = CtSpace.sm,
+    val textGapVertical: Dp = CtSpace.xxs,
+    val textGapHorizontal: Dp = CtSpace.sm,
+    val pageHorizontalMedium: Dp = CtSpace.pageFold,
+    val pageHorizontalExpanded: Dp = CtSpace.pageTablet,
+    val contentMaxWidth: Dp = CtSize.toolMaxWidth,
 )
 
 val LocalCtSpacing = staticCompositionLocalOf { CtSpacing() }
 
-/** 当前是否深色主题（供自绘组件取玻璃/阴影等非 ColorScheme 数值时判断）。 */
+/** 当前是否深色主题。 */
 val LocalCtDarkTheme = staticCompositionLocalOf { false }
 
 // ---------------------------------------------------------------------------
-// 浅色 ColorScheme（48 角色；数值 = design/tokens.json → color.light）
+// 浅色 ColorScheme（48 角色；数值 = Color.kt ← CtPalette）
 // ---------------------------------------------------------------------------
 private val CtLightColorScheme: ColorScheme = lightColorScheme(
     primary = LightPrimary,
@@ -118,7 +113,7 @@ private val CtLightColorScheme: ColorScheme = lightColorScheme(
 )
 
 // ---------------------------------------------------------------------------
-// 深色 ColorScheme（48 角色；数值 = design/tokens.json → color.dark）
+// 深色 ColorScheme（48 角色）
 // ---------------------------------------------------------------------------
 private val CtDarkColorScheme: ColorScheme = darkColorScheme(
     primary = DarkPrimary,
@@ -171,11 +166,14 @@ private val CtDarkColorScheme: ColorScheme = darkColorScheme(
     onTertiaryFixedVariant = DarkOnTertiaryFixedVariant,
 )
 
+/** M3 标准（非 Expressive）取色入口，供测试/预览对照。 */
+val CtThemeColorSchemes: Pair<ColorScheme, ColorScheme> = CtLightColorScheme to CtDarkColorScheme
+
 /**
  * L2 混合动态取色：surface/neutral 跟随系统壁纸，品牌 primary/secondary/tertiary
  * （含容器与 fixed 角色）保留品牌方案，避免「跟随壁纸后认不出班级工具」。
  */
-private fun brandedDynamicScheme(context: android.content.Context, dark: Boolean): ColorScheme {
+private fun brandedDynamicScheme(context: Context, dark: Boolean): ColorScheme {
     val dynamic = if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     val brand = if (dark) CtDarkColorScheme else CtLightColorScheme
     return dynamic.copy(
@@ -210,12 +208,9 @@ private fun brandedDynamicScheme(context: android.content.Context, dark: Boolean
 /**
  * 全局主题。
  *
- * @param darkTheme 是否深色（默认跟随系统）。调用方按「外观模式」用
- *   [AppearanceMode.resolveDark] 解析后传入即可强制浅色/深色（我的 → 外观），
- *   传 `isSystemInDarkTheme()` 则跟随系统。
- * @param dynamicColor 是否跟随系统壁纸取色（Material You）。默认关闭以保持品牌识别；
- *   Android 12+ 开启后为「混合动态色」（品牌主色保留，surface 跟随壁纸）。
- * @param spacing 语义间距（默认 CtSpacing；大屏可由调用方覆盖）。
+ * @param darkTheme 是否深色（默认跟随系统；调用方按「外观模式」用 [AppearanceMode.resolveDark] 解析）。
+ * @param dynamicColor 是否跟随系统壁纸取色（Material You）。默认关闭以保持品牌识别。
+ * @param spacing 语义间距（默认 [CtSpacing]；大屏可由调用方覆盖）。
  */
 @Composable
 fun ClassToolsTheme(
@@ -233,7 +228,6 @@ fun ClassToolsTheme(
         else -> CtLightColorScheme
     }
 
-    // 品牌语义色 / 玻璃材质 / 表达性字型：随明暗切换。
     // 系统栏图标随主题切换：深色模式状态栏/导航栏图标用浅色，避免「黑字压暗底」不可读。
     LaunchedEffect(darkTheme) {
         val activity = context.findActivity() ?: return@LaunchedEffect
@@ -243,9 +237,6 @@ fun ClassToolsTheme(
         }
     }
 
-    val brandColors = if (darkTheme) DarkCtBrandColors else LightCtBrandColors
-    val glassColors = if (darkTheme) DarkCtGlassColors else LightCtGlassColors
-
     MaterialTheme(
         colorScheme = colorScheme,
         typography = CtTypography,
@@ -254,8 +245,9 @@ fun ClassToolsTheme(
             CompositionLocalProvider(
                 LocalCtSpacing provides spacing,
                 LocalCtEmphasizedType provides CtEmphasizedType,
-                LocalCtBrandColors provides brandColors,
-                LocalCtGlassColors provides glassColors,
+                LocalCtColors provides ctColorOf(darkTheme),
+                LocalCtAccents provides ctAccentsOf(darkTheme),
+                LocalCtBrandColors provides if (darkTheme) DarkCtBrandColors else LightCtBrandColors,
                 LocalCtDarkTheme provides darkTheme,
                 content = content,
             )
@@ -265,8 +257,6 @@ fun ClassToolsTheme(
 
 /**
  * 按「外观模式」强制浅/深（跟随系统时取 [isSystemInDarkTheme]）：我的 → 外观三选一直接传入。
- *
- * 与 [ClassToolsTheme] 的 `darkTheme` 重载等价，便于页面/预览少写解析代码。
  */
 @Composable
 fun ClassToolsTheme(

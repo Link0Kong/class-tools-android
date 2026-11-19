@@ -291,4 +291,3 @@ object JwCardMapper {
 /** 当前本地时间 `HH:mm`（状态条「数据更新 HH:mm」，JVM 可测）。 */
 fun jwUpdatedTimeText(millis: Long = System.currentTimeMillis()): String =
     SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(millis))
-

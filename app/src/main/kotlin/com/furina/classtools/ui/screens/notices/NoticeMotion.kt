@@ -9,9 +9,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -20,16 +20,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.grid.LazyGridItemScope
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -40,6 +39,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -54,8 +54,11 @@ import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtPalette
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlinx.coroutines.delay
+
 // =============================================================================
 // 通知页高级动效（task-43）
 //
@@ -250,7 +253,7 @@ internal fun NoticePressableCard(
 
     // 高光：深色用白色微高光（surfaceBright 在深色下本身很暗），浅色用 surfaceBright
     val dark = LocalCtDarkTheme.current
-    val highlight = if (dark) Color.White else MaterialTheme.colorScheme.surfaceBright
+    val highlight = if (dark) CtPalette.MediaOnScrim else MaterialTheme.colorScheme.surfaceBright
     val highlightAlpha = (if (dark) 0.12f else 0.16f) * press + (if (dark) 0.04f else 0.07f) * expand
 
     val semanticsModifier = if (contentDescription != null) {
@@ -261,7 +264,7 @@ internal fun NoticePressableCard(
     } else {
         Modifier.semantics { role = Role.Button }
     }
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(CtRadius.card)
     val ringColor = if (pinned) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
     } else {

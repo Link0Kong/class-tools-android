@@ -1,16 +1,12 @@
 package com.furina.classtools.ui.navigation
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.view.View
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,37 +16,50 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.tool.AppTool
+import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtElevation
+import com.furina.classtools.ui.theme.CtMotionTokens
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
+import com.furina.classtools.ui.theme.CtSize
+import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.theme.rememberCtColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
+import com.furina.classtools.ui.theme.uiAccentOf
 
 /**
- * 工具卡 → 工具页的「一镜到底」容器转场（参考 HFUT-Schedule 的转场连续性原则，自行实现）。
+ * 工具卡 → 工具页的**共享容器变换**（Shared Transition）。
  *
- * 思路（不引入 Navigation shared-element 实验 API，稳定可控）：
- * - 卡片 `onGloballyPositioned` 把工具 id → 根坐标 bounds 登记到 [ToolTransitionAnchors]；
- * - 点卡片时，在 NavHost 上覆盖一层 [ToolTransitionOverlay]：从卡片 bounds 长成全屏圆角容器，
- *   同时背后的 NavHost 照常 push；覆盖层在最后 30% 淡出，形成「卡片展开成页面」的连续感；
- * - 目标页仍使用既有 spring push/pop 转场；系统「移除动画」时直接跳转、无覆盖层。
+ * M3 Expressive 的容器变换（container transform）语义：
+ *   起始容器（工具卡）与目标容器（工具页）之间做**位置 + 尺寸 + 圆角**的连续形变，
+ *   由同一个弹簧驱动；内容在形变过程中淡出/淡入，因此用户看到的是「这张卡变成了这个页面」，
+ *   而不是「两个页面互相推挤」。
+ *
+ * 实现（不引入实验性 shared-element API，行为稳定可控）：
+ *  - 卡片 `onGloballyPositioned` 把工具 id → 根坐标 bounds 登记到 [ToolTransitionAnchors]；
+ *  - 点击卡片：覆盖层从卡片 bounds **经弹簧**长成全屏圆角容器，同时 NavHost push 目标页
+ *    （目标页自身 push 转场关闭，因此不会和覆盖层叠加出两重动画）；
+ *  - 返回：工具页仍在前台时直接 pop，NavHost 的 pop 转场关闭；覆盖层以全屏开始、
+ *    经**同一个弹簧**缩回卡片 bounds 并淡出 —— 全程只有一层动画，没有「快照遮底」。
+ *  - 系统「移除动画」时直接跳转、无覆盖层。
+ *
+ * 与旧实现的差别（2026-11-19 重构）：**不再捕获界面快照 Bitmap**（旧做法把工具页
+ * `View.draw()` 成图片再缩小，属于补丁式遮底，且在 WebView/SurfaceView 页会空白）。
  */
 class ToolTransitionAnchors {
     private val anchors = mutableStateMapOf<String, Rect>()
@@ -78,30 +87,11 @@ fun Modifier.ctToolTransitionSource(toolId: String): Modifier {
 private fun lerp(from: Float, to: Float, fraction: Float): Float = from + (to - from) * fraction
 
 /**
- * 捕获当前工具页的真实界面快照（主线程同步 `View.draw(Canvas)`；调用时必须仍未开始转场，保证拍到工具页）。
+ * 容器变换覆盖层：进入 = 卡片 bounds → 全屏；退出 = 全屏 → 卡片 bounds。
  *
- * - 返回 null（尺寸异常 / draw 抛异常 / OOM）时调用方降级为原图标卡覆盖层，不影响返回；
- * - 仅用于「页面收回卡片」的退出动画（进入动画仍用图标卡，目标页很快会由 NavHost 渲染）；
- * - WebView/SurfaceView 等硬件层可能不在软件 Canvas 中完整呈现，最坏情况是快照局部空白，
- *   但仍优于旧实现「只画图标卡」。
- */
-internal fun captureToolSnapshot(view: View?): Bitmap? {
-    val root = view ?: return null
-    if (root.width <= 0 || root.height <= 0) return null
-    return runCatching {
-        Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bitmap ->
-            root.draw(Canvas(bitmap))
-        }
-    }.getOrNull()
-}
-
-/**
- * 覆盖层：进入 = 卡片 bounds → 全屏圆角容器；退出 = **全屏真实快照** → 卡片 bounds。
- *
- * 进入时覆盖层从卡片长成全屏、最后 30% 淡出露出目标页；退出时先由调用方 pop 回根页，
- * 再让 [snapshot]（工具页真实界面）从全屏缩回卡片并淡出——动画期间/结束后都不会露出工具内部界面。
- * [snapshot] 为 null（拍摄失败/进入方向）时退回旧图标卡视觉。
- * 若系统开启移除动画，则本 composable 不绘制任何覆盖层（调用方直接跳转）。
+ * @param reverse true = 返回方向（全屏 → 卡片）
+ * @param onHalfway 进入方向：形变到 55% 时触发一次（此时导航 push 目标页，用户看不到空白）
+ * @param onDone 动画结束（覆盖层撤除）
  */
 @Composable
 fun ToolTransitionOverlay(
@@ -110,7 +100,6 @@ fun ToolTransitionOverlay(
     onHalfway: () -> Unit,
     onDone: () -> Unit,
     reverse: Boolean = false,
-    snapshot: Bitmap? = null,
 ) {
     if (tool == null || startBounds == null) return
     val reduceMotion = rememberReduceMotion()
@@ -121,56 +110,45 @@ fun ToolTransitionOverlay(
         }
         return
     }
+    val colors = rememberCtColors()
+    val accent = uiAccentOf(tool)
     val progress = remember(tool, reverse) { Animatable(0f) }
     LaunchedEffect(tool, reverse) {
         try {
-            progress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = if (reverse) 280 else 340,
-                    easing = FastOutSlowInEasing,
-                ),
-            )
+            // 单一弹簧驱动整段形变（M3 Expressive spatial fast 0.75/600：≈300ms 成形，收得住、有弹性但不拖沓）
+            progress.animateTo(targetValue = 1f, animationSpec = CtMotion.spatialFast)
         } finally {
             onDone()
         }
     }
     LaunchedEffect(tool, reverse) {
-        // 进入：覆盖层先「铺开」一点再导航；退出：调用方已在开始动画前 pop（避免底层露出工具界面），
-        // 这里不再调用 onHalfway。
         if (!reverse) {
-            kotlinx.coroutines.delay(120)
+            // 进入：形变过半后开始 push 目标页，覆盖层在尾部淡出与之交接。
+            kotlinx.coroutines.delay(CtMotionTokens.standardMs / 2L)
             onHalfway()
         }
     }
 
     val density = LocalDensity.current
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // 退出兜底：先铺一层不透明根页底色，再画缩小的快照。
-        // 这样即使 NavHost 的 pop 在极端时序下晚一帧，用户也绝不会看到「工具页内部」，
-        // 只会看到卡片在干净背景上收回；root 出现后再撤层。
-        if (reverse) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.background,
-            ) {}
-        }
         val fullWidthPx = constraints.maxWidth.toFloat()
         val fullHeightPx = constraints.maxHeight.toFloat()
-        val progressValue = progress.value
         // 进入：0→1（卡片长成全屏）；退出：1→0（全屏收回卡片）。
-        val p = if (reverse) 1f - progressValue else progressValue
+        val p = if (reverse) 1f - progress.value else progress.value
         val left = lerp(startBounds.left, 0f, p)
         val top = lerp(startBounds.top, 0f, p)
         val width = lerp(startBounds.width, fullWidthPx, p)
         val height = lerp(startBounds.height, fullHeightPx, p)
-        val corner = (20f * (1f - p)).coerceAtLeast(0f)
-        val fade = if (reverse) {
-            // 退出：全程不透明；根页 pop 转场已关闭，收回结束才撤层，避免露出工具页。
-            1f
-        } else {
-            // 进入：最后 30% 淡出，露出已经完成 push 的目标页。
-            if (p <= 0.7f) 1f else (1f - (p - 0.7f) / 0.3f).coerceIn(0f, 1f)
+        // 圆角形变：卡片 20dp → 页面 0dp（M3 Expressive 形状变形）。
+        // 弹簧可能短暂过冲（p>1），圆角必须夹在 [0, 卡片圆角] 内，否则 RoundedCornerShape 会抛异常
+        val cornerDp = lerp(CtMotionTokens.containerMorphStartDp, 0f, p.coerceIn(0f, 1f))
+        val cornerPx = cornerDp * density.density
+        val shape: Shape = RoundedCornerShape(cornerPx)
+        // 进入：最后 35% 淡出露出目标页；退出：全程不透明（底层是干净的根页）。
+        val fade = when {
+            reverse -> 1f
+            p <= 0.65f -> 1f
+            else -> (1f - (p - 0.65f) / 0.35f).coerceIn(0f, 1f)
         }
         Box(
             modifier = Modifier
@@ -183,46 +161,42 @@ fun ToolTransitionOverlay(
                 )
                 .graphicsLayer { alpha = fade },
         ) {
-            if (reverse && snapshot != null) {
-                // 退出：真实工具页快照从全屏缩回卡片（圆角随进度收拢），最后 18% 淡出与底层卡片交接。
-                Image(
-                    bitmap = snapshot.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.FillBounds,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(corner.dp)),
-                )
-            } else {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    shape = RoundedCornerShape(corner.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    tonalElevation = 2.dp,
-                ) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = shape,
+                color = colors.containerLow,
+                contentColor = colors.textPrimary,
+                shadowElevation = 0.dp,
+            ) {
+                // 形变中的「容器内容」：卡片图标 + 名称（随形变淡出，目标页淡入接管）。
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier.graphicsLayer {
+                            alpha = (1f - p * 1.4f).coerceIn(0f, 1f)
+                        },
+                    ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Surface(
-                                shape = RoundedCornerShape(18.dp),
-                                color = tool.accent.copy(alpha = 0.18f),
+                                shape = CtShape.card,
+                                color = androidx.compose.ui.graphics.Color.Transparent,
+                                contentColor = accent.textRef,
                             ) {
-                                Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier.size(CtSize.glyphBox),
+                                    contentAlignment = Alignment.Center,
+                                ) {
                                     Icon(
                                         imageVector = tool.icon,
                                         contentDescription = null,
-                                        tint = tool.accent,
-                                        modifier = Modifier.size(28.dp),
+                                        tint = accent.textRef,
+                                        modifier = Modifier.size(CtSize.iconLarge),
                                     )
                                 }
                             }
-                            androidx.compose.foundation.layout.Spacer(
-                                modifier = Modifier.size(12.dp),
-                            )
+                            Spacer(modifier = Modifier.height(CtSpace.sm))
                             Text(
                                 text = tool.name,
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -233,3 +207,6 @@ fun ToolTransitionOverlay(
         }
     }
 }
+
+/** 形变起始圆角（dp；与 [CtRadius.card] 一致，供测试/预览引用）。 */
+val CtToolMorphStartRadius = CtRadius.card

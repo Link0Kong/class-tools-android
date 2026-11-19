@@ -231,7 +231,7 @@ fun JwEntryScreen(
 
     val webView = remember {
         WebView(context).apply {
-            setBackgroundColor(android.graphics.Color.WHITE)
+            setBackgroundColor(android.graphics.Color.WHITE)  // 设计令牌-允许：WebView 系统白底
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             // 2026-11-16：与微信内一致的环境（微信 UA）/第三方 Cookie/DOM storage/mixed content，

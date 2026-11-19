@@ -51,10 +51,13 @@ import com.furina.classtools.data.permission.PermissionTexts
 import com.furina.classtools.data.permission.PermissionType
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
-import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.glass.CtGlassCard
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtTokens
+import com.furina.classtools.ui.theme.CtType
 
 /**
  * 权限与提醒设置（v2.0.0）。
@@ -234,7 +237,7 @@ fun PermissionSettingsScreen(
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(CtSpace.sm))
             }
         }
     }
@@ -347,7 +350,7 @@ private fun PermissionCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (state.isGranted) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(CtSpace.sm))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Rounded.CheckCircle,
@@ -363,12 +366,12 @@ private fun PermissionCard(
                     )
                 }
             } else {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(CtSpace.xs))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 TextButton(onClick = onAction) {
                     Text(
                         if (state.needsSettings) "去系统设置开启" else "开启权限",
-                        fontSize = 14.sp,
+                        fontSize = CtType.labelSize,
                     )
                 }
             }

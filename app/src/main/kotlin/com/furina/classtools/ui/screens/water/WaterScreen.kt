@@ -93,7 +93,9 @@ import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolInfoRow
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolStat
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -400,7 +402,7 @@ fun WaterScreen(
                                                     onSave = { submitReading() },
                                                 )
                                                 RuleCard(persons = room.persons)
-                                                Spacer(Modifier.height(8.dp))
+                                                Spacer(Modifier.height(CtSpace.sm))
                                             }
                                             Column(
                                                 modifier = Modifier
@@ -466,7 +468,7 @@ fun WaterScreen(
                                                 onDelete = { deletingMonth = it },
                                             )
                                             RuleCard(persons = room.persons)
-                                            Spacer(Modifier.height(24.dp))
+                                            Spacer(Modifier.height(CtSpace.xxl))
                                         }
                                     }
                                 }

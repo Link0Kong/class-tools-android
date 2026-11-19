@@ -39,9 +39,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,10 +72,6 @@ import com.furina.classtools.features.group.GroupWorkflow
 import com.furina.classtools.features.group.GroupWorkflowState
 import com.furina.classtools.features.group.SeededGroupRandom
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.tool.CtToolCard
-import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
-import com.furina.classtools.ui.components.tool.CtToolSegmented
-import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
@@ -85,7 +81,14 @@ import com.furina.classtools.ui.components.expressive.CtChipGroup
 import com.furina.classtools.ui.components.expressive.CtChipOption
 import com.furina.classtools.ui.components.expressive.CtSegmentOption
 import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSectionHeader
+import com.furina.classtools.ui.components.tool.CtToolSegmented
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -332,14 +335,14 @@ private fun GroupContent(
                             onExport = onExport,
                             onCopy = onCopy,
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(CtSpace.sm))
                     }
                     Column(
                         modifier = Modifier.weight(0.58f).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ResultArea(state = state, onExport = onExport, onCopy = onCopy)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(CtSpace.sm))
                     }
                 }
             } else {
@@ -368,7 +371,7 @@ private fun GroupContent(
                                 onCopy = onCopy,
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(CtSpace.sm))
                     }
                     Box(modifier = Modifier.fillMaxWidth().padding(horizontal = padding)) {
                         PrimaryActions(
@@ -387,7 +390,6 @@ private fun GroupContent(
         }
     }
 }
-
 
 /** v6 紧凑卡：标题 titleSmall + 14/12 内边距，密度对齐小程序。 */
 @Composable
@@ -705,7 +707,7 @@ private fun GroupCard(
                     .fillMaxWidth()
                     .background(
                         MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
-                        RoundedCornerShape(10.dp),
+                        RoundedCornerShape(CtRadius.tile),
                     )
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -801,7 +803,7 @@ private fun CenteredError(message: String, onRetry: () -> Unit) {
 @Suppress("unused")
 @Composable
 private fun ValidationPreviewChip(error: String) {
-    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.errorContainer) {
+    Surface(shape = RoundedCornerShape(CtRadius.tile), color = MaterialTheme.colorScheme.errorContainer) {
         Text(
             text = error,
             style = MaterialTheme.typography.labelSmall,
@@ -820,4 +822,3 @@ private fun validateConfig(config: GroupConfig, members: List<GroupMember>): Str
         is GroupValidation.Valid -> null
         is GroupValidation.Invalid -> validation.error.message
     }
-

@@ -13,12 +13,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -42,7 +42,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import com.furina.classtools.ui.theme.rememberReduceMotion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,15 +56,17 @@ import com.furina.classtools.data.vote.VoteLogic
 import com.furina.classtools.data.vote.VoteRepository
 import com.furina.classtools.data.vote.VoteResult
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
+import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.EmptyState
-import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
-import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtShape
+import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -301,7 +302,7 @@ fun VoteListScreen(
                                         modifier = Modifier.fillMaxSize(),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                     ) {
-                                        Spacer(modifier = Modifier.height(40.dp))
+                                        Spacer(modifier = Modifier.height(CtSpace.huge))
                                         EmptyState(
                                             icon = Icons.Rounded.HowToVote,
                                             title = if (current == null || current.polls.isEmpty()) {

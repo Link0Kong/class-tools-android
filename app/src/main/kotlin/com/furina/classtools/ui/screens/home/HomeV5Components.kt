@@ -42,13 +42,26 @@ import androidx.compose.ui.unit.sp
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.data.tool.AppTool
+import com.furina.classtools.ui.components.CtIconBadge
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.CtPressLayer
+import com.furina.classtools.ui.components.CtTag
 import com.furina.classtools.ui.navigation.ctToolTransitionSource
+import com.furina.classtools.ui.theme.CtElevation
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
+import com.furina.classtools.ui.theme.CtSize
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.theme.CtType
+import com.furina.classtools.ui.theme.CtTypeScale
 import com.furina.classtools.ui.theme.HarmonyTokens
+import com.furina.classtools.ui.theme.ctPressFeedback
 import com.furina.classtools.ui.theme.harmonyTint
+import com.furina.classtools.ui.theme.rememberCtColors
 import com.furina.classtools.ui.theme.rememberHarmonyColors
+import com.furina.classtools.ui.theme.uiAccentOf
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -151,13 +164,13 @@ internal fun HomeHeroCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(3.dp)
-                    .clip(RoundedCornerShape(2.dp)),
+                    .clip(RoundedCornerShape(CtRadius.chip)),
             ) {
                 Box(modifier = Modifier.weight(1f).fillMaxSize().background(HarmonyTokens.MistTeal))
                 Box(modifier = Modifier.weight(1f).fillMaxSize().background(HarmonyTokens.SlateBlue))
                 Box(modifier = Modifier.weight(1f).fillMaxSize().background(HarmonyTokens.WarmSand))
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(CtSpace.md))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     shape = CircleShape,
@@ -179,7 +192,7 @@ internal fun HomeHeroCard(
             }
             Text(
                 text = "$greeting，${session.name.trim().ifBlank { "同学" }}",
-                style = CtText.title.copy(fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold),
+                style = CtText.title.copy(fontSize = CtType.titleSize, lineHeight = CtType.titleLine.sp, fontWeight = FontWeight.Bold),
                 color = colors.heroTitle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -246,45 +259,40 @@ internal fun HomeInfoCard(
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val colors = rememberHarmonyColors()
+    val c = rememberCtColors()
     Surface(
         onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = HarmonyTokens.CardShadowElevation,
-                shape = HomeCardShape,
-                clip = false,
-                ambientColor = HarmonyTokens.CardShadowColor,
-                spotColor = HarmonyTokens.CardShadowColor,
-            ),
-        shape = HomeCardShape,
-        color = colors.card,
-        contentColor = colors.textPrimary,
+        modifier = modifier.fillMaxWidth(),
+        shape = CtShape.card,
+        color = c.containerLow,
+        contentColor = c.textPrimary,
+        border = BorderStroke(CtSize.dividerThickness, c.divider),
+        shadowElevation = if (c.dark) CtElevation.none else CtElevation.card,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = HarmonyTokens.CardPadding, vertical = HarmonyTokens.CardPadding),
-            verticalArrangement = Arrangement.spacedBy(HarmonyTokens.ElementGap),
+                .padding(CtSpace.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(CtSpace.sm),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                HomeIconBadge(icon = icon, accent = accent)
-                Spacer(modifier = Modifier.width(8.dp))
+                CtIconBadge(
+                    icon = icon,
+                    color = accent,
+                    box = CtSize.badgeBox,
+                    glyph = CtSize.badgeGlyph,
+                )
+                Spacer(modifier = Modifier.width(CtSpace.sm))
                 Text(
                     text = title,
-                    style = CtText.labelMedium,
-                    color = colors.textSecondary,
+                    style = CtTypeScale.sectionTitle,
+                    color = c.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (!badge.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    CtPill(
-                        text = badge,
-                        containerColor = harmonyTint(accent),
-                        contentColor = accent,
-                    )
+                    Spacer(modifier = Modifier.width(CtSpace.xs))
+                    CtTag(text = badge, color = accent)
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 if (trailing != null) trailing()
@@ -294,7 +302,6 @@ internal fun HomeInfoCard(
     }
 }
 
-/** 分类色图标块（鸿蒙 `HomeScreen.iconBadge`：30dp tint 底 9dp 圆角 + 17dp 字形）。 */
 @Composable
 internal fun HomeIconBadge(
     icon: ImageVector,
@@ -320,7 +327,10 @@ internal fun HomeIconBadge(
     }
 }
 
-/** 常用工具单格（鸿蒙：46dp tint 块 + 12 名称；弹簧按压缩放）。 */
+/**
+ * 常用工具单格（统一规范 §3.2「磁贴」）：44dp 淡色圆角图标块 + 12 名称，占满格宽；
+ * 按压 scale 0.97（spring 0.75/600）+ 8% 按压层（M3 Expressive 实体感）。
+ */
 @Composable
 internal fun QuickToolTile(
     tool: AppTool,
@@ -328,56 +338,55 @@ internal fun QuickToolTile(
     modifier: Modifier = Modifier,
     reduceMotion: Boolean = false,
 ) {
-    val colors = rememberHarmonyColors()
+    val c = rememberCtColors()
+    val accent = uiAccentOf(tool)
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.94f else 1f,
-        animationSpec = if (reduceMotion) snap() else CtMotion.spatialFast,
-        label = "quickToolScale",
-    )
+    val press = ctPressFeedback(interaction, reduceMotion)
     val transitionSource = Modifier.ctToolTransitionSource(tool.id)
     Surface(
         onClick = onClick,
         modifier = modifier
             .then(transitionSource)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = press.scale
+                scaleY = press.scale
             },
-        shape = RoundedCornerShape(HarmonyTokens.RadiusCard),
-        color = Color.Transparent,
-        contentColor = colors.textPrimary,
+        shape = CtShape.input,
+        color = androidx.compose.ui.graphics.Color.Transparent,
+        contentColor = c.textPrimary,
         interactionSource = interaction,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(HarmonyTokens.RadiusInput),
-                color = harmonyTint(tool.accent),
-                contentColor = tool.accent,
+        Box {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = CtSpace.sm),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(CtSpace.xs),
             ) {
-                Box(modifier = Modifier.size(46.dp), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = tool.icon,
-                        contentDescription = null,
-                        tint = tool.accent,
-                        modifier = Modifier.size(22.dp),
-                    )
+                Surface(
+                    shape = CtShape.input,
+                    color = harmonyTint(accent.tintRef),
+                    contentColor = accent.textRef,
+                ) {
+                    Box(modifier = Modifier.size(CtSpace.huge + CtSpace.xs), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = tool.icon,
+                            contentDescription = null,
+                            tint = accent.tintRef,
+                            modifier = Modifier.size(CtSize.icon),
+                        )
+                    }
                 }
+                Text(
+                    text = tool.name,
+                    style = CtTypeScale.caption,
+                    color = c.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Text(
-                text = tool.name,
-                style = CtText.caption,
-                color = colors.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            CtPressLayer(alpha = press.overlayAlpha, modifier = Modifier.clip(CtShape.input))
         }
     }
 }
@@ -430,14 +439,14 @@ internal fun EditableToolTile(
             ) {
                 Surface(
                     shape = RoundedCornerShape(HarmonyTokens.RadiusTile),
-                    color = harmonyTint(tool.accent),
-                    contentColor = tool.accent,
+                    color = harmonyTint(uiAccentOf(tool).tintRef),
+                    contentColor = uiAccentOf(tool).textRef,
                 ) {
                     Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
-                            tint = tool.accent,
+                            tint = uiAccentOf(tool).tintRef,
                             modifier = Modifier.size(20.dp),
                         )
                     }

@@ -90,6 +90,7 @@ import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShapeTokens
 import java.time.Instant
 import java.time.LocalDateTime
@@ -400,7 +401,7 @@ fun VoteCreateScreen(
                                 item(key = "errors") {
                                     Surface(
                                         modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(24.dp),
+                                        shape = RoundedCornerShape(CtRadius.hero),
                                         color = MaterialTheme.colorScheme.errorContainer,
                                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                                     ) {
@@ -813,7 +814,7 @@ private fun VoteOptionsSection(
                             contentDescription = "第 ${index + 1} 个选项配图",
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(RoundedCornerShape(18.dp)),
+                                .clip(RoundedCornerShape(CtRadius.cardCompact)),
                         )
                         IconButton(
                             onClick = {

@@ -3,16 +3,18 @@ package com.furina.classtools.ui.screens.vote
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -20,18 +22,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.StopCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -54,16 +54,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.member.MemberCategory
 import com.furina.classtools.data.member.MemberEntry
-import com.furina.classtools.data.vote.PollSettings
 import com.furina.classtools.data.vote.PollCountdown
+import com.furina.classtools.data.vote.PollSettings
 import com.furina.classtools.data.vote.VoteError
 import com.furina.classtools.data.vote.VoteField
 import com.furina.classtools.data.vote.VoteLimits
@@ -81,9 +80,10 @@ import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.mutableStateOf
+import com.furina.classtools.ui.theme.CtSpace
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -136,7 +136,7 @@ internal fun VoteToolCard(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(CtRadius.hero))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -274,7 +274,7 @@ internal fun VoteOfflineBanner(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
@@ -332,7 +332,7 @@ internal fun VoteManageActionRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(CtRadius.cardCompact))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f))
             .clickable(enabled = enabled, onClick = onClick)
             .heightIn(min = 56.dp)
@@ -421,7 +421,7 @@ internal fun VoteManageContent(
             danger = true,
             onClick = onDelete,
         )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(CtSpace.md))
 }
 
 /** 通用确认框（危险操作二次确认）。 */

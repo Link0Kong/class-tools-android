@@ -74,7 +74,9 @@ import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
 
@@ -467,7 +469,7 @@ private fun RosterCategoryPage(
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(32.dp),
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(CtSpace.sm))
                     Text(
                         text = "团员名单加载失败",
                         style = MaterialTheme.typography.titleSmall,

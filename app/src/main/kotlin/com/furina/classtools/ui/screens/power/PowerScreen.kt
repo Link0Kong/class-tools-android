@@ -2,9 +2,6 @@
 
 package com.furina.classtools.ui.screens.power
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -12,6 +9,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,8 +34,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apartment
-import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -46,13 +46,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,22 +69,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.furina.classtools.data.power.PowerRange
 import com.furina.classtools.data.power.PowerHistoryResult
 import com.furina.classtools.data.power.PowerHistoryWindowResult
+import com.furina.classtools.data.power.PowerPoint
+import com.furina.classtools.data.power.PowerRange
 import com.furina.classtools.data.power.PowerRepository
+import com.furina.classtools.data.power.PowerRooms
 import com.furina.classtools.data.power.PowerRow
 import com.furina.classtools.data.power.PowerRowResult
-import com.furina.classtools.data.power.PowerRooms
-import com.furina.classtools.data.power.PowerStats
 import com.furina.classtools.data.power.PowerState
+import com.furina.classtools.data.power.PowerStats
 import com.furina.classtools.data.power.PowerTile
-import com.furina.classtools.features.power.PowerCompareLogic
-import com.furina.classtools.features.power.PowerCompareResult
 import com.furina.classtools.data.power.RoomInfo
-import com.furina.classtools.data.power.PowerPoint
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
+import com.furina.classtools.features.power.PowerCompareLogic
+import com.furina.classtools.features.power.PowerCompareResult
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
@@ -97,6 +97,7 @@ import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtTokens
 import com.furina.classtools.ui.theme.ctEmphasized
 import com.furina.classtools.ui.theme.rememberReduceMotion
@@ -651,7 +652,7 @@ private fun ReadyContent(
 private fun PickRoomCard(sel: String, onPick: () -> Unit) {
     CtToolCard(
         modifier = Modifier
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(CtRadius.hero))
             .clickable(onClick = onPick),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
     ) {
@@ -1053,7 +1054,7 @@ private fun Tile(
         modifier = modifier.then(
             if (tile.clickable) {
                 Modifier
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(CtRadius.hero))
                     .clickable(onClick = onClick)
             } else {
                 Modifier
@@ -1279,7 +1280,7 @@ private fun HousePickerSheet(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(CtRadius.cardCompact),
                                 color = if (selected) MaterialTheme.colorScheme.primaryContainer
                                 else MaterialTheme.colorScheme.surfaceContainerHigh,
                                 contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
@@ -1318,7 +1319,7 @@ private fun RoomButton(room: RoomInfo, selected: Boolean, onClick: () -> Unit, m
     Surface(
         onClick = onClick,
         modifier = modifier.heightIn(min = 48.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
@@ -1358,7 +1359,7 @@ private fun LowThresholdSheet(
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = 48.dp),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(CtRadius.cardCompact),
                             color = if (selected) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceContainerHigh,
                             contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer

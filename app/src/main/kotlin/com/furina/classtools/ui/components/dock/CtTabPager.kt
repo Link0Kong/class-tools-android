@@ -232,10 +232,10 @@ object CtPageTransitions {
     const val HARMONY_EXIT_FRACTION: Float = 0.067f
 
     /** 鸿蒙页面转场时长（Motion.SLOW）。 */
-    const val HARMONY_PAGE_MS: Int = 380
+    const val HARMONY_PAGE_MS: Int = 400
 
     /** 鸿蒙淡入淡出时长（Motion.NORMAL 近似；与位移同时长会让淡入过慢）。 */
-    const val HARMONY_FADE_MS: Int = 260
+    const val HARMONY_FADE_MS: Int = 200
 
     private fun harmonyPageSpec(): FiniteAnimationSpec<Float> =
         tween(durationMillis = HARMONY_PAGE_MS, easing = HarmonyMotion.ease)
@@ -285,4 +285,3 @@ object CtPageTransitions {
     @Suppress("unused")
     private fun unusedAbs(value: Float): Float = abs(value)
 }
-

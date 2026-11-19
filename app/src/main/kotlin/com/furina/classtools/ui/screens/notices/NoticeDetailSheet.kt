@@ -65,7 +65,10 @@ import com.furina.classtools.data.ppt.PptImageLoader
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.rememberReduceMotion
 
 /**
@@ -194,7 +197,7 @@ internal fun NoticeDetailSheetContent(
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(CtSpace.xs))
             Text(
                 text = detailMetaText(item, nowMillis),
                 style = MaterialTheme.typography.bodySmall,
@@ -205,7 +208,7 @@ internal fun NoticeDetailSheetContent(
             DetailTagLine(item = item, nowMillis = nowMillis)
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(CtSpace.md))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 
         // 正文可滚动区（高度上限 460dp；超长内容内部滚动，不顶掉底部动作区）
@@ -378,7 +381,7 @@ private fun AutoNoticeDetail(
     if (hasAi) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(CtRadius.cardCompact),
             color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
         ) {
             Column(
@@ -727,7 +730,7 @@ private fun DetailInfoRow(
 private fun DetailMergedBlock(meta: NoticeItemMeta.Merged, anchorMillis: Long?, nowMillis: Long) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
     ) {
         Column(

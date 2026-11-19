@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.components.dock
 
+import com.furina.classtools.ui.theme.CtMotionTokens
 import com.furina.classtools.ui.theme.HarmonyMotion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -7,22 +8,23 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 页面转场对齐（2026-11-19）：鸿蒙 `Motion.pageEnter/pageExit` 的数值契约。
+ * 页面转场对齐（2026-11-19 重构后口径）。
  *
- * 鸿蒙：进入 = 右移 28vp + 0.985 缩放 + 淡入；退出 = 右移 24vp + 0.99 缩放 + 淡出；
- * 时长 `Motion.SLOW = 380ms`，标准缓动 cubic-bezier(.4,0,.2,1)。
- * 转场函数在 NavHost 的 transitionSpec 里调用（非 @Composable，读不到 LocalDensity），
- * 位移按 360vp 手机折算为屏宽比例（28/360≈0.078、24/360≈0.067）。
+ * 两件事必须同时成立：
+ * 1. **容器变换**（工具卡 → 工具页）用单一弹簧驱动，起始/结束圆角与卡片令牌一致，
+ *    时长令牌 300ms 用于「形变过半后 push」的交接点；
+ * 2. **非工具页**（投票/PPT/数据隐私…）仍走 NavHost 的页面转场：右移 28/24vp + 0.985/0.99 缩放，
+ *    时长 = 令牌 [CtMotionTokens.slowMs]（400ms）。
  */
 class CtPageTransitionsHarmonyTest {
 
     @Test
-    fun `鸿蒙转场常量与 Motion 口径一致`() {
+    fun `鸿蒙转场常量与令牌口径一致`() {
         assertEquals(0.078f, CtPageTransitions.HARMONY_ENTER_FRACTION, 0.0005f)
         assertEquals(0.067f, CtPageTransitions.HARMONY_EXIT_FRACTION, 0.0005f)
-        assertEquals(380, CtPageTransitions.HARMONY_PAGE_MS)
+        assertEquals(CtMotionTokens.slowMs, CtPageTransitions.HARMONY_PAGE_MS)
         assertEquals(HarmonyMotion.SLOW_MS, CtPageTransitions.HARMONY_PAGE_MS)
-        assertEquals(260, CtPageTransitions.HARMONY_FADE_MS)
+        assertEquals(CtMotionTokens.shortMs, CtPageTransitions.HARMONY_FADE_MS)
         assertEquals(HarmonyMotion.NORMAL_MS, CtPageTransitions.HARMONY_FADE_MS)
         // 360vp 手机折算后与 28/24vp 的误差 < 1vp。
         assertEquals(28f, 360f * CtPageTransitions.HARMONY_ENTER_FRACTION, 1f)
@@ -43,8 +45,21 @@ class CtPageTransitionsHarmonyTest {
         assertNotNull(CtPageTransitions.pushExit())
         assertNotNull(CtPageTransitions.popEnter())
         assertNotNull(CtPageTransitions.popExit())
-        // 旧口径仍比鸿蒙口径位移更大（10%/12% vs 7.8%/6.7%）。
         assertTrue(CtPageTransitions.PUSH_SLIDE_FRACTION > CtPageTransitions.HARMONY_ENTER_FRACTION)
         assertTrue(CtPageTransitions.POP_SLIDE_FRACTION > CtPageTransitions.HARMONY_EXIT_FRACTION)
+    }
+
+    @Test
+    fun `容器变换参数来自设计令牌（圆角 20 形变到 0 由弹簧驱动）`() {
+        // 起始圆角 = 卡片圆角令牌；结束 = 0（页面直角）
+        assertEquals(
+            com.furina.classtools.ui.theme.CtRadius.card.value,
+            CtMotionTokens.containerMorphStartDp,
+            0.001f,
+        )
+        // 形变过半后 push 目标页：交接点 = 令牌 standardMs / 2
+        assertEquals(300, CtMotionTokens.standardMs)
+        // 页面转场（非工具页）时长 > 容器变换交接点（观感上容器先成形，再交接到页面）
+        assertTrue(CtPageTransitions.HARMONY_PAGE_MS > CtMotionTokens.standardMs)
     }
 }

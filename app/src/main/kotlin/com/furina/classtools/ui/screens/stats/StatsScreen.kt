@@ -48,7 +48,9 @@ import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtChipOption
 import com.furina.classtools.ui.components.expressive.CtFilterChipRow
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.theme.CtType
 import com.furina.classtools.ui.theme.rememberHarmonyColors
 import java.time.LocalDate
 
@@ -271,12 +273,12 @@ private fun SummaryCell(value: String, label: String, modifier: Modifier = Modif
     Surface(
         modifier = modifier,
         color = colors.card,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
             Text(
                 text = value,
-                fontSize = 22.sp,
+                fontSize = CtType.titleSize,
                 fontWeight = FontWeight.SemiBold,
                 color = colors.textPrimary,
                 maxLines = 1,
@@ -297,7 +299,7 @@ private fun AccountRow(rank: Int, row: VisitAccount) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = colors.card,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -321,7 +323,7 @@ private fun AccountRow(rank: Int, row: VisitAccount) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = "$rank",
-                        fontSize = 12.sp,
+                        fontSize = CtType.captionSize,
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -347,7 +349,7 @@ private fun AccountRow(rank: Int, row: VisitAccount) {
 
             Text(
                 text = "${row.count} 次",
-                fontSize = 13.sp,
+                fontSize = CtType.labelSize,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,

@@ -36,6 +36,7 @@ import com.furina.classtools.data.account.OppoBinding
 import com.furina.classtools.data.account.OppoBindingsUiState
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShapeTokens
 
 /**
@@ -216,7 +217,7 @@ private fun OppoBindingRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
     ) {
         Row(

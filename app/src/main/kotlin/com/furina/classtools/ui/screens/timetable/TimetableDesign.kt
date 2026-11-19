@@ -484,4 +484,3 @@ object TimetableExport {
         return buildString { repeat(4) { append(alphabet[random.nextInt(alphabet.length)]) } }
     }
 }
-

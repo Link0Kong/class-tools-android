@@ -23,8 +23,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,11 +37,10 @@ import com.furina.classtools.features.draw.DrawEntry
 import com.furina.classtools.features.draw.DrawError
 import com.furina.classtools.features.draw.DrawExportFactory
 import com.furina.classtools.features.draw.DrawExportPayload
-import com.furina.classtools.features.draw.DrawResultSheetPayload
-import com.furina.classtools.features.draw.DrawSheetFactory
 import com.furina.classtools.features.draw.DrawRandom
 import com.furina.classtools.features.draw.DrawResult
-import com.furina.classtools.features.draw.defaultDrawRandom
+import com.furina.classtools.features.draw.DrawResultSheetPayload
+import com.furina.classtools.features.draw.DrawSheetFactory
 import com.furina.classtools.features.draw.DrawSortMode
 import com.furina.classtools.features.draw.DrawStep
 import com.furina.classtools.features.draw.DrawTransition
@@ -50,10 +49,12 @@ import com.furina.classtools.features.draw.DrawValidator
 import com.furina.classtools.features.draw.DrawWorkflow
 import com.furina.classtools.features.draw.DrawWorkflowState
 import com.furina.classtools.features.draw.UserDataDrawConfigStore
+import com.furina.classtools.features.draw.defaultDrawRandom
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.theme.CtSpace
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -466,7 +467,7 @@ private fun DrawReadyContent(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(CtSpace.xs))
             }
         }
     }

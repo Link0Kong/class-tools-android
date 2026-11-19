@@ -87,6 +87,7 @@ import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.theme.ClassToolsTheme
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShapeTokens
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -686,7 +687,7 @@ private fun StatBlock(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(CtRadius.cardCompact))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
@@ -715,7 +716,7 @@ private fun ErrorBanner(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
@@ -848,7 +849,7 @@ private fun FileRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(CtRadius.card),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(
@@ -864,7 +865,7 @@ private fun FileRow(
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(CtRadius.input))
                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center,
                 ) {

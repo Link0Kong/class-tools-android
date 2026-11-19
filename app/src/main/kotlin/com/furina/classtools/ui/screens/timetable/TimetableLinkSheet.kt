@@ -58,7 +58,10 @@ import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.launch
@@ -456,7 +459,7 @@ fun TimetableLinkSheet(
                 },
             )
             LinkText("时区 Asia/Shanghai · 由本机课表快照生成，不联网")
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(CtSpace.xl))
         }
     }
 }
@@ -516,7 +519,7 @@ private fun CalendarChoiceRow(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
         color = container,
         contentColor = content,
     ) {
@@ -566,7 +569,7 @@ private fun LinkFileRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(CtRadius.cardCompact))
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         Row(

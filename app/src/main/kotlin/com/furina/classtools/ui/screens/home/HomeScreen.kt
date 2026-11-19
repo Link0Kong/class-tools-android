@@ -33,12 +33,12 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -87,15 +87,19 @@ import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtBrandDots
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.components.HarmonySkeletonRow
 import com.furina.classtools.ui.components.HarmonySkeletonTextBlock
 import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.theme.BrandMistTeal
 import com.furina.classtools.ui.theme.BrandSlateBlue
 import com.furina.classtools.ui.theme.BrandWarmSand
+import com.furina.classtools.ui.theme.CtAccents
 import com.furina.classtools.ui.theme.CtMotion
-import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.theme.CtText
 import com.furina.classtools.ui.theme.CtTokens
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import java.time.Instant
@@ -122,7 +126,7 @@ import kotlinx.serialization.json.intOrNull
  * 交互/无障碍：
  * - 首次进入逐块错峰淡入（系统「移除动画」/ 预览渲染时自动退化为无动画）；
  * - 快捷工具编辑保持原逻辑（点击加入/移出、最多 4 个、H-03 返回二次确认）；
- * - 下拉刷新（[PullToRefreshBox]）保持；四态（加载/空/失败/离线）全部保留。
+ * - 四态（加载/空/失败/离线）全部保留（不再提供下拉刷新：与「卡片式 + 无多余手势」的统一动效语言一致）。
  *
  * 自适应：≥840dp 双栏（左：今日课程 + 电费；右：作业 + 通知 + 常用工具），hero 全宽；
  * 内容限宽居中（见 `ui/adaptive`）。
@@ -399,14 +403,7 @@ fun HomeScreen(
     val contentMaxWidth = if (screenWidthDp >= 900) 960.dp else 880.dp
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
-        PullToRefreshBox(
-            isRefreshing = refreshing,
-            onRefresh = {
-                refreshing = true
-                retry()
-            },
-            modifier = Modifier.fillMaxSize(),
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 Column(
                     modifier = Modifier
@@ -659,9 +656,9 @@ private fun courseAccent(index: Int): Color {
         BrandMistTeal,
         BrandSlateBlue,
         BrandWarmSand,
-        Color(0xFF5F8F5B),
-        Color(0xFF8A6A92),
-        Color(0xFFB06A55),
+        CtAccents.leaf.tintRef,
+        CtAccents.plum.tintRef,
+        CtAccents.clay.tintRef,
     )
     return palette[index.mod(palette.size)]
 }
@@ -1007,7 +1004,7 @@ private fun HomeEmptyHint(
             )
         }
         if (actionText != null && onAction != null) {
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(CtSpace.xs))
             Surface(
                 onClick = onAction,
                 shape = CtShapeTokens.pill,
@@ -1030,7 +1027,8 @@ private fun HomeEmptyHint(
  */
 @Composable
 private fun HomeLoadingRow(text: String) {
-    HarmonySkeletonTextBlock(description = text)
+    // 骨架行与真实内容同高（40dp 图标块 + 两行文本 ≈ 56dp），避免加载完成时卡片高度跳变
+    HarmonySkeletonRow(description = text)
 }
 
 /** 卡内「已有内容、正在刷新」提示（内容还在，不用骨架替换，保持可读）。 */

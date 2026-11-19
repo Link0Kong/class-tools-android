@@ -232,7 +232,6 @@ fun DataPrivacyScreen(
         }
     }
 
-
     fun clearLocal() {
         val repo = repository
         dialog = DataPrivacyDialog.NONE
@@ -655,8 +654,6 @@ private fun IconButtonRefresh(enabled: Boolean, onClick: () -> Unit) {
         Icon(Icons.Rounded.Refresh, contentDescription = "刷新")
     }
 }
-
-
 
 // -----------------------------------------------------------------------------
 // 导出文件分享

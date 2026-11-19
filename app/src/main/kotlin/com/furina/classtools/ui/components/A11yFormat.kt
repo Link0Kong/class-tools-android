@@ -33,5 +33,3 @@ object CtA11yFormat {
         return "已${direction}到第 ${toIndex + 1} 个，共 $total 个"
     }
 }
-
-

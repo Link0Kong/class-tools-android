@@ -17,7 +17,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
-import com.furina.classtools.ui.theme.rememberReduceMotion
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -26,6 +25,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -50,13 +50,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -83,7 +83,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -128,6 +127,11 @@ import com.furina.classtools.features.ppt.PptResumeLogic
 import com.furina.classtools.features.ppt.PptResumeRecord
 import com.furina.classtools.features.ppt.PptVideoLogic
 import com.furina.classtools.ui.platform.VolumeKeyBridge
+import com.furina.classtools.ui.theme.CtPalette
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.theme.CtType
+import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.delay
 
 /**
@@ -515,7 +519,7 @@ private fun PptStepsPlayer(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(CtPalette.MediaScrimSoft)
             .focusRequester(keyFocus)
             .focusable()
             .onKeyEvent { event ->
@@ -677,7 +681,7 @@ private fun PptStepsPlayer(
                         )
                     } else {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = Color.White.copy(alpha = 0.6f), strokeWidth = 2.dp)
+                            CircularProgressIndicator(color = CtPalette.MediaOnScrim.copy(alpha = 0.6f), strokeWidth = 2.dp)
                         }
                     }
                 }
@@ -693,12 +697,12 @@ private fun PptStepsPlayer(
                                 failed.remove(currentUrl)
                                 retryToken += 1
                             },
-                        color = Color(0xCC000000),
+                        color = CtPalette.MediaScrimSoft,
                         shape = CircleShape,
                     ) {
                         Text(
                             text = "图片加载失败 · 重试",
-                            color = Color.White,
+                            color = CtPalette.MediaOnScrim,
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                         )
@@ -739,13 +743,13 @@ private fun PptStepsPlayer(
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .height(2.dp)
-                    .background(Color.White.copy(alpha = 0.18f)),
+                    .background(CtPalette.MediaOnScrim.copy(alpha = 0.18f)),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(PptNav.progress(counts, pos))
                         .fillMaxHeight()
-                        .background(Color.White.copy(alpha = 0.9f)),
+                        .background(CtPalette.MediaOnScrim.copy(alpha = 0.9f)),
                 )
             }
             AnimatedVisibility(
@@ -756,7 +760,7 @@ private fun PptStepsPlayer(
             ) {
                 Text(
                     text = detail.title.ifBlank { "演示" },
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = CtPalette.MediaOnScrim.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -771,7 +775,7 @@ private fun PptStepsPlayer(
         if (!blackScreen && onSwitchToVideo != null) {
             Surface(
                 shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.45f),
+                color = CtPalette.MediaScrimSoft.copy(alpha = 0.45f),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 14.dp, end = 16.dp)
@@ -783,7 +787,7 @@ private fun PptStepsPlayer(
             ) {
                 Text(
                     text = "分步",
-                    color = Color.White,
+                    color = CtPalette.MediaOnScrim,
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                 )
@@ -840,7 +844,7 @@ private fun PptStepsPlayer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .background(CtPalette.MediaScrimSoft.copy(alpha = 0.45f))
                     .clickable { showThumbs = false },
             ) {
                 Surface(
@@ -848,7 +852,7 @@ private fun PptStepsPlayer(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .pointerInput(Unit) { detectTapGestures { } },
-                    color = Color(0xEB121414),
+                    color = CtPalette.MediaScrimBody,
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -858,15 +862,15 @@ private fun PptStepsPlayer(
                                 .width(36.dp)
                                 .height(4.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.35f)),
+                                .background(CtPalette.MediaOnScrim.copy(alpha = 0.35f)),
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(CtSpace.sm))
                         Text(
                             text = "缩略图 · ${PptNav.pageLabel(counts, pos.slide)}",
-                            color = Color.White.copy(alpha = 0.8f),
+                            color = CtPalette.MediaOnScrim.copy(alpha = 0.8f),
                             style = MaterialTheme.typography.labelMedium,
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(CtSpace.sm))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             itemsIndexed(manifest.slides) { index, slide ->
                                 val thumbUrl = remember(manifest, index) { manifest.thumbOf(slide) }
@@ -883,8 +887,8 @@ private fun PptStepsPlayer(
                                         modifier = Modifier
                                             .width(128.dp)
                                             .heightIn(min = 72.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Color.White.copy(alpha = 0.08f)),
+                                            .clip(RoundedCornerShape(CtRadius.tile))
+                                            .background(CtPalette.MediaOnScrim.copy(alpha = 0.08f)),
                                     ) {
                                         PptAsyncImage(
                                             url = thumbUrl,
@@ -896,14 +900,14 @@ private fun PptStepsPlayer(
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(Color.White.copy(alpha = 0.08f)),
+                                                    .clip(RoundedCornerShape(CtRadius.tile))
+                                                    .background(CtPalette.MediaOnScrim.copy(alpha = 0.08f)),
                                             )
                                         }
                                     }
                                     Text(
                                         text = "${index + 1}",
-                                        color = if (index == pos.slide) Color.White else Color.White.copy(alpha = 0.55f),
+                                        color = if (index == pos.slide) CtPalette.MediaOnScrim else CtPalette.MediaOnScrim.copy(alpha = 0.55f),
                                         style = MaterialTheme.typography.labelSmall,
                                         modifier = Modifier.padding(top = 3.dp),
                                     )
@@ -920,7 +924,7 @@ private fun PptStepsPlayer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .background(CtPalette.MediaScrimSoft.copy(alpha = 0.45f))
                     .clickable { showNotes = false },
             ) {
                 Surface(
@@ -929,29 +933,29 @@ private fun PptStepsPlayer(
                         .fillMaxWidth()
                         .heightIn(max = 300.dp)
                         .pointerInput(Unit) { detectTapGestures { } },
-                    color = Color(0xEB121414),
+                    color = CtPalette.MediaScrimBody,
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
                         Text(
                             text = "备注 · 第 ${pos.slide + 1} 页",
-                            color = Color.White.copy(alpha = 0.85f),
+                            color = CtPalette.MediaOnScrim.copy(alpha = 0.85f),
                             style = MaterialTheme.typography.titleSmall,
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(CtSpace.sm))
                         val notes = currentSlide?.notes.orEmpty()
                         if (notes.isBlank()) {
                             Text(
                                 text = "本页无备注",
-                                color = Color.White.copy(alpha = 0.45f),
+                                color = CtPalette.MediaOnScrim.copy(alpha = 0.45f),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         } else {
                             Text(
                                 text = notes,
-                                color = Color.White.copy(alpha = 0.9f),
+                                color = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                                 style = MaterialTheme.typography.bodyMedium,
-                                lineHeight = 26.sp,
+                                lineHeight = CtType.title16Size,
                                 modifier = Modifier.verticalScroll(rememberScrollState()),
                             )
                         }
@@ -978,7 +982,7 @@ private fun PptStepsPlayer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black)
+                    .background(CtPalette.MediaScrimSoft)
                     .clickable { blackScreen = false },
             )
         }
@@ -1025,8 +1029,8 @@ private fun PptControlsBar(
     var moreOpen by remember { mutableStateOf(false) }
     val steps = PptNav.stepsOfSlide(counts, pos.slide)
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = Color(0xCC121414),
+        shape = RoundedCornerShape(CtRadius.input),
+        color = CtPalette.MediaScrimSoft,
         modifier = Modifier.padding(bottom = 24.dp, start = 16.dp, end = 16.dp),
     ) {
         Row(
@@ -1038,13 +1042,13 @@ private fun PptControlsBar(
                 Icon(
                     imageVector = Icons.Rounded.ChevronLeft,
                     contentDescription = "上一页",
-                    tint = Color.White.copy(alpha = 0.9f),
+                    tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                 )
             }
             Text(
                 text = "${pos.slide + 1} / ${counts.size}",
-                color = Color.White,
-                fontSize = 15.sp,
+                color = CtPalette.MediaOnScrim,
+                fontSize = CtType.bodySize,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(horizontal = 4.dp),
             )
@@ -1060,8 +1064,8 @@ private fun PptControlsBar(
                                 .size(6.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (index <= pos.step) Color.White
-                                    else Color.White.copy(alpha = 0.35f),
+                                    if (index <= pos.step) CtPalette.MediaOnScrim
+                                    else CtPalette.MediaOnScrim.copy(alpha = 0.35f),
                                 ),
                         )
                     }
@@ -1071,34 +1075,34 @@ private fun PptControlsBar(
                 Icon(
                     imageVector = Icons.Rounded.ChevronRight,
                     contentDescription = "下一页",
-                    tint = Color.White.copy(alpha = 0.9f),
+                    tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                 )
             }
             Box(
                 modifier = Modifier
                     .width(1.dp)
                     .height(24.dp)
-                    .background(Color.White.copy(alpha = 0.12f)),
+                    .background(CtPalette.MediaOnScrim.copy(alpha = 0.12f)),
             )
             IconButton(onClick = onThumbnails, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = Icons.Rounded.GridView,
                     contentDescription = "缩略图",
-                    tint = Color.White.copy(alpha = 0.9f),
+                    tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                 )
             }
             IconButton(onClick = onNotes, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.Notes,
                     contentDescription = "备注",
-                    tint = Color.White.copy(alpha = 0.9f),
+                    tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                 )
             }
             IconButton(onClick = onBlackScreen, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = Icons.Rounded.VisibilityOff,
                     contentDescription = "黑屏",
-                    tint = Color.White.copy(alpha = 0.9f),
+                    tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                 )
             }
             Box {
@@ -1106,7 +1110,7 @@ private fun PptControlsBar(
                     Icon(
                         imageVector = Icons.Rounded.MoreVert,
                         contentDescription = "更多",
-                        tint = Color.White.copy(alpha = 0.9f),
+                        tint = CtPalette.MediaOnScrim.copy(alpha = 0.9f),
                     )
                 }
                 DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
@@ -1186,9 +1190,9 @@ private fun PptHotspotOverlay(
         Surface(
             shape = CircleShape,
             color = when {
-                failed -> Color.White.copy(alpha = 0.22f)
-                hotspot.kind == PptMediaKind.AUDIO -> Color.Black.copy(alpha = 0.42f)
-                else -> Color.Black.copy(alpha = 0.45f)
+                failed -> CtPalette.MediaOnScrim.copy(alpha = 0.22f)
+                hotspot.kind == PptMediaKind.AUDIO -> CtPalette.MediaScrimSoft.copy(alpha = 0.42f)
+                else -> CtPalette.MediaScrimSoft.copy(alpha = 0.45f)
             },
             modifier = Modifier
                 .size(if (hotspot.kind == PptMediaKind.AUDIO) 48.dp else 64.dp)
@@ -1204,7 +1208,7 @@ private fun PptHotspotOverlay(
                         Icons.Rounded.PlayArrow
                     },
                     contentDescription = if (hotspot.kind == PptMediaKind.VIDEO) "播放视频" else "播放音频",
-                    tint = Color.White.copy(alpha = if (failed) 0.5f else 0.92f),
+                    tint = CtPalette.MediaOnScrim.copy(alpha = if (failed) 0.5f else 0.92f),
                     modifier = Modifier.size(if (hotspot.kind == PptMediaKind.AUDIO) 26.dp else 34.dp),
                 )
             }
@@ -1212,12 +1216,12 @@ private fun PptHotspotOverlay(
         if (badge.isNotEmpty()) {
             Text(
                 text = if (failed) "视频不可用" else badge,
-                color = Color.White.copy(alpha = if (failed) 0.5f else 0.85f),
+                color = CtPalette.MediaOnScrim.copy(alpha = if (failed) 0.5f else 0.85f),
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(4.dp)
-                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
+                    .background(CtPalette.MediaScrimSoft.copy(alpha = 0.45f), RoundedCornerShape(CtRadius.tile))
                     .padding(horizontal = 4.dp, vertical = 1.dp),
             )
         }
@@ -1250,7 +1254,7 @@ private fun PptMediaLayer(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier = Modifier.fillMaxSize().background(CtPalette.MediaScrimSoft)) {
         if (!failed && playback.url.isNotBlank()) {
             AndroidView(
                 factory = { ctx ->
@@ -1275,7 +1279,7 @@ private fun PptMediaLayer(
             if (playback.kind == PptMediaKind.AUDIO) {
                 Text(
                     text = "音频播放中",
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = CtPalette.MediaOnScrim.copy(alpha = 0.55f),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.align(Alignment.Center),
                 )
@@ -1286,8 +1290,8 @@ private fun PptMediaLayer(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(text = "视频不可用", color = Color.White.copy(alpha = 0.8f))
-                TextButton(onClick = onClose) { Text("关闭", color = Color.White) }
+                Text(text = "视频不可用", color = CtPalette.MediaOnScrim.copy(alpha = 0.8f))
+                TextButton(onClick = onClose) { Text("关闭", color = CtPalette.MediaOnScrim) }
             }
         }
 
@@ -1298,7 +1302,7 @@ private fun PptMediaLayer(
             Icon(
                 imageVector = Icons.Rounded.Close,
                 contentDescription = "关闭视频",
-                tint = Color.White,
+                tint = CtPalette.MediaOnScrim,
             )
         }
     }
@@ -1312,21 +1316,21 @@ private fun PptPlayerLoading(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.fillMaxSize().background(CtPalette.MediaScrimSoft), contentAlignment = Alignment.Center) {
         if (loading) {
-            CircularProgressIndicator(color = Color.White.copy(alpha = 0.75f), strokeWidth = 2.dp)
+            CircularProgressIndicator(color = CtPalette.MediaOnScrim.copy(alpha = 0.75f), strokeWidth = 2.dp)
         } else {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = error ?: "演示加载失败",
-                    color = Color.White.copy(alpha = 0.8f),
+                    color = CtPalette.MediaOnScrim.copy(alpha = 0.8f),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 32.dp),
                 )
                 Spacer(Modifier.height(10.dp))
                 Row {
-                    TextButton(onClick = onRetry) { Text("重试", color = Color.White) }
-                    TextButton(onClick = onClose) { Text("关闭", color = Color.White) }
+                    TextButton(onClick = onRetry) { Text("重试", color = CtPalette.MediaOnScrim) }
+                    TextButton(onClick = onClose) { Text("关闭", color = CtPalette.MediaOnScrim) }
                 }
             }
         }
@@ -1345,7 +1349,6 @@ private fun Context.findActivity(): Activity? {
     }
     return null
 }
-
 
 private fun toast(context: Context, message: String) {
     android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()

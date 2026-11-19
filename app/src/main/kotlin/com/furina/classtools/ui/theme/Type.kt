@@ -3,7 +3,6 @@ package com.furina.classtools.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
@@ -12,216 +11,70 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // =============================================================================
-// 班级工具站 · Android 17 类型标尺
+// Material 3 Typography（15 baseline + 15 emphasized）
 //
-// 数值来源：material3 1.4.0 `TypeScaleTokens`（30 个样式：15 baseline + 15 emphasized），
-// 对应 `design/tokens.json → typography`。要点：
-//   - 字体族使用系统默认（Android 默认 = Roboto Flex 拉丁 + Noto Sans CJK 中文），
-//     不打包字体（体积 + 多设备品牌一致性由系统字体承担）；如需品牌字体后续可加
-//     FontFamily(...) 与 FontVariation 设置，不影响本文件 API。
-//   - material3 1.4.0 的 `Typography` 公开构造只有 15 个 baseline 参数；
-//     15 个 emphasized 样式由本文件 `CtEmphasizedTypography` + `LocalCtEmphasizedType`
-//     提供（不能通过公开 API 写进 MaterialTheme.typography）。
-//   - 中文覆写：CJK 需要更松的行高，body/title/label 统一 +2sp（见每项注释）；
-//     tracking 保留 M3 原值（对 CJK 视觉影响 <0.5sp，可忽略）。
+// 数值来自 [CtDesign.kt] 的 [CtType]（唯一令牌源），保证「M3 组件」与「自绘组件」
+// 使用同一套字号：
+//   displayLarge 36 / displayMedium 32 / displaySmall 28（= displayTitle）
+//   headlineLarge 28 / headlineMedium 24 / headlineSmall 20（= 工具页顶栏）
+//   titleLarge 20 / titleMedium 16 / titleSmall 14
+//   bodyLarge 15 / bodyMedium 14 / bodySmall 12
+//   labelLarge 13 / labelMedium 12 / labelSmall 11
+//
+// 行高按中文可读性（1.3–1.5）取整；字体族用系统默认（Roboto Flex 拉丁 + Noto Sans CJK 中文），
+// 不打包字体（体积 / 多设备品牌一致性由系统字体承担；weight 轴用于 Expressive 的情绪层级）。
 // =============================================================================
 
 private val CtFontFamily = FontFamily.Default
 
-// ---------------------------------------------------------------------------
-// Baseline · 15 样式（MaterialTheme.typography）
-// ---------------------------------------------------------------------------
-val CtTypography = Typography(
-    /** 57/64 · w400 · -0.2（中文行高保持 64：Display 已足够松） */
-    displayLarge = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 57.sp,
-        lineHeight = 64.sp,
-        letterSpacing = (-0.2).sp,
-    ),
-    /** 45/52 · w400 · 0 */
-    displayMedium = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 45.sp,
-        lineHeight = 52.sp,
-        letterSpacing = 0.sp,
-    ),
-    /** 36/44 · w400 · 0 */
-    displaySmall = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 36.sp,
-        lineHeight = 44.sp,
-        letterSpacing = 0.sp,
-    ),
-    /** 32/40 · w400 · 0 */
-    headlineLarge = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 32.sp,
-        lineHeight = 40.sp,
-        letterSpacing = 0.sp,
-    ),
-    /** 28/36 · w400 · 0 */
-    headlineMedium = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 28.sp,
-        lineHeight = 36.sp,
-        letterSpacing = 0.sp,
-    ),
-    /** 24/32 · w400 · 0 → 中文 34 */
-    headlineSmall = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 24.sp,
-        lineHeight = 34.sp,
-        letterSpacing = 0.sp,
-    ),
-    /** 22/28 · w400 · 0 → 中文 30 */
-    titleLarge = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 30.sp,
-        letterSpacing = 0.sp,
-    ),
-    /** 16/24 · w500 · 0.2 → 中文 26 */
-    titleMedium = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        lineHeight = 26.sp,
-        letterSpacing = 0.2.sp,
-    ),
-    /** 14/20 · w500 · 0.1 → 中文 22 */
-    titleSmall = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.1.sp,
-    ),
-    /** 16/24 · w400 · 0.5 → 中文 26 */
-    bodyLarge = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 26.sp,
-        letterSpacing = 0.5.sp,
-    ),
-    /** 14/20 · w400 · 0.2 → 中文 22 */
-    bodyMedium = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.2.sp,
-    ),
-    /** 12/16 · w400 · 0.4 → 中文 18 */
-    bodySmall = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.4.sp,
-    ),
-    /** 14/20 · w500 · 0.1 → 中文 21 */
-    labelLarge = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 21.sp,
-        letterSpacing = 0.1.sp,
-    ),
-    /** 12/16 · w500 · 0.5 → 中文 18 */
-    labelMedium = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.5.sp,
-    ),
-    /** 11/16 · w500 · 0.5 → 中文 17 */
-    labelSmall = TextStyle(
-        fontFamily = CtFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 17.sp,
-        letterSpacing = 0.5.sp,
-    ),
+private fun style(
+    weight: FontWeight,
+    size: Int,
+    line: Int,
+    tracking: Double = 0.0,
+): TextStyle = TextStyle(
+    fontFamily = CtFontFamily,
+    fontWeight = weight,
+    fontSize = size.sp,
+    lineHeight = line.sp,
+    letterSpacing = tracking.sp,
 )
 
-// ---------------------------------------------------------------------------
-// Emphasized · 15 样式（表达性时刻；每屏最多 2 处，见 design/ANDROID17_DESIGN.md §3.3）
-//
-// material3 1.4.0 的公开 Typography 构造不能覆盖 emphasized，故用独立类型 + CompositionLocal。
-// 用法：`MaterialTheme.ctEmphasized.displayMediumEmphasized`（见文件末尾扩展属性）。
-// ---------------------------------------------------------------------------
-@Immutable
+val CtTypography = Typography(
+    displayLarge = style(FontWeight.Medium, 36, 46, -0.2),
+    displayMedium = style(FontWeight.Medium, 32, 42, -0.1),
+    displaySmall = style(FontWeight.Bold, 28, 36),
+    headlineLarge = style(FontWeight.Bold, 28, 36),
+    headlineMedium = style(FontWeight.Bold, 24, 32),
+    headlineSmall = style(FontWeight.Bold, 20, 27),
+    titleLarge = style(FontWeight.Medium, 20, 28),
+    titleMedium = style(FontWeight.Medium, CtType.title16Size.value.toInt(), CtType.title16Line, 0.1),
+    titleSmall = style(FontWeight.Medium, 14, 21, 0.1),
+    bodyLarge = style(FontWeight.Normal, CtType.bodySize.value.toInt(), CtType.bodyLine, 0.2),
+    bodyMedium = style(FontWeight.Normal, 14, 21, 0.2),
+    bodySmall = style(FontWeight.Normal, CtType.captionSize.value.toInt(), CtType.captionLine, 0.3),
+    labelLarge = style(FontWeight.Medium, CtType.labelSize.value.toInt(), CtType.labelLine, 0.1),
+    labelMedium = style(FontWeight.Medium, CtType.captionSize.value.toInt(), CtType.captionLine, 0.4),
+    labelSmall = style(FontWeight.Medium, CtType.microSize.value.toInt(), CtType.microLine, 0.4),
+)
+
+/** Emphasized 变体（表达性时刻：hero/统计数字；每屏最多 2 处）。 */
 data class CtEmphasizedTypography(
-    val displayLargeEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 57.sp, lineHeight = 64.sp, letterSpacing = 0.sp,
-    ),
-    val displayMediumEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 45.sp, lineHeight = 52.sp, letterSpacing = 0.sp,
-    ),
-    val displaySmallEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 36.sp, lineHeight = 44.sp, letterSpacing = 0.sp,
-    ),
-    val headlineLargeEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 32.sp, lineHeight = 40.sp, letterSpacing = 0.sp,
-    ),
-    val headlineMediumEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 28.sp, lineHeight = 36.sp, letterSpacing = 0.sp,
-    ),
-    val headlineSmallEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 24.sp, lineHeight = 34.sp, letterSpacing = 0.sp,
-    ),
-    val titleLargeEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 22.sp, lineHeight = 30.sp, letterSpacing = 0.sp,
-    ),
-    val titleMediumEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Bold,
-        fontSize = 16.sp, lineHeight = 26.sp, letterSpacing = 0.15.sp,
-    ),
-    val titleSmallEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Bold,
-        fontSize = 14.sp, lineHeight = 22.sp, letterSpacing = 0.1.sp,
-    ),
-    val bodyLargeEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 16.sp, lineHeight = 26.sp, letterSpacing = 0.15.sp,
-    ),
-    val bodyMediumEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 14.sp, lineHeight = 22.sp, letterSpacing = 0.25.sp,
-    ),
-    val bodySmallEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 12.sp, lineHeight = 18.sp, letterSpacing = 0.4.sp,
-    ),
-    val labelLargeEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Bold,
-        fontSize = 14.sp, lineHeight = 21.sp, letterSpacing = 0.1.sp,
-    ),
-    val labelMediumEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Bold,
-        fontSize = 12.sp, lineHeight = 18.sp, letterSpacing = 0.5.sp,
-    ),
-    val labelSmallEmphasized: TextStyle = TextStyle(
-        fontFamily = CtFontFamily, fontWeight = FontWeight.Bold,
-        fontSize = 11.sp, lineHeight = 17.sp, letterSpacing = 0.5.sp,
-    ),
+    val displayLargeEmphasized: TextStyle = style(FontWeight.SemiBold, 36, 46),
+    val displayMediumEmphasized: TextStyle = style(FontWeight.SemiBold, 32, 42),
+    val displaySmallEmphasized: TextStyle = style(FontWeight.Bold, 28, 36),
+    val headlineLargeEmphasized: TextStyle = style(FontWeight.Bold, 28, 36),
+    val headlineMediumEmphasized: TextStyle = style(FontWeight.Bold, 24, 32),
+    val headlineSmallEmphasized: TextStyle = style(FontWeight.Bold, 20, 27),
+    val titleLargeEmphasized: TextStyle = style(FontWeight.SemiBold, 20, 28),
+    val titleMediumEmphasized: TextStyle = style(FontWeight.SemiBold, 16, 24),
+    val titleSmallEmphasized: TextStyle = style(FontWeight.SemiBold, 14, 21),
+    val bodyLargeEmphasized: TextStyle = style(FontWeight.Medium, 15, 22),
+    val bodyMediumEmphasized: TextStyle = style(FontWeight.Medium, 14, 21),
+    val bodySmallEmphasized: TextStyle = style(FontWeight.Medium, 12, 17),
+    val labelLargeEmphasized: TextStyle = style(FontWeight.SemiBold, 13, 18),
+    val labelMediumEmphasized: TextStyle = style(FontWeight.SemiBold, 12, 17),
+    val labelSmallEmphasized: TextStyle = style(FontWeight.SemiBold, 11, 15),
 )
 
 val CtEmphasizedType = CtEmphasizedTypography()
@@ -229,12 +82,7 @@ val CtEmphasizedType = CtEmphasizedTypography()
 /** 表达性字型 CompositionLocal；由 ClassToolsTheme 提供。 */
 val LocalCtEmphasizedType = staticCompositionLocalOf { CtEmphasizedType }
 
-/**
- * 表达性字型访问器：
- * ```
- * Text("86.42", style = MaterialTheme.ctEmphasized.displayMediumEmphasized)
- * ```
- */
+/** 表达性字型访问器：`MaterialTheme.ctEmphasized.displayMediumEmphasized`。 */
 val MaterialTheme.ctEmphasized: CtEmphasizedTypography
     @Composable @ReadOnlyComposable
     get() = LocalCtEmphasizedType.current

@@ -34,7 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 
 /**
  * 教务卡片页内容（规格 `_audit/jw_entry_20261113/JW_CARDS_V1_SPEC.md` §4）。
@@ -116,7 +118,7 @@ fun JwCardsSection(
             Spacer(modifier = Modifier.size(8.dp))
             Text(JwCardTexts.BTN_OPEN_SITE)
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(CtSpace.lg))
     }
 }
 

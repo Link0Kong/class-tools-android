@@ -37,9 +37,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,10 +52,12 @@ import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.reminder.ReminderSettingsStore
 import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
-import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtTokens
 import kotlinx.coroutines.launch
 
@@ -193,13 +195,13 @@ fun ReminderSettingsScreen(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(CtSpace.xs))
                         Text(
                             "立即检查本机通知链路，并查看缓存与上次运行摘要。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(CtSpace.sm))
                         OutlinedButton(
                             onClick = {
                                 ReminderRuntime.runNow(context)
@@ -223,7 +225,7 @@ fun ReminderSettingsScreen(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(CtSpace.xs))
                         Text(
                             "提醒由本机调度（Android WorkManager，约 15 分钟检查一次）；手机省电/息屏时可能延迟。" +
                                 "提醒设置只保存在本机，不随账号同步；点击通知可直接打开作业/课表。",
@@ -234,7 +236,7 @@ fun ReminderSettingsScreen(
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(CtSpace.md))
             }
         }
     }

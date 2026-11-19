@@ -86,7 +86,10 @@ import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSectionHeader
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -334,7 +337,7 @@ fun HomeworkScreen(
                                 .align(Alignment.TopCenter)
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 6.dp),
-                            shape = RoundedCornerShape(18.dp),
+                            shape = RoundedCornerShape(CtRadius.cardCompact),
                             color = MaterialTheme.colorScheme.errorContainer,
                         ) {
                             Row(
@@ -532,7 +535,7 @@ private fun HomeworkCard(
                 }
                 val body = item.row.content.trim()
                 if (body.isNotEmpty()) {
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(CtSpace.xxs))
                     Text(
                         text = body,
                         style = MaterialTheme.typography.bodyMedium,

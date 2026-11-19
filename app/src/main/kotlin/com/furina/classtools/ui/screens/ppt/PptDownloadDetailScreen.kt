@@ -31,8 +31,8 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PictureAsPdf
-import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.WarningAmber
@@ -65,8 +65,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.ppt.PptDeckDetail
 import com.furina.classtools.data.ppt.PptDetailResult
-import com.furina.classtools.data.ppt.PptFileDownloader
 import com.furina.classtools.data.ppt.PptDownloadEvent
+import com.furina.classtools.data.ppt.PptFileDownloader
 import com.furina.classtools.data.ppt.PptImageLoader
 import com.furina.classtools.data.ppt.PptMediaKind
 import com.furina.classtools.data.ppt.PptRepository
@@ -79,7 +79,10 @@ import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import java.io.File
 import kotlinx.coroutines.launch
 
@@ -309,7 +312,7 @@ fun PptDownloadDetailContent(
                             title = "下载详情加载失败",
                             message = error ?: "请稍后重试",
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(CtSpace.sm))
                         CtToolPrimaryButton(text = "重试", onClick = onRetryLoad)
                     }
                 }
@@ -390,7 +393,7 @@ fun PptDownloadDetailContent(
                             }
                         }
                     }
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(CtSpace.xl))
                 }
             }
         }
@@ -411,7 +414,7 @@ private fun DetailHeader(detail: PptDeckDetail, imageLoader: PptImageLoader) {
                 modifier = Modifier
                     .width(128.dp)
                     .heightIn(min = 72.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(CtRadius.tile))
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             ) {
                 PptAsyncImage(
@@ -597,7 +600,7 @@ private fun DownloadRowCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Surface(
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(CtRadius.tile),
                 color = MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.size(40.dp),
             ) {
@@ -750,7 +753,7 @@ private fun MediaDownloadRowCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Surface(
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(CtRadius.tile),
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 modifier = Modifier.size(40.dp),
             ) {
@@ -820,7 +823,7 @@ private fun MediaDownloadRowCard(
                 else -> Button(
                     onClick = onDownload,
                     modifier = Modifier.heightIn(min = 48.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(CtRadius.tile),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 ) {

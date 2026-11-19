@@ -48,9 +48,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.BuildConfig
-import com.furina.classtools.data.auth.AuthRepository
 import com.furina.classtools.data.account.OppoQuickLoginClick
 import com.furina.classtools.data.account.OppoQuickLoginRule
+import com.furina.classtools.data.auth.AuthRepository
 import com.furina.classtools.data.auth.VerifyResult
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.ui.components.BrandMark
@@ -60,7 +60,9 @@ import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.screens.privacy.LegalFullTextLinks
 import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import kotlinx.coroutines.launch
 
 private sealed interface IdentityUiState {
@@ -422,13 +424,13 @@ fun IdentityScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(CtSpace.xl))
             Text(
                 text = "v${BuildConfig.VERSION_NAME} · Android 17 设计语言",
                 style = com.furina.classtools.ui.theme.CtText.caption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(CtSpace.xxl))
         }
     }
 

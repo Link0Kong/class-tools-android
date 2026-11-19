@@ -30,9 +30,9 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -49,10 +49,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -93,7 +93,9 @@ import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.theme.ClassToolsTheme
-import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtShape
+import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.theme.CtType
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -489,7 +491,7 @@ fun DiagScreen(
                         )
                         MyReportsCard(reports = myReports, nowMillis = nowMillis())
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(CtSpace.xxl))
                 }
             }
 
@@ -559,7 +561,7 @@ private fun SummaryStrip(
         if (lastUpdated.isNotBlank()) {
             Text(
                 text = "最后更新 $lastUpdated",
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
@@ -685,7 +687,7 @@ private fun AiAnalysisRow(
             if (DiagUiText.autoFixable(analysis)) {
                 Text(
                     text = "⚙ 可自动修复",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                 )
@@ -830,7 +832,7 @@ private fun RelatedRepairBlock(repair: RepairTask, nowMillis: Long) {
         if (timeText.isNotBlank()) {
             Text(
                 text = timeText,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             )
         }
@@ -1156,7 +1158,7 @@ private fun ServiceHealthRowBlock(
         if (row.detail.isNotBlank()) {
             Text(
                 text = DiagSanitizer.sanitizeDisplay(row.detail, 240),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -1168,7 +1170,7 @@ private fun ServiceHealthRowBlock(
             val relative = if (millis > 0) relativeTime(millis, nowMillis) else ""
             Text(
                 text = "检查于 " + (relative.ifBlank { clockText(millis) }).ifBlank { checkedAt },
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             )
         }

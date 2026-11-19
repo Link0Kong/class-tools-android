@@ -343,4 +343,3 @@ private fun hitAt(points: List<TrendPoint>, offsetX: Float, widthPx: Int): Int? 
     val frac = (offsetX / widthPx.toFloat()).coerceIn(0f, 1f)
     return PowerStats.nearestPoint(points, frac)?.index
 }
-

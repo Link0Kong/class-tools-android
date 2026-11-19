@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +39,7 @@ import com.furina.classtools.ui.theme.CtText
 import com.furina.classtools.ui.theme.HarmonyMotion
 import com.furina.classtools.ui.theme.HarmonyTokens
 import com.furina.classtools.ui.theme.harmonyTint
+import com.furina.classtools.ui.theme.uiAccentOf
 import com.furina.classtools.ui.theme.rememberHarmonyColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 
@@ -106,14 +108,14 @@ internal fun AllToolCard(
                 // 40dp 淡色底图标块（鸿蒙 tint(accent, 0.12) / 24vp 字形）
                 Surface(
                     shape = RoundedCornerShape(HarmonyTokens.RadiusTile),
-                    color = harmonyTint(tool.accent),
-                    contentColor = tool.accent,
+                    color = harmonyTint(uiAccentOf(tool).tintRef),
+                    contentColor = uiAccentOf(tool).textRef,
                 ) {
                     Box(modifier = Modifier.size(HarmonyTokens.GlyphBox), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
-                            tint = tool.accent,
+                            tint = uiAccentOf(tool).tintRef,
                             modifier = Modifier.size(HarmonyTokens.TileGlyph),
                         )
                     }
@@ -144,7 +146,7 @@ internal fun AllToolCard(
             Surface(
                 shape = CircleShape,
                 color = MaterialThemePrimary(),
-                contentColor = androidx.compose.ui.graphics.Color.White,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(6.dp)

@@ -30,8 +30,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.MoreVert
@@ -73,6 +73,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.ppt.DefaultPptRepository
 import com.furina.classtools.data.ppt.PptByteSource
 import com.furina.classtools.data.ppt.PptDeck
@@ -81,7 +82,6 @@ import com.furina.classtools.data.ppt.PptListResult
 import com.furina.classtools.data.ppt.PptLocalStore
 import com.furina.classtools.data.ppt.PptRepository
 import com.furina.classtools.data.ppt.PptUploadInput
-import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.ppt.PptUploadPhase
 import com.furina.classtools.data.ppt.PptUploadResult
 import com.furina.classtools.data.ppt.PptUriSource
@@ -98,7 +98,11 @@ import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.theme.CtPalette
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -429,7 +433,7 @@ fun PptListContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(CtRadius.tile),
                     color = MaterialTheme.colorScheme.tertiaryContainer,
                 ) {
                     Row(
@@ -457,7 +461,7 @@ fun PptListContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(CtRadius.tile),
                     color = MaterialTheme.colorScheme.errorContainer,
                 ) {
                     Row(
@@ -598,7 +602,7 @@ private fun PptDeckCard(
                 modifier = Modifier
                     .width(128.dp)
                     .heightIn(min = 72.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(CtRadius.tile))
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             ) {
                 PptAsyncImage(
@@ -624,7 +628,7 @@ private fun PptDeckCard(
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .height(3.dp)
-                            .background(Color.Black.copy(alpha = 0.18f)),
+                            .background(CtPalette.MediaScrimSoft.copy(alpha = 0.18f)),
                     ) {
                         Box(
                             modifier = Modifier
@@ -636,10 +640,10 @@ private fun PptDeckCard(
                     Text(
                         text = "$percent%",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
+                        color = CtPalette.MediaOnScrim,
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                            .background(CtPalette.MediaScrimSoft.copy(alpha = 0.45f), CircleShape)
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     )
                 }
@@ -841,7 +845,7 @@ private fun PptListSkeleton() {
                         Modifier
                             .width(128.dp)
                             .heightIn(min = 72.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(CtRadius.tile))
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -879,7 +883,7 @@ private fun PptListEmpty(onUpload: () -> Unit) {
                 title = PptStatusTexts.EMPTY_TITLE,
                 message = "支持 .ppt / .pptx",
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(CtSpace.sm))
             CtToolPrimaryButton(text = "上传 PPT", onClick = onUpload)
         }
     }
@@ -898,7 +902,7 @@ private fun PptListError(message: String, onRetry: () -> Unit) {
                 title = "加载失败",
                 message = message,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(CtSpace.sm))
             CtToolPrimaryButton(text = "重试", onClick = onRetry)
         }
     }

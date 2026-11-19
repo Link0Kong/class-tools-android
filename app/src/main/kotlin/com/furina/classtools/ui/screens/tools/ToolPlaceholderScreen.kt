@@ -30,7 +30,12 @@ import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.theme.harmonyTint
+import com.furina.classtools.ui.theme.uiAccentOf
 
 /**
  * 工具占位页：原生版本正在迁移中。
@@ -58,29 +63,29 @@ fun ToolPlaceholderScreen(
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(CtSpace.xl))
 
                 Surface(
-                    shape = RoundedCornerShape(26.dp),
-                    color = tool.accent.copy(alpha = 0.18f),
+                    shape = RoundedCornerShape(CtRadius.sheetTop),
+                    color = harmonyTint(uiAccentOf(tool).tintRef),
                 ) {
                     Box(modifier = Modifier.size(88.dp), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
-                            tint = tool.accent,
+                            tint = uiAccentOf(tool).tintRef,
                             modifier = Modifier.size(42.dp),
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(CtSpace.lg))
                 Text(
                     text = tool.name,
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(CtSpace.xs))
                 Text(
                     text = tool.subtitle,
                     style = MaterialTheme.typography.bodyMedium,
@@ -90,7 +95,7 @@ fun ToolPlaceholderScreen(
                 Spacer(modifier = Modifier.height(14.dp))
                 CtPill(text = "原生版开发中")
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(CtSpace.xxl))
 
                 Surface(
                     modifier = Modifier.widthIn(max = 560.dp),
@@ -128,14 +133,14 @@ fun ToolPlaceholderScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(CtSpace.lg))
                 Text(
                     text = "数据层与网页 / 小程序共用 CloudBase 契约（userdata v6 + marks），此页仅替换 UI。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.widthIn(max = 560.dp),
                 )
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(CtSpace.xxxl))
             }
         }
     }

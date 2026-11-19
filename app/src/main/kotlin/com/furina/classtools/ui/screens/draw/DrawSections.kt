@@ -31,8 +31,8 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,9 +50,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -67,15 +67,16 @@ import com.furina.classtools.features.draw.DrawResult
 import com.furina.classtools.features.draw.DrawSortMode
 import com.furina.classtools.features.draw.DrawStep
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolInfoRow
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
-import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.components.tool.CtToolSectionHeader
-import com.furina.classtools.ui.components.EmptyState
+import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShapeTokens
 
 // =============================================================================
@@ -139,7 +140,6 @@ private fun DrawCompactInfoRow(label: String, value: String) {
         )
     }
 }
-
 
 /** 步骤条：已完成/当前步骤可点击回退（只允许向前回退，不允许跳过）。 */
 @Composable
@@ -596,7 +596,7 @@ fun DrawEntryChip(
 @Composable
 fun DrawNumberChip(number: Int?, name: String?) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(CtRadius.tile),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Text(

@@ -199,7 +199,6 @@ private fun PptListDarkPreview() {
     PptListPreview(dark = true)
 }
 
-
 @Preview(name = "232 演示 v6 · 下载详情（文件 + 媒体）", showBackground = true, widthDp = 412, heightDp = 1300)
 @Composable
 private fun PptDownloadDetailPreview() {
@@ -263,7 +262,6 @@ private fun DiagV6Preview(
 private fun DiagV6FoldedPreview() {
     DiagV6Preview()
 }
-
 
 @Preview(name = "234 诊断 v6 · 深色", showBackground = true, widthDp = 412, heightDp = 2200)
 @Composable

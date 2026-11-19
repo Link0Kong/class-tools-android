@@ -202,16 +202,15 @@ fun MainNavHost(
     // 根页 Pager 状态 hoist 到 NavHost 外层：进入工具页再返回时保持当前 Tab。
     val pagerState = rememberCtTabPagerState(pageCount = TOP_LEVEL_COUNT)
 
-    // 工具卡 → 工具页「一镜到底」覆盖转场状态（参考 HFUT 的连续性原则，自行实现）。
+    // 工具卡 → 工具页的**共享容器变换**状态（M3 Expressive container transform）。
     val toolTransitionAnchors = remember { ToolTransitionAnchors() }
     var transitionTool by remember { mutableStateOf<AppTool?>(null) }
     var transitionStart by remember { mutableStateOf<Rect?>(null) }
     var transitionRoute by remember { mutableStateOf<String?>(null) }
-    // 返回：全屏页面收回工具卡（reverse）。真实工具页快照由 View.draw 同步捕获，
-    // 覆盖层显示快照并从全屏缩回卡片；pop 在动画开始前完成，避免底层露出工具内部界面。
+    // 返回：覆盖层从全屏经同一弹簧缩回卡片（reverse）。pop 在动画开始前完成，
+    // 底层始终是干净的根页；不再捕获界面快照（旧「快照遮底」补丁已移除）。
     var transitionReverse by remember { mutableStateOf(false) }
     var transitionPendingPop by remember { mutableStateOf(false) }
-    var transitionSnapshot by remember { mutableStateOf<Bitmap?>(null) }
     val reduceMotion = rememberReduceMotion()
 
     // 通知点击带入的工具（hw/tt）：登录/进入主界面后消费一次。
@@ -247,29 +246,28 @@ fun MainNavHost(
             "vote" -> Routes.VOTE
             else -> Routes.tool(tool.id)
         }
-        // 有卡片锚点且未移除动画时，走覆盖层「卡片展开成页面」转场；否则直接导航。
+        // 有卡片锚点且未移除动画时，走容器变换「卡片长成页面」；否则直接导航。
         val anchor = toolTransitionAnchors.get(tool.id)
-        if (!reduceMotion && anchor != null) {
+        if (!reduceMotion && anchor != null && transitionTool == null) {
             transitionStart = anchor
             transitionTool = tool
             transitionRoute = route
             transitionReverse = false
             transitionPendingPop = false
-            transitionSnapshot = null
         } else {
             navController.navigate(route)
         }
     }
 
     /**
-     * 工具页返回：有卡片锚点时播放「真实工具页快照收回卡片」的一镜到底退出动画。
+     * 工具页返回：容器变换「页面收回卡片」。
      *
-     * 顺序（保证动画期间/结束后都不露出工具内部界面）：
-     * 1. 先在工具页仍在前台时**同步捕获当前界面 Bitmap**（覆盖层还没出现，拍到的就是工具页）；
-     * 2. 立即 `popBackStack()` 回根页（此后底层一直是根页）；
-     * 3. 覆盖层全屏显示快照，并从全屏缩回卡片 bounds，结束撤层。
+     * 顺序：1) 立即 `popBackStack()` 回根页（此后底层一直是干净的根页）；
+     * 2) 覆盖层从全屏经同一弹簧缩回卡片 bounds 并淡出，结束撤层。
      *
-     * 无锚点/移除动画/已有转场进行中时直接 pop；快照拍摄失败时覆盖层降级为图标卡。
+     * 与旧实现（捕获界面快照再缩小）相比：不做 View.draw 快照，无「遮底」层，
+     * WebView/SurfaceView 页面也不会出现快照空白。
+     * 无锚点/移除动画/已有转场进行中时直接 pop。
      */
     fun popTool(toolId: String) {
         val tool = ToolCatalog.byId(toolId)
@@ -278,15 +276,11 @@ fun MainNavHost(
             navController.popBackStack()
             return
         }
-        // 1) 快照必须在 pop 之前、覆盖层出现之前拍摄。
-        val snapshot = runCatching { captureToolSnapshot(rootView) }.getOrNull()
-        // 2) 先 pop：底层回到根页；pendingPop 仅作 onDone 兜底（pop 失败时强制再 pop 一次）。
+        // 先 pop：底层回到根页；pendingPop 仅作 onDone 兜底（pop 失败时强制再 pop 一次）。
         val popped = runCatching { navController.popBackStack() }.getOrDefault(false)
         transitionPendingPop = !popped
-        // 3) 覆盖层显示快照并缩回卡片。
         transitionStart = anchor
         transitionTool = tool
-        transitionSnapshot = snapshot
         transitionRoute = null
         transitionReverse = true
     }
@@ -382,8 +376,8 @@ fun MainNavHost(
             ) {
         composable(
             route = Routes.ROOT,
-            // 根页不参与 NavHost 的 pop 淡入：工具页 pop 由快照覆盖层负责，
-            // 若根页再做 fadeIn，会出现「快照收回卡片后工具页仍停留一瞬」。
+            // 根页不参与 NavHost 的进出场：工具页的进入/返回统一由容器变换覆盖层负责
+            // （覆盖层与目标页之间靠淡出交接），根页再叠加位移会出现两重动画。
             enterTransition = { EnterTransition.None },
             exitTransition = { ExitTransition.None },
             popEnterTransition = { EnterTransition.None },
@@ -438,10 +432,10 @@ fun MainNavHost(
                     defaultValue = false
                 },
             ),
-            enterTransition = { CtPageTransitions.harmonyPushEnter() },
-            exitTransition = { CtPageTransitions.harmonyPushExit() },
-            // 退出由 ToolTransitionOverlay 的「收回卡片」覆盖层负责；NavHost 不再叠加 pop 动画，
-            // 否则会出现「页面滑走 + 卡片收回」两重动画。
+            // 进入/返回都由 ToolTransitionOverlay 的容器变换覆盖层负责（卡片 ⇄ 页面 连续形变），
+            // NavHost 不再叠加 push/pop 位移，否则会出现「页面滑走 + 卡片收回」两重动画。
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { ExitTransition.None },
         ) { entry ->
@@ -964,7 +958,6 @@ fun MainNavHost(
             tool = transitionTool,
             startBounds = transitionStart,
             reverse = transitionReverse,
-            snapshot = transitionSnapshot,
             onHalfway = {
                 if (transitionPendingPop) {
                     transitionPendingPop = false
@@ -984,7 +977,6 @@ fun MainNavHost(
                 }
                 transitionTool = null
                 transitionStart = null
-                transitionSnapshot = null
                 transitionRoute = null
                 transitionReverse = false
             },

@@ -42,10 +42,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -64,6 +64,8 @@ import com.furina.classtools.data.notices.NoticeAttachmentSource
 import com.furina.classtools.data.notices.NoticeItemMeta
 import com.furina.classtools.data.ppt.OkHttpPptImageLoader
 import com.furina.classtools.data.ppt.PptImageLoader
+import com.furina.classtools.ui.theme.CtPalette
+import com.furina.classtools.ui.theme.CtRadius
 import java.io.File
 import java.net.URLEncoder
 import java.util.Base64
@@ -315,7 +317,7 @@ fun NoticeAttachmentThumb(
     when (val current = state) {
         ThumbState.Loading -> Surface(
             modifier = modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(CtRadius.tile),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
             Row(
@@ -346,7 +348,7 @@ fun NoticeAttachmentThumb(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(148.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(CtRadius.tile))
                     .clickable { showFull = true },
             )
             Text(
@@ -428,8 +430,8 @@ fun NoticeImageFullDialog(
         ) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
-                color = Color(0xEE000000),
-                contentColor = Color.White,
+                color = CtPalette.MediaScrimWeak,
+                contentColor = CtPalette.MediaOnScrim,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     var image by remember(source, imageLoader) { mutableStateOf<ImageBitmap?>(null) }
@@ -492,16 +494,16 @@ fun NoticeImageFullDialog(
                         failed -> Text(
                             text = "无法预览 · $title",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White,
+                            color = CtPalette.MediaOnScrim,
                         )
 
-                        else -> CircularProgressIndicator(color = Color.White)
+                        else -> CircularProgressIndicator(color = CtPalette.MediaOnScrim)
                     }
                     if (image != null) {
                         Text(
                             text = "双指缩放 · 双击复位",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.65f),
+                            color = CtPalette.MediaOnScrim.copy(alpha = 0.65f),
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = 28.dp),
@@ -520,14 +522,14 @@ fun NoticeImageFullDialog(
                             },
                             modifier = Modifier.align(Alignment.TopStart),
                         ) {
-                            Icon(Icons.Rounded.Share, contentDescription = "分享图片链接", tint = Color.White)
+                            Icon(Icons.Rounded.Share, contentDescription = "分享图片链接", tint = CtPalette.MediaOnScrim)
                         }
                     }
                     IconButton(
                         onClick = onDismiss,
                         modifier = Modifier.align(Alignment.TopEnd),
                     ) {
-                        Icon(Icons.Rounded.Close, contentDescription = "关闭大图", tint = Color.White)
+                        Icon(Icons.Rounded.Close, contentDescription = "关闭大图", tint = CtPalette.MediaOnScrim)
                     }
                 }
             }
@@ -675,7 +677,7 @@ private fun AttachmentOpenRow(
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(CtRadius.tile))
             .clickable(enabled = !preparing) { startOpen() }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -744,4 +746,3 @@ private fun archiveFileDetailText(file: NoticeArchiveFile): String = listOf(
 ).filter { it.isNotBlank() }.joinToString(" · ")
 
 private fun Int.ifZero(fallback: Int): Int = if (this > 0) this else fallback
-

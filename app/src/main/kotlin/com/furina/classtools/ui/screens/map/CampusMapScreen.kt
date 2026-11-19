@@ -17,7 +17,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -42,18 +42,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.furina.classtools.R
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.furina.classtools.BuildConfig
+import com.furina.classtools.R
 import com.furina.classtools.ui.components.CtTopBar
+import com.furina.classtools.ui.theme.CtRadius
 
 private const val TAG = "CampusMap"
 
@@ -366,7 +367,7 @@ fun CampusMapScreen(
                         .padding(top = 10.dp)
                         .background(
                             MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                            RoundedCornerShape(999.dp),
+                            RoundedCornerShape(CtRadius.pill),
                         )
                         .padding(horizontal = 12.dp, vertical = 5.dp),
                 )
@@ -476,4 +477,3 @@ private fun parseMapHealth(raw: String?): MapPageHealth? {
         textLength = number("t"),
     )
 }
-

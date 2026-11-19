@@ -206,8 +206,3 @@ object ToolOrderPrefs {
     @Suppress("unused")
     private fun roundForTest(value: Float): Int = value.roundToInt()
 }
-
-
-
-
-

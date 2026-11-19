@@ -32,8 +32,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.Article
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.DarkMode
@@ -42,7 +43,6 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Feedback
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Shield
@@ -112,13 +112,15 @@ import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
 import com.furina.classtools.ui.theme.AppearanceMode
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtShape
+import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
 import com.furina.classtools.ui.theme.HarmonyTokens
-import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
-import com.furina.classtools.ui.theme.rememberProfileHeroColors
 import com.furina.classtools.ui.theme.harmonyTint
 import com.furina.classtools.ui.theme.rememberHarmonyColors
+import com.furina.classtools.ui.theme.rememberProfileHeroColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
 
@@ -562,19 +564,19 @@ private fun DataSection(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(CtSpace.sm))
             Row(modifier = Modifier.fillMaxWidth()) {
                 MetricCell("待交作业", MeStatsBuilder.formatCount(stats.pendingHomework), Modifier.weight(1f))
                 MetricCell("已完成作业", MeStatsBuilder.formatCount(stats.doneHomework), Modifier.weight(1f))
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(CtSpace.sm))
             Row(modifier = Modifier.fillMaxWidth()) {
                 MetricCell("抽签记录", MeStatsBuilder.formatCount(stats.drawRecords), Modifier.weight(1f))
                 MetricCell("体测记录", MeStatsBuilder.formatCount(stats.fitRecords), Modifier.weight(1f))
             }
             val extras = MeStatsBuilder.extraMetrics(stats)
             if (extras.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(CtSpace.sm))
                 Text(
                     text = extras.joinToString(" · ") { (label, value) -> "$label $value" },
                     style = CtText.caption,
@@ -832,7 +834,7 @@ private fun SignOutSection(
     version: String,
     onSignOutClick: () -> Unit,
 ) {
-    Spacer(modifier = Modifier.height(4.dp))
+    Spacer(modifier = Modifier.height(CtSpace.xs))
     OutlinedButton(
         onClick = onSignOutClick,
         modifier = Modifier

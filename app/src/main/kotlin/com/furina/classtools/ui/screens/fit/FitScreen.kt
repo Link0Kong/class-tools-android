@@ -2,8 +2,8 @@
 
 package com.furina.classtools.ui.screens.fit
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,18 +69,21 @@ import com.furina.classtools.features.fit.FitScoring
 import com.furina.classtools.features.fit.FitSex
 import com.furina.classtools.features.fit.FitTables
 import com.furina.classtools.ui.components.CtPill
-import com.furina.classtools.ui.components.tool.CtToolCard
-import com.furina.classtools.ui.components.tool.CtToolField
-import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
-import com.furina.classtools.ui.components.tool.CtToolSegmented
-import com.furina.classtools.ui.components.tool.CtToolStat
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
 import com.furina.classtools.ui.components.expressive.CtSegmentOption
 import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
+import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.components.tool.CtToolSegmented
+import com.furina.classtools.ui.components.tool.CtToolStat
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.ctEmphasized
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -242,7 +245,7 @@ fun FitScreen(
                                     input = input,
                                     onInput = { input = it },
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(CtSpace.sm))
                             }
                         }
                         val side: @Composable (Modifier) -> Unit = { m ->
@@ -288,7 +291,7 @@ fun FitScreen(
                                     onRename = { renameIndex = it },
                                     onDelete = { deleteIndex = it },
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(CtSpace.xs))
                             }
                         }
                     }
@@ -434,7 +437,6 @@ fun FitScreen(
 }
 
 private enum class FitPhase { LOADING, READY, ERROR }
-
 
 /** v6 紧凑卡：标题 titleSmall + 14/12 内边距，密度对齐小程序。 */
 @Composable
@@ -671,11 +673,9 @@ private fun ScoreCard(calc: FitCalc) {
     }
 }
 
-
-
 @Composable
 private fun StatChip(label: String, value: String) {
-    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+    Surface(shape = RoundedCornerShape(CtRadius.tile), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -749,7 +749,7 @@ private fun HistoryCard(
                         .fillMaxWidth()
                         .background(
                             MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
-                            RoundedCornerShape(16.dp),
+                            RoundedCornerShape(CtRadius.cardCompact),
                         )
                         .padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -829,7 +829,7 @@ private fun StandardsSheet(
                     Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
                         column.forEachIndexed { index, threshold ->
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(CtRadius.tile),
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 modifier = Modifier.padding(end = 4.dp),
                             ) {
@@ -858,7 +858,7 @@ private fun StandardsSheet(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(CtSpace.sm))
         }
     }
 }

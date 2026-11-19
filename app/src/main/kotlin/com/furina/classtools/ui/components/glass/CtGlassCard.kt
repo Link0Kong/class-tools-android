@@ -1,77 +1,79 @@
 package com.furina.classtools.ui.components.glass
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.furina.classtools.ui.theme.CtShapeTokens
-import com.furina.classtools.ui.theme.HarmonyTokens
-import com.furina.classtools.ui.theme.rememberHarmonyColors
+import com.furina.classtools.ui.theme.CtElevation
+import com.furina.classtools.ui.theme.CtShape
+import com.furina.classtools.ui.theme.rememberCtColors
 
 /**
- * 鸿蒙风格白卡（2026-11-17 重做；名字保留 `CtGlassCard` 以免大面积改调用方）。
+ * 规范卡片（旧名 `CtGlassCard` 保留）：**surfaceContainerLow 底 + 1dp outlineVariant 描边 +
+ * 20dp 圆角 + 极浅投影**。全局「卡片」只有一个视觉定义，所有页面/组件都经此渲染。
  *
- * 与鸿蒙 ToolTile/HomeScreen 卡片一致：
- * - 纯色卡片底（浅色 #FFFFFF / 深色中性 surface），**不再有玻璃半透明、描边高光、渐变**；
- * - 18dp 圆角 + 轻阴影（radius 18 / y6 / 低 alpha 墨色，Compose 用 2dp elevation 近似）；
- * - 无 1dp 描边（鸿蒙卡片靠底色+阴影分层）。
- *
- * 用法不变：`CtGlassCard(onClick = ...) { content() }`。
+ * 用法不变：`CtGlassCard(onClick = …) { content() }` 或 `CtGlassCard { content() }`。
  */
 @Composable
 fun CtGlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = CtShapeTokens.toolCard,
+    shape: Shape = CtShape.card,
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val colors = rememberHarmonyColors()
-    val cardModifier = modifier
-        .fillMaxWidth()
-        .shadow(
-            elevation = HarmonyTokens.CardShadowElevation,
-            shape = shape,
-            clip = false,
-            ambientColor = HarmonyTokens.CardShadowColor,
-            spotColor = HarmonyTokens.CardShadowColor,
-        )
-        .clip(shape)
-        .background(colors.card)
+    val c = rememberCtColors()
     if (onClick != null) {
         Surface(
             onClick = onClick,
-            modifier = cardModifier,
+            modifier = modifier.fillMaxWidth(),
             shape = shape,
-            color = colors.card,
-            contentColor = colors.textPrimary,
-            shadowElevation = 0.dp,
+            color = c.containerLow,
+            contentColor = c.textPrimary,
+            shadowElevation = CtElevation.card,
         ) {
-            Box { content() }
+            CardBorder(c.dark) { content() }
         }
     } else {
         Surface(
-            modifier = cardModifier,
+            modifier = modifier.fillMaxWidth(),
             shape = shape,
-            color = colors.card,
-            contentColor = colors.textPrimary,
-            shadowElevation = 0.dp,
+            color = c.containerLow,
+            contentColor = c.textPrimary,
+            shadowElevation = if (c.dark) CtElevation.none else CtElevation.card,
         ) {
-            Box { content() }
+            CardBorder(c.dark) { content() }
         }
     }
 }
 
-/** 兼容旧调用：圆角 18dp 的卡片形状。 */
-val CtHarmonyCardShape: Shape = RoundedCornerShape(HarmonyTokens.RadiusCard)
-
-/** 兼容 Material 主题色引用的占位（旧代码可能引用 glass 命名空间下的少量常量）。 */
+/** 卡片内描边（发丝线；深色 1dp）。 */
 @Composable
-internal fun harmonyCardContentColor() = MaterialTheme.colorScheme.onSurface
+private fun CardBorder(dark: Boolean, content: @Composable () -> Unit) {
+    val c = rememberCtColors()
+    val width: Dp = if (dark) 1.dp else 0.5.dp
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .ctGlassSurface(
+                tokens = CtMaterial(
+                    fill = androidx.compose.ui.graphics.Color.Transparent,
+                    border = c.divider,
+                    borderWidth = width,
+                    shadowElevation = CtElevation.none,
+                    shadowColor = c.cardShadow,
+                ),
+                shape = CtShape.card,
+                shadow = false,
+            ),
+    ) {
+        content()
+    }
+}
+
+/** 兼容旧调用：圆角 20dp 的卡片形状。 */
+@Composable
+fun CtHarmonyCardShape(): Shape = CtShape.card

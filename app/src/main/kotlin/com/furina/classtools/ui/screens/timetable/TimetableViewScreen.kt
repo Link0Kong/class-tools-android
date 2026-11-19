@@ -115,7 +115,12 @@ import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
 import com.furina.classtools.ui.components.expressive.CtSegmentOption
 import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtPalette
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.theme.CtType
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import java.time.Instant
 import java.time.LocalDate
@@ -720,7 +725,7 @@ private fun CompactBodyV5(
             dark = grid.dark,
             collapsible = true,
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(CtSpace.lg))
     }
 }
 
@@ -1042,7 +1047,7 @@ private fun WeekGridV5(grid: TimetableGridContext) {
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(CtRadius.card),
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
         Column {
@@ -1093,12 +1098,12 @@ private fun WeekGridV5(grid: TimetableGridContext) {
                             ) {
                                 Text(
                                     text = "$period",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text(
                                     text = TtPeriods.startText(period),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     maxLines = 1,
                                 )
@@ -1121,7 +1126,7 @@ private fun WeekGridV5(grid: TimetableGridContext) {
                         }
                         Box(modifier = Modifier.fillMaxWidth().height(gridHeight)) {
                             Canvas(modifier = Modifier.fillMaxSize()) {
-                                val gridLine = if (grid.dark) Color(0x26FFFFFF) else Color(0x18000000)
+                                val gridLine = if (grid.dark) CtPalette.MediaOnScrim.copy(alpha = 0.15f) else CtPalette.MediaScrimSoft.copy(alpha = 0.09f)
                                 val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 7f))
                                 for (period in 1..TtPeriods.COUNT) {
                                     val y = period * rowHeight.toPx()
@@ -1181,7 +1186,7 @@ private fun DayHeaderCell(
     height: Dp,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(CtRadius.input)
     val container = when {
         isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
         isWeekend -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.65f)
@@ -1340,7 +1345,7 @@ private fun CourseBlockV5(
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(
                 text = TtPeriods.startText(course.start),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                 fontWeight = FontWeight.Bold,
                 color = content.copy(alpha = 0.78f),
                 maxLines = 1,
@@ -1348,7 +1353,7 @@ private fun CourseBlockV5(
             Text(
                 text = course.name,
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = if (metrics.courseNameMaxLines >= 3) 11.sp else 10.sp,
+                    fontSize = if (metrics.courseNameMaxLines >= 3) CtType.microSize else CtType.microSize,
                 ),
                 fontWeight = FontWeight.SemiBold,
                 color = content,
@@ -1358,7 +1363,7 @@ private fun CourseBlockV5(
             if (course.room.isNotBlank() && span >= 2) {
                 Text(
                     text = TtCalendar.roomShort(course.room),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                     color = content.copy(alpha = 0.72f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1411,7 +1416,7 @@ private fun NowIndicatorOverlay(now: TimetableNowState.Visible, gridHeight: Dp) 
         ) {
             Text(
                 text = now.label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                 maxLines = 1,
                 modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
             )
@@ -1451,7 +1456,7 @@ private fun DayViewV5(
                 Surface(
                     onClick = { onSelectDay(index) },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(CtRadius.cardCompact),
                     color = when {
                         active -> MaterialTheme.colorScheme.primaryContainer
                         today -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
@@ -1485,7 +1490,7 @@ private fun DayViewV5(
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(CtRadius.card),
             color = MaterialTheme.colorScheme.surfaceContainerLowest,
         ) {
             Column(
@@ -1565,7 +1570,7 @@ private fun DaySessionRowV5(
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
         color = Color(pair.container),
         contentColor = content,
     ) {
@@ -1584,7 +1589,7 @@ private fun DaySessionRowV5(
                 )
                 Text(
                     text = session.endText,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                     color = content.copy(alpha = 0.7f),
                     maxLines = 1,
                 )
@@ -1656,7 +1661,7 @@ private fun AllCoursesCardV5(
     }
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(CtRadius.card),
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
         Column(
@@ -1698,7 +1703,7 @@ private fun AllCoursesCardV5(
                             Box(
                                 modifier = Modifier
                                     .size(10.dp)
-                                    .clip(RoundedCornerShape(4.dp))
+                                    .clip(RoundedCornerShape(CtRadius.tile))
                                     .background(Color(pair.container)),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -1732,7 +1737,7 @@ private fun ExportCardV5(onExport: () -> Unit) {
     Surface(
         onClick = onExport,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(CtRadius.card),
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
     ) {
@@ -1795,7 +1800,7 @@ private fun WeekPickerSheet(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(CtRadius.input),
                             color = if (selected) {
                                 MaterialTheme.colorScheme.primaryContainer
                             } else {
@@ -1880,7 +1885,7 @@ private fun TimetableSettingsSheet(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(CtSpace.md))
     }
 }
 
@@ -1951,7 +1956,7 @@ fun TimetableCourseDetailContent(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(CtRadius.card),
             color = Color(pair.container),
             contentColor = content,
         ) {
@@ -1983,7 +1988,7 @@ fun TimetableCourseDetailContent(
         }
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(CtRadius.cardCompact),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             Column(
@@ -2041,7 +2046,7 @@ fun TimetableCourseDetailContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(CtSpace.sm))
     }
 }
 
@@ -2070,7 +2075,7 @@ private fun TimetableLoadingState() {
                     modifier = Modifier
                         .width(38.dp)
                         .height(52.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(CtRadius.tile))
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = alpha * 0.7f)),
                 )
                 repeat(5) { column ->
@@ -2083,7 +2088,7 @@ private fun TimetableLoadingState() {
                         modifier = Modifier
                             .weight(1f)
                             .height(52.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(CtRadius.input))
                             .background(color),
                     )
                 }
@@ -2118,7 +2123,7 @@ private fun TimetableErrorState(message: String, kind: TtFailureKind?, onRetry: 
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 24.dp),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(CtRadius.card),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
@@ -2155,7 +2160,7 @@ private fun TimetableEmptyState(onRefresh: () -> Unit, onLogin: (() -> Unit)? = 
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 24.dp),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(CtRadius.card),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(

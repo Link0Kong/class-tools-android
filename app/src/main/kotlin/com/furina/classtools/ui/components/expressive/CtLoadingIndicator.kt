@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.ui.theme.CtRadius
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -114,7 +115,7 @@ fun CtContainedLoadingIndicator(
     Box(
         modifier = modifier
             .size(size.container + 16.dp)
-            .background(color = containerColor, shape = RoundedCornerShape(20.dp))
+            .background(color = containerColor, shape = RoundedCornerShape(CtRadius.card))
             .padding(8.dp),
         contentAlignment = Alignment.Center,
     ) {

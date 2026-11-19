@@ -7,15 +7,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -38,11 +37,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -53,7 +52,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.theme.CtType
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -154,7 +157,7 @@ fun CtFloatingDock(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 480.dp),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(CtRadius.hero),
             color = containerColor,
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = 0.dp,
@@ -335,11 +338,11 @@ private fun DockItem(
             modifier = Modifier.size(20.dp),
         )
         if (showLabel) {
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(CtSpace.xxs))
             Text(
                 text = destination.label,
                 // 鸿蒙 AppShell.tabItem：图标 20 + 文案 10 + 间距 2（安卓仅把文案色保留为可读的 primary）。
-                fontSize = 10.sp,
+                fontSize = CtType.microSize,
                 fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
                 color = contentColor,
                 maxLines = 1,
@@ -347,5 +350,3 @@ private fun DockItem(
         }
     }
 }
-
-

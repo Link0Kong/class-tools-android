@@ -1,12 +1,12 @@
 package com.furina.classtools.ui.components.expressive
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShapeTokens
 
 /**
@@ -161,7 +162,7 @@ private fun CtFabActionRow(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
         color = action.containerColor ?: MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = action.contentColor ?: MaterialTheme.colorScheme.onSurface,
         shadowElevation = 2.dp,
@@ -187,4 +188,3 @@ private fun CtFabActionRow(
         }
     }
 }
-

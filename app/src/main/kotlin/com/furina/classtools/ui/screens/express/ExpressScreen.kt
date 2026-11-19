@@ -36,6 +36,7 @@ import com.furina.classtools.data.express.ExpressCatalog
 import com.furina.classtools.data.express.ExpressTarget
 import com.furina.classtools.ui.components.CtTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShapeTokens
 
 /**
@@ -96,7 +97,7 @@ private fun ExpressCard(target: ExpressTarget, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(CtRadius.tile),
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
                 contentColor = MaterialTheme.colorScheme.primary,
             ) {

@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.unit.Constraints
@@ -59,17 +60,19 @@ import com.furina.classtools.data.tool.ToolCategory
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.SectionHeader
 import com.furina.classtools.ui.components.reorderableSemantics
+import com.furina.classtools.ui.theme.CtAnimatedEntrance
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
 import com.furina.classtools.ui.theme.HarmonyTokens
 import com.furina.classtools.ui.theme.rememberHarmonyColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
+import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.math.max
-import kotlin.math.roundToInt
 
 /**
  * 「全部工具」页（2026-11-17 按鸿蒙 `AllScreen.ets` 重做）：
@@ -114,6 +117,8 @@ fun AllToolsScreen(
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     val reduceMotion = rememberReduceMotion()
+    // 列表错峰入场（系统「移除动画」/预览渲染时直接终态）
+    val animateEntrance = !reduceMotion && !LocalInspectionMode.current
     val colors = rememberHarmonyColors()
     val naturalIds = remember(isAdmin) { ToolCatalog.visibleTools(isAdmin).map { it.id } }
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
@@ -336,6 +341,7 @@ fun AllToolsScreen(
                             content = {
                                 toolsInOrder.forEachIndexed { displayIndex, tool ->
                                     key(tool.id) {
+                                        CtAnimatedEntrance(enabled = animateEntrance, index = displayIndex) {
                                         Box(
                                             modifier = Modifier
                                                 .alpha(if (tool.id == effectiveDraggingId) 0.22f else 1f)
@@ -394,6 +400,7 @@ fun AllToolsScreen(
                                                 editing = editing,
                                                 selected = quickDraft.contains(tool.id),
                                             )
+                                        }
                                         }
                                     }
                                 }
@@ -617,6 +624,6 @@ private fun HarmonyAllToolsHeader(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(CtSpace.md))
     }
 }

@@ -65,6 +65,7 @@ import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.theme.CtRadius
 import kotlinx.coroutines.launch
 
 /**
@@ -487,7 +488,7 @@ private fun RollBubble(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(CtRadius.hero))
             .clickable(onClick = onToggle),
     ) {
         CtToolCard(

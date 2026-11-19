@@ -104,4 +104,3 @@ object CtDockLogic {
         return "$label，第 ${index + 1} 个 Tab，共 $count 个，$state"
     }
 }
-

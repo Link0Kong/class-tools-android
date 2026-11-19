@@ -40,6 +40,7 @@ import com.furina.classtools.features.roster.RosterMember
 import com.furina.classtools.features.roster.RosterState
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
+import com.furina.classtools.ui.theme.CtRadius
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -227,7 +228,7 @@ internal fun RosterRefreshErrorBanner(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(CtRadius.cardCompact),
         color = MaterialTheme.colorScheme.errorContainer,
     ) {
         Row(
