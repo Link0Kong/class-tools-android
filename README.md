@@ -34,13 +34,13 @@ artifacts/               APK、预览 PNG 等构建产物（不提交）
 
 | 项 | 路径/版本 |
 |---|---|
-| JDK | `C:\AndroidToolchain\jdk17`（OpenJDK 17.0.2，Gradle 构建用）、`C:\AndroidToolchain\jdk`（21.0.2） |
-| Android SDK | `C:\AndroidToolchain\sdk`（platforms/android-37.0、build-tools/37.0.0 + 36.0.0、platform-tools 37.0.2） |
-| Gradle | `C:\AndroidToolchain\gradle\gradle-9.9.0`（项目内 `gradlew.bat` 已生成，distributionUrl 指向腾讯镜像） |
+| JDK | `G:\Dev\AndroidToolchain\jdk17`（OpenJDK 17.0.2，Gradle 构建用）、`G:\Dev\AndroidToolchain\jdk`（21.0.2） |
+| Android SDK | `G:\Dev\AndroidToolchain\sdk`（platforms/android-37.0、build-tools/37.0.0 + 36.0.0、platform-tools 37.0.2） |
+| Gradle | `G:\Dev\AndroidToolchain\gradle\gradle-9.9.0`（项目内 `gradlew.bat` 已生成，distributionUrl 指向腾讯镜像） |
 
 ```powershell
-$env:JAVA_HOME='C:\AndroidToolchain\jdk17'
-$env:ANDROID_HOME='C:\AndroidToolchain\sdk'
+$env:JAVA_HOME='G:\Dev\AndroidToolchain\jdk17'
+$env:ANDROID_HOME='G:\Dev\AndroidToolchain\sdk'
 cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
 .\gradlew.bat assembleDebug --console=plain     # Debug APK -> app\build\outputs\apk\debug\app-debug.apk
 .\gradlew.bat assembleRelease --console=plain   # Release 签名 APK -> app\build\outputs\apk\release\app-release.apk

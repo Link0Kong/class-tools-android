@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$root = 'C:\AndroidToolchain'
+$root = 'G:\Dev\AndroidToolchain'
 $dl   = Join-Path $root 'downloads'
 $sdk  = Join-Path $root 'sdk'
 $jdk  = Join-Path $root 'jdk'

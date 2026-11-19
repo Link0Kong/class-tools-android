@@ -1,6 +1,6 @@
 # Extended accessibility audit: tool pages + profile subpages (ASCII wrapper, UTF8 labels).
 $ErrorActionPreference = 'Stop'
-$adb = 'C:\AndroidToolchain\sdk\platform-tools\adb.exe'
+$adb = 'G:\Dev\AndroidToolchain\sdk\platform-tools\adb.exe'
 $outDir = 'C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\artifacts\a11y-audit'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 

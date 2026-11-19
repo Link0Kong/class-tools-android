@@ -1,6 +1,6 @@
 # Add accessibility labels to bare Switch controls (a11y audit fix).
 $ErrorActionPreference = 'Stop'
-$base = 'C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\app\src\main\kotlin\com\furina\classtools\ui\screens'
+$base = 'G:\ClassTools\android-class-tools\app\src\main\kotlin\com\furina\classtools\ui\screens'
 
 $files = @(
     (Join-Path $base 'draw\DrawSections.kt'),

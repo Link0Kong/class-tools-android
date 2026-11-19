@@ -1,6 +1,6 @@
 # Live Updates polish: transient result notification + availability helper.
 $ErrorActionPreference = 'Stop'
-$root = 'C:\Users\Ko_Li\.openclaw\workspace\android-class-tools'
+$root = 'G:\ClassTools\android-class-tools'
 $base = Join-Path $root 'app\src\main\kotlin\com\furina\classtools'
 
 # 1) LiveUpdateNotifier: expose availability + transient result notification
