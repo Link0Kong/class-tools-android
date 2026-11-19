@@ -23,10 +23,12 @@ class HarmonyTokensTest {
 
     @Test
     fun `间距与页面边距与鸿蒙 Tokens 同值`() {
-        assertEquals(16.dp, HarmonyTokens.PagePadding)   // PAGE_PADDING
+        // 2026-11-19 鸿蒙间隔规范：PAGE_PADDING 由 16 → 20（屏幕边缘 20vp）
+        assertEquals(20.dp, HarmonyTokens.PagePadding)
         assertEquals(24.dp, HarmonyTokens.PagePaddingFold)
         assertEquals(32.dp, HarmonyTokens.PagePaddingTablet)
-        assertEquals(12.dp, HarmonyTokens.Gap)           // GAP
+        // 2026-11-19 8vp 网格：GAP 由 12 → 16（卡片间距 16vp）
+        assertEquals(16.dp, HarmonyTokens.Gap)
         assertEquals(16.dp, HarmonyTokens.CardPadding)
         assertEquals(12.dp, HarmonyTokens.TilePadding)   // ToolTile padding SPACE_12
         assertEquals(8.dp, HarmonyTokens.BreathTop)      // BREATH_TOP
@@ -61,21 +63,21 @@ class HarmonyTokensTest {
         assertEquals(96.dp, HarmonyTokens.TileMinHeight)
         assertEquals(40.dp, HarmonyTokens.GlyphBox)
         assertEquals(24.dp, HarmonyTokens.TileGlyph)
-        assertEquals(12.dp, HarmonyTokens.TileTextGap)
-        assertEquals(2.dp, HarmonyTokens.TextGap)
-        assertEquals(8.dp, HarmonyTokens.TextGapHorizontal)
-        assertEquals(16.dp, HarmonyTokens.ElementGapLarge)
-        assertEquals(8.dp, HarmonyTokens.ElementGap)
+        assertEquals(16.dp, HarmonyTokens.TileTextGap)
+        assertEquals(4.dp, HarmonyTokens.TextGap)
+        assertEquals(12.dp, HarmonyTokens.TextGapHorizontal)
+        assertEquals(20.dp, HarmonyTokens.ElementGapLarge)
+        assertEquals(12.dp, HarmonyTokens.ElementGap)
     }
 
     @Test
-    fun `字号层级为新阶梯 28 24 20 16 15 13 12`() {
+    fun `字号层级为新阶梯 28 24 20 16 14 14 12`() {
         assertEquals(28, CtType.displayTitleSize.value.toInt())
         assertEquals(24, CtType.titleSize.value.toInt())
         assertEquals(20, CtType.headlineSize.value.toInt())
         assertEquals(16, CtType.title16Size.value.toInt())
-        assertEquals(15, CtType.bodySize.value.toInt())
-        assertEquals(13, CtType.labelSize.value.toInt())
+        assertEquals(14, CtType.bodySize.value.toInt())
+        assertEquals(14, CtType.labelSize.value.toInt())
         assertEquals(12, CtType.captionSize.value.toInt())
 
         // 旧入口 CtText 指向同一套字号（页面零改动迁移）

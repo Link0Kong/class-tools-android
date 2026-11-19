@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -54,7 +55,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.components.light.CtLightInk
 import com.furina.classtools.ui.theme.CtLightScene
+import com.furina.classtools.ui.theme.CtPalette
 import com.furina.classtools.ui.theme.LocalCtLight
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtRadius
@@ -64,7 +67,11 @@ import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtType
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlin.math.abs
+
 import kotlin.math.roundToInt
+
+/** 深色浮岛底不透明度（比页面底更实、更深，轮廓清楚不灰糊）。 */
+private const val DARK_DOCK_ALPHA: Float = 0.92f
 
 /**
  * **ColorOS 17 浮岛式底栏**（task-20 / v2.0.0）。
@@ -141,19 +148,45 @@ fun CtFloatingDock(
         label = "dockPillScaleY",
     )
 
-    // 2026-11-19 沉浸光感：浮岛 = THIN + 底部渐变颜色蒙层（官方「底部悬浮」规范）。
-    // - 光感开启：材质层由 CtLight 提供（API31+ 真模糊 / 旧机降级 / 关闭时自动回落实色）；
-    // - 光感关闭：保留既有浅色实底（BAR_LIGHT）+ 发丝线（用户显式选择「实色规范」）。
+    // 2026-11-19 沉浸光感 + 深色优化：浮岛 = THIN + 底部渐变颜色蒙层（官方「底部悬浮」规范）。
+    // 深色专用（用户反馈「深色工具栏灰糊」）：
+    //   - 底色不再用 surfaceContainerLow（与页面底几乎同色 → 灰糊），改为**更深的实感底**
+    //     `DarkBar`(#171C1F) 叠加 0.92 不透明度：比内容层更暗、轮廓清楚；
+    //   - 1px 高光边（白 0.18）+ 顶部线性高光（白 0.10），让浮岛从深底上「浮」起来；
+    //   - 选中药丸改为**低饱和雾青**（primary 0.22）+ 1px 亮边，文字/图标用 primary（对深底 ≥7:1）。
     val light = LocalCtLight.current
-    val containerColor = if (dark) {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    } else {
-        com.furina.classtools.ui.theme.HarmonyTokens.BarLight
-    }
-    val glass = if (light.enabled) {
+    val containerColor = if (dark) CtPalette.DarkBar else com.furina.classtools.ui.theme.HarmonyTokens.BarLight
+    val dockShape = RoundedCornerShape(CtRadius.hero)
+    val glass = if (dark) {
+        // 深色：不用 CtLight 的 THICK 材质（其底色 = DarkContainer，和页面底撞色 → 灰糊），
+        // 改用「深色玻璃」：更深底色 + 高光边 + 顶部高光（材质仍统一来自 CtGlassSurface）。
+        Modifier
+            .clip(dockShape)
+            .background(containerColor.copy(alpha = DARK_DOCK_ALPHA))
+            .drawWithCache {
+                val highlight = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    0f to CtLightInk.highlight.copy(alpha = 0.10f),
+                    0.5f to Color.Transparent,
+                )
+                onDrawBehind {
+                    drawRect(brush = highlight)
+                    // 1px 高光边（上）+ 极淡暗边（下），塑造玻璃厚度
+                    drawRect(
+                        color = CtLightInk.highlight.copy(alpha = 0.18f),
+                        topLeft = Offset(0f, 0f),
+                        size = androidx.compose.ui.geometry.Size(size.width, 1f),
+                    )
+                    drawRect(
+                        color = CtLightInk.shade.copy(alpha = 0.35f),
+                        topLeft = Offset(0f, size.height - 1f),
+                        size = androidx.compose.ui.geometry.Size(size.width, 1f),
+                    )
+                }
+            }
+    } else if (light.enabled) {
         Modifier.ctLightMaterial(
             CtLightScene.BOTTOM_DOCK,
-            shape = RoundedCornerShape(CtRadius.hero),
+            shape = dockShape,
             fadeAtTop = true,
             bodySafe = true,
             // 浮岛文字/图标需要清楚：比官方 THIN 略厚一档，视觉仍是悬浮薄雾。
@@ -161,9 +194,9 @@ fun CtFloatingDock(
         )
     } else {
         Modifier
-            .clip(RoundedCornerShape(CtRadius.hero))
+            .clip(dockShape)
             .background(containerColor)
-            .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant), RoundedCornerShape(CtRadius.hero))
+            .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant), dockShape)
     }
     val borderColor = MaterialTheme.colorScheme.outlineVariant
     val dockShadowElevation = 0.dp
@@ -261,11 +294,16 @@ fun CtFloatingDock(
                         },
                     shape = CtShapeTokens.pill,
                     color = if (dark) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+                        // 深色：低饱和雾青药丸（primary 0.22）+ 1px 亮边，避免「灰药丸糊在灰底上」
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                     } else {
                         com.furina.classtools.ui.theme.HarmonyTokens.TintTeal
                     },
-                    border = BorderStroke(0.dp, Color.Transparent),
+                    border = if (dark) {
+                        BorderStroke(1.dp, CtLightInk.highlight.copy(alpha = 0.14f))
+                    } else {
+                        BorderStroke(0.dp, Color.Transparent)
+                    },
                     shadowElevation = pillShadowElevation,
                 ) {}
 

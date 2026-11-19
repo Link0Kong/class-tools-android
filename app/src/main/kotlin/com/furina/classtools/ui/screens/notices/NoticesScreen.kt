@@ -947,7 +947,7 @@ fun NoticesScreen(
             androidx.compose.foundation.layout.Box(
             modifier = Modifier.ctLightMaterial(
                 CtLightScene.SNACKBAR,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                shape = CtShape.input,
                 bodySafe = true,
             ),
         ) { SnackbarHost(

@@ -4,6 +4,7 @@ package com.furina.classtools.ui.screens.data
 
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
+import com.furina.classtools.ui.theme.CtShape
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.clickable
@@ -323,7 +324,7 @@ fun DataPrivacyScreen(
             androidx.compose.foundation.layout.Box(
             modifier = Modifier.ctLightMaterial(
                 CtLightScene.SNACKBAR,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                shape = CtShape.input,
                 bodySafe = true,
             ),
         ) { SnackbarHost(

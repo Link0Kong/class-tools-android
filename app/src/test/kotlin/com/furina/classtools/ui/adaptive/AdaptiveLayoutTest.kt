@@ -29,7 +29,8 @@ class AdaptiveLayoutTest {
 
     @Test
     fun horizontalPadding_byWidthClass() {
-        assertEquals(16, CtAdaptive.horizontalPaddingDp(412))
+        // 2026-11-19 鸿蒙间隔规范：屏幕边缘 20vp（手机）/ 24（折叠）/ 32（平板）
+        assertEquals(20, CtAdaptive.horizontalPaddingDp(412))
         assertEquals(24, CtAdaptive.horizontalPaddingDp(700))
         assertEquals(32, CtAdaptive.horizontalPaddingDp(1000))
     }
@@ -52,7 +53,8 @@ class AdaptiveLayoutTest {
     @Test
     fun effectiveContentWidth_neverExceedsLimit() {
         // 手机：窗口 - 2*16
-        assertEquals(380, CtAdaptive.effectiveContentWidthDp(412))
+        // 有效内容宽 = min(屏幕, 内容上限) - 2 × 屏幕边缘(20)
+        assertEquals(372, CtAdaptive.effectiveContentWidthDp(412))
         // 平板：min(1000-64, 1200) = 936
         assertEquals(936, CtAdaptive.effectiveContentWidthDp(1000))
         // 超宽屏：被 1200 限宽

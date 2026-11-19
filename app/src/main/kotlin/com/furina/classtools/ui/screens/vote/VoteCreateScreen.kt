@@ -4,6 +4,7 @@ package com.furina.classtools.ui.screens.vote
 
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
+import com.furina.classtools.ui.theme.CtShape
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.net.Uri
@@ -481,7 +482,7 @@ fun VoteCreateScreen(
             androidx.compose.foundation.layout.Box(
             modifier = Modifier.ctLightMaterial(
                 CtLightScene.SNACKBAR,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                shape = CtShape.input,
                 bodySafe = true,
             ),
         ) { SnackbarHost(

@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.ui.components.light.CtLightInk
 import com.furina.classtools.ui.theme.CtLightIntensity
 import com.furina.classtools.ui.theme.CtLightScene
 import com.furina.classtools.ui.theme.CtPalette
@@ -308,7 +309,7 @@ fun CtLightBackdrop(modifier: Modifier = Modifier, baseColor: Color? = null) {
 /** 单团柔光斑（径向渐变圆，边缘完全透明）。 */
 @Composable
 private fun GlowSpot(color: Color, alpha: Float, modifier: Modifier = Modifier) {
-    val ring = lerp(color, Color.White, 0.35f)
+    val ring = lerp(color, CtLightInk.highlight, 0.35f)
     Box(
         modifier = modifier.background(
             Brush.radialGradient(

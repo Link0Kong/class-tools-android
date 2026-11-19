@@ -20,16 +20,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import com.furina.classtools.data.tool.AppTool
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtAnimatedEntrance
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtElevation
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtShape
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtSize
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtTypeScale
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.ctPressFeedback
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.harmonyTint
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.rememberCtColors
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.rememberReduceMotion
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.uiAccentOf
 
 /**
@@ -57,8 +68,7 @@ fun ToolCard(
     val interaction = remember { MutableInteractionSource() }
     val press = ctPressFeedback(interaction, reduceMotion)
     val body: @Composable () -> Unit = {
-        Surface(
-            onClick = onClick,
+        CtGlassSurface(
             modifier = modifier
                 .fillMaxWidth()
                 .graphicsLayer {
@@ -66,11 +76,9 @@ fun ToolCard(
                     scaleY = press.scale
                 },
             shape = CtShape.card,
-            color = c.containerLow,
-            contentColor = c.textPrimary,
-            border = BorderStroke(CtSize.dividerThickness, c.divider),
-            shadowElevation = if (c.dark) CtElevation.none else CtElevation.card,
-            interactionSource = interaction,
+            onClick = onClick,
+            frosted = true,
+            body = true,
         ) {
             Box(modifier = Modifier.fillMaxSize().then(contentSemantics)) {
                 Row(
@@ -134,7 +142,6 @@ fun ToolCard(
         body()
     }
 }
-
 /** 常用工具的小横条（胶囊：图标 + 名称）。 */
 @Composable
 fun ToolRowItem(

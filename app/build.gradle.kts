@@ -141,9 +141,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 94
-    // 测试版本 11：1.0.0-beta11（全局沉浸光感：5 档材质 × 3 档强度；所有深层页面适配）。
-        versionName = "1.0.0-beta11"
+        versionCode = 95
+    // 测试版本 12：1.0.0-beta12（自定义背景 + 磨砂玻璃卡片 + 鸿蒙排版/间距 + 深色工具栏优化）。
+        versionName = "1.0.0-beta12"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -163,7 +163,7 @@ android {
         buildConfigField("String", "OPPO_ACCOUNT_SCOPE", buildConfigString(oppoAccountScope))
 
         // 测试版本标识（当前为「测试版本 8」）：App 内版本行使用。
-        buildConfigField("int", "TEST_VERSION", "11")
+        buildConfigField("int", "TEST_VERSION", "12")
         buildConfigField("String", "TEST_VERSION_LABEL", buildConfigString("测试版本"))
     }
 

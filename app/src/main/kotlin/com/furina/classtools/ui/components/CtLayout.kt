@@ -68,6 +68,7 @@ import com.furina.classtools.ui.components.CtSheetContainer
 import com.furina.classtools.ui.components.CtSkeletonPage
 import com.furina.classtools.ui.components.CtTag
 import com.furina.classtools.ui.components.CtTextField
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtAnimatedEntrance
 import com.furina.classtools.ui.theme.CtColor
 import com.furina.classtools.ui.theme.CtElevation
@@ -107,11 +108,16 @@ import com.furina.classtools.ui.theme.rememberReduceMotion
 // =============================================================================
 
 /**
- * 卡片容器。
+ * 卡片容器（**磨砂玻璃材质**，2026-11-19）。
+ *
+ * 材质统一来自 `ui/components/background/CtGlassSurface.kt`：
+ * 半透明底（浅 0.55–0.70 / 深 0.45–0.60）+ 顶部线性高光 + 1px 高光边 + 柔和外阴影；
+ * 背景越花（渐变/自定义照片）底越实，正文对比度始终 ≥ AA。
  *
  * @param onClick 非 null 时可点按（按压 spring 0.97 + 8% tonal 按压层）
  * @param contentPadding 内边距（默认 16dp）
  * @param entranceIndex 非 null 时参与列表错峰入场
+ * @param frosted false = 实色卡片（列表/表单等需要最稳可读性的场合）
  */
 @Composable
 fun CtCard(
@@ -120,47 +126,40 @@ fun CtCard(
     shape: Shape = CtShape.card,
     contentPadding: Dp = CtSpace.cardPadding,
     entranceIndex: Int? = null,
+    frosted: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val c = rememberCtColors()
     val body: @Composable () -> Unit = {
         if (onClick != null) {
             val reduceMotion = rememberReduceMotion()
             val interaction = remember { MutableInteractionSource() }
             val press = ctPressFeedback(interaction, reduceMotion)
-            Surface(
-                onClick = onClick,
-                modifier = Modifier
+            CtGlassSurface(
+                modifier = modifier
                     .fillMaxWidth()
                     .graphicsLayer {
                         scaleX = press.scale
                         scaleY = press.scale
                     },
                 shape = shape,
-                color = c.containerLow,
-                contentColor = c.textPrimary,
-                border = BorderStroke(CtSize.dividerThickness, c.divider),
-                shadowElevation = if (c.dark) CtElevation.none else CtElevation.card,
-                interactionSource = interaction,
+                onClick = onClick,
+                frosted = frosted,
+                body = true,
             ) {
-                Box {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(contentPadding),
-                        content = content,
-                    )
-                    CtPressOverlay(alpha = press.overlayAlpha, color = c)
-                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(contentPadding),
+                    content = content,
+                )
+                CtPressOverlay(alpha = press.overlayAlpha, color = rememberCtColors())
             }
         } else {
-            Surface(
+            CtGlassSurface(
                 modifier = modifier.fillMaxWidth(),
                 shape = shape,
-                color = c.containerLow,
-                contentColor = c.textPrimary,
-                border = BorderStroke(CtSize.dividerThickness, c.divider),
-                shadowElevation = if (c.dark) CtElevation.none else CtElevation.card,
+                frosted = frosted,
+                body = true,
             ) {
                 Column(
                     modifier = Modifier

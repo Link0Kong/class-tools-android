@@ -2,6 +2,7 @@ package com.furina.classtools.ui.screens.draw
 
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
+import com.furina.classtools.ui.theme.CtShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -316,7 +317,7 @@ fun DrawScreen(
             androidx.compose.foundation.layout.Box(
             modifier = Modifier.ctLightMaterial(
                 CtLightScene.SNACKBAR,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                shape = CtShape.input,
                 bodySafe = true,
             ),
         ) { SnackbarHost(

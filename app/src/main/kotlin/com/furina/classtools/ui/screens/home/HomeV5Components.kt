@@ -486,7 +486,11 @@ internal fun HomeReveal(
         content()
         return
     }
-    val progress = androidx.compose.animation.core.Animatable(0f)
+    // 必须 remember：否则每次重组都会新建 Animatable 并从 0 重新计时；
+    // 自定义背景/刷新等导致父级重组时，入场动画会一直停在中途（整页/整卡发灰）。
+    val progress = androidx.compose.runtime.remember(index) {
+        androidx.compose.animation.core.Animatable(0f)
+    }
     androidx.compose.runtime.LaunchedEffect(index) {
         kotlinx.coroutines.delay(index * 40L)
         progress.animateTo(1f, androidx.compose.animation.core.tween(durationMillis = 260))

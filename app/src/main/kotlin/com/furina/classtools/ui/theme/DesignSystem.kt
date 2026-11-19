@@ -33,59 +33,63 @@ import androidx.compose.ui.unit.sp
 // 字体：CtTypeScale（由 CtType 生成）
 // -----------------------------------------------------------------------------
 
-/** 字体层级（TextStyle）。行高/字号比 1.29–1.47，中文可读。 */
+/**
+ * 字体层级（TextStyle）—— 2026-11-19 按鸿蒙排版规范重排（字号 28/24/20/16/14/12，行高 1.4–1.6）。
+ *
+ * 行高 = 字号 × [CtType] 的 lineRatio，并取 2 的倍数对齐 8vp 网格。
+ */
 object CtTypeScale {
-    /** 页面主标题：28 / 36 / Bold。 */
+    /** 页面主标题：28 / 40 / Bold（1.43）。 */
     val display: TextStyle = TextStyle(
         fontSize = CtType.displayTitleSize,
         lineHeight = CtType.displayTitleLine.sp,
         fontWeight = FontWeight.Bold,
     )
 
-    /** hero 问候 / 身份姓名：24 / 32 / Bold。 */
+    /** hero 问候 / 身份姓名：24 / 36 / Bold（1.5）。 */
     val title: TextStyle = TextStyle(
         fontSize = CtType.titleSize,
         lineHeight = CtType.titleLine.sp,
         fontWeight = FontWeight.Bold,
     )
 
-    /** 工具页顶栏 / 分组大标题：20 / 27 / Bold。 */
+    /** 工具页顶栏 / 分组大标题 / 弹层大标题：20 / 28 / Bold（1.4）。 */
     val headline: TextStyle = TextStyle(
         fontSize = CtType.headlineSize,
         lineHeight = CtType.headlineLine.sp,
         fontWeight = FontWeight.Bold,
     )
 
-    /** 区块标题 / 列表主文字：16 / 24 / Medium。 */
+    /** 区块标题 / 列表主文字：16 / 24 / Medium（1.5）。 */
     val title16: TextStyle = TextStyle(
         fontSize = CtType.title16Size,
         lineHeight = CtType.title16Line.sp,
         fontWeight = FontWeight.Medium,
     )
 
-    /** 正文：15 / 22 / Normal。 */
+    /** 正文：14 / 22 / Normal（1.57）。 */
     val body: TextStyle = TextStyle(
         fontSize = CtType.bodySize,
         lineHeight = CtType.bodyLine.sp,
     )
 
-    /** 强调正文：15 / 22 / Medium。 */
+    /** 强调正文：14 / 22 / Medium。 */
     val bodyMedium: TextStyle = body.copy(fontWeight = FontWeight.Medium)
 
-    /** 标签/按钮：13 / 18 / Medium。 */
+    /** 标签/按钮：14 / 20 / Medium（1.43，与正文同字号）。 */
     val label: TextStyle = TextStyle(
         fontSize = CtType.labelSize,
         lineHeight = CtType.labelLine.sp,
         fontWeight = FontWeight.Medium,
     )
 
-    /** 次级标签（不加粗）：13 / 18。 */
+    /** 次级标签（不加粗）：14 / 20。 */
     val labelPlain: TextStyle = TextStyle(
         fontSize = CtType.labelSize,
         lineHeight = CtType.labelLine.sp,
     )
 
-    /** 说明：12 / 17。 */
+    /** 说明：12 / 18（1.5）。 */
     val caption: TextStyle = TextStyle(
         fontSize = CtType.captionSize,
         lineHeight = CtType.captionLine.sp,
@@ -94,17 +98,17 @@ object CtTypeScale {
     /** 说明（Medium，用于区块标题小字）。 */
     val captionMedium: TextStyle = caption.copy(fontWeight = FontWeight.Medium)
 
-    /** 角标：11 / 15 / Medium。 */
+    /** 角标：11 / 16 / Medium。 */
     val micro: TextStyle = TextStyle(
         fontSize = CtType.microSize,
         lineHeight = CtType.microLine.sp,
         fontWeight = FontWeight.Medium,
     )
 
-    /** 区块标题（13 Medium 次级色）：组件 `CtSectionTitle` 使用。 */
+    /** 区块标题（14 Medium 次级色）：组件 `CtSectionTitle` 使用。 */
     val sectionTitle: TextStyle = label
 
-    /** 数字展示（电费/统计等）：24 / 32 / Bold，等宽数字。 */
+    /** 数字展示（电费/统计等）：24 / 36 / Bold，等宽数字。 */
     val metric: TextStyle = title.copy(fontFeatureSettings = "tnum")
 }
 

@@ -93,6 +93,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.BuildConfig
 import com.furina.classtools.data.session.Session
+import com.furina.classtools.data.background.CtBackgroundSelection
+import com.furina.classtools.data.background.LocalBackgroundStore
 import com.furina.classtools.data.settings.AppSettingsStore
 import com.furina.classtools.data.settings.LocalAppSettingsStore
 import com.furina.classtools.data.update.UpdateCheckResult
@@ -218,6 +220,9 @@ fun ProfileScreen(
     // 写入后主题根即时重组）；预览/孤立组件（null）用入参回退，不依赖 Context。
     // pending* 是本机乐观态：点击后立刻高亮，DataStore 回写到位后清空。
     val appSettings = LocalAppSettingsStore.current
+    val backgroundStore = LocalBackgroundStore.current
+    val storedBackground by (backgroundStore?.selection?.collectAsStateWithLifecycle()
+        ?: remember { mutableStateOf(CtBackgroundSelection.DEFAULT) })
     val storedAppearanceMode = rememberAppearanceMode(appSettings, appearanceMode)
     val storedHideStatusBar = rememberHideStatusBar(appSettings, hideStatusBar)
     // 沉浸光感（强 / 均衡 / 弱 / 关闭）：DataStore Flow 实时回读，写入后全应用立刻重组。
@@ -318,6 +323,7 @@ fun ProfileScreen(
                         onOpenPermissions = onOpenPermissions,
                         onOpenReminderSettings = onOpenReminderSettings,
                     )
+                    BackgroundSection(store = backgroundStore, selection = storedBackground)
                     AppearanceSection(
                         dynamicColorEnabled = dynamicColorEnabled,
                         onDynamicColorChange = onDynamicColorChange,
@@ -350,7 +356,7 @@ fun ProfileScreen(
         androidx.compose.foundation.layout.Box(
             modifier = Modifier.ctLightMaterial(
                 CtLightScene.SNACKBAR,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                shape = CtShape.input,
                 bodySafe = true,
             ),
         ) { SnackbarHost(
@@ -445,7 +451,7 @@ private fun ProfileHeader() {
  * **12sp Medium 次级色** + 上 16 / 下 8 间距（此前是 13sp Regular + 上 16 / 下 6）。
  */
 @Composable
-private fun SectionTitle(text: String) {
+internal fun SectionTitle(text: String) {
     Text(
         text = text,
         style = CtText.caption.copy(fontWeight = FontWeight.Medium),
@@ -455,14 +461,14 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun GroupCard(content: @Composable ColumnScope.() -> Unit) {
+internal fun GroupCard(content: @Composable ColumnScope.() -> Unit) {
     CtGlassCard(shape = CtShapeTokens.cardLarge) {
         Column(modifier = Modifier.fillMaxWidth(), content = content)
     }
 }
 
 @Composable
-private fun RowDivider() {
+internal fun RowDivider() {
     HorizontalDivider(
         thickness = 0.5.dp,
         color = MaterialTheme.colorScheme.outlineVariant,

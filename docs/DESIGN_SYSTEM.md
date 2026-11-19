@@ -395,3 +395,214 @@ pwsh -File docs/design/grep_hardcode.ps1 -Verbose   # 逐条列出
   `light-07-appearance.png`（外观四档设置）。
 - 构建：`assembleDebug` / `assembleRelease` 通过。
 
+
+---
+
+## 11. 自定义背景（Custom Background，2026-11-19）
+
+参考：鸿蒙「个性化 · 背景」与官方沉浸光感（背景可模糊、前景绝不模糊）。
+入口：**我的 → 背景**（位于「外观」之上，紧邻身份/同步信息，一屏可达）。
+
+### 11.1 数据与隐私边界（红线）
+
+| 项 | 策略 |
+|---|---|
+| 图片存放 | `filesDir/backgrounds/<bg_时间戳>.jpg`（App 私有目录，随卸载删除） |
+| 图片压缩 | 解码 → 长边缩到 **≤2048px**（`inSampleSize` 先粗缩再精确缩放）→ **JPEG 质量 85** 落盘 |
+| 选图入口 | 系统照片选择器 `ActivityResultContracts.PickVisualMedia(ImageOnly)`（无存储权限；低版本自动回退 GetContent） |
+| 偏好存储 | `SharedPreferences("ct_background_prefs").getString("ct_background_selection")` |
+| 上传/同步 | **不上传、不进 userdata v6 云同步、不进任何导出**（纯本机偏好，与外观模式同层） |
+| 删除 | 删偏好 + 删 `filesDir/backgrounds/bg_*.jpg`（两处都做，避免残留占空间）；恢复默认「暖白」 |
+| 路径安全 | 偏好只存**文件名**（不存绝对路径）；读取前校验 `bg_[A-Za-z0-9_-]+.jpg` + `canonicalFile` 必须在私有目录内（防路径穿越，单测覆盖） |
+
+### 11.2 持久化契约
+
+`storageValue` 格式（**禁止改名**，老版本读不懂就回落默认）：
+
+```
+warm_white
+deep_space|custom:bg_1700000000000.jpg|blur:2
+```
+
+- 第 1 段 = 预设 id（`warm_white / mist_teal / slate_blue / warm_sand / deep_space /
+  morning_mist / sunset_angle / teal_indigo / nightfall`）；
+- `custom:<文件名>` 存在 = 正在使用自定义图片；
+- `blur:0..3` = 背景模糊档（缺省 = 2「标准」）；
+- 任何非法/未知值 → 回退默认暖白（不抛异常、不丢其他设置）。
+
+### 11.3 预设与明暗参数（唯一映射表 `CtBackgroundPalette`）
+
+| 预设 | 浅色底 | 深色底 | 类型 |
+|---|---|---|---|
+| 暖白（默认） | `CtPalette.Bg` | `DarkBg` | 纯色 |
+| 雾青 | Bg + 雾青 10% | DarkBg | 纯色 |
+| 灰蓝 | Bg + 灰蓝 10% | DarkBg | 纯色 |
+| 暖沙 | Bg + 暖沙 12% | DarkBg | 纯色 |
+| 深空 | `DarkBg` | `DarkBg`（+深一档） | 纯色 |
+| 晨雾渐变 | Bg → Bg+雾青 16% | DarkBg | 线性渐变 |
+| 斜阳渐变 | Bg+暖沙 18% → Container+暖沙 10% | DarkBg | 线性渐变 |
+| 青黛渐变 | Bg+雾青 14% → Bg+灰蓝 16% | DarkBg | 线性渐变 |
+| 夜幕渐变 | DarkBg → DarkBg+雾青 16% | DarkBg → 青 20% | 线性渐变 |
+
+每个预设都带 4 个可读性参数：`headlineOnBackground`（标题对背景）、`cardAlphaBoost`（卡片玻璃补偿）、
+`scrimTop/scrimBottom`（顶部/底部蒙层）、`bloomAlpha`（光感柔光斑强度）。
+**自定义图片**在此基础上再抬一档：卡片补偿 **+0.18**、顶部 scrim **0.84（深）/0.82（浅）**、
+底部 0.88（深）/0.86（浅）；旧机（无 GPU 模糊）额外压一层 0.85/0.90 底色蒙层。
+该不透明度按「任意图片（纯黑/纯白）最坏情况」计算仍满足标题 AA（单测 `CtBackgroundTest`）。
+
+### 11.4 渲染层序（`CtBackgroundLayer`，前景绝不模糊）
+
+```
+ExpressiveBackground
+ ├─ CtBackgroundLayer            ← 背景层（唯一被模糊的层）
+ │   ├─ 1) 底色 / 预设渐变
+ │   ├─ 2) 自定义图片 ContentScale.Crop + graphicsLayer{renderEffect=BlurEffect}（仅 API31+；clip=true）
+ │   ├─ 3) 预设光感柔光斑（仅图片未启用时）
+ │   └─ 4) 顶部/底部/中间四段 scrim（保证顶栏、dock 附近文字可读）
+ └─ CompositionLocalProvider(LocalCtBackgroundCardBoost) { 页面内容 }   ← 前景，永远锐利
+```
+
+- 模糊只作用在**图片图层**（`Image` 的 `graphicsLayer.renderEffect`），父容器/卡片/文字在**另一个子节点**，
+  因此不会被糊（这是需求硬红线；beta11 曾因给容器挂 RenderEffect 把 dock 文字糊掉而放弃整层模糊）。
+- 旧机（API 26–30）：`ctBackgroundBlurSigma()` 返回 0，改画底色蒙层，观感一致、可读性不降。
+- 背景层静态绘制（不逐帧动画/不采样列表），滚动只重绘前景。
+
+### 11.5 设置 UI（`BackgroundSection`）
+
+3×3 预设网格（点按 ≥48dp、选中 = 2dp 主色描边 + ✓；缩略图始终用**浅色参数**展示预设本色，避免深色模式下 8 个浅色预设全显示为黑色）→「从相册选择图片」行（副标题说明只存本机/长边/质量）
+→ 已选图片时出现「背景模糊：不模糊/轻/标准/强」四档 + 「删除」。全部状态即时生效并持久化。
+
+---
+
+## 12. 磨砂玻璃卡片（Frosted Glass Card，2026-11-19）
+
+**所有卡片一个材质来源**：`ui/components/background/CtGlassSurface.kt`（`CtGlassTokens` 为唯一映射表）。
+
+### 12.1 材质分层
+
+1. **半透明底**：浅色 = 白 `0.55–0.70`、深色 = 深容器 `0.45–0.60`（按沉浸光感强度取档）；
+2. **顶部线性高光**：白 `0.10–0.22` → 0（42% 处透明），表现「玻璃被上方光照亮」；
+3. **1px 高光边**：顶部亮边（浅 0.40–0.60 / 深 0.18–0.26）+ 底部极淡暗边（塑造厚度，深色必留）；
+4. **柔和外阴影**：浅色 `CtElevation.card`（1dp、墨色 10%）；深色 0（深底投影不可见，靠高光边分层）。
+
+### 12.2 映射表（明暗 × 强度）
+
+| 强度 | 浅色 baseAlpha | 深色 baseAlpha | 浅色 顶高光 | 深色 顶高光 |
+|---|---|---|---|---|
+| 强 | 0.55 | 0.45 | 0.22 | 0.16 |
+| 均衡（默认） | 0.62 | 0.52 | 0.18 | 0.13 |
+| 弱 | 0.68 | 0.58 | 0.14 | 0.10 |
+| 关闭 | 0.92 | 0.94 | 0.06 | 0.05 |
+
+**背景补偿**：`resolvedAlpha = clamp(baseAlpha + boost, MIN_BODY_ALPHA 0.62, MAX_BODY_ALPHA 0.92)`，
+`boost` 来自当前背景预设/图片（`CtBackgroundColors.cardAlphaBoost`，图片再 +0.18）——
+背景越花，卡片越实，形成「真实磨砂」但绝不牺牲可读性。
+
+### 12.3 接入点（页面零改动）
+
+| 组件 | 说明 |
+|---|---|
+| `CtCard`（`ui/components/CtLayout.kt`） | 直接使用 `CtGlassSurface`；`frosted=false` 可退回实色 |
+| `CtGlassCard`（旧名保留） | 同上（我的页 `GroupCard`、身份卡、hero 等全部经此） |
+| `ToolCard` / `AllToolCard` | 工作台快捷工具 / 全部工具磁贴 |
+| `CtGlassSurface` | 新增底层容器：`CtGlassSurface(onClick=…, boost=…, frosted=true)` |
+
+**不玻璃化的部分（有意）**：列表行 `CtListRow`、输入框 `CtTextField`、弹层正文容器、以及自定义图片背景下的
+所有承载正文的卡片——它们保持实色 `container` 底（`frosted=false`/原实现），避免「玻璃套玻璃」导致可读性下降。
+
+### 12.4 AA 红线（单测锁定）
+
+`CtGlassTokensTest` 对 **9 预设 × 明暗 × 3 强度** 全组合断言：
+正文（`TextPrimary`/`DarkTextPrimary`）与次级文字（`TextSecondary`/`DarkTextSecondary`）压在
+「玻璃底 + 最坏底层」合成色上的对比度 **≥ 4.5**（复用 `ctLightContrastFloor`）。当前最差组合 ≥ 5.4。
+
+---
+
+## 13. 排版与间隔（Harmony Typography & Spacing，2026-11-19）
+
+参考：[鸿蒙文本排版](https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/typography-0000002622688363)、
+[鸿蒙间隔参数](https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/interval-parameter-0000002562577161)。
+
+### 13.1 字号阶梯（`CtType` / `CtTypeScale`）
+
+| 语义 | 字号/行高/倍数/字重 | 用途 |
+|---|---|---|
+| display | **28 / 40 / 1.43 / Bold** | 页面主标题（工作台/全部/我的） |
+| title | **24 / 36 / 1.50 / Bold** | hero 问候、身份卡姓名、指标数字 |
+| headline | **20 / 28 / 1.40 / Bold** | 工具页顶栏、分组大标题、弹层大标题 |
+| title16 | **16 / 24 / 1.50 / Medium** | 区块标题、列表主文字 |
+| body | **14 / 22 / 1.57 / Regular** | 正文 |
+| label | **14 / 20 / 1.43 / Medium** | 按钮、标签、区块标题 |
+| caption | **12 / 18 / 1.50 / Regular** | 说明、徽标、页脚 |
+| micro | 11 / 16 / Medium | 底栏文案（装饰性） |
+
+字重只有 **Regular 400 / Medium 500 / Bold 700** 三档（旧 600 已并入 500）。
+相对 beta11 的变化：body 15→14、label 13→14、caption 行高 17→18、display 行高 36→40、
+headline 行高 27→28、title 行高 32→36。
+
+### 13.2 间距（`CtSpace`，8vp 网格）
+
+| 令牌 | 值 | 语义 |
+|---|---|---|
+| gridUnit | 8vp | 网格基本单位 |
+| xxs / xs / sm | 4 / 8 / 12 | 半格、控件间距 |
+| md / lg / xl | 16 / 20 / 24 | 卡片内边距 / 页面边距 / 区块间距 |
+| xxl / xxxl / huge | 32 / 40 / 48 | 大分区 |
+| **pagePhone** | **20vp**（原 16） | 屏幕边缘（手机） |
+| pageFold / pageTablet | 24 / 32 | 折叠 / 平板 |
+| cardPadding | 16vp | 卡片内边距 |
+| rowPaddingV / rowPaddingH | 8 / 16 | 列表行内边距 |
+| cardGap / sectionGap / groupGap | 16 / 24 / 32 | 卡片 / 区块 / 大分区 |
+
+细则：所有 spacing 令牌是 **4 的倍数**（半格），语义间距（控件/卡片/区块）是 **8 的倍数**；
+页面边距三档 20/24/32 与 `CtTokens.Spacing.pageHorizontal*` / `CtAdaptive.horizontalPaddingDp()` 同源，
+因此首页/全部/我的/工具页/设置页**一次性全部**按新边距生效（有效内容宽 = min(屏幕, 上限) − 2×20）。
+
+### 13.3 迁移影响与自查
+
+- 令牌变更后回归了 `CtDesignTokensTest` / `HarmonyTokensTest` / `AdaptiveLayoutTest` 中的旧断言（已按新规范更新）。
+- 新增 `CtSpacingTokensTest`（14 项）：8vp 网格、4/8 倍数、页面边距 20/24/32、
+  字号层级 28/24/20/16/14/12、行高 1.4–1.6、字重三档、`CtTypeScale` 与令牌一致。
+- 硬编码自查 `docs/design/grep_hardcode.ps1` 仍为 **0**（本轮把 14 处 Snackbar 圆角、光感高光/折射色收敛进令牌）。
+
+---
+
+## 14. 2026-11-19 深色工具栏优化（Dark Toolbars）
+
+用户反馈「深色下工具栏灰糊」。根因：浮岛 dock 与顶栏在深色里都用 `surfaceContainerLow`/`DarkContainer`，
+与页面底 `DarkBg` 只差 3–4 个色阶，材质又半透明 → 轮廓消失。
+
+| 位置 | 改法 |
+|---|---|
+| 浮岛 dock | 底色改 `CtPalette.DarkBar`(#171C1F) × **0.92**（比页面底更暗）；顶部线性高光 白 0.10；**1px 高光边 白 0.18** + 底部暗边 黑 0.35；选中药丸 = `primary` 0.22 低饱和雾青 + **1px 高光边 白 0.14** |
+| 顶栏 | 深色下改用 `THICK` 材质（更大模糊 + 更高底色），并补 1px 高光边 白 0.14（随浮层进度 α） |
+| 卡片 | 玻璃底 + 顶部高光 + 1px 高光边（见 §12），深色 0 阴影靠高光边分层 |
+| 文字 | 选中 dock 项 `primary`（对 DarkBar ≥ 7:1）、未选中 `onSurfaceVariant`（≥ 5.3:1）——AA |
+
+对比截图：`docs/design/shots/dark-dock-before.png`（beta11）与 `dark-dock-after.png`（本轮）。
+
+---
+
+## 15. 验收证据（2026-11-19 第 2 轮）
+
+| 项 | 结果 |
+|---|---|
+| 单测 | `:app:testDebugUnitTest` **1725 / 0 失败 / 2 skipped**（新增 47：背景 26 + 玻璃 11 + 间距排版 14，扣除重命名合并） |
+| 构建 | `assembleRelease` 成功：**v1.0.0-beta12 / vc95**，APK **5,853,309 B / SHA-256 `CBFE71FC…B3A86C`**（最终包，含玻璃底修正与背景动画修复） |
+| 硬编码自查 | `grep_hardcode.ps1` = **0** |
+| 模拟器（emulator-5562，1440×3200，API 37） | 浅/深 × 首页/全部/我的/背景选择器/自定义图片/工具页实拍：`v2-beta12-light-custom.png`、`v2-beta12-dark-custom.png`、`v2-dark-all.png`、`dark-*-before/after.png` |
+| 端到端 | 系统照片选择器 → 选图 → 落盘 `files/backgrounds/bg_1795097692069.jpg`（72,862 B）→ 偏好 `warm_white|custom:bg_…\|blur:2` → 全部页面背景即时生效（含深色与工具页） |
+
+### 15.1 残留风险与未验证项（如实）
+
+1. **「深色 + 自定义图片」已复拍**：beta12 最终包在重建的 AVD 上实拍（`v2-beta12-dark-custom.png`），
+   深色卡片用 surfaceContainer 玻璃底，不再灰糊；另修复 `HomeReveal` 未 remember Animatable 导致
+   自定义背景触发重组时整页停留在半透明入场态的问题（表现为文字/卡片发灰，已通过像素采样 + 截图确认恢复）。
+2. **大屏/平板未实拍**：本轮只验证 1440×3200（411dp 宽）手机竖屏；页面边距 20dp 在 600/840dp 断点下走
+   24/32（`CtAdaptive`），未逐屏实拍 360–430dp 与平板组合（横向溢出风险低：内容宽度只减不增）。
+3. **背景图片内存**：2048 长边 ARGB_8888 ≈ 16MB 常驻（1 份，全局共享）；未做「按窗口尺寸二次降采样」，
+   低端机 2GB RAM 场景需注意。
+4. **照片选择器**：依赖系统 `PickVisualMedia`（Android 13+ 原生）；Android 12 及以下由 AndroidX 回退到
+   `ACTION_GET_CONTENT`，未在 API 26–30 设备实测。
+5. **沉浸光感「关闭」时的玻璃**：卡片退化为 0.92/0.94 近实色（仍带 1px 高光边），与 beta11 的纯实色略有差别，
+   如需严格回退可把 `CtGlassTokens.*(enabled=false)` 的 `baseAlpha` 设为 1.0。

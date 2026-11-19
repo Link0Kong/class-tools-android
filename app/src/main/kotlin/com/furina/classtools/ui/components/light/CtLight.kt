@@ -22,6 +22,7 @@ import com.furina.classtools.ui.theme.CtLightCapability
 import com.furina.classtools.ui.theme.CtLightLevel
 import com.furina.classtools.ui.theme.CtLightMaterialTable
 import com.furina.classtools.ui.theme.CtLightScene
+import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtLightSpec
 import com.furina.classtools.ui.theme.CtLightContext
 import com.furina.classtools.ui.theme.LocalCtLight
@@ -131,8 +132,23 @@ fun CtLightMaterialHost(content: @Composable () -> Unit) {
 // 材质绘制
 // -----------------------------------------------------------------------------
 
+/**
+ * 材质「光」的基础色（**玻璃高光 / 折射亮边的唯一来源**）。
+ *
+ * 浅色模式下高光 = 白（提亮）；深色模式下高光仍用白（模拟环境光），暗边用黑（塑造厚度）。
+ * 抽成令牌是为了让 `docs/design/grep_hardcode.ps1`（禁止 `CtLightInk.highlight/Black` 字面量）通过，
+ * 同时保证「所有材质的亮度只有一个来源」——调一处即可全局统一。
+ */
+object CtLightInk {
+    /** 高光（顶部线性高光 / 1px 亮边 / 折射亮边）。 */
+    val highlight: Color = Color.White // 设计令牌-允许（玻璃高光唯一来源，见 docs/DESIGN_SYSTEM.md 玻璃章节）
+
+    /** 暗边（底部 1px，塑造玻璃厚度；深色下更明显）。 */
+    val shade: Color = Color.Black // 设计令牌-允许（玻璃暗边唯一来源，同上）
+}
+
 /** 材质默认形状（卡片 20dp；弹层传 `CtShape.sheet`，浮岛传 `RoundedCornerShape(CtRadius.hero)`）。 */
-val CtLightMaterialShape: Shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+val CtLightMaterialShape: Shape = CtShape.card
 
 /**
  * **沉浸光感材质**（唯一对外绘制入口）。
@@ -173,7 +189,7 @@ fun Modifier.ctLightMaterial(
         .drawWithCache {
             // 缓存画笔与渐变（只在尺寸/主题/规格变化时重建；滚动时不重建）。
             val highlight = Brush.verticalGradient(
-                0f to Color.White.copy(alpha = spec.highlightAlpha * 0.55f),
+                0f to CtLightInk.highlight.copy(alpha = spec.highlightAlpha * 0.55f),
                 0.55f to Color.Transparent,
             )
             val fade = spec.gradientFade.toPx()
@@ -214,7 +230,7 @@ private fun DrawScope.specPaint(spec: CtLightSpec, bloom: Boolean, dark: Boolean
     if (bloom) {
         drawRect(
             brush = Brush.verticalGradient(
-                0f to Color.White.copy(alpha = spec.highlightAlpha * 0.22f),
+                0f to CtLightInk.highlight.copy(alpha = spec.highlightAlpha * 0.22f),
                 1f to Color.Transparent,
             ),
         )
@@ -229,12 +245,12 @@ private fun DrawScope.specPaint(spec: CtLightSpec, bloom: Boolean, dark: Boolean
 private fun DrawScope.drawEdgeRefraction(spec: CtLightSpec, dark: Boolean) {
     val hair = 1f
     drawRect(
-        color = Color.White.copy(alpha = spec.refractionAlpha.coerceAtLeast(0.10f)),
+        color = CtLightInk.highlight.copy(alpha = spec.refractionAlpha.coerceAtLeast(0.10f)),
         topLeft = Offset(0f, 0f),
         size = Size(size.width, hair),
     )
     drawRect(
-        color = (if (dark) Color.White else Color.Black).copy(alpha = if (dark) spec.refractionAlpha * 0.6f else 0.06f),
+        color = (if (dark) CtLightInk.highlight else CtLightInk.shade).copy(alpha = if (dark) spec.refractionAlpha * 0.6f else 0.06f),
         topLeft = Offset(0f, size.height - hair),
         size = Size(size.width, hair),
     )

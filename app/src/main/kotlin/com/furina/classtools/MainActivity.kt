@@ -11,12 +11,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.data.push.OppPushClick
 import com.furina.classtools.data.reminder.ReminderIntentFactory
+import com.furina.classtools.data.background.BackgroundStore
+import com.furina.classtools.data.background.LocalBackgroundStore
 import com.furina.classtools.data.settings.LocalAppSettingsStore
 import com.furina.classtools.ui.ClassToolsRoot
 import com.furina.classtools.ui.platform.VolumeKeyBridge
@@ -53,7 +56,13 @@ class MainActivity : ComponentActivity() {
         pendingToolId.value = toolIdFrom(intent)
         pendingNoticeId.value = noticeIdFrom(intent)
         val container = (application as ClassToolsApp).container
+        // 自定义背景：本机存储（App 私有目录 + SharedPreferences）；只本机、不上传、不进云同步。
+        val backgroundStore = BackgroundStore(this)
         setContent {
+            // 冷启动恢复已保存的背景位图（IO 线程解码，主线程不阻塞；失败静默回退预设）。
+            LaunchedEffect(backgroundStore) {
+                runCatching { backgroundStore.restoreBitmap() }
+            }
             // 外观偏好存本机（不进 userdata）：壁纸取色 / 外观模式 / 隐藏状态栏均实时生效。
             val dynamicColor by container.appSettings.dynamicColor
                 .collectAsStateWithLifecycle(initialValue = false)
@@ -77,8 +86,11 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = dynamicColor,
                 immersiveLight = immersiveLight,
             ) {
-                // 「我的 → 外观」直接读写本机设置（MainNavHost 之外的新设置项，不改导航层）。
-                CompositionLocalProvider(LocalAppSettingsStore provides container.appSettings) {
+                // 「我的 → 外观」直接读写本机设置；背景 Store 同层提供（全局背景层订阅）。
+                CompositionLocalProvider(
+                    LocalAppSettingsStore provides container.appSettings,
+                    LocalBackgroundStore provides backgroundStore,
+                ) {
                     // 全局隐藏系统状态栏（下滑临时显示）；关闭时恢复 statusBarsPadding 的常规行为。
                     CtImmersiveStatusBar(enabled = hideStatusBar) {
                         ClassToolsRoot(

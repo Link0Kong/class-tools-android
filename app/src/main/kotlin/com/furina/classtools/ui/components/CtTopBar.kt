@@ -4,6 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,7 +39,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.components.light.ctLightMaterial
+import com.furina.classtools.ui.components.light.CtLightInk
+import com.furina.classtools.ui.theme.CtLightLevel
 import com.furina.classtools.ui.theme.CtLightScene
+import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import com.furina.classtools.ui.theme.CtSize
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
@@ -81,6 +86,7 @@ fun CtTopBar(
 ) {
     val colors = rememberHarmonyColors()
     val light = LocalCtLight.current
+    val darkSurface = LocalCtDarkTheme.current
     val reduceMotion = rememberReduceMotion()
     val density = LocalDensity.current
     val target = if (light.enabled) {
@@ -104,9 +110,30 @@ fun CtTopBar(
                     if (overlay <= 0.001f) {
                         Modifier
                     } else {
-                        Modifier
-                            .graphicsLayer { alpha = overlay }
-                            .ctLightMaterial(CtLightScene.TOP_BAR, bodySafe = false)
+                        if (darkSurface) {
+                            // 深色：顶栏用更大的模糊 + 更高的底色不透明度，并补一层 1px 高光边，
+                            // 避免 beta11 深色下「顶栏与页面同色 → 看不出浮层」（用户反馈灰糊）。
+                            Modifier
+                                .graphicsLayer { alpha = overlay }
+                                .ctLightMaterial(
+                                    CtLightScene.TOP_BAR,
+                                    bodySafe = false,
+                                    levelOverride = CtLightLevel.THICK,
+                                )
+                                .drawWithCache {
+                                    onDrawBehind {
+                                        drawRect(
+                                            color = CtLightInk.highlight.copy(alpha = 0.14f * overlay),
+                                            topLeft = Offset(0f, 0f),
+                                            size = androidx.compose.ui.geometry.Size(size.width, 1f),
+                                        )
+                                    }
+                                }
+                        } else {
+                            Modifier
+                                .graphicsLayer { alpha = overlay }
+                                .ctLightMaterial(CtLightScene.TOP_BAR, bodySafe = false)
+                        }
                     },
                 )
                 .height(CtSize.topBarHeight)

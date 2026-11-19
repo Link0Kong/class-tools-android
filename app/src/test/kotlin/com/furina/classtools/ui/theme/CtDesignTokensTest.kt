@@ -169,13 +169,15 @@ class CtDesignTokensTest {
 
     @Test
     fun `间距刻度 4 8 12 16 20 24 与页面边距三档`() {
-        assertEquals(4.dp, CtSpace.xs)
-        assertEquals(8.dp, CtSpace.sm)
-        assertEquals(12.dp, CtSpace.md)
-        assertEquals(16.dp, CtSpace.lg)
-        assertEquals(20.dp, CtSpace.xl)
-        assertEquals(24.dp, CtSpace.xxl)
-        assertEquals(16.dp, CtSpace.pagePhone)
+        // 2026-11-19 8vp 网格：xs=8 / sm=12 / md=16 / xxl=32（xxs=4 为半格）
+        assertEquals(8.dp, CtSpace.xs)
+        assertEquals(12.dp, CtSpace.sm)
+        assertEquals(16.dp, CtSpace.md)
+        assertEquals(20.dp, CtSpace.lg)
+        assertEquals(24.dp, CtSpace.xl)
+        assertEquals(32.dp, CtSpace.xxl)
+        // 2026-11-19 鸿蒙间隔规范：屏幕边缘 20vp（原 16）
+        assertEquals(20.dp, CtSpace.pagePhone)
         assertEquals(24.dp, CtSpace.pageFold)
         assertEquals(32.dp, CtSpace.pageTablet)
         // 页面边距三档 = 鸿蒙 Breakpoints（跨端一致）
@@ -190,19 +192,19 @@ class CtDesignTokensTest {
         assertEquals(24.sp, CtType.titleSize)
         assertEquals(20.sp, CtType.headlineSize)
         assertEquals(16.sp, CtType.title16Size)
-        assertEquals(15.sp, CtType.bodySize)
-        assertEquals(13.sp, CtType.labelSize)
+        assertEquals(14.sp, CtType.bodySize)
+        assertEquals(14.sp, CtType.labelSize)
         assertEquals(12.sp, CtType.captionSize)
 
         assertEquals(28.sp, CtTypeScale.display.fontSize)
         assertEquals(24.sp, CtTypeScale.title.fontSize)
         assertEquals(20.sp, CtTypeScale.headline.fontSize)
         assertEquals(16.sp, CtTypeScale.title16.fontSize)
-        assertEquals(15.sp, CtTypeScale.body.fontSize)
-        assertEquals(13.sp, CtTypeScale.label.fontSize)
+        assertEquals(14.sp, CtTypeScale.body.fontSize)
+        assertEquals(14.sp, CtTypeScale.label.fontSize)
         assertEquals(12.sp, CtTypeScale.caption.fontSize)
 
-        // 行高比例 1.29–1.47（大字号紧、小字号松）
+        // 行高比例 1.4–1.6（鸿蒙排版规范：大字号紧、小字号松）
         listOf(
             CtTypeScale.display,
             CtTypeScale.title,

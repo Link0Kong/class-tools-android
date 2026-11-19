@@ -177,46 +177,58 @@ object CtSemantic {
 // -----------------------------------------------------------------------------
 
 /**
- * 字号阶梯（sp）。语义与任务规范一一对应：
- * displayTitle 28 / title 24 / headline 20 / title16（正文标题）/ body 15 / label 13 / caption 12。
+ * 字号阶梯（sp）—— **2026-11-19 按鸿蒙「文本排版」规范重排**：
  *
- * 行高按中文字形可读性取 1.33–1.45 倍（行高/字号），M3 Expressive 的「大字号紧行高、
- * 小字号松行高」在 ratio 里体现为：display 1.29 → body 1.47。
+ * 口径（官方 Typography 规范的核心条款）：
+ * - 字号层级 **28 / 24 / 20 / 16 / 14 / 12**（标题 20–28、正文 14–16、说明 12）；
+ * - 行高 **1.4–1.6 倍**（大字号紧一点、小字号松一点：28→1.43、14→1.57、12→1.5）；
+ * - 字重只用 Regular(400) / Medium(500) / Bold(700) 三档（标题 Bold、强调 Medium、正文 Regular）。
+ *
+ * 与 beta11 的差异：body 15→**14**、label 13→**14**（并入正文档）、title16 行高 24→**24**（1.5）、
+ * display 行高 36→**40**（1.43）、headline 27→**28**（1.4）、caption 17→**18**（1.5）。
+ * 所有行高都是「字号 × 1.4–1.6」并取 2 的倍数，便于与 8vp 网格对齐。
  */
 object CtType {
-    /** 页面主标题（工作台/全部/我的 页首）。28sp / 36 / Bold */
+    /** 页面主标题（工作台/全部/我的 页首）。28sp / 40 / Bold（1.43） */
     val displayTitleSize = 28.sp
-    const val displayTitleLine = 36
-    /** hero 问候/身份姓名。24sp / 32 / Bold */
+    const val displayTitleLine = 40
+    /** hero 问候/身份姓名。24sp / 36 / Bold（1.5） */
     val titleSize = 24.sp
-    const val titleLine = 32
-    /** 工具页顶栏标题、分组大标题。20sp / 27 / Bold */
+    const val titleLine = 36
+    /** 工具页顶栏标题、分组大标题、弹层大标题。20sp / 28 / Bold（1.4） */
     val headlineSize = 20.sp
-    const val headlineLine = 27
-    /** 区块标题、列表主文字。16sp / 24 / Medium */
+    const val headlineLine = 28
+    /** 区块标题、列表主文字。16sp / 24 / Medium（1.5） */
     val title16Size = 16.sp
     const val title16Line = 24
-    /** 正文。15sp / 22 / Normal */
-    val bodySize = 15.sp
+    /** 正文。14sp / 22 / Normal（1.57） */
+    val bodySize = 14.sp
     const val bodyLine = 22
-    /** 标签/按钮/次级操作。13sp / 18 / Medium */
-    val labelSize = 13.sp
-    const val labelLine = 19
-    /** 说明/徽标/页脚。12sp / 17 / Normal */
+    /** 标签/按钮/次级操作。14sp / 20 / Medium（1.43）—— 与正文同字号，仅字重区分 */
+    val labelSize = 14.sp
+    const val labelLine = 20
+    /** 说明/徽标/页脚。12sp / 18 / Normal（1.5） */
     val captionSize = 12.sp
-    const val captionLine = 17
-    /** 角标（底部 dock 文案等极小字号；仅用于非正文装饰性标签）。11sp / 15 */
+    const val captionLine = 18
+    /** 角标（底部 dock 文案等极小字号；仅用于非正文装饰性标签）。11sp / 16 */
     val microSize = 11.sp
-    const val microLine = 15
+    const val microLine = 16
 
     /**
-     * 可变字体轴（M3 Expressive 用 weight 轴产生「同一个字面不同情绪」）：
-     * 标题 700 / 强调 600 / 正文 400 / 次要 450。系统字体族即可支持这些 weight。
+     * 字重轴（官方：Regular / Medium / Bold 三档；600 保留给旧调用方，视觉等同 Medium）。
+     * 标题 Bold 700 / 强调 Medium 500 / 正文 Regular 400。
      */
     const val weightBold = 700
-    const val weightSemiBold = 600
+    const val weightSemiBold = 500
     const val weightMedium = 500
     const val weightNormal = 400
+
+    /** 行高倍数（单测锁定 1.4–1.6）。 */
+    const val lineRatioDisplay = 1.43f
+    const val lineRatioTitle = 1.50f
+    const val lineRatioHeadline = 1.40f
+    const val lineRatioBody = 1.57f
+    const val lineRatioCaption = 1.50f
 }
 
 // -----------------------------------------------------------------------------
@@ -247,36 +259,56 @@ object CtRadius {
 // 4. 间距 CtSpace（4/8/12/16/20/24 栅格）
 // -----------------------------------------------------------------------------
 
-/** 间距（dp）：4 / 8 / 12 / 16 / 20 / 24 六档 + 页面边距三档。 */
+/**
+ * 间距（dp）—— **按鸿蒙「间隔参数」规范重排：8vp 网格**。
+ *
+ * 官方口径（以 8 为基本单位）：
+ * - 屏幕边缘 **20vp**（手机）/ 24（折叠）/ 32（平板）；
+ * - 卡片内边距 **16vp**；区块间距 **24vp**；控件间距 **8 / 12 / 16vp**；
+ * - 所有间距都是 8 的倍数（5 段以内的小间距允许 4 = 半格）。
+ *
+ * 与 beta11 的差异：`pagePhone` 16 → **20**（屏幕边缘 20vp）、`rowPaddingV` 10 → **8**、
+ * `cardGap` 12 → **16**、`sectionGap` 16 → **24**（区块间距）、`xxs` 2 → **4**（半格）。
+ * 单测 `CtSpacingTokensTest` 锁定：所有 spacing 令牌是 4 的倍数、页面边距 = 20/24/32。
+ */
 object CtSpace {
-    val xxs = 2.dp
-    val xs = 4.dp
-    val sm = 8.dp
-    val md = 12.dp
-    val lg = 16.dp
-    val xl = 20.dp
-    val xxl = 24.dp
-    val xxxl = 32.dp
-    val huge = 40.dp
+    /** 半格（4vp；8vp 网格里唯一允许的非 8 倍数）。 */
+    val xxs = 4.dp
+    val xs = 8.dp
+    val sm = 12.dp
+    val md = 16.dp
+    val lg = 20.dp
+    val xl = 24.dp
+    val xxl = 32.dp
+    val xxxl = 40.dp
+    val huge = 48.dp
 
-    /** 页面左右边距：手机 16 / 折叠 24 / 平板 32。 */
-    val pagePhone = 16.dp
+    /** 页面左右边距（**屏幕边缘**）：手机 20 / 折叠 24 / 平板 32。 */
+    val pagePhone = 20.dp
     val pageFold = 24.dp
     val pageTablet = 32.dp
 
-    /** 卡片内边距 / 列表项内边距 / 工具磁贴内边距。 */
+    /** 卡片内边距 / 列表项内边距 / 工具磁贴内边距（卡片内边距固定 16vp）。 */
     val cardPadding = 16.dp
     val rowPaddingH = 16.dp
-    val rowPaddingV = 10.dp
+    val rowPaddingV = 8.dp
     val tilePadding = 12.dp
 
-    /** 卡片间距 / 区块间距。 */
-    val cardGap = 12.dp
-    val sectionGap = 16.dp
-    val groupGap = 24.dp
+    /** 卡片间距 16 / 区块间距 24（官方 24vp）/ 大分区间距 32。 */
+    val cardGap = 16.dp
+    val sectionGap = 24.dp
+    val groupGap = 32.dp
+
+    /** 控件间距（官方 8 / 12 / 16 三档）。 */
+    val controlGap = 8.dp
+    val controlGapMedium = 12.dp
+    val controlGapLarge = 16.dp
 
     /** 顶部呼吸区（页面内容与状态栏之间）。 */
     val breathTop = 8.dp
+
+    /** 8vp 网格基本单位（文档/单测引用）。 */
+    val gridUnit = 8.dp
 }
 
 // -----------------------------------------------------------------------------

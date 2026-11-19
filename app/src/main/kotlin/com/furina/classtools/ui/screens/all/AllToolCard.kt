@@ -34,13 +34,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.ui.navigation.ctToolTransitionSource
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.HarmonyMotion
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.HarmonyTokens
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.harmonyTint
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.uiAccentOf
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.rememberHarmonyColors
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.rememberReduceMotion
 
 /**
@@ -80,8 +88,8 @@ internal fun AllToolCard(
     val shape = RoundedCornerShape(HarmonyTokens.RadiusCard)
 
     Box {
-        Surface(
-            onClick = onClick,
+        // 磨砂玻璃卡片（统一材质来源 CtGlassSurface）：半透明底 + 顶部高光 + 1px 高光边。
+        CtGlassSurface(
             modifier = modifier
                 .fillMaxWidth()
                 .heightIn(min = HarmonyTokens.TileMinHeight)
@@ -92,11 +100,9 @@ internal fun AllToolCard(
                     this.alpha = alpha
                 },
             shape = shape,
-            color = colors.card,
-            contentColor = colors.textPrimary,
-            shadowElevation = HarmonyTokens.CardShadowElevation,
-            tonalElevation = 0.dp,
-            interactionSource = interaction,
+            onClick = onClick,
+            frosted = true,
+            body = true,
         ) {
             Row(
                 modifier = Modifier
