@@ -26,7 +26,7 @@ class HarmonyTokensTest {
         assertEquals(24.dp, HarmonyTokens.PagePaddingFold)
         assertEquals(32.dp, HarmonyTokens.PagePaddingTablet)
         assertEquals(12.dp, HarmonyTokens.Gap)           // Tokens.GAP
-        assertEquals(14.dp, HarmonyTokens.CardPadding)   // Tokens.CARD_PADDING
+        assertEquals(16.dp, HarmonyTokens.CardPadding)   // 鸿蒙间隔规范：有明显边界元素 16vp
         assertEquals(12.dp, HarmonyTokens.TilePadding)   // ToolTile padding SPACE_12
         assertEquals(96.dp, HarmonyTokens.TileMinHeight) // ToolTile minHeight
         assertEquals(40.dp, HarmonyTokens.GlyphBox)      // ToolTile 40dp 图标块
@@ -57,6 +57,9 @@ class HarmonyTokensTest {
         assertEquals(17.dp, HarmonyTokens.BadgeGlyph)       // iconBadge(glyph=17)
         assertEquals(12.dp, HarmonyTokens.TileTextGap)      // ToolTile margin left GAP
         assertEquals(2.dp, HarmonyTokens.TextGap)           // Tokens.TEXT_GAP
+        assertEquals(8.dp, HarmonyTokens.TextGapHorizontal) // TEXT_GAP_H
+        assertEquals(16.dp, HarmonyTokens.ElementGapLarge)  // GAP_L
+        assertEquals(8.dp, HarmonyTokens.ElementGap)        // GAP
         assertEquals(24.dp, HarmonyTokens.TileGlyph)        // ToolTile fontSize 24
     }
 
@@ -106,7 +109,12 @@ class HarmonyTokensTest {
     fun `页面语义间距默认值与鸿蒙 PAGE_PADDING 一致`() {
         assertEquals(16.dp, CtSpacing().screenHorizontal)
         assertEquals(12.dp, CtSpacing().cardGap)
-        assertEquals(14.dp, CtSpacing().cardPadding)
+        assertEquals(16.dp, CtSpacing().cardPadding)
+        assertEquals(16.dp, CtSpacing().sectionGap)
+        assertEquals(16.dp, CtSpacing().elementGapLarge)
+        assertEquals(8.dp, CtSpacing().elementGap)
+        assertEquals(2.dp, CtSpacing().textGapVertical)
+        assertEquals(8.dp, CtSpacing().textGapHorizontal)
         assertTrue(CtSpacing().minTouchTarget >= 48.dp)
     }
 

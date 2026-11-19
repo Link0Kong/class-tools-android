@@ -865,7 +865,7 @@ private fun HomeQuickToolsSection(
                     style = CtText.caption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(CtTokens.Spacing.elementGap))
             }
             Text(
                 text = if (editing) "完成" else "编辑",
@@ -873,7 +873,7 @@ private fun HomeQuickToolsSection(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .clickable { if (editing) onFinishEdit() else onStartEdit() }
-                    .padding(start = 10.dp, top = 6.dp, bottom = 6.dp),
+                    .padding(start = CtTokens.Spacing.elementGap, top = CtTokens.Spacing.elementGap, bottom = CtTokens.Spacing.elementGap),
             )
             Text(
                 text = "全部 ›",
@@ -904,7 +904,7 @@ private fun HomeQuickToolsSection(
                 shape = HomeCardShape,
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                    modifier = Modifier.padding(horizontal = CtTokens.Spacing.cardPadding, vertical = CtTokens.Spacing.cardPadding),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -1017,7 +1017,7 @@ private fun HomeEmptyHint(
                 Text(
                     text = actionText,
                     style = CtText.label,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    modifier = Modifier.padding(horizontal = CtTokens.Spacing.cardPadding, vertical = CtTokens.Spacing.elementGap),
                 )
             }
         }

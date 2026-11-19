@@ -33,21 +33,28 @@ object CtTokens {
         val pageHorizontalMedium = 24.dp
         val pageHorizontalExpanded = 32.dp
 
-        /** 区块间距（鸿蒙 section 间 20）。 */
-        val sectionGapCompact = 20.dp
+        /** 区块间距（鸿蒙间隔规范：元素间大间隔 16vp；平板取 24）。 */
+        val sectionGapCompact = 16.dp
         val sectionGapExpanded = 24.dp
 
         /** 卡片间距（鸿蒙 GAP=12）。 */
         val cardGapCompact = 12.dp
         val cardGapExpanded = 16.dp
 
-        /** 卡片内边距（鸿蒙卡片 14；ToolTile 12 见 Radius/Size）。 */
-        val cardPaddingCompact = 14.dp
+        /** 卡片内边距（鸿蒙间隔规范：有明显边界元素 16vp；ToolTile 12 见 Size）。 */
+        val cardPaddingCompact = 16.dp
         val cardPaddingExpanded = 20.dp
+        /** 元素间大 / 普通间隔（鸿蒙 16vp / 8vp）。 */
+        val elementGapLarge = 16.dp
+        val elementGap = 8.dp
+        /** 主次文本纵 / 横间隔（鸿蒙 2vp / 8vp）。 */
+        val textGapVertical = 2.dp
+        val textGapHorizontal = 8.dp
 
         /** 语义别名（v2 新页面通用）：随窗口自适应的默认值（见 ui/adaptive 的 spec 覆盖）。 */
         val pageHorizontal: androidx.compose.ui.unit.Dp get() = pageHorizontalCompact
         val cardGap: androidx.compose.ui.unit.Dp get() = cardGapCompact
+        val cardPadding: androidx.compose.ui.unit.Dp get() = cardPaddingCompact
     }
 
     /** 圆角数值（需要动画插值/自定义 RoundedCornerShape 时用；2026-11-17 对齐鸿蒙 18/14/24/26）。 */
@@ -109,7 +116,7 @@ object CtTokens {
 
         /** 鸿蒙卡片/工具磁贴。 */
         val cardMinHeight = 96.dp
-        val cardPadding = 14.dp
+        val cardPadding = 16.dp
         val tilePadding = 12.dp
         val tileGlyph = 40.dp
         val pageHeaderHeight = 60.dp

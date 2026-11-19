@@ -1,5 +1,16 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-19 14:0x · 1.0.0-beta9 / vc92：鸿蒙间隔参数落地（16/24/32 + 12/16/8/2）
+
+- **屏幕边距**：手机 16dp / 折叠 24dp / 平板 32dp（`HarmonyTokens.PagePadding*`、`CtSpacing`）。
+- **卡片**：卡片间 12dp；卡片内边距 16dp（`HarmonyTokens.CardPadding`、`CtTokens.Spacing.cardPadding` 同步 14→16）。
+- **元素**：大间隔 16dp / 普通 8dp；主次文本纵 2dp / 横 8dp（新增 `ElementGapLarge/ElementGap/TextGapHorizontal` 与 `CtTokens` 对应字段）。
+- **页面收敛**：电费卡片/图表/文本、首页 hero/工具卡、我的页分组标题按上述值替换；删除 18/14/10 等不在语义档位的关键间距。
+- **验证**：`HarmonyTokensTest` 增补 token 断言；`:app:compileDebugKotlin` 成功；`:app:testDebugUnitTest 1654/0（2 skipped）`。
+- **发布**：`assembleRelease` 自动上传 beta9（vc92）到 ECS+OSS；APK 5,820,537 B / `23D0F4AF…`；ECS/OSS `latest.json` 均为 vc92。
+
+## 2026-11-19 13:4x · 1.0.0-beta8 / vc91：所有版本发布自动上传更新渠道
+
 ## 2026-11-19 13:4x · 1.0.0-beta8 / vc91：所有版本发布自动上传更新渠道
 
 > 用户原话：「安卓所有版本发布都要自动上传更新渠道」。本条把发布上传固化为构建流程，并发布当前版本。

@@ -36,14 +36,20 @@ import androidx.compose.ui.unit.dp
 data class CtSpacing(
     /** 页面左右边距（鸿蒙 `Tokens.PAGE_PADDING` = 16；2026-11-19 由 20 修正）。 */
     val screenHorizontal: Dp = 16.dp,
-    /** 大区块之间的垂直间距。 */
-    val sectionGap: Dp = 20.dp,
+    /** 大区块之间的垂直间距（鸿蒙元素间大间隔 16vp）。 */
+    val sectionGap: Dp = 16.dp,
     /** 卡片之间的间距。 */
     val cardGap: Dp = 12.dp,
     /** 最小触控目标（无障碍硬线 48dp）。 */
     val minTouchTarget: Dp = 48.dp,
-    /** 卡片内边距。 */
-    val cardPadding: Dp = 14.dp,
+    /** 卡片内边距（鸿蒙有明显边界元素 16vp）。 */
+    val cardPadding: Dp = 16.dp,
+    /** 元素间大 / 普通间隔（鸿蒙 16vp / 8vp）。 */
+    val elementGapLarge: Dp = 16.dp,
+    val elementGap: Dp = 8.dp,
+    /** 主次文本纵 / 横间隔（鸿蒙 2vp / 8vp）。 */
+    val textGapVertical: Dp = 2.dp,
+    val textGapHorizontal: Dp = 8.dp,
     /** medium 宽度下的页面边距。 */
     val pageHorizontalMedium: Dp = 24.dp,
     /** expanded 宽度下的页面边距。 */

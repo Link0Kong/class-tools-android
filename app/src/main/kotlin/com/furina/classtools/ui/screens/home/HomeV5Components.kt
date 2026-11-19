@@ -266,7 +266,7 @@ internal fun HomeInfoCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = HarmonyTokens.CardPadding, vertical = HarmonyTokens.CardPadding),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(HarmonyTokens.ElementGap),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 HomeIconBadge(icon = icon, accent = accent)

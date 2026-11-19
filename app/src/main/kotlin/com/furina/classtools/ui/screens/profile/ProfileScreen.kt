@@ -113,6 +113,7 @@ import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
 import com.furina.classtools.ui.theme.AppearanceMode
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtText
+import com.furina.classtools.ui.theme.HarmonyTokens
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import com.furina.classtools.ui.theme.rememberProfileHeroColors
@@ -396,9 +397,9 @@ private fun ProfileHeader() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 20.dp, bottom = 16.dp),
+            .padding(top = HarmonyTokens.PagePadding, bottom = HarmonyTokens.PagePadding),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(HarmonyTokens.ElementGap),
     ) {
         Text(
             text = "我的",
@@ -491,7 +492,7 @@ private fun ProfileHeroCard(session: Session) {
                         color = scheme.primary,
                     )
                 }
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(HarmonyTokens.CardPadding))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = session.name.ifBlank { "班级成员" },
@@ -507,7 +508,7 @@ private fun ProfileHeroCard(session: Session) {
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(HarmonyTokens.ElementGap))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -733,7 +734,7 @@ private fun AppearanceModeRows(
                     )
                     .padding(horizontal = 16.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(HarmonyTokens.ElementGap),
             ) {
                 Icon(
                     imageVector = appearanceModeIcon(item),
@@ -865,7 +866,7 @@ private fun SignOutSection(
         textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp, bottom = 4.dp),
+            .padding(top = HarmonyTokens.ElementGap, bottom = HarmonyTokens.TextGap),
     )
 }
 
@@ -886,7 +887,7 @@ private fun ActionRow(
             .fillMaxWidth()
             .heightIn(min = 52.dp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = HarmonyTokens.PagePadding, vertical = HarmonyTokens.ElementGap),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -939,7 +940,7 @@ private fun SwitchRow(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = HarmonyTokens.PagePadding, vertical = HarmonyTokens.ElementGap),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -981,7 +982,7 @@ private fun ValueRow(title: String, value: String) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = HarmonyTokens.PagePadding, vertical = HarmonyTokens.ElementGap),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

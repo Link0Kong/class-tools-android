@@ -80,7 +80,7 @@ object HarmonyTokens {
     val PagePadding = 16.dp
     val PagePaddingFold = 24.dp
     val PagePaddingTablet = 32.dp
-    val CardPadding = 14.dp
+    val CardPadding = 16.dp
     val TilePadding = 12.dp
     val TileMinHeight = 96.dp
     val GlyphBox = 40.dp
@@ -90,13 +90,19 @@ object HarmonyTokens {
     val TileTextGap = 12.dp
     /** 主次文本上下间距（鸿蒙 `Tokens.TEXT_GAP` = 2）。 */
     val TextGap = 2.dp
+    /** 主次文本左右间隔（鸿蒙 TEXT_GAP_H = 8vp）。 */
+    val TextGapHorizontal = 8.dp
+    /** 元素间大间隔（鸿蒙 GAP_L = 16vp）。 */
+    val ElementGapLarge = 16.dp
+    /** 元素间普通间隔（鸿蒙 GAP = 8vp）。 */
+    val ElementGap = 8.dp
     /** 卡片小标题图标块（鸿蒙 HomeScreen.iconBadge(box=30, glyph=17)）。 */
     val BadgeBox = 30.dp
     val BadgeGlyph = 17.dp
     /** 顶栏高度（鸿蒙 `PageHeader.ets` headerBar 高 56vp；2026-11-19 由 60 修正）。 */
     val PageHeaderHeight = 56.dp
     val ButtonHeight = 48.dp
-    val SectionGap = 20.dp
+    val SectionGap = 16.dp
     /** 发丝线宽度（鸿蒙 `border({width: 0.5})`）。 */
     val HairlineWidth = 0.5.dp
     val ContentMaxWidthPhone = 880.dp

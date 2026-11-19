@@ -464,7 +464,7 @@ fun PowerScreen(
                 onDismissRequest = { showCompareDetail = false },
                 title = { Text(compareResult.label) },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.elementGap)) {
                         Text(
                             text = compareResult.title,
                             style = MaterialTheme.typography.bodySmall,
@@ -551,7 +551,7 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGap),
             ) {
                 Text(
                     text = "电费加载失败",
@@ -608,7 +608,7 @@ private fun ReadyContent(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGap),
     ) {
         PickRoomCard(sel = sel, onPick = onPickHouse)
         HeroCard(
@@ -657,7 +657,7 @@ private fun PickRoomCard(sel: String, onPick: () -> Unit) {
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGap),
         ) {
             Icon(
                 imageVector = Icons.Rounded.Apartment,
@@ -701,7 +701,7 @@ private fun HeroCard(
         PowerState.OK -> brand.powerPositive
         PowerState.IDLE -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    CtToolCard(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp)) {
+    CtToolCard(contentPadding = PaddingValues(horizontal = CtTokens.Spacing.cardPadding, vertical = CtTokens.Spacing.cardPadding)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -731,7 +731,7 @@ private fun HeroCard(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(CtTokens.Spacing.elementGap),
                 ) {
                     CtPill(
                         text = PowerStats.stateText(state),
@@ -845,7 +845,7 @@ private fun TrendSection(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(CtTokens.Spacing.elementGap),
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -1019,9 +1019,9 @@ private fun TilesSection(
     onCompareClick: () -> Unit,
     onTileClick: (PowerTile) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGap)) {
         tiles.chunked(2).forEach { rowTiles ->
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGap), modifier = Modifier.fillMaxWidth()) {
                 rowTiles.forEach { tile ->
                     Tile(
                         tile = tile,
@@ -1156,7 +1156,7 @@ private fun Tile(
 @Composable
 private fun BillCard(bill: com.furina.classtools.data.power.BillInfo) {
     CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.elementGap)) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BillCell(label = "电价", value = bill.elecText, modifier = Modifier.weight(1f))
                 BillCell(label = "区间电费", value = bill.feeText, modifier = Modifier.weight(1f))
@@ -1270,7 +1270,7 @@ private fun HousePickerSheet(
                             .fillMaxWidth()
                             .heightIn(max = 260.dp)
                             .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.elementGap),
                     ) {
                         matches.forEach { (b, room) ->
                             val selected = room.rv == selectedRv
@@ -1286,7 +1286,7 @@ private fun HousePickerSheet(
                                 else MaterialTheme.colorScheme.onSurface,
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    modifier = Modifier.padding(horizontal = CtTokens.Spacing.elementGapLarge, vertical = CtTokens.Spacing.elementGap),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
@@ -1325,7 +1325,7 @@ private fun RoomButton(room: RoomInfo, selected: Boolean, onClick: () -> Unit, m
         else MaterialTheme.colorScheme.onSurface,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = CtTokens.Spacing.elementGap, vertical = CtTokens.Spacing.elementGapLarge),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
