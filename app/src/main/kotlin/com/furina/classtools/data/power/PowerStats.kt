@@ -748,7 +748,7 @@ object PowerStats {
 
     /** 计费规则条（电价 / 区间电费 / 免费额度 / 水费折算 / 已忽略扣减）。 */
     fun billOf(rangeStats: RangeStats?, persons: Int = DEFAULT_PERSONS): BillInfo {
-        val p = if (persons == 6) 6 else DEFAULT_PERSONS
+        val p = persons.coerceIn(1, 6)
         val drop = rangeStats?.drop?.takeIf { it.isFinite() && it > 0 }
         val fee = drop?.let { round2(it * ELEC_PRICE) }
         val ddn = rangeStats?.deduct?.n ?: 0

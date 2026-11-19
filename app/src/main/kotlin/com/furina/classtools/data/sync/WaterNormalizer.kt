@@ -14,8 +14,8 @@ import kotlinx.serialization.json.put
 /**
  * `water` section 归一化（契约：`_water_contract.md` §7.1 + docs/api/USERDATA_V6.md §1.3）。
  *
- * 结构：`{ "rooms": { "<roomverify>": { "p": 4|6, "recs": [ {"m":"YYYY-MM","r":<吨>,"ts":<ms>} ] } } }`
- * 规则：p 只允许 4/6；月份合法 `YYYY-MM`；读数有限且 ≥0、保留 2 位；按月唯一升序；≤120 条；坏房间丢弃。
+ * 结构：`{ "rooms": { "<roomverify>": { "p": 1..6, "recs": [ {"m":"YYYY-MM","r":<吨>,"ts":<ms>} ] } } }`
+ * 规则：p 只允许 1–6；月份合法 `YYYY-MM`；读数有限且 ≥0、保留 2 位；按月唯一升序；≤120 条；坏房间丢弃。
  *
  * 用途：push 前归一（避免本机旧脏数据回写云端）；远端 merge 结果落本机前也可归一。
  */
@@ -32,7 +32,7 @@ object WaterNormalizer {
                 val room = roomElement as? JsonObject ?: continue
                 if (roomVerify.isBlank()) continue
                 val persons = (room["p"] as? JsonPrimitive)?.intOrNull
-                    ?.let { if (it == 6) 6 else PERSONS_DEFAULT } ?: PERSONS_DEFAULT
+                    ?.takeIf { it in 1..6 } ?: PERSONS_DEFAULT
                 val records = normalizeRecords(room["recs"])
                 rooms[roomVerify] = buildJsonObject {
                     put("p", JsonPrimitive(persons))

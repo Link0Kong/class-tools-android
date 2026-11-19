@@ -168,7 +168,7 @@ object ToolCatalog {
         AppTool(
             id = "water",
             name = "水量",
-            subtitle = "4/6 人间 · 月份记录",
+            subtitle = "1–6 人间 · 月份记录",
             icon = Icons.Rounded.WaterDrop,
             accent = Color(0xFF4A88A8),
             category = ToolCategory.CLASS,

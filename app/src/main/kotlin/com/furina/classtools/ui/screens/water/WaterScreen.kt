@@ -109,9 +109,9 @@ import kotlinx.serialization.json.put
  * 宿舍水量页（原生）。
  *
  * 契约：`docs/api/USERDATA_V6.md` water section + `web/tools/tests/_water_contract.md` §0/§1/§2/§7。
- * - 数据真源：`userdata.water = {rooms:{<roomverify>:{p:4|6, recs:[{m,r,ts}]}}}`，整段 LWW；
+ * - 数据真源：`userdata.water = {rooms:{<roomverify>:{p:1..6, recs:[{m,r,ts}]}}}`，整段 LWW；
  * - 关注宿舍沿用 `userdata.power.sel`（未选时本页可直接选择并写回 power section）；
- * - 4/6 人间切换影响免费额度（2 吨/人/月）与水费：超出部分 × 3.03 元/吨，折合扣电 = 水费 ÷ 0.58；
+ * - 1–6 人间切换影响免费额度（2 吨/人/月）与水费：超出部分 × 3.03 元/吨，折合扣电 = 水费 ÷ 0.58；
  * - 月份选择器（‹ 上月 / YYYY年MM月 / 下月 › + 12 月网格弹层，已有抄表月份显示圆点）；
  * - 隐私：只显示楼栋+房间号+读数，不含姓名/学号；**不导出、不分享**。
  *
@@ -622,13 +622,16 @@ private fun RoomCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                WaterRules.PERSONS_OPTIONS.forEach { option ->
-                    CtToolChip(
-                        text = "$option 人间",
-                        selected = persons == option,
-                        onClick = { onPersons(option) },
-                    )
+            // 1–6 人间分两行，避免窄屏 6 个 chip 横向溢出。
+            WaterRules.PERSONS_OPTIONS.chunked(3).forEach { rowOptions ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowOptions.forEach { option ->
+                        CtToolChip(
+                            text = "$option 人间",
+                            selected = persons == option,
+                            onClick = { onPersons(option) },
+                        )
+                    }
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {

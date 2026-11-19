@@ -6,7 +6,7 @@ import java.util.Locale
  * 水量状态变更（纯函数）：
  * - 录入：月份合法、读数 ≥0、2 位小数；**不得小于上一条、不得大于下一条**；同月覆盖需确认；
  * - 删除：按月份删除；
- * - 人数切换：4/6 人间（影响免费额度与计费）；
+ * - 人数切换：1–6 人间（影响免费额度与计费）；
  * - 每次变更返回新 [WaterState]（不可变，整段 LWW 写回 userdata）。
  */
 object WaterMutator {
@@ -81,7 +81,7 @@ object WaterMutator {
         return WaterState(rooms)
     }
 
-    /** 切换 4/6 人间（影响免费额度与计费；历史记录不变）。 */
+    /** 切换 1–6 人间（影响免费额度与计费；历史记录不变）。 */
     fun withPersons(state: WaterState, roomVerify: String, persons: Int): WaterState {
         val key = roomVerify.trim()
         if (key.isEmpty()) return state

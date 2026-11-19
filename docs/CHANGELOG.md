@@ -1,5 +1,18 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-19 18:0x · 1.0.0-beta10 / vc93：宿舍人数 1–6 自选
+
+- **需求**：用户要求「优化宿舍人数为 6 人以下自选」。原 `PERSONS_OPTIONS=[4,6]`、`WaterNormalizer` 与 `PowerStats.billOf` 把非 4/6 一律回落 4，23A/23B 固定四人间。
+- **实现**：
+  - `WaterRules.PERSONS_OPTIONS` 改为 `1..6`；`WaterCodec.normalizePersons` 只接受 1–6，非法值回落 4。
+  - `WaterNormalizer` 远端 `p` 接受 1–6；`PowerStats.billOf` 免费额度按 1–6 计算，不再强制 4/6。
+  - 水量页人数 chips 分两行展示（1–6），窄屏不横向溢出；标题/范围文案与工具卡副标题同步。
+- **下线约束**：23A/23B 固定四人间取消，所有宿舍均可 1–6 自选；云端 `water` / `water_room` 的 persons CHECK 已迁移为 1–6（`deploy/cloudbase/2026-11-19_water_persons_1_6.sql`）。
+- **验证**：`:app:testDebugUnitTest` 通过（WaterLogicTest 增加 5 人合法 / 9 人回落）；`:app:compileDebugKotlin` 成功；beta10 APK 5,820,541 B / `31B09D78…`；ECS+OSS `latest.json` vc93。
+- **发布**：`assembleRelease` 自动上传 beta10（vc93）完成。
+
+## 2026-11-19 14:0x · 1.0.0-beta9 / vc92：鸿蒙间隔参数落地（16/24/32 + 12/16/8/2）
+
 ## 2026-11-19 14:0x · 1.0.0-beta9 / vc92：鸿蒙间隔参数落地（16/24/32 + 12/16/8/2）
 
 - **屏幕边距**：手机 16dp / 折叠 24dp / 平板 32dp（`HarmonyTokens.PagePadding*`、`CtSpacing`）。

@@ -320,6 +320,9 @@ class WaterLogicTest {
         assertEquals(6, state.rooms.getValue("1-13---324").persons)
 
         state = WaterMutator.withPersons(state, "1-13---324", 5)
+        assertEquals(5, state.rooms.getValue("1-13---324").persons) // 5 人间合法
+
+        state = WaterMutator.withPersons(state, "1-13---324", 9)
         assertEquals(4, state.rooms.getValue("1-13---324").persons) // 非法人数回落默认 4
 
         state = WaterMutator.clearRoom(state, "1-13---324")

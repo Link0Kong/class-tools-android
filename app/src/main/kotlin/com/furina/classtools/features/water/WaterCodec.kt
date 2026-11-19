@@ -16,7 +16,7 @@ import kotlinx.serialization.json.put
  * `userdata.water` section 编解码（契约：`docs/api/USERDATA_V6.md` §1.2 + `_water_contract.md` §2）。
  *
  * 输出键序固定：`rooms` → `<roomverify>` → `p`、`recs` → `m`、`r`、`ts`（与网页/小程序逐字段一致）。
- * 输入容错（坏数据丢弃，不崩）：人数非 4/6 → 4；月份非法 → 丢；读数非有限/负数 → 丢；
+ * 输入容错（坏数据丢弃，不崩）：人数非 1–6 → 4；月份非法 → 丢；读数非有限/负数 → 丢；
  * 同月重复保留最后一条；按月升序；每间 ≤120 条。**整段 LWW**（不按间合并）。
  */
 object WaterCodec {

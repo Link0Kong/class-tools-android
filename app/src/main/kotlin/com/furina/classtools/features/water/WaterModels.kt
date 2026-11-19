@@ -27,8 +27,8 @@ object WaterRules {
     /** 默认 4 人间。 */
     const val PERSONS_DEFAULT: Int = 4
 
-    /** 可选人数档位。 */
-    val PERSONS_OPTIONS: List<Int> = listOf(4, 6)
+    /** 可选人数档位：1–6 人间自选（2026-11-19 用户要求）。 */
+    val PERSONS_OPTIONS: List<Int> = (1..6).toList()
 
     /** 每学年按 10 个月划拨（规则卡文案）。 */
     const val CYCLE_MONTHS: Int = 10

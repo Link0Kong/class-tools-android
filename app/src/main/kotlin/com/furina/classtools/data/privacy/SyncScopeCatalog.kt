@@ -49,7 +49,7 @@ object SyncScopeCatalog {
         SyncScopeItem("prefs", "通知提醒偏好", "网页/小程序通知提醒偏好", SyncScopeMode.SYNCED, "prefs"),
         SyncScopeItem("nick", "昵称", "自定义昵称", SyncScopeMode.SYNCED, "nick"),
         SyncScopeItem("power", "关注宿舍（电费）", "关注宿舍与低电阈值（不导出）", SyncScopeMode.SYNCED, "power"),
-        SyncScopeItem("water", "抄表记录（水量）", "4/6 人间月份抄表记录", SyncScopeMode.SYNCED, "water"),
+        SyncScopeItem("water", "抄表记录（水量）", "1–6 人间月份抄表记录", SyncScopeMode.SYNCED, "water"),
 
         // ---- 仅本机 / 设备偏好 ----
         SyncScopeItem("identity", "身份 token", "只存本机，不上传；退出登录即清除", SyncScopeMode.LOCAL_ONLY),
