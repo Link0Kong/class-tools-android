@@ -39,6 +39,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.data.background.CtBackgroundSelection
 import com.furina.classtools.data.background.LocalBackgroundStore
 import kotlinx.coroutines.delay
+import com.furina.classtools.ui.components.background.asComposeImageBitmap
+import com.furina.classtools.data.background.ctBackgroundBlurSigma
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
 
 /**
  * 全局沉浸式状态栏（2026-11-15 用户要求：app 使用时顶部通知栏隐藏）。
@@ -124,19 +128,70 @@ fun CtImmersiveStatusBar(
         )
     }
 
+    // 自定义图片背景：**必须在 App 根画一次**，否则只有「页面内容区」有图、状态栏留白条仍是光场，
+    // 观感就是「只有工作台背景是全屏的」（用户反馈的根因）。
+    val bgBitmap = if (store != null) {
+        store.bitmap.collectAsStateWithLifecycle().value
+    } else {
+        null
+    }
+    val imageBitmap = if (selection.hasImage && bgBitmap != null) {
+        remember(bgBitmap) { bgBitmap.asComposeImageBitmap() }
+    } else {
+        null
+    }
+    val blurSigmaDp = remember(selection, light.capability, imageBitmap) {
+        if (imageBitmap == null) 0f else ctBackgroundBlurSigma(selection, light.capability)
+    }
+    val veilAlpha = remember(dark) { if (dark) 0.66f else 0.46f }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .drawBehind {
-                drawLightField(
-                    field = field,
-                    dark = dark,
-                    virtual = size,
-                    timeMs = 0L,
-                )
+                if (imageBitmap == null) {
+                    drawLightField(
+                        field = field,
+                        dark = dark,
+                        virtual = size,
+                        timeMs = 0L,
+                    )
+                }
             },
     ) {
+        if (imageBitmap != null) {
+            // 图片层：整屏 Crop + 仅本层模糊（默认不模糊）+ 可读性蒙层；前景永远清晰。
+            val sigmaPx = with(density) { blurSigmaDp.dp.toPx() }
+            androidx.compose.foundation.Image(
+                bitmap = imageBitmap,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        clip = true
+                        if (sigmaPx > 0f) {
+                            renderEffect = androidx.compose.ui.graphics.BlurEffect(
+                                radiusX = sigmaPx,
+                                radiusY = sigmaPx,
+                                edgeTreatment = androidx.compose.ui.graphics.TileMode.Clamp,
+                            )
+                        }
+                    },
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0f to MaterialTheme.colorScheme.background.copy(alpha = veilAlpha * 0.90f),
+                            0.40f to MaterialTheme.colorScheme.background.copy(alpha = veilAlpha * 0.55f),
+                            1f to MaterialTheme.colorScheme.background.copy(alpha = veilAlpha),
+                        ),
+                    ),
+            )
+        }
         androidx.compose.runtime.CompositionLocalProvider(
             com.furina.classtools.ui.components.background.LocalCtRootAuroraActive provides true,
         ) {

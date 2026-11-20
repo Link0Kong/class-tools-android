@@ -169,17 +169,87 @@ object CtLightFields {
      */
     fun of(preset: CtBackgroundPreset, dark: Boolean): CtLightField {
         val base = if (dark) darkField else lightField
-        val emphasis: Int = when (preset) {
-            CtBackgroundPreset.MIST_TEAL, CtBackgroundPreset.TEAL_INDIGO, CtBackgroundPreset.NIGHTFALL -> 0
-            CtBackgroundPreset.SLATE_BLUE -> 1
-            CtBackgroundPreset.WARM_SAND, CtBackgroundPreset.SUNSET_ANGLE -> 2
-            CtBackgroundPreset.MORNING_MIST -> 3
-            CtBackgroundPreset.WARM_WHITE, CtBackgroundPreset.DEEP_SPACE -> 3
+        val e = emphasisOf(preset)
+        val blooms = base.blooms.mapIndexed { index, bloom ->
+            val f = e.factors.getOrElse(index) { 1f }
+            bloom.copy(alpha = (bloom.alpha * f).coerceIn(0f, if (dark) 0.80f else 0.66f))
         }
-        val boosted = base.blooms.mapIndexed { index, bloom ->
-            if (index != emphasis) bloom else bloom.copy(alpha = (bloom.alpha * 1.35f).coerceAtMost(0.62f))
-        }
-        return base.copy(blooms = boosted)
+        val tintedBase = e.baseTint?.let { tint ->
+            blendColor(base.base, tint, if (dark) e.tintAmountDark else e.tintAmountLight)
+        } ?: base.base
+        // 深空：额外整体压暗（光斑 + 流光），确保它是 9 个预设里一眼可辨的「最暗中性」档。
+        val dim = if (preset == CtBackgroundPreset.DEEP_SPACE) 0.45f else 1f
+        return base.copy(
+            base = tintedBase,
+            blooms = blooms.map { it.copy(alpha = it.alpha * dim) },
+            sheenAlpha = base.sheenAlpha * dim,
+        )
+    }
+
+    /**
+     * 预设的风格化参数（**唯一映射表**）。
+     *
+     * 光斑顺序：0 = 雾青（右上）· 1 = 灰蓝（左中）· 2 = 暖沙（右下）· 3 = 薄荷（中上）。
+     *
+     * @param factors 四团光斑的 alpha 系数（>1 强调、<1 收敛、0 关闭）
+     * @param baseTint 底色偏移色（null = 不改底色）
+     */
+    private data class PresetEmphasis(
+        val factors: FloatArray,
+        val baseTint: Color? = null,
+        val tintAmountDark: Float = 0.34f,
+        val tintAmountLight: Float = 0.30f,
+    )
+
+    private fun emphasisOf(preset: CtBackgroundPreset): PresetEmphasis = when (preset) {
+        // 暖白：浅色下就是默认光场（不加底色偏移）；深色下底色偏暖，避免和「深空」混为一谈。
+        CtBackgroundPreset.WARM_WHITE -> PresetEmphasis(
+            floatArrayOf(1f, 1f, 1f, 1f),
+            baseTint = Color(0xFF2A2118),
+            tintAmountDark = 0.38f,
+            tintAmountLight = 0f,
+        )
+        CtBackgroundPreset.MIST_TEAL -> PresetEmphasis(
+            floatArrayOf(1.95f, 0.35f, 0.10f, 0.95f),
+            baseTint = Color(0xFF0B5C46),
+            tintAmountDark = 0.34f,
+        )
+        CtBackgroundPreset.SLATE_BLUE -> PresetEmphasis(
+            floatArrayOf(0.45f, 2.05f, 0.12f, 0.45f),
+            baseTint = Color(0xFF1A2E66),
+            tintAmountDark = 0.34f,
+        )
+        CtBackgroundPreset.WARM_SAND -> PresetEmphasis(
+            floatArrayOf(0.25f, 0.35f, 2.10f, 0.40f),
+            baseTint = Color(0xFF6B4318),
+            tintAmountDark = 0.38f,
+        )
+        CtBackgroundPreset.DEEP_SPACE -> PresetEmphasis(
+            floatArrayOf(0.25f, 0.45f, 0.08f, 0.12f),
+            baseTint = Color(0xFF04070E),
+            tintAmountDark = 0.30f,
+            tintAmountLight = 0.30f,
+        )
+        CtBackgroundPreset.MORNING_MIST -> PresetEmphasis(
+            floatArrayOf(0.85f, 1.05f, 0.12f, 2.10f),
+            baseTint = Color(0xFF1A5A6E),
+            tintAmountDark = 0.36f,
+        )
+        CtBackgroundPreset.SUNSET_ANGLE -> PresetEmphasis(
+            floatArrayOf(0.12f, 0.20f, 2.20f, 0.25f),
+            baseTint = Color(0xFF7A3A12),
+            tintAmountDark = 0.40f,
+        )
+        CtBackgroundPreset.TEAL_INDIGO -> PresetEmphasis(
+            floatArrayOf(1.60f, 1.60f, 0.10f, 0.50f),
+            baseTint = Color(0xFF0F2F55),
+            tintAmountDark = 0.32f,
+        )
+        CtBackgroundPreset.NIGHTFALL -> PresetEmphasis(
+            floatArrayOf(0.35f, 1.95f, 0.18f, 0.20f),
+            baseTint = Color(0xFF0A1030),
+            tintAmountDark = 0.38f,
+        )
     }
 
     /** 强度 → 光斑整体 alpha 系数（强 1 / 均衡 0.78 / 弱 0.5 / 关闭 0）。 */
@@ -200,6 +270,17 @@ object CtLightFields {
             vignetteAlpha = field.vignetteAlpha * (0.6f + 0.4f * f),
         )
     }
+}
+
+/** 两色线性混合（t = 0 取 [a]，1 取 [b]）；保持 a 的 alpha。 */
+private fun blendColor(a: Color, b: Color, t: Float): Color {
+    val f = t.coerceIn(0f, 1f)
+    return Color(
+        red = a.red + (b.red - a.red) * f,
+        green = a.green + (b.green - a.green) * f,
+        blue = a.blue + (b.blue - a.blue) * f,
+        alpha = a.alpha,
+    )
 }
 
 /** 便捷：当前背景预设 + 明暗 → 未缩放的原始光场。 */

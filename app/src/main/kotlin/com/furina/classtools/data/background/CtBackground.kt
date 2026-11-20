@@ -132,7 +132,7 @@ data class CtBackgroundSelection(
         const val MAX_CUSTOM_BLUR: Int = 3
 
         /** 默认自定义模糊档（标准，σ≈24dp）。 */
-        const val DEFAULT_CUSTOM_BLUR: Int = 2
+        const val DEFAULT_CUSTOM_BLUR: Int = 0
 
         const val CUSTOM_PREFIX: String = "custom:"
         const val BLUR_PREFIX: String = "blur:"

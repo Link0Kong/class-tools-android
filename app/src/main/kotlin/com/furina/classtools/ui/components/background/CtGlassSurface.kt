@@ -225,7 +225,9 @@ fun CtGlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape,
     onClick: (() -> Unit)? = null,
-    boost: Float = 0f,
+    // 默认读取「背景花哨程度」补偿（照片背景/强光场 → 卡片更实），保证正文可读；
+    // 2026-11-20：此前所有调用方都没传 boost，导致自定义照片上卡片过透、文字压不住。
+    boost: Float = LocalCtBackgroundCardBoost.current,
     body: Boolean = true,
     frosted: Boolean = true,
     content: @Composable () -> Unit,

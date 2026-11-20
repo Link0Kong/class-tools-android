@@ -69,7 +69,10 @@ fun CtBackgroundLayer(
             factor = CtLightFields.alphaFactor(light.setting),
         )
     }
+    // 根级已绘制「光场 或 自定义图片 + 蒙层」（见 CtImmersiveStatusBar）时，页面级不再画任何背景层，
+    // 否则会出现「图片只在内容区、顶部留白条还是光场」的半屏观感，且同屏重复绘制。
     val rootAurora = LocalCtRootAuroraActive.current
+    if (rootAurora) return
 
     Box(modifier = modifier.fillMaxSize()) {
         // 1) 底：根级光场已就绪 → 留空（透出根光场）；无照片 → 本地绘制光场
