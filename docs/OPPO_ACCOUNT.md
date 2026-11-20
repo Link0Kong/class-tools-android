@@ -164,6 +164,9 @@ $env:JAVA_HOME='C:\AndroidToolchain\jdk17'; $env:ANDROID_HOME='C:\AndroidToolcha
 - **真实 OPPO 账号 OAuth 联调仍未完成**：本机 `app/oppo.properties` 已填账号服务 AppID/AppKey（不入库、不打印），
   但服务端用 authCode 换 openid 仍返回 `oppo_exchange_failed`（常见 `invalid_client`：账号服务未开通或凭证/包名/签名不匹配），
   **当前真实授权链路被服务端凭证问题阻塞**；客户端已把该错误以可诊断文案展示（见 §6）。ColorOS 真机授权页/静默授权待服务端修复后复测；
+  2026-11-20 进一步核对：用户提供的 `appServerSecret` 实为 **Push MasterSecret**（推送服务端鉴权已通过）；账号服务 token 端点已同时尝试
+  `client-uc.heytapmobi.com`（当前 SDK 环境）与旧 `api.uc.oppomobile.com`、`app_secret` 与 `app_server_secret` 四种组合，
+  用无效 code 均返回 `2020003 invalid_client` → **账号服务未对该应用开通或账号服务凭证是另一套**，详见 `PUSH_ACCOUNT_RECHECK_20261120.md`；
 - **ECS `/account` 接口由 Lead 实现**：本仓库只按契约消费；真实 `unbound/limit/openid_bound_else` 行为与响应字段以实际服务端为准
   （客户端解析已按契约 + 容错实现）；
 - **授权 scope 需在开放平台申请**：默认 `openid`（静默授权，服务端用 authCode 换 openid）；若要展示 OPPO 昵称，需账号服务开通
