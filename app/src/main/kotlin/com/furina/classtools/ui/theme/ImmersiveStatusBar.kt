@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -18,15 +20,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.data.background.CtBackgroundPreset
+import com.furina.classtools.ui.components.background.drawLightField
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.furina.classtools.data.background.CtBackgroundSelection
+import com.furina.classtools.data.background.LocalBackgroundStore
 import kotlinx.coroutines.delay
 
 /**
@@ -95,17 +106,47 @@ fun CtImmersiveStatusBar(
         0.dp
     }
 
+    // 全局光场在 App 根绘制（**挂在根 Box 自身的 drawBehind 上**）：
+    // 子节点方案会被布局约束/层叠顺序干扰（实测顶部 63dp 之外会被根底色盖住），
+    // 而 drawBehind 直接使用根 Box 的绘制尺寸，保证从屏幕最顶端到最底端连续。
+    val dark = LocalCtDarkTheme.current
+    val light = LocalCtLight.current
+    val store = LocalBackgroundStore.current
+    val selection = if (store != null) {
+        store.selection.collectAsStateWithLifecycle().value
+    } else {
+        CtBackgroundSelection.DEFAULT
+    }
+    val field = remember(selection.preset, dark, light.setting) {
+        CtLightFields.scaled(
+            field = CtLightFields.of(selection.preset, dark),
+            factor = CtLightFields.alphaFactor(light.setting),
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            .drawBehind {
+                drawLightField(
+                    field = field,
+                    dark = dark,
+                    virtual = size,
+                    timeMs = 0L,
+                )
+            },
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = extraTop),
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.furina.classtools.ui.components.background.LocalCtRootAuroraActive provides true,
         ) {
-            content()
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = extraTop),
+            ) {
+                content()
+            }
         }
     }
 }

@@ -156,15 +156,15 @@ class CtDesignTokensTest {
     // ---- 3. 形状 / 间距 / 字号 ----
 
     @Test
-    fun `圆角与任务规范一致（card 20 输入 14 hero 28 弹层 28 胶囊）`() {
-        assertEquals(20.dp, CtRadius.card)
+    fun `圆角与任务规范一致（card 24 输入 14 hero 32 弹层 28 胶囊 · 2026-11-20 v2 加大一档）`() {
+        assertEquals(24.dp, CtRadius.card)
         assertEquals(14.dp, CtRadius.input)
-        assertEquals(28.dp, CtRadius.hero)
+        assertEquals(32.dp, CtRadius.hero)
         assertEquals(28.dp, CtRadius.sheetTop)
         assertEquals(28.dp, CtRadius.dialog)
         assertEquals(999.dp, CtRadius.pill)
         // 紧凑档保留旧值（鸿蒙 18）
-        assertEquals(18.dp, CtRadius.cardCompact)
+        assertEquals(20.dp, CtRadius.cardCompact)
     }
 
     @Test

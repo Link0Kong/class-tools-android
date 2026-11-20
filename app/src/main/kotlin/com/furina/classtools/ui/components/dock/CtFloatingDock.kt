@@ -60,6 +60,8 @@ import com.furina.classtools.ui.theme.CtLightScene
 import com.furina.classtools.ui.theme.CtPalette
 import com.furina.classtools.ui.theme.LocalCtLight
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.components.glass.ctGlass
+import com.furina.classtools.ui.theme.CtLightLevel
 import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -115,8 +117,10 @@ fun CtFloatingDock(
     pagerOffsetFraction: Float = 0f,
     translucent: Boolean = true,
     showLabels: Boolean = true,
-    /** 真实玻璃效果（Haze 等绘制在 Surface 上的 Modifier；null = 仅半透明色层）。 */
+    /** 真实玻璃效果（Haze 等绘制在 Surface 上的 Modifier；null = 仅半透明色层）。历史参数，保留兼容。 */
     glassModifier: Modifier? = null,
+    /** 页面级 Haze 源（源 = 会从浮岛下面滚过的内容）；传入后材质做真模糊。 */
+    hazeState: dev.chrisbanes.haze.HazeState? = null,
 ) {
     if (destinations.isEmpty()) return
     val safeIndex = selectedIndex.coerceIn(0, destinations.lastIndex)
@@ -154,50 +158,19 @@ fun CtFloatingDock(
     //     `DarkBar`(#171C1F) 叠加 0.92 不透明度：比内容层更暗、轮廓清楚；
     //   - 1px 高光边（白 0.18）+ 顶部线性高光（白 0.10），让浮岛从深底上「浮」起来；
     //   - 选中药丸改为**低饱和雾青**（primary 0.22）+ 1px 亮边，文字/图标用 primary（对深底 ≥7:1）。
-    val light = LocalCtLight.current
-    val containerColor = if (dark) CtPalette.DarkBar else com.furina.classtools.ui.theme.HarmonyTokens.BarLight
+    // 2026-11-20 沉浸光感 v2：浮岛改用统一材质引擎（THIN 档 + 真模糊 + 点光源高光 + 折射亮边），
+    // 不再按明暗自建两套手绘材质 —— 深浅色差异全部由 CtGlassTable 表达（深色更实、亮边代替投影）。
     val dockShape = RoundedCornerShape(CtRadius.hero)
-    val glass = if (dark) {
-        // 深色：不用 CtLight 的 THICK 材质（其底色 = DarkContainer，和页面底撞色 → 灰糊），
-        // 改用「深色玻璃」：更深底色 + 高光边 + 顶部高光（材质仍统一来自 CtGlassSurface）。
-        Modifier
-            .clip(dockShape)
-            .background(containerColor.copy(alpha = DARK_DOCK_ALPHA))
-            .drawWithCache {
-                val highlight = androidx.compose.ui.graphics.Brush.verticalGradient(
-                    0f to CtLightInk.highlight.copy(alpha = 0.10f),
-                    0.5f to Color.Transparent,
-                )
-                onDrawBehind {
-                    drawRect(brush = highlight)
-                    // 1px 高光边（上）+ 极淡暗边（下），塑造玻璃厚度
-                    drawRect(
-                        color = CtLightInk.highlight.copy(alpha = 0.18f),
-                        topLeft = Offset(0f, 0f),
-                        size = androidx.compose.ui.geometry.Size(size.width, 1f),
-                    )
-                    drawRect(
-                        color = CtLightInk.shade.copy(alpha = 0.35f),
-                        topLeft = Offset(0f, size.height - 1f),
-                        size = androidx.compose.ui.geometry.Size(size.width, 1f),
-                    )
-                }
-            }
-    } else if (light.enabled) {
-        Modifier.ctLightMaterial(
-            CtLightScene.BOTTOM_DOCK,
+    val glass = Modifier
+        .ctGlass(
+            level = CtLightLevel.ULTRA_THICK,
             shape = dockShape,
-            fadeAtTop = true,
             bodySafe = true,
-            // 浮岛文字/图标需要清楚：比官方 THIN 略厚一档，视觉仍是悬浮薄雾。
-            levelOverride = com.furina.classtools.ui.theme.CtLightLevel.THICK,
+            haze = hazeState,
+            glow = 0.35f,
+            fillBoost = 0.30f,
         )
-    } else {
-        Modifier
-            .clip(dockShape)
-            .background(containerColor)
-            .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant), dockShape)
-    }
+        .then(if (hazeState == null && glassModifier != null) glassModifier else Modifier)
     val borderColor = MaterialTheme.colorScheme.outlineVariant
     val dockShadowElevation = 0.dp
     val pillShadowElevation = 0.dp

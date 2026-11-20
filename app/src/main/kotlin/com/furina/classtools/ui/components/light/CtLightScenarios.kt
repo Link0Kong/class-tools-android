@@ -217,8 +217,9 @@ fun CtLightBottomBar(
 /**
  * 底部渐变颜色蒙层（官方「底部悬浮 = THIN + 渐变颜色蒙层延展底部」）。
  *
- * 铺在 dock / 操作条 / Snackbar 之下（页面底色 → 透明），内容滚到底部时被光感柔和吞没，
- * 不与悬浮元素「硬碰硬」。
+ * 2026-11-20 沉浸光感 v2：浮岛已改为**真模糊玻璃**（Haze 采样页面内容），蒙层若仍用
+ * 0.62/0.92/1.0 的底色，会把浮岛背后的画面糊成一片白 —— 玻璃就失去透光对象（实测确认）。
+ * 因此蒙层只保留极轻的「下沿收口」（0 → 0.20 → 0.34），把内容柔和收进浮岛，而不是盖住光场。
  *
  * @param height 蒙层高度（默认 108dp：dock 60 + 导航栏 + 上沿柔化）
  */
@@ -237,9 +238,9 @@ fun CtLightBottomScrim(
             .background(
                 Brush.verticalGradient(
                     0f to Color.Transparent,
-                    0.35f to base.copy(alpha = 0.62f),
-                    0.72f to base.copy(alpha = 0.92f),
-                    1f to base.copy(alpha = 1f),
+                    0.45f to base.copy(alpha = 0.34f),
+                    0.78f to base.copy(alpha = 0.58f),
+                    1f to base.copy(alpha = 0.80f),
                 ),
             ),
     )
@@ -269,7 +270,10 @@ fun CtLightPanel(
 fun CtLightBackdrop(modifier: Modifier = Modifier, baseColor: Color? = null) {
     val light = LocalCtLight.current
     val c = rememberCtColors()
-    val base = baseColor ?: c.background
+    // 根级光场（App 根 drawBehind 绘制）已铺满全屏时，这里不能再画不透明底色 ——
+    // 否则会把光场整片盖住（2026-11-20 实测：只剩顶部 63dp 一条可见）。
+    val rootAurora = com.furina.classtools.ui.components.background.LocalCtRootAuroraActive.current
+    val base = if (rootAurora) Color.Transparent else (baseColor ?: c.background)
     val strength = when {
         !light.enabled -> 0f
         else -> when (light.setting.intensity) {

@@ -37,14 +37,14 @@ class HarmonyTokensTest {
     }
 
     @Test
-    fun `圆角按 M3 Expressive 上移一档（卡片 20 hero 28 输入 14 弹层 28）`() {
-        assertEquals(20.dp, HarmonyTokens.RadiusCard)   // 鸿蒙 18 → 安卓 20（Expressive）
-        assertEquals(28.dp, HarmonyTokens.RadiusHero)   // 鸿蒙 24 → 安卓 28
+    fun `圆角按 M3 Expressive 上移一档（卡片 24 hero 32 输入 14 弹层 28 · v2）`() {
+        assertEquals(24.dp, HarmonyTokens.RadiusCard)   // 鸿蒙 18 → 安卓 20（Expressive）
+        assertEquals(32.dp, HarmonyTokens.RadiusHero)   // 鸿蒙 24 → 安卓 28
         assertEquals(14.dp, HarmonyTokens.RadiusInput)  // 鸿蒙 14（不变）
         assertEquals(28.dp, HarmonyTokens.RadiusSheet)  // 弹层 28
         assertEquals(12.dp, HarmonyTokens.RadiusTile)   // 磁贴图标块 12（不变）
         // 紧凑档保留鸿蒙原值，供小磁贴/编辑格使用
-        assertEquals(18.dp, CtRadius.cardCompact)
+        assertEquals(20.dp, CtRadius.cardCompact)
     }
 
     @Test

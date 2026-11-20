@@ -167,9 +167,10 @@ fun CtLoading(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(26.dp),
-            strokeWidth = 3.dp,
+        // 2026-11-20：改用 M3 Expressive 形变指示器
+        // （7 形状连续形变 + 每次 90° 自转 + 4666ms 匀速自转；官方 LoadingIndicator 的等价实现）。
+        com.furina.classtools.ui.components.expressive.CtLoadingIndicator(
+            size = com.furina.classtools.ui.components.expressive.CtLoadingIndicatorSize.Medium,
             color = MaterialTheme.colorScheme.primary,
         )
         Text(

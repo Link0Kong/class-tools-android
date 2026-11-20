@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.home
 
+import com.furina.classtools.ui.components.background.CtGlassSurface
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.BorderStroke
@@ -260,14 +262,12 @@ internal fun HomeInfoCard(
     content: @Composable () -> Unit,
 ) {
     val c = rememberCtColors()
-    Surface(
-        onClick = onClick,
+    // 2026-11-20 沉浸光感 v2：卡片改用统一玻璃材质（透光 + 点光源高光 + 折射亮边 + 内阴影），
+    // 不再用实色 Surface —— 实色卡片压在光场上是「灰白板」，材质层的透光完全看不见。
+    CtGlassSurface(
         modifier = modifier.fillMaxWidth(),
         shape = CtShape.card,
-        color = c.containerLow,
-        contentColor = c.textPrimary,
-        border = BorderStroke(CtSize.dividerThickness, c.divider),
-        shadowElevation = if (c.dark) CtElevation.none else CtElevation.card,
+        onClick = onClick,
     ) {
         Column(
             modifier = Modifier

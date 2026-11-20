@@ -177,11 +177,11 @@ private fun BootSplash() {
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
             )
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .size(22.dp),
-                strokeWidth = 2.5.dp,
+            // 2026-11-20：启动页加载动画同步升级为 M3 Expressive 形变指示器。
+            com.furina.classtools.ui.components.expressive.CtLoadingIndicator(
+                modifier = Modifier.padding(top = 4.dp),
+                size = com.furina.classtools.ui.components.expressive.CtLoadingIndicatorSize.Small,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }

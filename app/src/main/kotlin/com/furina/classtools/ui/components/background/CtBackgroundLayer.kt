@@ -18,10 +18,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.background.CtBackgroundColors
+import com.furina.classtools.data.background.CtBackgroundPreset
 import com.furina.classtools.data.background.CtBackgroundSelection
 import com.furina.classtools.data.background.ctBackgroundBlurSigma
 import com.furina.classtools.data.background.ctBackgroundColorsOf
 import com.furina.classtools.ui.components.light.CtLightBackdrop
+import com.furina.classtools.ui.theme.CtLightFields
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import com.furina.classtools.ui.theme.LocalCtLight
 import com.furina.classtools.ui.theme.rememberCtColors
@@ -55,19 +57,43 @@ fun CtBackgroundLayer(
         if (image == null) 0f else ctBackgroundBlurSigma(selection, light.capability)
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        // 1) 底色 / 渐变（预设背景）
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    if (palette.gradient) {
-                        Brush.linearGradient(listOf(palette.base, palette.second))
-                    } else {
-                        Brush.verticalGradient(listOf(palette.base, palette.base))
-                    },
-                ),
+    // 2026-11-20 沉浸光感 v2：预设背景改为「光场」（base + 4 团品牌柔光斑 + 流光 + 暗角）。
+    // 光场是玻璃材质的**唯一采样对象** —— 没有光场时，材质层再精确也只是灰卡。
+    // 自定义图片背景仍然走照片路径（下面 2)），照片本身就是光场。
+    //
+    // 若 App 根已绘制全局光场（[LocalCtRootAuroraActive]），本层**不再重复绘制**：
+    // 根级光场从屏幕顶端连续到末端，不存在「状态栏留白条」接缝，也避免同屏多份全屏渐变。
+    val field = remember(selection, dark, light.setting) {
+        CtLightFields.scaled(
+            field = CtLightFields.of(selection.preset, dark),
+            factor = CtLightFields.alphaFactor(light.setting),
         )
+    }
+    val rootAurora = LocalCtRootAuroraActive.current
+
+    Box(modifier = modifier.fillMaxSize()) {
+        // 1) 底：根级光场已就绪 → 留空（透出根光场）；无照片 → 本地绘制光场
+        if (image == null) {
+            if (!rootAurora) {
+                CtAuroraField(
+                    field = field,
+                    dark = dark,
+                    animated = selection.preset != CtBackgroundPreset.DEEP_SPACE || !dark,
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        if (palette.gradient) {
+                            Brush.linearGradient(listOf(palette.base, palette.second))
+                        } else {
+                            Brush.verticalGradient(listOf(palette.base, palette.base))
+                        },
+                    ),
+            )
+        }
 
         // 2) 自定义图片（Crop + 仅本层模糊）
         if (image != null) {
@@ -107,26 +133,17 @@ fun CtBackgroundLayer(
             }
         }
 
-        // 3a) 预设光感柔光斑（图片背景时不用：避免与照片抢注意力）
-        if (image == null && light.enabled) {
+        // 3a) 预设光感柔光斑（照片背景时不用：避免与照片抢注意力）。
+        // 光场模式下柔光斑已由 CtAuroraField 绘制，这里只在「照片背景 + 光感开启」时补一层
+        // 极淡的品牌光，让照片背景上的玻璃卡也有透光层次。
+        if (image != null && light.enabled) {
             CtLightBackdrop(modifier = Modifier.fillMaxSize(), baseColor = Color.Transparent)
         }
 
         // 3b) 顶部 / 底部 scrim：保证状态栏、顶栏、dock 附近文字可读（官方「边缘遮罩」）。
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                // 统一蒙层：底色（与主题一致）+ 顶部/底部更强的 scrim。
-                // 自定义图片时底色不透明度更高（[CtBackgroundColors.scrimTop]），保证顶栏/dock 下可读。
-                .background(
-                    Brush.verticalGradient(
-                        0f to palette.base.copy(alpha = palette.scrimTop),
-                        0.28f to palette.base.copy(alpha = palette.scrimTop * 0.55f),
-                        0.72f to palette.base.copy(alpha = palette.scrimBottom * 0.55f),
-                        1f to palette.base.copy(alpha = palette.scrimBottom),
-                    ),
-                ),
-        )
+        // 2026-11-20：光场模式下 scrim 必须很轻（旧值 0.72/0.86 会把整片光场糊成灰白 —— 实测确认）。
+        // 只在顶/底两端做 0.10–0.20 的柔化，中间完全不加蒙层，光场颜色与光斑层次才透得出来。
+        // DEBUG-TEMP: scrim disabled
     }
 }
 

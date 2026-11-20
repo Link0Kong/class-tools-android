@@ -24,9 +24,13 @@ import com.furina.classtools.data.background.CtBackgroundCheck
 import com.furina.classtools.data.background.CtBackgroundPalette
 import com.furina.classtools.data.background.CtBackgroundPreset
 import com.furina.classtools.data.background.ctBackgroundContrast
+import com.furina.classtools.ui.components.glass.ctGlass
+import com.furina.classtools.ui.components.glass.ctGlassPointerLight
+import com.furina.classtools.ui.components.glass.rememberCtGlassPress
 import com.furina.classtools.ui.components.light.CtLightInk
 import com.furina.classtools.ui.theme.CtElevation
 import com.furina.classtools.ui.theme.CtLightIntensity
+import com.furina.classtools.ui.theme.CtLightLevel
 import com.furina.classtools.ui.theme.CtPalette
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import com.furina.classtools.ui.theme.LocalCtLight
@@ -201,6 +205,21 @@ fun rememberCtGlassSpec(boost: Float = 0f): CtGlassSpec {
  * @param body 承载正文（影响不透明度下限）
  * @param frosted true = 磨砂玻璃；false = 实色（列表行/输入框/媒体卡）
  */
+/**
+ * 玻璃表面（**所有卡片的唯一材质来源**，2026-11-20 材质引擎重写）。
+ *
+ * 材质参数不再由本文件推导，全部来自 `ui/theme/Glass.kt` 的 [com.furina.classtools.ui.theme.CtGlassTable]
+ * （5 档 × 3 强度 × 明暗），绘制由 `ui/components/glass/CtGlassEngine.kt` 的 `Modifier.ctGlass` 完成：
+ * 上亮下暗的介质底 + 极淡品牌赋色 + 点光源高光 + 上亮下暗折射亮边 + 底部内阴影 + 柔和外投影。
+ *
+ * 卡片默认**不做 Haze 真模糊**（它自己就是内容；官方功耗红线也要求材质只用在悬浮层与弹层）。
+ * 真正需要「糊开背后文字」的顶栏 / 浮岛 / 弹层请直接用 `Modifier.ctGlass(..., haze = LocalCtHazeState.current)`。
+ *
+ * @param onClick 非 null 时可点（按压时点光源跟随手指 + 外部容器做弹性形变）
+ * @param boost 背景补偿（自定义照片背景时抬高底色不透明度，来自 `LocalCtBackgroundCardBoost`）
+ * @param body 承载正文（正文安全不透明度下限；装饰性容器传 false 可更透）
+ * @param frosted true = 玻璃材质；false = 实色（列表行 / 输入框 / 媒体卡）
+ */
 @Composable
 fun CtGlassSurface(
     modifier: Modifier = Modifier,
@@ -211,57 +230,48 @@ fun CtGlassSurface(
     frosted: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val dark = LocalCtDarkTheme.current
     val c = rememberCtColors()
-    val spec = if (frosted) rememberCtGlassSpec(boost) else null
-    val alpha = spec?.let { CtGlassTokens.resolvedAlpha(it, boost, body) } ?: 1f
-    // 半透明底：浅色用白（CtGlassTokens.baseColor），深色用 surfaceContainer(#1E2326)。
-    // 注意：深色不能用 DarkContainer 再叠图片（会透出中灰 → 卡片/文字发灰）；surfaceContainer 与页面底同色相，
-    // 透出来的是「同色相的磨砂」而不是灰雾。
-    val baseFill = if (dark) MaterialTheme.colorScheme.surfaceContainer else CtGlassTokens.baseColor(false)
-    val fill = if (frosted && spec != null) {
-        baseFill.copy(alpha = alpha)
-    } else {
-        c.containerLow
+    val press = rememberCtGlassPress()
+    // 内容材质档位：承载正文 → REGULAR（常规厚度，正文区域更实）；装饰性外壳 → THIN。
+    val level = remember(body) {
+        if (body) CtLightLevel.THIN else CtLightLevel.ULTRA_THIN
     }
-    val material: Modifier = if (frosted && spec != null) {
+    val material: Modifier = if (frosted) {
+        Modifier
+            .ctGlassPointerLight(press)
+            .ctGlass(
+                level = level,
+                shape = shape,
+                bodySafe = body,
+                pressState = press,
+                fillBoost = boost,
+            )
+    } else {
         Modifier
             .then(
-                if (!dark && spec.shadowElevation > 0.dp) {
+                if (c.dark) {
+                    Modifier
+                } else {
                     Modifier.shadow(
-                        elevation = spec.shadowElevation,
-                        shape = shape,
+                        CtElevation.card,
+                        shape,
                         clip = false,
                         ambientColor = c.cardShadow,
                         spotColor = c.cardShadow,
                     )
-                } else {
-                    Modifier
-                },
-            )
-            .clip(shape)
-            .background(fill)
-            .frostedEdge(shape, spec)
-    } else {
-        Modifier
-            .then(
-                if (!dark) {
-                    Modifier.shadow(CtElevation.card, shape, clip = false, ambientColor = c.cardShadow, spotColor = c.cardShadow)
-                } else {
-                    Modifier
                 },
             )
             .clip(shape)
             .background(c.containerLow)
-            .clip(shape)
     }
+    val contentColor = c.textPrimary
     if (onClick != null) {
         Surface(
             onClick = onClick,
             modifier = modifier.fillMaxWidth().then(material),
             shape = shape,
             color = Color.Transparent,
-            contentColor = c.textPrimary,
+            contentColor = contentColor,
             shadowElevation = 0.dp,
         ) { content() }
     } else {
@@ -269,7 +279,7 @@ fun CtGlassSurface(
             modifier = modifier.fillMaxWidth().then(material),
             shape = shape,
             color = Color.Transparent,
-            contentColor = c.textPrimary,
+            contentColor = contentColor,
             shadowElevation = 0.dp,
         ) { content() }
     }

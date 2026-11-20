@@ -1,5 +1,12 @@
 package com.furina.classtools.ui.screens.profile
 
+import androidx.compose.ui.platform.LocalDensity
+import com.furina.classtools.ui.components.CtRootHeader
+import com.furina.classtools.ui.components.CtStickyHeaderBar
+import com.furina.classtools.ui.components.ctStickyHeaderProgress
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+
 import com.furina.classtools.ui.components.light.ctLightSummaryText
 import com.furina.classtools.ui.theme.CtLightSetting
 import com.furina.classtools.ui.theme.CtLightIntensity
@@ -282,6 +289,11 @@ fun ProfileScreen(
         }
     }
 
+    // 2026-11-20 页面骨架 v2：滚动内容作为 Haze 源，常驻悬浮玻璃条做真模糊。
+    val meScrollState = rememberScrollState()
+    val meHazeState = rememberHazeState()
+    val meDensity = LocalDensity.current
+
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
@@ -297,7 +309,8 @@ fun ProfileScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .hazeSource(meHazeState)
+                        .verticalScroll(meScrollState)
                         .padding(bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp),
                 ) {
@@ -348,6 +361,12 @@ fun ProfileScreen(
                     )
                 }
             }
+            // 常驻悬浮玻璃条（滚动后渐变出现）。
+            CtStickyHeaderBar(
+                title = "我的",
+                progress = ctStickyHeaderProgress(meScrollState.value.toFloat(), meDensity.density),
+                hazeState = meHazeState,
+            )
         }
         // 没有全局 UpdateHost（App 根）时，由「我的」页兜底展示更新弹窗，避免检查到新版却看不到。
         if (resolvedUpdateManager != null && updateCheckStatus == null && !updateHostState.value) {
@@ -430,20 +449,11 @@ fun ProfileScreen(
 
 @Composable
 private fun ProfileHeader() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = HarmonyTokens.PagePadding, bottom = HarmonyTokens.PagePadding),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(HarmonyTokens.ElementGap),
-    ) {
-        Text(
-            text = "我的",
-            style = CtText.title,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f),
-        )
-    }
+    CtRootHeader(
+        title = "我的",
+        eyebrow = "账号与偏好",
+        subtitle = "身份、数据同步、提醒与外观",
+    )
 }
 
 /**

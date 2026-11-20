@@ -1,5 +1,16 @@
 package com.furina.classtools.ui.screens.all
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.MaterialTheme
+import com.furina.classtools.ui.components.CtGlassIconButton
+import com.furina.classtools.ui.components.CtRootHeader
+import com.furina.classtools.ui.components.CtStickyHeaderBar
+import com.furina.classtools.ui.components.ctStickyHeaderProgress
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -303,6 +314,9 @@ fun AllToolsScreen(
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
 
+    // 2026-11-20 页面骨架 v2：常驻悬浮玻璃条（渐变模糊）需要页面级 Haze 源。
+    val hazeState = rememberHazeState()
+
     CompositionLocalProvider(LocalViewConfiguration provides dragViewConfiguration) {
         ExpressiveBackground(modifier = modifier.fillMaxSize()) {
             Box(
@@ -320,6 +334,7 @@ fun AllToolsScreen(
                         .fillMaxHeight()
                         .statusBarsPadding()
                         .padding(horizontal = pagePadding)
+                        .hazeSource(hazeState)
                         .verticalScroll(scrollState),
                 ) {
                     HarmonyAllToolsHeader(
@@ -495,6 +510,23 @@ fun AllToolsScreen(
                         )
                     }
                 }
+
+                // 常驻悬浮玻璃条：滚动后由完全透明渐变到「材质 + 模糊」（官方渐变模糊）。
+                CtStickyHeaderBar(
+                    title = "全部工具",
+                    progress = ctStickyHeaderProgress(scrollState.value.toFloat(), density.density),
+                    hazeState = hazeState,
+                    actions = {
+                        CtGlassIconButton(
+                            icon = if (editing) Icons.Rounded.Check else Icons.Rounded.Tune,
+                            contentDescription = if (editing) "完成编辑" else "编辑首页快捷",
+                            onClick = {
+                                editing = !editing
+                                if (!editing) draggingId = null
+                            },
+                        )
+                    },
+                )
             }
         }
     }
@@ -570,7 +602,7 @@ private fun CategoryGrid(
     }
 }
 
-/** 鸿蒙 AllScreen 页头：标题 26 Bold + 右侧「编辑首页/完成」13 雾青 + 副标题 12。 */
+/** 页头（2026-11-20 重做）：大标题「全部工具」+ 玻璃动作（编辑/完成）+ 副标题统计。 */
 @Composable
 private fun HarmonyAllToolsHeader(
     editing: Boolean,
@@ -579,51 +611,21 @@ private fun HarmonyAllToolsHeader(
     dragging: Boolean,
     onToggleEdit: () -> Unit,
 ) {
-    val colors = rememberHarmonyColors()
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = HarmonyTokens.BreathTop),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "全部工具",
-                style = CtText.title,
-                color = colors.textPrimary,
-                modifier = Modifier.weight(1f),
+    CtRootHeader(
+        title = "全部工具",
+        eyebrow = "工具库",
+        subtitle = when {
+            dragging -> "松手保存顺序"
+            editing -> "点工具加入或移出首页快捷（最多 4 个）"
+            else -> "$toolCount 个工具 · $columns 列 · 长按可拖动排序"
+        },
+        actions = {
+            CtGlassIconButton(
+                icon = if (editing) Icons.Rounded.Check else Icons.Rounded.Tune,
+                contentDescription = if (editing) "完成编辑" else "编辑首页快捷",
+                onClick = onToggleEdit,
+                tint = if (editing) MaterialTheme.colorScheme.primary else null,
             )
-            Text(
-                text = if (editing) "完成" else "编辑首页",
-                style = CtText.label,
-                color = if (dragging) colors.textTertiary else colors.heroAccent,
-                modifier = Modifier
-                    .clickable { onToggleEdit() }
-                    .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = if (editing) {
-                    "点工具加入或移出首页快捷（最多 4 个）"
-                } else {
-                    "$toolCount 个工具 · $columns 列"
-                },
-                style = CtText.caption,
-                color = if (editing) colors.heroAccent else colors.textTertiary,
-                modifier = Modifier.weight(1f),
-            )
-            if (dragging) {
-                Text(
-                    text = "松手保存",
-                    style = CtText.caption,
-                    color = colors.heroAccent,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(CtSpace.md))
-    }
+        },
+    )
 }

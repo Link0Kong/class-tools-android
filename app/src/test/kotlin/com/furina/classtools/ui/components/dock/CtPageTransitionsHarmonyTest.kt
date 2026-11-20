@@ -50,7 +50,7 @@ class CtPageTransitionsHarmonyTest {
     }
 
     @Test
-    fun `容器变换参数来自设计令牌（圆角 20 形变到 0 由弹簧驱动）`() {
+    fun `容器变换参数来自设计令牌（圆角 24 形变到 0 由弹簧驱动 · v2）`() {
         // 起始圆角 = 卡片圆角令牌；结束 = 0（页面直角）
         assertEquals(
             com.furina.classtools.ui.theme.CtRadius.card.value,

@@ -1233,18 +1233,10 @@ private fun RootTabs(
             onSelect = onSelectTab,
             pagerOffsetFraction = pagerState.currentPageOffsetFraction,
             modifier = Modifier.align(Alignment.BottomCenter),
-            glassModifier = if (ctLightEnabled) {
-                null
-            } else {
-                Modifier.hazeEffect(
-                    state = hazeState,
-                    style = HazeDefaults.style(
-                        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
-                        blurRadius = 24.dp,
-                        noiseFactor = 0.02f,
-                    ),
-                )
-            },
+            glassModifier = null,
+            // 浮岛不再做 Haze 真模糊：背后是页面底部空白 + 卡片边缘，模糊后会留下「幽灵文字」，
+            // 反而不如「更实的高档玻璃 + 点光源高光」干净（2026-11-20 模拟器实测）。
+            hazeState = null,
         )
     }
 }

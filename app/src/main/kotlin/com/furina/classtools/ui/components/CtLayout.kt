@@ -83,6 +83,26 @@ import com.furina.classtools.ui.theme.ctPressFeedback
 import com.furina.classtools.ui.theme.harmonyTint
 import com.furina.classtools.ui.theme.rememberCtColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.furina.classtools.ui.components.glass.ctGlass
+import com.furina.classtools.ui.components.glass.ctGlassPointerLight
+import com.furina.classtools.ui.components.glass.rememberCtGlassPress
+import com.furina.classtools.ui.theme.CtLightLevel
+import com.furina.classtools.ui.theme.CtPalette
+import com.furina.classtools.ui.theme.LightPrimary
+import com.furina.classtools.ui.theme.LocalCtDarkTheme
 
 // =============================================================================
 // 统一组件库（全局唯一视觉定义）
@@ -342,22 +362,63 @@ fun CtRowDivider(modifier: Modifier = Modifier, startInset: Dp = CtSpace.rowPadd
     )
 }
 
-/** 按钮三档。 */
+/**
+ * 按钮四档（2026-11-20 M3 Expressive 重做）。
+ *
+ * 视觉与交互口径（对齐 Material 3 Expressive Button 规范）：
+ * - **Filled**：品牌渐变胶囊（主色 500 → 600），56dp 高，按压时形状从「胶囊」形变到 12dp 圆角
+ *   （官方 pressed shape），并带按压点光源与 0.98 弹性缩放；
+ * - **Tonal**：玻璃材质（THIN）+ 主色文字（沉浸光感下"次操作"的正确表达）；
+ * - **Outlined**：透明底 + 1dp 描边 + 主色文字；
+ * - **Text**：无底无框，只有文字 + 状态层。
+ *
+ * 所有档位共享：≥48dp 触摸目标、`labelLarge` 语义（15sp Medium）、图标 20dp、图标间距 8dp。
+ */
 enum class CtButtonStyle {
-    /** 主操作：filled 主色胶囊。 */
+    /** 主操作：品牌渐变胶囊（形状形变 + 点光源）。 */
     Filled,
 
-    /** 次操作：tonal 主色淡底胶囊。 */
+    /** 次操作：玻璃材质 + 主色文字。 */
     Tonal,
+
+    /** 次操作（描边）：透明底 + 1dp 描边。 */
+    Outlined,
 
     /** 文字操作：只有文字，最小 48dp 触控。 */
     Text,
 }
 
+/** 按钮几何令牌（唯一来源；与 M3 Expressive Button 的 Medium 档对齐）。 */
+object CtButtonSpec {
+    /** 按钮高度（Medium 档 56dp）。 */
+    val height = 56.dp
+
+    /** 紧凑高度（行内/对话框底部 48dp）。 */
+    val heightCompact = 48.dp
+
+    /** 静止圆角 = 全圆（胶囊）。 */
+    val roundRadius = 999.dp
+
+    /** 按下圆角（M3 Expressive Medium pressed = 12dp）。 */
+    val pressedRadius = 12.dp
+
+    /** 图标尺寸。 */
+    val iconSize = 20.dp
+
+    /** 图标与文字间距。 */
+    val iconGap = 8.dp
+
+    /** 按压缩放。 */
+    const val pressScale = 0.975f
+}
+
 /**
- * 统一按钮：**Filled 56dp 胶囊**（主操作）/ Tonal / Text 三档；宽度默认撑满（传 modifier 可改）。
+ * 统一按钮（**全局唯一按钮实现**）。
  *
- * @param enabled false 时禁用（主操作常见：未勾选协议/表单未填完）
+ * @param style 四档变体（见 [CtButtonStyle]）
+ * @param leadingIcon 左侧图标（Material Icons 标准库）
+ * @param trailingIcon 右侧图标（如箭头）
+ * @param compact true = 48dp（对话框/行内），false = 56dp（页面主操作）
  */
 @Composable
 fun CtButton(
@@ -367,53 +428,172 @@ fun CtButton(
     style: CtButtonStyle = CtButtonStyle.Filled,
     enabled: Boolean = true,
     leadingIcon: ImageVector? = null,
+    trailingIcon: ImageVector? = null,
+    compact: Boolean = false,
+    /** false = 宽度只包内容（卡内次要动作）；true = 撑满可用宽度（页面主操作）。 */
+    fillWidth: Boolean = true,
 ) {
     val c = rememberCtColors()
-    val shape = CtShape.pill
-    val content: @Composable RowScope.() -> Unit = {
+    val dark = LocalCtDarkTheme.current
+    val reduceMotion = rememberReduceMotion()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val height = if (compact) CtButtonSpec.heightCompact else CtButtonSpec.height
+
+    // 形状形变：胶囊 ↔ 12dp 圆角（官方 pressed shape；effects 弹簧无过冲）
+    val targetRadius = if (pressed && enabled) CtButtonSpec.pressedRadius else CtButtonSpec.roundRadius
+    val radius by animateDpAsState(
+        targetValue = targetRadius,
+        animationSpec = if (reduceMotion) snap() else spring(
+            dampingRatio = 1f,
+            stiffness = 1600f,
+        ),
+        label = "ctButtonRadius",
+    )
+    val shape = RoundedCornerShape(radius)
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled) CtButtonSpec.pressScale else 1f,
+        animationSpec = CtMotion.spatialFast,
+        label = "ctButtonScale",
+    )
+    val pressState = rememberCtGlassPress()
+
+    val contentColor: Color = when (style) {
+        CtButtonStyle.Filled -> c.onPrimary
+        CtButtonStyle.Tonal -> c.primary
+        CtButtonStyle.Outlined, CtButtonStyle.Text -> c.primary
+    }
+    val disabledAlpha = if (enabled) 1f else 0.38f
+
+    val surface: Modifier = when (style) {
+        CtButtonStyle.Filled -> Modifier
+            .ctFilledButtonSurface(shape = shape, pressed = pressed, enabled = enabled)
+        CtButtonStyle.Tonal -> Modifier
+            .ctGlass(
+                level = CtLightLevel.MEDIUM,
+                shape = shape,
+                bodySafe = false,
+                pressState = pressState,
+            )
+            .ctGlassPointerLight(pressState)
+        CtButtonStyle.Outlined -> Modifier
+            .clip(shape)
+            .background(c.surface.copy(alpha = if (dark) 0.24f else 0.42f))
+            .border(BorderStroke(1.dp, c.primary.copy(alpha = 0.55f)), shape)
+        CtButtonStyle.Text -> Modifier
+    }
+
+    Row(
+        modifier = modifier
+            .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
+            .height(height)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                alpha = disabledAlpha
+            }
+            .then(surface)
+            .clip(shape)
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+            )
+            .semantics {
+                if (!enabled) disabled()
+            }
+            .padding(horizontal = CtSpace.xl),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         if (leadingIcon != null) {
             Icon(
                 imageVector = leadingIcon,
                 contentDescription = null,
-                modifier = Modifier.size(CtSize.iconSmall),
+                tint = contentColor,
+                modifier = Modifier.size(CtButtonSpec.iconSize),
             )
-            Spacer(modifier = Modifier.width(CtSpace.sm))
+            Spacer(modifier = Modifier.width(CtButtonSpec.iconGap))
         }
-        Text(text = text, style = CtTypeScale.label)
-    }
-    when (style) {
-        CtButtonStyle.Filled -> Button(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = modifier
-                .fillMaxWidth()
-                .heightIn(min = CtSize.buttonHeight),
-            shape = shape,
-            content = content,
+        Text(
+            text = text,
+            style = CtTypeScale.label.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-
-        CtButtonStyle.Tonal -> FilledTonalButton(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = modifier
-                .fillMaxWidth()
-                .heightIn(min = CtSize.buttonHeight),
-            shape = shape,
-            content = content,
-        )
-
-        CtButtonStyle.Text -> TextButton(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = modifier.heightIn(min = CtSize.minTouch),
-            shape = shape,
-            colors = ButtonDefaults.textButtonColors(contentColor = c.textPrimary),
-            content = content,
-        )
+        if (trailingIcon != null) {
+            Spacer(modifier = Modifier.width(CtButtonSpec.iconGap))
+            Icon(
+                imageVector = trailingIcon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(CtButtonSpec.iconSize),
+            )
+        }
     }
 }
 
-/** 文字动作（区块标题右侧 / 卡片内链接）：13 Medium 主色，最小 48dp 触控区。 */
+/**
+ * Filled 按钮表面：品牌渐变 + 顶部高光 + 底部柔影 + 按压提亮。
+ *
+ * 单独抽成 Modifier 便于 Dialog 底部动作条等地方复用同一套视觉。
+ */
+private fun Modifier.ctFilledButtonSurface(
+    shape: Shape,
+    pressed: Boolean,
+    enabled: Boolean,
+): Modifier = this
+    .shadow(
+        elevation = if (enabled) 8.dp else 0.dp,
+        shape = shape,
+        clip = false,
+        ambientColor = CtPalette.MistTeal.copy(alpha = 0.45f),
+        spotColor = CtPalette.MistTeal.copy(alpha = 0.55f),
+    )
+    .clip(shape)
+    .drawWithCache {
+        val base = Brush.verticalGradient(
+            listOf(
+                LightPrimary.copy(alpha = 0.96f),
+                CtPalette.MistTeal.copy(alpha = 0.98f),
+            ),
+        )
+        val pressedBrush = Brush.verticalGradient(
+            listOf(
+                LightPrimary.copy(alpha = 1f),
+                LightPrimary.copy(alpha = 1f),
+            ),
+        )
+        val specular = Brush.verticalGradient(
+            0f to Color.White.copy(alpha = 0.28f),
+            0.45f to Color.White.copy(alpha = 0.04f),
+            1f to Color.Transparent,
+        )
+        onDrawBehind {
+            drawRect(brush = if (pressed) pressedBrush else base)
+            drawRect(brush = specular)
+            // 上沿亮线（玻璃质感的"边缘"）+ 下沿暗线（厚度）
+            drawRect(
+                color = Color.White.copy(alpha = 0.32f),
+                topLeft = Offset(0f, 0f),
+                size = Size(size.width, 1.2.dp.toPx()),
+            )
+            drawRect(
+                color = Color.Black.copy(alpha = 0.10f),
+                topLeft = Offset(0f, size.height - 1f),
+                size = Size(size.width, 1f),
+            )
+        }
+    }
+
+/**
+ * 文字动作（区块标题右侧 / 卡片内链接）：主色 14 Medium，最小 48dp 触控区。
+ *
+ * 带按压状态层（8%）与 0.98 缩放，与按钮档位保持一致的触感。
+ */
 @Composable
 fun CtTextAction(
     text: String,
@@ -423,16 +603,38 @@ fun CtTextAction(
     color: androidx.compose.ui.graphics.Color? = null,
 ) {
     val c = rememberCtColors()
-    TextButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.heightIn(min = CtSize.minTouch),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = CtSpace.sm),
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = CtMotion.spatialFast,
+        label = "ctTextActionScale",
+    )
+    val shape = RoundedCornerShape(CtRadius.chip)
+    Row(
+        modifier = modifier
+            .heightIn(min = CtSize.minTouch)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+            )
+            .background(c.stateLayer.copy(alpha = if (pressed) 0.08f else 0f))
+            .padding(horizontal = CtSpace.sm),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = text,
             style = CtTypeScale.label,
             color = color ?: if (enabled) c.primary else c.textTertiary,
+            maxLines = 1,
         )
     }
 }

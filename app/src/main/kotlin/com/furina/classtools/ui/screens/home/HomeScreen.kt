@@ -1,5 +1,10 @@
 package com.furina.classtools.ui.screens.home
 
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import com.furina.classtools.ui.components.CtButton
+import com.furina.classtools.ui.components.CtButtonStyle
+
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -27,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Assignment
+import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Notifications
@@ -54,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,11 +92,15 @@ import com.furina.classtools.data.tool.ToolCatalog
 import com.furina.classtools.features.home.HomeToolsEditor
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
 import com.furina.classtools.ui.components.CtBrandDots
+import com.furina.classtools.ui.components.CtGlassIconButton
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.CtRootHeader
+import com.furina.classtools.ui.components.CtStickyHeaderBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.HarmonySkeletonRow
 import com.furina.classtools.ui.components.HarmonySkeletonTextBlock
 import com.furina.classtools.ui.components.NotificationPermissionBanner
+import com.furina.classtools.ui.components.ctStickyHeaderProgress
 import com.furina.classtools.ui.components.glass.CtGlassCard
 import com.furina.classtools.ui.theme.BrandMistTeal
 import com.furina.classtools.ui.theme.BrandSlateBlue
@@ -102,6 +113,8 @@ import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
 import com.furina.classtools.ui.theme.CtTokens
 import com.furina.classtools.ui.theme.rememberReduceMotion
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -402,100 +415,148 @@ fun HomeScreen(
     val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
     val contentMaxWidth = if (screenWidthDp >= 900) 960.dp else 880.dp
 
+    // 2026-11-20 页面骨架 v2：滚动内容 + 常驻悬浮玻璃条（渐变模糊）。
+    // haze 源 = 滚动内容（只有它会从悬浮条下面经过），悬浮条自己做真模糊。
+    val scrollState = rememberScrollState()
+    val hazeState = rememberHazeState()
+    val density = LocalDensity.current
+    val stickyProgress = ctStickyHeaderProgress(scrollState.value.toFloat(), density.density)
+    val greeting = remember(today, nowMillis) {
+        HomeWorkbenchLogic.greeting(Instant.ofEpochMilli(nowMillis).atZone(zone).hour)
+    }
+    val todayLabel = remember(today) { HomeWorkbenchLogic.dateText(today) }
+
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                Column(
-                    modifier = Modifier
-                        .widthIn(max = contentMaxWidth)
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = com.furina.classtools.ui.theme.HarmonyTokens.PagePadding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(top = com.furina.classtools.ui.theme.HarmonyTokens.BreathTop, bottom = 120.dp),
-                    verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
-                ) {
-                    HomeReveal(enabled = animateEntrance, index = 0) {
-                        HomeHeroCard(
-                            session = session,
-                            date = today,
-                            plan = ttPlan,
-                            loading = ttLoading,
-                            nowMillis = nowMillis,
-                            reduceMotion = reduceMotion,
-                            onOpenTimetable = { openToolId("tt") },
-                        )
-                    }
-                    if (showNotificationPermissionBanner && onOpenPermissions != null) {
+            Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = contentMaxWidth)
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = com.furina.classtools.ui.theme.HarmonyTokens.PagePadding)
+                            .verticalScroll(scrollState)
+                            .padding(top = com.furina.classtools.ui.theme.HarmonyTokens.BreathTop, bottom = 120.dp),
+                        verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
+                    ) {
+                        HomeReveal(enabled = animateEntrance, index = 0) {
+                            CtRootHeader(
+                                title = "工作台",
+                                eyebrow = "班级工具站",
+                                subtitle = "$todayLabel · $greeting",
+                                actions = {
+                                    CtGlassIconButton(
+                                        icon = Icons.Rounded.Notifications,
+                                        contentDescription = "通知待处理",
+                                        badge = ntItems.isNotEmpty(),
+                                        onClick = { openToolId("nt") },
+                                    )
+                                    CtGlassIconButton(
+                                        icon = Icons.Rounded.Apps,
+                                        contentDescription = "全部工具",
+                                        onClick = onOpenAll,
+                                    )
+                                },
+                            )
+                        }
                         HomeReveal(enabled = animateEntrance, index = 1) {
-                            NotificationPermissionBanner(
-                                visible = true,
-                                onOpenPermissions = onOpenPermissions,
+                            HomeHeroCard(
+                                session = session,
+                                date = today,
+                                plan = ttPlan,
+                                loading = ttLoading,
+                                nowMillis = nowMillis,
+                                reduceMotion = reduceMotion,
+                                onOpenTimetable = { openToolId("tt") },
+                            )
+                        }
+                        if (showNotificationPermissionBanner && onOpenPermissions != null) {
+                            HomeReveal(enabled = animateEntrance, index = 2) {
+                                NotificationPermissionBanner(
+                                    visible = true,
+                                    onOpenPermissions = onOpenPermissions,
+                                )
+                            }
+                        }
+                        // 鸿蒙 HomeScreen 顺序：hero → 今日课程 → 宿舍电费 → 作业待交 → 通知待处理 → 常用工具
+                        // （单列、内容最大宽 880/960 居中；平板不再分双栏）。
+                        HomeReveal(enabled = animateEntrance, index = 3) {
+                            HomeTodayCoursesCard(
+                                plan = ttPlan,
+                                loading = ttLoading,
+                                onOpen = { openToolId("tt") },
+                            )
+                        }
+                        HomeReveal(enabled = animateEntrance, index = 4) {
+                            HomePowerCard(
+                                card = powerCard,
+                                loading = powerLoading,
+                                onOpen = {
+                                    if (powerCard == null && onOpenPowerPicker != null) {
+                                        onOpenPowerPicker()
+                                    } else {
+                                        openToolId("power")
+                                    }
+                                },
+                            )
+                        }
+                        HomeReveal(enabled = animateEntrance, index = 5) {
+                            HomeHomeworkCard(
+                                count = hwItems.size,
+                                item = hwItems.getOrNull(hwIndex % maxOf(1, hwItems.size)),
+                                loading = homeworkLoading,
+                                failed = homeworkFailed,
+                                onOpen = { openToolId("hw") },
+                            )
+                        }
+                        HomeReveal(enabled = animateEntrance, index = 6) {
+                            HomeNoticesCard(
+                                pendingCount = ntItems.size,
+                                item = ntItems.getOrNull(ntIndex % maxOf(1, ntItems.size)),
+                                state = noticesState,
+                                errorText = noticesFailedMessage,
+                                updatedText = noticesUpdatedText,
+                                onOpen = { openToolId("nt") },
+                                onRetry = ::retry,
+                            )
+                        }
+                        HomeReveal(enabled = animateEntrance, index = 7) {
+                            HomeQuickToolsSection(
+                                quickTools = quickTools,
+                                editing = editing,
+                                draft = draft,
+                                editableTools = editableTools,
+                                columns = 4,
+                                reduceMotion = reduceMotion,
+                                onToggle = ::toggleTool,
+                                onStartEdit = {
+                                    draft = quickToolIds
+                                    editing = true
+                                },
+                                onFinishEdit = ::finishEditing,
+                                onOpenTool = onOpenTool,
+                                onOpenAll = onOpenAll,
                             )
                         }
                     }
-                    // 鸿蒙 HomeScreen 顺序：hero → 今日课程 → 宿舍电费 → 作业待交 → 通知待处理 → 常用工具
-                    // （单列、内容最大宽 880/960 居中；平板不再分双栏）。
-                    HomeReveal(enabled = animateEntrance, index = 2) {
-                        HomeTodayCoursesCard(
-                            plan = ttPlan,
-                            loading = ttLoading,
-                            onOpen = { openToolId("tt") },
-                        )
-                    }
-                    HomeReveal(enabled = animateEntrance, index = 3) {
-                        HomePowerCard(
-                            card = powerCard,
-                            loading = powerLoading,
-                            onOpen = {
-                                if (powerCard == null && onOpenPowerPicker != null) {
-                                    onOpenPowerPicker()
-                                } else {
-                                    openToolId("power")
-                                }
-                            },
-                        )
-                    }
-                    HomeReveal(enabled = animateEntrance, index = 4) {
-                        HomeHomeworkCard(
-                            count = hwItems.size,
-                            item = hwItems.getOrNull(hwIndex % maxOf(1, hwItems.size)),
-                            loading = homeworkLoading,
-                            failed = homeworkFailed,
-                            onOpen = { openToolId("hw") },
-                        )
-                    }
-                    HomeReveal(enabled = animateEntrance, index = 5) {
-                        HomeNoticesCard(
-                            pendingCount = ntItems.size,
-                            item = ntItems.getOrNull(ntIndex % maxOf(1, ntItems.size)),
-                            state = noticesState,
-                            errorText = noticesFailedMessage,
-                            updatedText = noticesUpdatedText,
-                            onOpen = { openToolId("nt") },
-                            onRetry = ::retry,
-                        )
-                    }
-                    HomeReveal(enabled = animateEntrance, index = 6) {
-                        HomeQuickToolsSection(
-                            quickTools = quickTools,
-                            editing = editing,
-                            draft = draft,
-                            editableTools = editableTools,
-                            columns = 4,
-                            reduceMotion = reduceMotion,
-                            onToggle = ::toggleTool,
-                            onStartEdit = {
-                                draft = quickToolIds
-                                editing = true
-                            },
-                            onFinishEdit = ::finishEditing,
-                            onOpenTool = onOpenTool,
-                            onOpenAll = onOpenAll,
-                        )
-                    }
                 }
             }
+
+            // 常驻悬浮玻璃条：滚过 12dp 后由透明渐变到「材质 + 模糊 + 融合带」。
+            CtStickyHeaderBar(
+                title = "工作台",
+                progress = stickyProgress,
+                hazeState = hazeState,
+                actions = {
+                    CtGlassIconButton(
+                        icon = Icons.Rounded.Notifications,
+                        contentDescription = "通知待处理",
+                        badge = ntItems.isNotEmpty(),
+                        onClick = { openToolId("nt") },
+                    )
+                },
+            )
         }
     }
 }
@@ -1004,19 +1065,18 @@ private fun HomeEmptyHint(
             )
         }
         if (actionText != null && onAction != null) {
-            Spacer(modifier = Modifier.height(CtSpace.xs))
-            Surface(
+            Spacer(modifier = Modifier.height(CtSpace.sm))
+            // 2026-11-20 按钮重做：改用全局 CtButton（Tonal = 玻璃材质 + 主色文字 + 按压形变），
+            // 宽度只包内容（Modifier.fillMaxWidth(false) 由 wrapContentWidth 保证）。
+            CtButton(
+                text = actionText,
                 onClick = onAction,
-                shape = CtShapeTokens.pill,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                contentColor = MaterialTheme.colorScheme.primary,
-            ) {
-                Text(
-                    text = actionText,
-                    style = CtText.label,
-                    modifier = Modifier.padding(horizontal = CtTokens.Spacing.cardPadding, vertical = CtTokens.Spacing.elementGap),
-                )
-            }
+                modifier = Modifier,
+                style = CtButtonStyle.Tonal,
+                fillWidth = false,
+                compact = true,
+                trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            )
         }
     }
 }

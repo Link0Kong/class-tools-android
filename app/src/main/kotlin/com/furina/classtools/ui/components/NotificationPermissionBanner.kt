@@ -64,13 +64,10 @@ fun NotificationPermissionBanner(
     if (!visible || NotificationPermissionBannerState.dismissedThisSession) return
     val colors = rememberHarmonyColors()
     val accent = MaterialTheme.colorScheme.tertiary
-    Surface(
+    // 2026-11-20：与首页其它卡片统一为玻璃材质（透光 + 高光 + 折射亮边）。
+    com.furina.classtools.ui.components.background.CtGlassSurface(
         modifier = modifier.fillMaxWidth(),
         shape = CtShapeTokens.toolCard,
-        color = colors.card,
-        contentColor = colors.textPrimary,
-        shadowElevation = HarmonyTokens.CardShadowElevation,
-        tonalElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier

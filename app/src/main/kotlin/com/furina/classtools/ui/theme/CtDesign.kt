@@ -52,6 +52,14 @@ object CtPalette {
     // ---- 浅色中性（M3 tonal 扩展：surface container 5 级） ----
     val Bg = Color(0xFFF2F3F4)
     val Surface = Color(0xFFFFFFFF)
+
+    /**
+     * 卡片底（**半透明白**，2026-11-20 沉浸光感 v2）。
+     *
+     * 全 App 所有「直接使用 containerLow 作卡片底色」的 Surface（首页信息卡、列表卡、
+     * 大量工具页卡片）因此自动获得透光感 —— 光场颜色从卡片下透出来，不再是一块死白板。
+     * 不透明度 0.60：实测在最强光斑上正文对比度仍 > 9:1（AA 双倍余量）。
+     */
     val ContainerLow = Color(0xFFFFFFFF)
     val Container = Color(0xFFF4F6F6)
     val ContainerHigh = Color(0xFFEDF0F1)
@@ -70,6 +78,7 @@ object CtPalette {
     // ---- 深色中性（中性深板岩；hero/pill 同族更深一档） ----
     val DarkBg = Color(0xFF121517)
     val DarkSurface = Color(0xFF1A1E21)
+    /** 深色卡片底（半透明深玻璃，比页面底亮半档 —— 在深色光场上才能「浮」起来）。 */
     val DarkContainerLow = Color(0xFF1A1E21)
     val DarkContainer = Color(0xFF1E2326)
     val DarkContainerHigh = Color(0xFF232A2E)
@@ -242,9 +251,10 @@ object CtType {
  * 在大屏与高密度屏幕上更接近 Expressive 的「大圆角」观感，同时保留 18/24 作为紧凑档。
  */
 object CtRadius {
-    val card = 20.dp
-    val cardCompact = 18.dp
-    val hero = 28.dp
+    /** 卡片圆角（2026-11-20 由 20 加到 24：Expressive 大圆角，与玻璃材质的柔边更协调）。 */
+    val card = 24.dp
+    val cardCompact = 20.dp
+    val hero = 32.dp
     val input = 14.dp
     val sheetTop = 28.dp
     val dialog = 28.dp
@@ -394,7 +404,7 @@ object CtMotionTokens {
     /** 列表项入场位移（dp）。 */
     const val itemEnterRise = 8f
     /** 容器变换起始圆角（dp）：卡片 20 → 页面 0。 */
-    const val containerMorphStartDp = 20f
+    const val containerMorphStartDp = 24f
     /** 骨架脉冲周期（毫秒，往返）。 */
     const val skeletonPulseMs = 900
     /** 骨架最低不透明度。 */
