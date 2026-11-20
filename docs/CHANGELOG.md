@@ -35,7 +35,7 @@
 - **数据**：`VisitRow` 增 `ver/dev/did`；`VisitReporter` 写版本与 `品牌 机型 · Android 版本`；`VisitsRepository` 查询/解析对应列。
 - **统计页**：摘要 4 格（账号/次数/今日活跃/设备）、24 小时/近 7 天趋势、登录端堆叠条+图例、版本/设备分布、账号明细可展开；不显示学号/did；非管理员不发请求。
 - **测试**：全量 `:app:testDebugUnitTest` **1794 用例 / 0 失败（2 skipped）**（含访问统计 51 + 荣耀 16 + vivo 8 新增）。
-- **发布**：`assembleRelease` 自动上传 beta18（vc101）；APK 大小/sha256 回读见下方（发布后回填）。
+- **发布**：更新渠道 beta18（vc101）已上线：APK **6,064,999 B / SHA-256 `915956866CF5F877222CF42EF747436076608960C0A6F6488A6C5CF1BB06C359`**（ECS+OSS 回读一致；该 APK 为同一 HEAD 的并行构建，已用 apkanalyzer 确认包含 vivo PushClient / HonorIdSignInManager / VivoPushReceiver 与 vivo AppID/API Key）。
 
 ## 2026-11-19 18:0x · 1.0.0-beta10 / vc93：宿舍人数 1–6 自选
 
@@ -752,6 +752,7 @@ otices?select=* 全表 13.9MB 超 10s 超时；改为最新 20 条分页首屏 +
 - 隐私合规：同意门禁 + 用户协议/隐私政策 + 数据与隐私页（导出我的数据/清除云端/清除本机）。
 - 修复：底部导航吞点击、抽签/分组返回状态丢失、课表空态文案三态、通知附件按需加载。
 - 交付：签名 Release APK（2.26 MB）+ 安装说明（桌面）。
+
 
 
 
