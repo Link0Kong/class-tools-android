@@ -21,8 +21,12 @@ artifacts/
 key/
 keystore.properties
 *.jks
-# OPPO PUSH 密钥（本机填写，不入库；模板见 app/oppo.properties.example）
+# 厂商密钥（本机填写，不入库；模板见 app/*.properties.example）
 app/oppo.properties
+app/honor.properties
+app/vivo.properties
 
-# OPPO SDK 官方 demo/临时解压目录（仅本机参考，不入库；AAR 本体在 app/libs 入交付）
+# 厂商 SDK 官方 demo/临时解压目录（仅本机参考，不入库；AAR 本体在 app/libs 入交付）
 _oppo_sdk_tmp/
+_honor_sdk_tmp/
+_vivo_sdk_tmp/

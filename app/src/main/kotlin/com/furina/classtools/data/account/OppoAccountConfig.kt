@@ -131,16 +131,20 @@ object OppoAccountText {
      * ECS 返回 `oppo_exchange_failed`（服务端用 authCode 换 openid 失败，常见 message=`invalid_client`：
      * 账号服务未开通 / AppID·AppKey·包名·签名不匹配）时的可诊断提示。
      */
-    fun exchangeFailedMessage(detail: String?): String {
+    fun exchangeFailedMessage(detail: String?, providerLabel: String = "OPPO"): String {
         val reason = detail?.trim().orEmpty().take(120)
         return if (reason.isEmpty()) {
-            "OPPO 账号服务未开通或凭证不匹配，请联系管理员"
+            "$providerLabel 账号服务未开通或凭证不匹配，请联系管理员"
         } else {
-            "OPPO 账号服务未开通或凭证不匹配（$reason），请联系管理员"
+            "$providerLabel 账号服务未开通或凭证不匹配（$reason），请联系管理员"
         }
     }
 
     /** 服务端未绑定提示的兜底文案（服务端会带 message，优先用服务端）。 */
+    fun unboundFallback(providerLabel: String = "OPPO"): String =
+        "该 $providerLabel 账号未绑定学号，请先用学号+姓名登录，再到「我的 → 账号」绑定"
+
+    /** @deprecated 使用 [unboundFallback]（荣耀与 OPPO 共用同一套文案生成）。 */
     const val UNBOUND_FALLBACK: String =
         "该 OPPO 账号未绑定学号，请先用学号+姓名登录，再到「我的 → 账号」绑定"
 

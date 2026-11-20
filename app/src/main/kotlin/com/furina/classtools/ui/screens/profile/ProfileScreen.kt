@@ -190,6 +190,10 @@ fun ProfileScreen(
     /** 「我的」行副标题（如「已绑定 1/3」；空 = 尚未读取）。 */
     oppoAccountLabel: String = "",
     onOpenOppoAccount: () -> Unit = {},
+    /** 荣耀账号（绑定学号）入口：已配置 + 荣耀设备时才展示。 */
+    honorAccountAvailable: Boolean = false,
+    honorAccountLabel: String = "",
+    onOpenHonorAccount: () -> Unit = {},
     onOpenFeedback: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     /** 预览/测试注入更新检查状态；null = 使用进程内 UpdateManager 的实时状态。 */
@@ -328,10 +332,13 @@ fun ProfileScreen(
                         onOpenDataPrivacy = onOpenDataPrivacy,
                         onClearCache = ::requestClearCache,
                     )
-                    OppoAccountSection(
-                        available = oppoAccountAvailable,
-                        label = oppoAccountLabel,
-                        onOpen = onOpenOppoAccount,
+                    AccountSection(
+                        oppoAvailable = oppoAccountAvailable,
+                        oppoLabel = oppoAccountLabel,
+                        onOpenOppo = onOpenOppoAccount,
+                        honorAvailable = honorAccountAvailable,
+                        honorLabel = honorAccountLabel,
+                        onOpenHonor = onOpenHonorAccount,
                     )
                     NotifySection(
                         reminderStatus = reminderStatus,
@@ -679,22 +686,36 @@ private fun MetricCell(label: String, value: String, modifier: Modifier = Modifi
 // 3) 账号（OPPO 账号绑定）
 // =============================================================================
 
-/** 「我的 → 账号」：OPPO 账号绑定入口（已绑定 N/3；点开底部弹层管理）。 */
+/** 「我的 → 账号」：厂商账号绑定入口（已绑定 N/3；点开底部弹层管理）。 */
 @Composable
-private fun OppoAccountSection(
-    available: Boolean,
-    label: String,
-    onOpen: () -> Unit,
+private fun AccountSection(
+    oppoAvailable: Boolean,
+    oppoLabel: String,
+    onOpenOppo: () -> Unit,
+    honorAvailable: Boolean,
+    honorLabel: String,
+    onOpenHonor: () -> Unit,
 ) {
-    if (!available) return
+    if (!oppoAvailable && !honorAvailable) return
     SectionTitle("账号")
     GroupCard {
-        ActionRow(
-            icon = Icons.Rounded.AccountCircle,
-            title = "OPPO 账号",
-            subtitle = label.ifBlank { "—" },
-            onClick = onOpen,
-        )
+        if (oppoAvailable) {
+            ActionRow(
+                icon = Icons.Rounded.AccountCircle,
+                title = "OPPO 账号",
+                subtitle = oppoLabel.ifBlank { "—" },
+                onClick = onOpenOppo,
+            )
+        }
+        if (oppoAvailable && honorAvailable) RowDivider()
+        if (honorAvailable) {
+            ActionRow(
+                icon = Icons.Rounded.AccountCircle,
+                title = "荣耀账号",
+                subtitle = honorLabel.ifBlank { "—" },
+                onClick = onOpenHonor,
+            )
+        }
     }
 }
 

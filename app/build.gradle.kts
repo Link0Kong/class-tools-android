@@ -35,6 +35,27 @@ val oppoAccountAppKey = (oppoProps.getProperty("oppo.accountAppKey") ?: "").trim
 // scope 默认仅 openid（官方文档最小要求）；如需昵称/unionid 由开放平台申请权限后在此覆盖（空格分隔）。
 val oppoAccountScope = (oppoProps.getProperty("oppo.accountScope") ?: "").trim().ifBlank { "openid" }
 
+// 荣耀账号服务（honorid-opensdk 8.0.1.351）客户端配置：app/honor.properties（不入库）。
+// Client ID 由荣耀 SDK 在运行时传入（Manifest 不需要 meta-data）；Client Secret 只在服务端。
+val honorPropsFile = file("honor.properties")
+val honorProps = Properties().apply {
+    if (honorPropsFile.isFile) {
+        honorPropsFile.inputStream().use { load(it) }
+    }
+}
+val honorClientId = (honorProps.getProperty("honor.clientId") ?: "").trim()
+val honorScope = (honorProps.getProperty("honor.scope") ?: "").trim().ifBlank { "openid profile" }
+
+// vivo 推送客户端配置：app/vivo.properties（不入库）。AppSecret 只在服务端。
+val vivoPropsFile = file("vivo.properties")
+val vivoProps = Properties().apply {
+    if (vivoPropsFile.isFile) {
+        vivoPropsFile.inputStream().use { load(it) }
+    }
+}
+val vivoAppId = (vivoProps.getProperty("vivo.appId") ?: "").trim()
+val vivoApiKey = (vivoProps.getProperty("vivo.apiKey") ?: "").trim()
+
 // ============================================================================
 // 2026-11-18 自建后端切流（P3）：REST base 三档 + ECS 各服务地址按 buildType 区分
 // 契约与切换/回滚步骤：deploy/migration/CLIENTS.md
@@ -141,13 +162,16 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 99
-    // 测试版本 15：1.0.0-beta15（访问统计可视化：访问次数/设备/版本/登录端 + 账号明细）。
-        versionName = "1.0.0-beta16"
+        versionCode = 100
+    // 测试版本 17：1.0.0-beta17（荣耀账号 + vivo 推送 + OPPO 复核；含 beta15 统计与 beta16 沉浸光感修复）。
+        versionName = "1.0.0-beta17"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
         manifestPlaceholders["oppoAccountAppId"] = oppoAccountAppId
+        // vivo 推送 SDK 从 Manifest meta-data 读取 app_id / api_key（官方要求，随 APK 分发）。
+        manifestPlaceholders["vivoPushAppId"] = vivoAppId
+        manifestPlaceholders["vivoPushApiKey"] = vivoApiKey
 
         // 公开 Publishable Key（role=anon，设计上公开）。REST/ECS 地址按 buildType 注入（见 buildTypes）。
         val publishableKey = (project.findProperty("ct.publishableKey") as String?).orEmpty()
@@ -162,8 +186,16 @@ android {
         buildConfigField("String", "OPPO_ACCOUNT_APP_KEY", buildConfigString(oppoAccountAppKey))
         buildConfigField("String", "OPPO_ACCOUNT_SCOPE", buildConfigString(oppoAccountScope))
 
+        // 荣耀账号服务（app/honor.properties；空串 = 未配置 → 荣耀入口隐藏）。
+        buildConfigField("String", "HONOR_ACCOUNT_CLIENT_ID", buildConfigString(honorClientId))
+        buildConfigField("String", "HONOR_ACCOUNT_SCOPE", buildConfigString(honorScope))
+
+        // vivo 推送（app/vivo.properties；空串 = 未配置 → 客户端跳过初始化/注册/上传）。
+        buildConfigField("String", "VIVO_PUSH_APP_ID", buildConfigString(vivoAppId))
+        buildConfigField("String", "VIVO_PUSH_API_KEY", buildConfigString(vivoApiKey))
+
         // 测试版本标识（当前为「测试版本 8」）：App 内版本行使用。
-        buildConfigField("int", "TEST_VERSION", "15")
+        buildConfigField("int", "TEST_VERSION", "17")
         buildConfigField("String", "TEST_VERSION_LABEL", buildConfigString("测试版本"))
     }
 
@@ -373,6 +405,11 @@ dependencies {
     // 纯本地依赖：SDK 自包含（无 gson/okhttp/commons-codec 传递依赖，已用 javap 核对）。
     implementation(files("libs/com.heytap.msp_V4.0.0.aar"))
 
+    // 荣耀账号服务 SDK（官方 honorid-opensdk 8.0.1.351，本地 AAR；OAuth 授权 + 快捷登录）。
+    implementation(files("libs/honorid-opensdk-8.0.1.351.aar"))
+    // vivo 推送客户端 SDK（官方 vpush_clientSDK 4.1.7.0_517，本地 AAR；含 libs/*.jar 由 AGP 合并）。
+    implementation(files("libs/vpush_clientSDK_v4.1.7.0_517.aar"))
+
     // OPPO 账号服务 OAuth 授权 SDK（Maven Central；账号快捷登录/绑定学号）。
     // 传递依赖：account-oauth-sdk / account-env / account-service-ipc + appcompat(runtime) + viewbinding，
     // 由 Gradle 解析（settings.gradle.kts 已含 mavenCentral；官方要求的 repositories 配置已满足）。
@@ -407,3 +444,5 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+

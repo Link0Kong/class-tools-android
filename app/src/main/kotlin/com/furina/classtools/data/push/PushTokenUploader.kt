@@ -37,6 +37,7 @@ data class PushTokenPayload(
 
     companion object {
         const val PROVIDER_OPPO: String = "oppo"
+        const val PROVIDER_VIVO: String = "vivo"
 
         /** PostgREST 资源路径 + 冲突键（服务端 upsert 语义）。 */
         const val PATH: String = "push_tokens?on_conflict=provider,token"
@@ -44,13 +45,19 @@ data class PushTokenPayload(
         /** PostgREST upsert：冲突时合并（重复上传幂等），只写不回传行。 */
         const val PREFER: String = "resolution=merge-duplicates,return=minimal"
 
-        fun of(registrationId: String?, device: String, appVersion: String): PushTokenPayload? {
+        fun of(
+            registrationId: String?,
+            device: String,
+            appVersion: String,
+            provider: String = PROVIDER_OPPO,
+        ): PushTokenPayload? {
             val token = registrationId?.trim().orEmpty()
             if (token.isEmpty()) return null
             return PushTokenPayload(
                 token = token,
                 device = device.trim(),
                 appVersion = appVersion.trim(),
+                provider = provider,
             )
         }
     }

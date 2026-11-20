@@ -1,13 +1,41 @@
 # 版本记录（Android 客户端）
 
-## 2026-11-20 · 1.0.0-beta15 / vc98：访问统计可视化（次数/设备/版本/登录端 + 账号明细）
+## 2026-11-20 · 1.0.0-beta17 / vc100：荣耀账号 + vivo 推送 + OPPO 推送/账号复核（含 beta15 统计与 beta16 沉浸光感修复）
 
-- **需求**：用户要求「重构各端统计模块，可视化、简洁直观展示不同账号的访问次数、访问设备、使用版本等信息，更详细」。
-- **契约**：`web/统计多端_详细统计_契约_20261120.md`（在 2026-11-18 契约上新增 `visits.ver/dev` 两列与统一可视化页面）。
-- **数据**：`VisitRow` 增 `ver/dev/did`；`VisitReporter` 写 `BuildConfig.VERSION_NAME` 与 `品牌 机型 · Android 版本`（≤32/≤48，失败写空串不阻断）；`VisitsRepository` 查询/解析 `select=slot,sid,name,ts,client,ver,dev,did`。
-- **统计页**（`ui/screens/stats/StatsScreen.kt`）：摘要 4 格（账号/次数/今日活跃/设备）、今天 24 小时 / 近 7 天趋势柱、登录端堆叠条+图例、版本/设备分布（≤6+其他）、账号明细可展开（登录端/版本/设备明细），默认今天、排序/过滤/分钟时间/旧行「未记录」沿用契约；不显示学号/did；非管理员不发请求。
-- **测试**：访问统计相关 51 用例全绿（`VisitStatsTest` 30 / `VisitReporterTest` 17 / `VisitsRepositoryTest` 4）；全量 `:app:testDebugUnitTest` 1762 用例 / 0 失败（2 skipped）。
-- **发布**：`assembleRelease` 自动上传 beta15（vc98）完成；APK 5,886,077 B / sha256 `e48c5261…88a8`；ECS/OSS `latest.json` 均为 vc98。
+> 用户 2026-11-20 要求：按 `honorid-opensdk-8.0.1.351.aar` 接入荣耀账号 OAuth；按 AppID/AppKey/AppSecret 接入 vivo 推送；再次检查 OPPO 账号服务与推送服务。
+> 本版同时包含 beta15 访问统计可视化与 beta16 沉浸光感修复（并行会话已发布 vc99；本版为叠加荣耀/vivo 后的新版本号）。
+
+### 荣耀账号（新增）
+- 客户端：本地 AAR `honorid-opensdk-8.0.1.351.aar`；`HonorAccountConfig/HonorAuthSdk/HonorAccountManager`；
+  `SignInOptionBuilder(clientId/scope/openid/profile, requireAuthCode)` → `getSignInIntent` → `parseAuthResultFromIntent`
+  → authCode → ECS `/honor/login|bind|bindings|unbind`；身份页「荣耀账号快捷登录」+「我的 → 账号 → 荣耀账号」弹层；
+  仅荣耀设备（`MANUFACTURER=HONOR` 或 `isHonorMachine`）展示；Client Secret 只在服务端。
+- 服务端：`account_app.py` v1.1 增加 `/honor/*`（token 端点 `hnoauth-login.cloud.honor.com/oauth2/v3/token` + `GOpen.User.getInfo` 取 openID）；
+  `ecs_account.py` 上传 `honor-account.json`；已部署，`/account/__health` providers.honor=true。
+- DB：`account_bindings.provider` 放开 `honor`（每学号每厂商最多 3 个）。
+- 详见 `docs/HONOR_ACCOUNT.md`。
+
+### vivo 推送（新增）
+- 客户端：本地 AAR `vpush_clientSDK_v4.1.7.0_517.aar`；`VivoPushConfig/Sdk/Store/Receiver/Manager`；
+  Manifest `app_id/api_key` + `VivoPushReceiver` + `classtools://com.furina.classtools/notice` deeplink；
+  登录后（已同意隐私）才 `initialize(agreePrivacyStatement=true)` → `turnOnPush` → `getRegId` → 上传 `push_tokens(provider='vivo')`；AppSecret 只在服务端。
+- 服务端：`briefdesk/scripts/vivo_push.py`（auth + `/message/send`，skipType=4 intent URI 点击直达通知详情）；
+  统一推送巡检 `push_tick_all.py`（harmony→oppo→vivo），`ClasstoolsPushWatch` 已改指向它。
+- DB：`push_tokens.provider` 放开 `vivo`。
+- 详见 `docs/VIVO_PUSH.md`。
+
+### OPPO 复核
+- **推送**：AppKey/MasterSecret 鉴权成功；发现唯一推送任务此前只跑鸿蒙、`oppo_push.py` **从未被调度** → 已并入统一巡检；
+  云端当前 0 台 OPPO token（无 ColorOS 真机登录），需真机验证到达/点击。
+- **账号**：ECS 服务 configured=true，但账号服务 token 端点用现有 appKey/appSecret + 无效 code 返回 `2020003 invalid_client`
+  （同一套密钥在推送侧有效）→ 账号服务 AppKey/AppSecret 是另一套或服务未开通；需在 OPPO 开放平台补齐并登记包名+签名。详见 `docs/PUSH_ACCOUNT_RECHECK_20261120.md`。
+
+### beta15 访问统计可视化（本次一并发布）
+- **契约**：`web/统计多端_详细统计_契约_20261120.md`（新增 `visits.ver/dev` 两列）。
+- **数据**：`VisitRow` 增 `ver/dev/did`；`VisitReporter` 写版本与 `品牌 机型 · Android 版本`；`VisitsRepository` 查询/解析对应列。
+- **统计页**：摘要 4 格（账号/次数/今日活跃/设备）、24 小时/近 7 天趋势、登录端堆叠条+图例、版本/设备分布、账号明细可展开；不显示学号/did；非管理员不发请求。
+- **测试**：全量 `:app:testDebugUnitTest` **1794 用例 / 0 失败（2 skipped）**（含访问统计 51 + 荣耀 16 + vivo 8 新增）。
+- **发布**：`assembleRelease` 自动上传 beta17（vc100）；APK 大小/sha256 回读见下方（发布后回填）。
 
 ## 2026-11-19 18:0x · 1.0.0-beta10 / vc93：宿舍人数 1–6 自选
 
@@ -724,4 +752,5 @@ otices?select=* 全表 13.9MB 超 10s 超时；改为最新 20 条分页首屏 +
 - 隐私合规：同意门禁 + 用户协议/隐私政策 + 数据与隐私页（导出我的数据/清除云端/清除本机）。
 - 修复：底部导航吞点击、抽签/分组返回状态丢失、课表空态文案三态、通知附件按需加载。
 - 交付：签名 Release APK（2.26 MB）+ 安装说明（桌面）。
+
 

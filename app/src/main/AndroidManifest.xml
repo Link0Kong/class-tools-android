@@ -47,6 +47,15 @@
             android:name="com.heytap.msp.client.appid"
             android:value="${oppoAccountAppId}" />
 
+        <!-- vivo 推送（vpush 4.1.7.0_517）：官方要求 application 节点配置 app_id / api_key；
+             值由 Gradle manifestPlaceholders 从 app/vivo.properties 注入（未配置为空串，运行时跳过）。 -->
+        <meta-data
+            android:name="app_id"
+            android:value="${vivoPushAppId}" />
+        <meta-data
+            android:name="api_key"
+            android:value="${vivoPushApiKey}" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -57,7 +66,27 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- vivo 推送点击跳转（服务端 skipType=4 + intent URI）：
+                 intent://com.furina.classtools/notice#Intent;scheme=classtools;S.noticeId=<gid>;end -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="com.furina.classtools"
+                    android:path="/notice"
+                    android:scheme="classtools" />
+            </intent-filter>
         </activity>
+
+        <!-- vivo 推送回调 Receiver（SDK 按类名实例化；不得混淆，见 proguard-rules.pro）。 -->
+        <receiver
+            android:name=".data.push.VivoPushReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.vivo.pushclient.action.RECEIVE" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".data.reminder.ReminderBootReceiver"

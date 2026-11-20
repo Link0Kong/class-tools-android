@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.BuildConfig
+import com.furina.classtools.data.account.HonorQuickLoginRule
 import com.furina.classtools.data.account.OppoQuickLoginClick
 import com.furina.classtools.data.account.OppoQuickLoginRule
 import com.furina.classtools.data.auth.AuthRepository
@@ -89,6 +90,14 @@ fun IdentityScreen(
     oppoLoginError: String? = null,
     onOppoQuickLogin: () -> Unit = {},
     onDismissOppoError: () -> Unit = {},
+    /** 是否展示「荣耀账号快捷登录」（已配置 + 荣耀设备）。 */
+    honorQuickLoginAvailable: Boolean = false,
+    /** 荣耀授权进行中（拉起荣耀账号授权页/解析结果）。 */
+    honorLoginInProgress: Boolean = false,
+    /** 非空时弹简洁提示（未绑定/授权失败等）；确认后由调用方清空。 */
+    honorLoginError: String? = null,
+    onHonorQuickLogin: () -> Unit = {},
+    onDismissHonorError: () -> Unit = {},
 ) {
     var studentId by rememberSaveable { mutableStateOf("") }
     var name by rememberSaveable { mutableStateOf("") }
@@ -176,53 +185,62 @@ fun IdentityScreen(
                         style = com.furina.classtools.ui.theme.CtText.bodyMedium,
                     )
 
-                    // OPPO 账号快捷登录：独立于学号+姓名表单，放在表单上方（用户 2026-11-17 晚反馈：
-                    // 未填学号/姓名也应能用；按钮只依赖协议勾选与授权中状态）。
-                    if (oppoQuickLoginAvailable) {
-                        OutlinedButton(
-                            onClick = {
-                                when (
-                                    OppoQuickLoginRule.onClick(
-                                        consentAccepted = consentAccepted,
-                                        authorizing = oppoLoginInProgress,
-                                        verifying = verifying,
-                                    )
-                                ) {
-                                    OppoQuickLoginClick.Trigger -> {
-                                        consentHint = false
-                                        onOppoQuickLogin()
-                                    }
+                    // 厂商账号快捷登录（OPPO / 荣耀）：独立于学号+姓名表单，放在表单上方
+                    // （用户 2026-11-17 晚反馈：未填学号/姓名也应能用；按钮只依赖协议勾选与授权中状态）。
+                    if (oppoQuickLoginAvailable || honorQuickLoginAvailable) {
+                        if (oppoQuickLoginAvailable) {
+                            QuickLoginButton(
+                                label = "OPPO 账号快捷登录",
+                                inProgress = oppoLoginInProgress,
+                                enabled = OppoQuickLoginRule.isButtonEnabled(
+                                    authorizing = oppoLoginInProgress,
+                                    verifying = verifying,
+                                ),
+                                onClick = {
+                                    when (
+                                        OppoQuickLoginRule.onClick(
+                                            consentAccepted = consentAccepted,
+                                            authorizing = oppoLoginInProgress,
+                                            verifying = verifying,
+                                        )
+                                    ) {
+                                        OppoQuickLoginClick.Trigger -> {
+                                            consentHint = false
+                                            onOppoQuickLogin()
+                                        }
 
-                                    OppoQuickLoginClick.ShowConsentHint -> consentHint = true
-                                    OppoQuickLoginClick.Ignore -> Unit
-                                }
-                            },
-                            enabled = OppoQuickLoginRule.isButtonEnabled(
-                                authorizing = oppoLoginInProgress,
-                                verifying = verifying,
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            shape = CtShapeTokens.pill,
-                        ) {
-                            if (oppoLoginInProgress) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Rounded.AccountCircle,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "OPPO 账号快捷登录",
-                                    style = com.furina.classtools.ui.theme.CtText.label,
-                                )
-                            }
+                                        OppoQuickLoginClick.ShowConsentHint -> consentHint = true
+                                        OppoQuickLoginClick.Ignore -> Unit
+                                    }
+                                },
+                            )
+                        }
+                        if (honorQuickLoginAvailable) {
+                            QuickLoginButton(
+                                label = "荣耀账号快捷登录",
+                                inProgress = honorLoginInProgress,
+                                enabled = HonorQuickLoginRule.isButtonEnabled(
+                                    authorizing = honorLoginInProgress,
+                                    verifying = verifying,
+                                ),
+                                onClick = {
+                                    when (
+                                        HonorQuickLoginRule.onClick(
+                                            consentAccepted = consentAccepted,
+                                            authorizing = honorLoginInProgress,
+                                            verifying = verifying,
+                                        )
+                                    ) {
+                                        OppoQuickLoginClick.Trigger -> {
+                                            consentHint = false
+                                            onHonorQuickLogin()
+                                        }
+
+                                        OppoQuickLoginClick.ShowConsentHint -> consentHint = true
+                                        OppoQuickLoginClick.Ignore -> Unit
+                                    }
+                                },
+                            )
                         }
                         if (consentHint && !consentAccepted) {
                             Text(
@@ -437,7 +455,7 @@ fun IdentityScreen(
     if (showPrivacy) PrivacyPolicyDialog(onDismiss = { showPrivacy = false })
     if (showAgreement) UserAgreementDialog(onDismiss = { showAgreement = false })
 
-    // OPPO 快捷登录失败/未绑定：简短弹窗（不写长说明；确认后清空由调用方处理）。
+    // 厂商快捷登录失败/未绑定：简短弹窗（不写长说明；确认后清空由调用方处理）。
     oppoLoginError?.let { message ->
         CtLightAlertDialog(
             onDismissRequest = onDismissOppoError,
@@ -452,5 +470,56 @@ fun IdentityScreen(
                 TextButton(onClick = onDismissOppoError) { Text("知道了") }
             },
         )
+    }
+    honorLoginError?.let { message ->
+        CtLightAlertDialog(
+            onDismissRequest = onDismissHonorError,
+            title = { Text("荣耀账号登录") },
+            text = {
+                Text(
+                    text = message,
+                    style = com.furina.classtools.ui.theme.CtText.body,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onDismissHonorError) { Text("知道了") }
+            },
+        )
+    }
+}
+
+/** 厂商账号快捷登录按钮（OPPO / 荣耀共用；48dp 高、授权中转圈）。 */
+@Composable
+private fun QuickLoginButton(
+    label: String,
+    inProgress: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        shape = CtShapeTokens.pill,
+    ) {
+        if (inProgress) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Rounded.AccountCircle,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = label,
+                style = com.furina.classtools.ui.theme.CtText.label,
+            )
+        }
     }
 }

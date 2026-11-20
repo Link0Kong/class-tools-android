@@ -61,6 +61,7 @@ internal fun OppoAccountSheet(
     onRefresh: () -> Unit,
     onBind: () -> Unit,
     onUnbind: (OppoBinding) -> Unit,
+    providerLabel: String = "OPPO",
 ) {
     var pendingUnbind by remember { mutableStateOf<OppoBinding?>(null) }
     val page = (bindingsState as? OppoBindingsUiState.Ready)?.page
@@ -75,7 +76,7 @@ internal fun OppoAccountSheet(
         OppoBindingsUiState.Idle -> "—"
     }
     CtBottomSheet(onDismissRequest = onDismiss) {
-        CtBottomSheetHeader(title = "OPPO 账号", subtitle = subtitle)
+        CtBottomSheetHeader(title = "$providerLabel 账号", subtitle = subtitle)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -114,7 +115,7 @@ internal fun OppoAccountSheet(
                 is OppoBindingsUiState.Ready -> {
                     if (bindingsState.page.items.isEmpty()) {
                         Text(
-                            text = "暂未绑定 OPPO 账号",
+                            text = "暂未绑定 $providerLabel 账号",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 16.dp),
@@ -125,6 +126,7 @@ internal fun OppoAccountSheet(
                                 binding = binding,
                                 busy = busy,
                                 onUnbind = { pendingUnbind = binding },
+                                providerLabel = providerLabel,
                             )
                         }
                     }
@@ -139,7 +141,7 @@ internal fun OppoAccountSheet(
 
                 OppoBindingsUiState.Idle -> {
                     Text(
-                        text = "暂未绑定 OPPO 账号",
+                        text = "暂未绑定 $providerLabel 账号",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 16.dp),
@@ -170,7 +172,7 @@ internal fun OppoAccountSheet(
                     )
                     Spacer(Modifier.width(8.dp))
                 }
-                Text(if (busy) "处理中…" else "绑定 OPPO 账号")
+                Text(if (busy) "处理中…" else "绑定 $providerLabel 账号")
             }
             TextButton(
                 onClick = onDismiss,
@@ -185,10 +187,10 @@ internal fun OppoAccountSheet(
     pendingUnbind?.let { binding ->
         CtLightAlertDialog(
             onDismissRequest = { if (!busy) pendingUnbind = null },
-            title = { Text("解绑 OPPO 账号？") },
+            title = { Text("解绑 $providerLabel 账号？") },
             text = {
                 Text(
-                    text = binding.nickname.ifBlank { "该 OPPO 账号" },
+                    text = binding.nickname.ifBlank { "该 $providerLabel 账号" },
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
@@ -214,6 +216,7 @@ private fun OppoBindingRow(
     binding: OppoBinding,
     busy: Boolean,
     onUnbind: () -> Unit,
+    providerLabel: String = "OPPO",
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -229,7 +232,7 @@ private fun OppoBindingRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = binding.nickname.ifBlank { "OPPO 账号" },
+                    text = binding.nickname.ifBlank { "$providerLabel 账号" },
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -252,3 +255,4 @@ private fun OppoBindingRow(
         }
     }
 }
+

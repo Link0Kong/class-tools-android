@@ -1,0 +1,10 @@
+# vivo 推送客户端配置模板
+#
+# 复制本文件为 app/vivo.properties 后填写真实值（app/vivo.properties 已在 .gitignore）。
+# 获取位置：vivo 开放平台 → 应用服务 → 推送服务（AppID / AppKey）。
+# AppID 与 AppKey（即 Manifest 的 api_key）由 vivo 设计要求编译进 APK；
+# AppSecret 只在服务端（briefdesk/secrets/vivo-push.json），绝不能进客户端或仓库。
+#
+# 未配置（任一为空）时：客户端不初始化 SDK、不注册、不上传 token，其余功能不受影响。
+vivo.appId=
+vivo.apiKey=

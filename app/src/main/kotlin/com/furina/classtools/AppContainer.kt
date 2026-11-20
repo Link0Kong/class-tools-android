@@ -3,6 +3,10 @@ package com.furina.classtools
 import android.content.Context
 import com.furina.classtools.data.account.EcsOppoAccountApi
 import com.furina.classtools.data.account.HeytapOppoOAuthSdk
+import com.furina.classtools.data.account.HonorAccountConfig
+import com.furina.classtools.data.account.HonorAccountDeviceSupport
+import com.furina.classtools.data.account.HonorAccountManager
+import com.furina.classtools.data.account.HonorIdAuthSdk
 import com.furina.classtools.data.account.OppoAccountConfig
 import com.furina.classtools.data.account.OppoAccountDeviceSupport
 import com.furina.classtools.data.account.OppoAccountManager
@@ -56,6 +60,10 @@ import com.furina.classtools.data.push.HeytapOppoPushSdk
 import com.furina.classtools.data.push.OppoPushConfig
 import com.furina.classtools.data.push.OppoPushManager
 import com.furina.classtools.data.push.PrefsOppoPushStore
+import com.furina.classtools.data.push.PrefsVivoPushStore
+import com.furina.classtools.data.push.VivoPushConfig
+import com.furina.classtools.data.push.VivoPushManager
+import com.furina.classtools.data.push.VivoPushSdkImpl
 import com.furina.classtools.data.push.PushChannels
 import com.furina.classtools.data.vote.DefaultVoteRepository
 import com.furina.classtools.data.vote.VoteRepository
@@ -133,10 +141,12 @@ class AppContainer(context: Context) {
         // （未登录时 manager 内部跳过，等下次 onSessionChanged；重复上传由幂等门跳过）。
         if (previousSid != session?.sid) {
             runCatching { oppoPushManager.onSessionChanged() }
+            runCatching { vivoPushManager.onSessionChanged() }
             // 云空间会话绑定班级身份；切号/退出时丢弃内存会话与游标，避免串号。
             runCatching { cloudSpaceRepository.reset() }
-            // OPPO 账号绑定列表按学号区分：切号/退出时丢弃内存列表，避免显示上一个账号的绑定。
+            // 账号绑定列表按学号区分：切号/退出时丢弃内存列表，避免显示上一个账号的绑定。
             runCatching { oppoAccountManager.clearBindings() }
+            runCatching { honorAccountManager.clearBindings() }
         }
     }
 
@@ -428,6 +438,30 @@ class AppContainer(context: Context) {
         )
     }
 
+    /**
+     * vivo 推送（官方 vpush 4.1.7.0_517）：
+     * - AppID/AppKey 来自 `app/vivo.properties`（空 = 未配置 → 安全跳过）；AppSecret 只在服务端；
+     * - 不在 Application.onCreate 初始化：登录成功后 [VivoPushManager.onSessionChanged] 首次启动
+     *   （用户已同意隐私政策），注册成功 regId 上传 `push_tokens(provider='vivo')`。
+     */
+    val vivoPushManager: VivoPushManager by lazy {
+        VivoPushManager(
+            context = appContext,
+            config = VivoPushConfig.of(
+                appId = BuildConfig.VIVO_PUSH_APP_ID,
+                apiKey = BuildConfig.VIVO_PUSH_API_KEY,
+            ),
+            sdk = VivoPushSdkImpl(),
+            store = PrefsVivoPushStore(appContext),
+            uploader = ApiPushTokenUploader(apiClient),
+            scope = appScope,
+            sessionProvider = { activeSession },
+            deviceLabel = { deviceLabel() },
+            appVersion = BuildConfig.VERSION_NAME,
+            ensureNotificationChannel = { PushChannels.ensureClassNoticeChannel(appContext) },
+        )
+    }
+
     /** 上报云端 token 时展示的设备标签（只含厂商/型号，不含任何个人隐私；与网页/小程序无关）。 */
     private fun deviceLabel(): String {
         val parts = listOf(android.os.Build.MANUFACTURER, android.os.Build.MODEL)
@@ -455,6 +489,34 @@ class AppContainer(context: Context) {
             oauth = HeytapOppoOAuthSdk(),
             // 严格 ColorOS：只认 ColorOS/OPPO ROM 系统属性（用户 2026-11-17 晚要求，不再看品牌名）。
             deviceSupported = OppoAccountDeviceSupport.isSupported(hasColorOsRom = hasColorOsRom()),
+        )
+    }
+
+    /**
+     * 荣耀账号服务（荣耀账号绑定学号 ≤3 个 + 快捷登录）：
+     * - 客户端凭证来自 `app/honor.properties`（BuildConfig；空 = 未配置 → 入口隐藏）；
+     * - 客户端只把荣耀 SDK 的 authorizationCode 交给 ECS `/honor` 系列接口，**不自行验证** openId；
+     * - 仅荣耀设备展示入口（Build.MANUFACTURER=HONOR 或 SDK isHonorMachine）。
+     */
+    val honorAccountManager: HonorAccountManager by lazy {
+        val authSdk = HonorIdAuthSdk()
+        HonorAccountManager(
+            config = HonorAccountConfig.of(
+                clientId = BuildConfig.HONOR_ACCOUNT_CLIENT_ID,
+                scope = BuildConfig.HONOR_ACCOUNT_SCOPE,
+                baseUrl = BuildConfig.ACCOUNT_BASE_URL,
+            ),
+            api = EcsOppoAccountApi(
+                transport = OkHttpTransport(),
+                baseUrl = BuildConfig.ACCOUNT_BASE_URL,
+                pathPrefix = "/honor",
+                providerLabel = "荣耀",
+            ),
+            auth = authSdk,
+            deviceSupported = HonorAccountDeviceSupport.isSupported(
+                manufacturer = android.os.Build.MANUFACTURER,
+                sdkSaysHonorMachine = runCatching { authSdk.isHonorMachine() }.getOrDefault(false),
+            ),
         )
     }
 
@@ -498,6 +560,7 @@ class AppContainer(context: Context) {
     /** 退出登录：清内存会话、名单缓存（本机业务数据按账号隔离，下次登录同账号仍可用）。 */
     suspend fun signOut() {
         runCatching { oppoAccountManager.clearBindings() }
+        runCatching { honorAccountManager.clearBindings() }
         activeSession = null
         sessionStore.clear()
         classMembersRepository.clear()
@@ -520,3 +583,4 @@ class AppContainer(context: Context) {
         userDataRepository.pull(force = false)
     }
 }
+

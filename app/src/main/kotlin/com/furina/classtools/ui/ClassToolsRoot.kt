@@ -1,6 +1,8 @@
 package com.furina.classtools.ui
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +62,9 @@ fun ClassToolsRoot(
     // OPPO 账号快捷登录状态（身份页；成功后的会话流程与学号+姓名核验完全一致）。
     var oppoLoginInProgress by remember { mutableStateOf(false) }
     var oppoLoginError by remember { mutableStateOf<String?>(null) }
+    // 荣耀账号快捷登录（SDK 是 startActivityForResult 模式，需要 ActivityResultLauncher）。
+    var honorLoginInProgress by remember { mutableStateOf(false) }
+    var honorLoginError by remember { mutableStateOf<String?>(null) }
     val activity = remember(context) { context.findActivity() }
 
     fun completeLogin(session: Session) {
@@ -67,6 +72,26 @@ fun ClassToolsRoot(
         scope.launch {
             container.sessionStore.save(session)
             runCatching { container.classMembersRepository.load(force = true) }
+        }
+    }
+
+    val honorLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (honorLoginInProgress) {
+            scope.launch {
+                val loginResult = runCatching {
+                    container.honorAccountManager.login(result.resultCode, result.data)
+                }.getOrElse {
+                    OppoSessionLoginResult.Failure("unexpected", "荣耀登录失败，请重试")
+                }
+                honorLoginInProgress = false
+                when (loginResult) {
+                    is OppoSessionLoginResult.Success -> completeLogin(loginResult.session)
+                    is OppoSessionLoginResult.Unbound -> honorLoginError = loginResult.message
+                    is OppoSessionLoginResult.Failure -> honorLoginError = loginResult.message
+                }
+            }
         }
     }
 
@@ -129,6 +154,29 @@ fun ClassToolsRoot(
                     }
                 },
                 onDismissOppoError = { oppoLoginError = null },
+                // 荣耀账号快捷登录：仅已配置 + 荣耀设备时展示。
+                honorQuickLoginAvailable = container.honorAccountManager.quickLoginAvailable,
+                honorLoginInProgress = honorLoginInProgress,
+                honorLoginError = honorLoginError,
+                onHonorQuickLogin = {
+                    val host = activity
+                    if (host == null) {
+                        honorLoginError = "当前环境不支持荣耀快捷登录"
+                    } else if (!honorLoginInProgress) {
+                        honorLoginError = null
+                        val intent = container.honorAccountManager.signInIntent(host)
+                        if (intent == null) {
+                            honorLoginError = "无法拉起荣耀账号授权，请确认已登录荣耀账号后重试"
+                        } else {
+                            honorLoginInProgress = true
+                            runCatching { honorLauncher.launch(intent) }.onFailure {
+                                honorLoginInProgress = false
+                                honorLoginError = "无法拉起荣耀账号授权，请重试"
+                            }
+                        }
+                    }
+                },
+                onDismissHonorError = { honorLoginError = null },
             )
 
             is SessionState.SignedIn -> {

@@ -1133,6 +1133,78 @@ private fun RootTabs(
         }
     }
 
+    // ---- 荣耀账号（与 OPPO 同一套绑定/登录契约，路径 /honor/*；授权走 Activity 结果） ----
+    val honorAccountManager = container.honorAccountManager
+    val honorBindingsState by honorAccountManager.bindingsState.collectAsStateWithLifecycle()
+    var showHonorAccountSheet by remember { mutableStateOf(false) }
+    var honorAccountBusy by remember { mutableStateOf(false) }
+    val honorAccountLabel = when (val state = honorBindingsState) {
+        is OppoBindingsUiState.Ready -> OppoAccountText.bindingsLabel(state.page.count, state.page.max)
+        is OppoBindingsUiState.Loading, is OppoBindingsUiState.Error -> "读取中…"
+        OppoBindingsUiState.Idle -> ""
+    }
+
+    fun refreshHonorBindings() {
+        if (!honorAccountManager.bindingsAvailable || session.token.isBlank()) return
+        scope.launch { runCatching { honorAccountManager.refreshBindings(session.token) } }
+    }
+
+    LaunchedEffect(pagerState.currentPage, showHonorAccountSheet) {
+        if (pagerState.currentPage == 2 || showHonorAccountSheet) refreshHonorBindings()
+    }
+
+    val honorBindLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (!honorAccountBusy) return@rememberLauncherForActivityResult
+        scope.launch {
+            val bindResult = runCatching {
+                honorAccountManager.bind(result.resultCode, result.data, session.token)
+            }.getOrElse { OppoBindResult.Failure("unexpected", "绑定失败，请重试") }
+            honorAccountBusy = false
+            val message = when (bindResult) {
+                is OppoBindResult.Success -> "已绑定荣耀账号"
+                is OppoBindResult.Limit -> bindResult.message
+                is OppoBindResult.BoundElsewhere -> "该荣耀账号已绑定其他学号"
+                is OppoBindResult.Failure -> bindResult.message
+            }
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun bindHonorAccount() {
+        val host = activity ?: run {
+            android.widget.Toast.makeText(context, "当前环境不支持荣耀账号授权", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (honorAccountBusy) return
+        val intent = honorAccountManager.signInIntent(host)
+        if (intent == null) {
+            android.widget.Toast.makeText(context, "无法拉起荣耀账号授权", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        honorAccountBusy = true
+        runCatching { honorBindLauncher.launch(intent) }.onFailure {
+            honorAccountBusy = false
+            android.widget.Toast.makeText(context, "无法拉起荣耀账号授权", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun unbindHonorAccount(bindingId: Long) {
+        if (honorAccountBusy) return
+        honorAccountBusy = true
+        scope.launch {
+            val result = runCatching { honorAccountManager.unbind(session.token, bindingId) }
+                .getOrElse { OppoUnbindResult.Failure("unexpected", "解绑失败，请重试") }
+            honorAccountBusy = false
+            val message = when (result) {
+                is OppoUnbindResult.Success -> "已解绑"
+                is OppoUnbindResult.Failure -> result.message
+            }
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val showNotificationPermissionBanner = !notificationGranted && reminderSettings.enabled
     // 沉浸光感是否启用（dock 的玻璃实现二选一：CtLight 材质 or 旧 Haze）。
     val ctLightEnabled = com.furina.classtools.ui.theme.LocalCtLight.current.enabled
@@ -1188,6 +1260,9 @@ private fun RootTabs(
                         oppoAccountAvailable = oppoAccountManager.bindingsAvailable,
                         oppoAccountLabel = oppoAccountLabel,
                         onOpenOppoAccount = { showOppoAccountSheet = true },
+                        honorAccountAvailable = honorAccountManager.bindingsAvailable,
+                        honorAccountLabel = honorAccountLabel,
+                        onOpenHonorAccount = { showHonorAccountSheet = true },
                         onOpenFeedback = onOpenFeedback,
                         onOpenGuide = onOpenGuide,
                         dynamicColorEnabled = dynamicColorEnabled,
@@ -1197,7 +1272,7 @@ private fun RootTabs(
             }
         }
 
-        // OPPO 账号绑定管理弹层（列表/绑定/解绑；入口在「我的 → 账号」）。
+        // 厂商账号绑定管理弹层（列表/绑定/解绑；入口在「我的 → 账号」）。
         if (showOppoAccountSheet) {
             OppoAccountSheet(
                 bindingsState = oppoBindingsState,
@@ -1208,6 +1283,19 @@ private fun RootTabs(
                 onRefresh = { refreshOppoBindings() },
                 onBind = { bindOppoAccount() },
                 onUnbind = { binding -> unbindOppoAccount(binding.id) },
+            )
+        }
+        if (showHonorAccountSheet) {
+            OppoAccountSheet(
+                bindingsState = honorBindingsState,
+                busy = honorAccountBusy,
+                maxBindings = (honorBindingsState as? OppoBindingsUiState.Ready)?.page?.max
+                    ?: OppoAccountText.DEFAULT_MAX_BINDINGS,
+                onDismiss = { if (!honorAccountBusy) showHonorAccountSheet = false },
+                onRefresh = { refreshHonorBindings() },
+                onBind = { bindHonorAccount() },
+                onUnbind = { binding -> unbindHonorAccount(binding.id) },
+                providerLabel = "荣耀",
             )
         }
 

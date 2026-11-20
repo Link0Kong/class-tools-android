@@ -53,3 +53,22 @@
 -keep class com.platform.usercenter.** { *; }
 -dontwarn com.platform.**
 -dontwarn com.heytap.accountsdk.**
+
+# -----------------------------------------------------------------------------
+# HONOR ID SDK（honorid-opensdk 8.0.1.351）
+# - 通过 AIDL/IPC 与 com.hihonor.id 交互，内部有反射与 Parcelable；
+# - 运行时类名不能混淆（否则 parseAuthResultFromIntent / 账号服务绑定失败）。
+# -----------------------------------------------------------------------------
+-keep class com.hihonor.cloudservice.** { *; }
+-keep class com.hihonor.honorid.** { *; }
+-keep class com.hihonor.cloudservice.framework.aidl.** { *; }
+-dontwarn com.hihonor.**
+
+# -----------------------------------------------------------------------------
+# vivo 推送（vpush_clientSDK 4.1.7.0_517）
+# - Manifest 声明自定义 Receiver，SDK 按类名回调；内部 AIDL/反射需要整包保留。
+# -----------------------------------------------------------------------------
+-keep class com.vivo.push.** { *; }
+-keep class com.vivo.vms.** { *; }
+-keep class com.furina.classtools.data.push.VivoPushReceiver { *; }
+-dontwarn com.vivo.**

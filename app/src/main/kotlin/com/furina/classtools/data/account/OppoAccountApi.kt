@@ -57,11 +57,19 @@ internal sealed interface OppoHttpOutcome {
     data class Failure(val code: String, val message: String) : OppoHttpOutcome
 }
 
+/**
+ * ECS 账号接口客户端（OPPO `/oppo` 与荣耀 `/honor` 共用同一契约，仅路径与文案前缀不同）。
+ *
+ * @param pathPrefix 服务端路径前缀（`/oppo` 或 `/honor`）
+ * @param providerLabel 展示用厂商名（OPPO / 荣耀）
+ */
 class EcsOppoAccountApi(
     private val transport: HttpTransport,
     baseUrl: String = OppoAccountConfig.DEFAULT_BASE_URL,
     private val requestTimeoutMs: Long = DEFAULT_TIMEOUT_MS,
     private val json: Json = NetJson,
+    private val pathPrefix: String = "/oppo",
+    private val providerLabel: String = "OPPO",
 ) : OppoAccountApi {
 
     /** 规范化根地址（结尾无 `/`）。 */
@@ -69,9 +77,9 @@ class EcsOppoAccountApi(
 
     override suspend fun login(authCode: String): OppoLoginResult {
         val code = OppoAuthCode.normalize(authCode)
-            ?: return OppoLoginResult.Failure(OppoAccountErrorCode.PARSE, "OPPO 授权码无效，请重试")
+            ?: return OppoLoginResult.Failure(OppoAccountErrorCode.PARSE, "$providerLabel 授权码无效，请重试")
         val body = buildJsonObject { put("code", JsonPrimitive(code)) }.toString()
-        return when (val outcome = call(HttpMethod.POST, "/oppo/login", body, classToken = null)) {
+        return when (val outcome = call(HttpMethod.POST, "$pathPrefix/login", body, classToken = null)) {
             is OppoHttpOutcome.Failure -> OppoLoginResult.Failure(outcome.code, outcome.message)
             is OppoHttpOutcome.Body -> {
                 if (outcome.status !in 200..299) {
@@ -87,9 +95,9 @@ class EcsOppoAccountApi(
 
     override suspend fun bind(authCode: String, classToken: String): OppoBindResult {
         val code = OppoAuthCode.normalize(authCode)
-            ?: return OppoBindResult.Failure(OppoAccountErrorCode.PARSE, "OPPO 授权码无效，请重试")
+            ?: return OppoBindResult.Failure(OppoAccountErrorCode.PARSE, "$providerLabel 授权码无效，请重试")
         val body = buildJsonObject { put("code", JsonPrimitive(code)) }.toString()
-        return when (val outcome = call(HttpMethod.POST, "/oppo/bind", body, classToken)) {
+        return when (val outcome = call(HttpMethod.POST, "$pathPrefix/bind", body, classToken)) {
             is OppoHttpOutcome.Failure -> OppoBindResult.Failure(outcome.code, outcome.message)
             is OppoHttpOutcome.Body -> {
                 if (outcome.status !in 200..299) {
@@ -102,7 +110,7 @@ class EcsOppoAccountApi(
     }
 
     override suspend fun bindings(classToken: String): OppoBindingsResult {
-        return when (val outcome = call(HttpMethod.GET, "/oppo/bindings", body = null, classToken)) {
+        return when (val outcome = call(HttpMethod.GET, "$pathPrefix/bindings", body = null, classToken)) {
             is OppoHttpOutcome.Failure -> OppoBindingsResult.Failure(outcome.code, outcome.message)
             is OppoHttpOutcome.Body -> {
                 if (outcome.status !in 200..299) {
@@ -121,7 +129,7 @@ class EcsOppoAccountApi(
             return OppoUnbindResult.Failure(OppoAccountErrorCode.PARSE, "绑定记录无效，请刷新后重试")
         }
         val body = buildJsonObject { put("id", JsonPrimitive(bindingId)) }.toString()
-        return when (val outcome = call(HttpMethod.POST, "/oppo/unbind", body, classToken)) {
+        return when (val outcome = call(HttpMethod.POST, "$pathPrefix/unbind", body, classToken)) {
             is OppoHttpOutcome.Failure -> OppoUnbindResult.Failure(outcome.code, outcome.message)
             is OppoHttpOutcome.Body -> {
                 if (outcome.status !in 200..299) {
@@ -155,7 +163,7 @@ class EcsOppoAccountApi(
         body: String?,
         classToken: String?,
     ): OppoHttpOutcome {
-        val requiresToken = path != "/oppo/login" && path != "/__health"
+        val requiresToken = path != "$pathPrefix/login" && path != "/__health"
         val token = classToken?.trim().orEmpty()
         if (requiresToken && token.isEmpty()) {
             return OppoHttpOutcome.Failure(OppoAccountErrorCode.UNAUTHORIZED, "登录已失效，请重新验证")
@@ -196,7 +204,7 @@ class EcsOppoAccountApi(
         val message = when {
             // 服务端换 openid 失败（账号服务未开通/凭证不匹配）：给出可诊断提示（含 invalid_client 等原文）。
             serverCode == OppoAccountErrorCode.EXCHANGE_FAILED ->
-                OppoAccountText.exchangeFailedMessage(serverMessage)
+                OppoAccountText.exchangeFailedMessage(serverMessage, providerLabel)
 
             serverMessage.isNotBlank() -> serverMessage
             outcome.status in 500..599 -> "服务暂时不可用，请稍后重试"
@@ -217,17 +225,17 @@ class EcsOppoAccountApi(
             .ifBlank { obj["reason"].asStringOrNull().orEmpty().trim() }
         if (okFlag == false) {
             if (errorCode == OppoAccountErrorCode.UNBOUND) {
-                return OppoLoginResult.Unbound(message.ifBlank { OppoAccountText.UNBOUND_FALLBACK })
+                return OppoLoginResult.Unbound(message.ifBlank { OppoAccountText.unboundFallback(providerLabel) })
             }
             if (errorCode == OppoAccountErrorCode.EXCHANGE_FAILED) {
                 return OppoLoginResult.Failure(
                     code = errorCode,
-                    message = OppoAccountText.exchangeFailedMessage(message),
+                    message = OppoAccountText.exchangeFailedMessage(message, providerLabel),
                 )
             }
             return OppoLoginResult.Failure(
                 code = errorCode.ifBlank { "login_failed" },
-                message = message.ifBlank { "OPPO 登录失败，请稍后重试" },
+                message = message.ifBlank { "$providerLabel 登录失败，请稍后重试" },
             )
         }
         // 兼容 ok 字段缺失：只要拿到 token 即视为成功。
@@ -258,16 +266,16 @@ class EcsOppoAccountApi(
         if (okFlag == false) {
             return when (errorCode) {
                 OppoAccountErrorCode.LIMIT -> OppoBindResult.Limit(
-                    message.ifBlank { "一个学号最多绑定 3 个 OPPO 账号" },
+                    message.ifBlank { "一个学号最多绑定 3 个 $providerLabel 账号" },
                 )
 
                 OppoAccountErrorCode.BOUND_ELSEWHERE -> OppoBindResult.BoundElsewhere(
-                    message.ifBlank { "该 OPPO 账号已绑定其他学号" },
+                    message.ifBlank { "该 $providerLabel 账号已绑定其他学号" },
                 )
 
                 OppoAccountErrorCode.EXCHANGE_FAILED -> OppoBindResult.Failure(
                     code = errorCode,
-                    message = OppoAccountText.exchangeFailedMessage(message),
+                    message = OppoAccountText.exchangeFailedMessage(message, providerLabel),
                 )
 
                 else -> OppoBindResult.Failure(
@@ -356,3 +364,6 @@ object OppoAuthCode {
         return text
     }
 }
+
+
+
