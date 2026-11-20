@@ -141,9 +141,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 97
-    // 测试版本 13：1.0.0-beta13（沉浸光感 v2：全局光场 + 玻璃材质引擎 + 按钮/图标/加载动画重做）。
-        versionName = "1.0.0-beta14"
+        versionCode = 98
+    // 测试版本 15：1.0.0-beta15（访问统计可视化：访问次数/设备/版本/登录端 + 账号明细）。
+        versionName = "1.0.0-beta15"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。

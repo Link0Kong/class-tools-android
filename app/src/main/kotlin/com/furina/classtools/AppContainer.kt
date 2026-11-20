@@ -62,6 +62,7 @@ import com.furina.classtools.data.vote.VoteRepository
 import com.furina.classtools.data.visits.VisitDeviceId
 import com.furina.classtools.data.visits.VisitReporter
 import com.furina.classtools.data.visits.VisitsRepository
+import com.furina.classtools.data.visits.androidDeviceLabel
 import com.furina.classtools.data.permission.AndroidPermissionController
 import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.privacy.CallbackLocalCleaner
@@ -228,8 +229,9 @@ class AppContainer(context: Context) {
     private val visitDeviceId: VisitDeviceId by lazy { VisitDeviceId.from(appContext) }
 
     /**
-     * 访问上报（契约 `web/统计多端_最新登录_契约_20261118.md` §3 安卓）：
+     * 访问上报（契约 `web/统计多端_详细统计_契约_20261120.md` §1/§5 安卓）：
      * `POST visits` 一行（`client=android`、`id=<sid>|<slot>|android`、小时去重），
+     * 并随行写 `ver=BuildConfig.VERSION_NAME`、`dev=<品牌 机型 · Android 版本>`（截断 48）。
      * 由 [updateActiveSession] 在会话恢复/登录成功后 best-effort 触发；失败静默。
      */
     val visitReporter: VisitReporter by lazy {
@@ -238,6 +240,8 @@ class AppContainer(context: Context) {
             currentSession = { activeSession },
             deviceIdProvider = { visitDeviceId.get() },
             clock = { System.currentTimeMillis() },
+            versionProvider = { BuildConfig.VERSION_NAME },
+            deviceLabelProvider = { androidDeviceLabel() },
         )
     }
 

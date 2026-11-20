@@ -1,5 +1,14 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-20 · 1.0.0-beta15 / vc98：访问统计可视化（次数/设备/版本/登录端 + 账号明细）
+
+- **需求**：用户要求「重构各端统计模块，可视化、简洁直观展示不同账号的访问次数、访问设备、使用版本等信息，更详细」。
+- **契约**：`web/统计多端_详细统计_契约_20261120.md`（在 2026-11-18 契约上新增 `visits.ver/dev` 两列与统一可视化页面）。
+- **数据**：`VisitRow` 增 `ver/dev/did`；`VisitReporter` 写 `BuildConfig.VERSION_NAME` 与 `品牌 机型 · Android 版本`（≤32/≤48，失败写空串不阻断）；`VisitsRepository` 查询/解析 `select=slot,sid,name,ts,client,ver,dev,did`。
+- **统计页**（`ui/screens/stats/StatsScreen.kt`）：摘要 4 格（账号/次数/今日活跃/设备）、今天 24 小时 / 近 7 天趋势柱、登录端堆叠条+图例、版本/设备分布（≤6+其他）、账号明细可展开（登录端/版本/设备明细），默认今天、排序/过滤/分钟时间/旧行「未记录」沿用契约；不显示学号/did；非管理员不发请求。
+- **测试**：访问统计相关 51 用例全绿（`VisitStatsTest` 30 / `VisitReporterTest` 17 / `VisitsRepositoryTest` 4）；全量 `:app:testDebugUnitTest` 1762 用例 / 0 失败（2 skipped）。
+- **发布**：`assembleRelease` 自动上传 beta15（vc98）到 ECS+OSS（APK 大小与 sha256 发布后回填）。
+
 ## 2026-11-19 18:0x · 1.0.0-beta10 / vc93：宿舍人数 1–6 自选
 
 - **需求**：用户要求「优化宿舍人数为 6 人以下自选」。原 `PERSONS_OPTIONS=[4,6]`、`WaterNormalizer` 与 `PowerStats.billOf` 把非 4/6 一律回落 4，23A/23B 固定四人间。

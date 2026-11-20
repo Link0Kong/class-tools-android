@@ -6,6 +6,7 @@ import com.furina.classtools.data.network.NetJson
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.visits.VisitDeviceId
 import com.furina.classtools.data.visits.VisitReporter
+import com.furina.classtools.data.visits.androidDeviceLabel
 import java.io.IOException
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -20,9 +21,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 安卓访问上报单测（契约 `web/统计多端_最新登录_契约_20261118.md` §1/§3）：
+ * 安卓访问上报单测（契约 `web/统计多端_详细统计_契约_20261120.md` §1/§5）：
  * 全部走 [FakeTransport]（不发真实网络、不用真实账号/token），固定 clock + 固定时区 +
- * 内存 deviceId，断言 POST 路径/请求头/请求体、小时去重、无会话不上报、失败静默。
+ * 内存 deviceId + 注入版本/设备 provider，断言 POST 路径/请求头/请求体（含 ver/dev）、
+ * 小时去重、无会话不上报、失败静默、版本/设备标签归一化。
  */
 class VisitReporterTest {
 
@@ -35,6 +37,8 @@ class VisitReporterTest {
     private val did: String = "0123456789abcdef"
     private val sid: String = "3260799999" // 官方测试身份（公开），不涉及真实账号
     private val name: String = "测试账号"
+    private val version: String = "1.0.0-beta14"
+    private val deviceLabel: String = "Xiaomi 23127PN0CC · Android 15"
 
     private val session = Session(
         sid = sid,
@@ -48,12 +52,16 @@ class VisitReporterTest {
         currentSession: () -> Session? = { session },
         clock: () -> Long = { fixedNow },
         deviceId: () -> String = { did },
+        version: () -> String = { this.version },
+        deviceLabel: () -> String = { this.deviceLabel },
     ): VisitReporter = VisitReporter(
         api = testApiClient(transport),
         currentSession = currentSession,
         deviceIdProvider = deviceId,
         clock = clock,
         zoneId = zone,
+        versionProvider = version,
+        deviceLabelProvider = deviceLabel,
     )
 
     private fun rowOf(transport: FakeTransport): JsonObject {
@@ -85,6 +93,8 @@ class VisitReporterTest {
         assertEquals(name, row["name"]!!.jsonPrimitive.content)
         assertEquals(did, row["did"]!!.jsonPrimitive.content)
         assertEquals("android", row["client"]!!.jsonPrimitive.content)
+        assertEquals(version, row["ver"]!!.jsonPrimitive.content)
+        assertEquals(deviceLabel, row["dev"]!!.jsonPrimitive.content)
         assertEquals(fixedNow, row["ts"]!!.jsonPrimitive.long)
     }
 
@@ -176,6 +186,82 @@ class VisitReporterTest {
             ApiResponse(400, """{"code":"PGRST204","message":"column client does not exist"}""")
         }
         assertFalse(reporter(transport).reportOnce())
+    }
+
+    // ------------------------------------------------------------ ver/dev 注入与归一化
+
+    @Test
+    fun reportOnce_normalizesInjectedVersionAndDevice() = runTest {
+        val transport = FakeTransport { ApiResponse(201, "") }
+        val reporter = reporter(
+            transport,
+            version = { " v2.0.0 " },
+            deviceLabel = { "  Xiaomi   14 ·\tAndroid 15 " },
+        )
+
+        assertTrue(reporter.reportOnce())
+
+        val row = rowOf(transport)
+        assertEquals("2.0.0", row["ver"]!!.jsonPrimitive.content)
+        assertEquals("Xiaomi 14 · Android 15", row["dev"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun reportOnce_failingOrBlankProvidersStillPostEmptyFields() = runTest {
+        val transport = FakeTransport { ApiResponse(201, "") }
+        val reporter = reporter(
+            transport,
+            version = { throw IllegalStateException("no version") },
+            deviceLabel = { "   " },
+        )
+
+        assertTrue("新字段失败不阻断上报", reporter.reportOnce())
+
+        val row = rowOf(transport)
+        assertTrue(row.containsKey("ver"))
+        assertTrue(row.containsKey("dev"))
+        assertEquals("", row["ver"]!!.jsonPrimitive.content)
+        assertEquals("", row["dev"]!!.jsonPrimitive.content)
+        assertEquals(1, transport.requests.size)
+    }
+
+    @Test
+    fun normalizeVersion_removesWhitespaceAndVPrefixAndTruncates() {
+        assertEquals("1.0.0-beta14", VisitReporter.normalizeVersion("  v 1.0.0-beta14  "))
+        assertEquals("2.0.0", VisitReporter.normalizeVersion("V2.0.0"))
+        assertEquals("", VisitReporter.normalizeVersion(""))
+        assertEquals("", VisitReporter.normalizeVersion(null))
+        assertEquals(
+            VisitReporter.MAX_VERSION_LENGTH,
+            VisitReporter.normalizeVersion("9".repeat(64)).length,
+        )
+    }
+
+    @Test
+    fun normalizeDeviceLabel_collapsesWhitespaceAndTruncates() {
+        assertEquals(
+            "Xiaomi 14 · Android 15",
+            VisitReporter.normalizeDeviceLabel("  Xiaomi   14 ·\tAndroid 15 "),
+        )
+        assertEquals("", VisitReporter.normalizeDeviceLabel(null))
+        assertEquals(
+            VisitReporter.MAX_DEVICE_LENGTH,
+            VisitReporter.normalizeDeviceLabel("x".repeat(80)).length,
+        )
+    }
+
+    @Test
+    fun androidDeviceLabel_dedupesBrandAndIncludesAndroidVersion() {
+        assertEquals("Xiaomi 14 · Android 15", androidDeviceLabel("Xiaomi", "Xiaomi 14", "15"))
+        assertEquals("samsung SM-S9110 · Android 14", androidDeviceLabel("samsung", "SM-S9110", "14"))
+        assertEquals("Xiaomi 23127PN0CC · Android", androidDeviceLabel("Xiaomi", "23127PN0CC", null))
+        assertEquals("Android", androidDeviceLabel(null, null, null))
+        assertTrue(androidDeviceLabel("Xiaomi", "X".repeat(80), "15").length <= 48)
+        assertEquals(
+            "unknown 品牌被忽略",
+            "Pixel 9 · Android 16",
+            androidDeviceLabel("unknown", "Pixel 9", "16"),
+        )
     }
 
     // ------------------------------------------------------------ did 持久化

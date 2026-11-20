@@ -15,22 +15,29 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * 安卓访问上报（唯一口径：`web/统计多端_最新登录_契约_20261118.md` §1/§3 安卓）：
+ * 安卓访问上报（唯一口径：`web/统计多端_详细统计_契约_20261120.md` §1/§5 安卓）：
  *
  * ```
  * POST {REST}visits
  * Prefer: resolution=ignore-duplicates,return=minimal
  * [{"id":"<sid>|<slot>|android","slot":"YYYY-MM-DD-HH","sid":"<sid>","name":"<姓名>",
- *   "did":"<16 位小写十六进制>","client":"android","ts":<epoch 毫秒>}]
+ *   "did":"<16 位小写十六进制>","client":"android",
+ *   "ver":"<版本短标签 ≤32>","dev":"<设备短标签 ≤48>","ts":<epoch 毫秒>}]
  * ```
  *
  * - `client` 固定 `android`；`id` 含端代码，避免同一小时换端被主键/去重吞掉；
+ * - `ver` 取 [versionProvider]（默认 `BuildConfig.VERSION_NAME`），去空白/去 `v` 前缀、截断 32；
+ * - `dev` 取 [deviceLabelProvider]（默认 [androidDeviceLabel]），去重品牌、合并空白、截断 48；
+ *   两个 provider 失败或为空时写空串（列有默认值），**不阻断上报**；
  * - 同一进程内同一 `sid` + `slot` 成功上报后不再重复（进程重启后由服务端主键 +
  *   `resolution=ignore-duplicates` 兜底）；失败不记 slot，下次会话变化/重启可重试；
  * - 失败静默返回 `false`，不抛异常、不影响登录与首屏；
  * - **不请求 representation**（历史 401 教训：returning 要求新行同时可 SELECT）。
  *
  * 线程安全：实例由 AppContainer 单例持有，[reportOnce] 可在任意线程并发调用。
+ *
+ * @param versionProvider 版本短标签来源（测试注入固定值；默认应用版本名）
+ * @param deviceLabelProvider 设备短标签来源（测试注入固定值；默认 [androidDeviceLabel]）
  */
 class VisitReporter(
     private val api: ApiClient,
@@ -38,6 +45,8 @@ class VisitReporter(
     private val deviceIdProvider: () -> String,
     private val clock: () -> Long = { System.currentTimeMillis() },
     private val zoneId: ZoneId = ZoneId.systemDefault(),
+    private val versionProvider: () -> String = { com.furina.classtools.BuildConfig.VERSION_NAME },
+    private val deviceLabelProvider: () -> String = { androidDeviceLabel() },
 ) {
     private val lock = Any()
 
@@ -68,6 +77,10 @@ class VisitReporter(
             return false
         }
 
+        // 版本/设备只是附加信息：provider 抛异常或为空都写空串（列有默认值），不阻断上报。
+        val ver = normalizeVersion(safeProvider(versionProvider))
+        val dev = normalizeDeviceLabel(safeProvider(deviceLabelProvider))
+
         val body = buildJsonArray {
             add(
                 buildJsonObject {
@@ -77,6 +90,8 @@ class VisitReporter(
                     put("name", name)
                     put("did", did)
                     put("client", CLIENT)
+                    put("ver", ver)
+                    put("dev", dev)
                     put("ts", now)
                 },
             )
@@ -111,6 +126,14 @@ class VisitReporter(
         /** 幂等去重 + 不返回行；写 visits 不能要求 representation。 */
         const val PREFER: String = "resolution=ignore-duplicates,return=minimal"
 
+        /** 契约 §1：ver ≤ 32 字符。 */
+        const val MAX_VERSION_LENGTH: Int = 32
+
+        /** 契约 §1：dev ≤ 48 字符。 */
+        const val MAX_DEVICE_LENGTH: Int = 48
+
+        private val WHITESPACE: Regex = Regex("\\s+")
+
         private val SLOT_FORMAT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("yyyy-MM-dd-HH", Locale.ROOT)
 
@@ -121,7 +144,61 @@ class VisitReporter(
         /** did 契约：16 位小写十六进制（8~64 hex 内，安卓固定 16 位）。 */
         fun isValidDeviceId(value: String): Boolean =
             value.length == 16 && value.all { it in '0'..'9' || it in 'a'..'f' }
+
+        /**
+         * 版本短标签（契约 §5）：去空白、去 `v`/`V` 前缀、截断 32。
+         *
+         * 例：`" v1.0.0-beta14 "` → `1.0.0-beta14`。
+         */
+        fun normalizeVersion(raw: String?): String = raw.orEmpty()
+            .filterNot { it.isWhitespace() }
+            .removePrefix("v")
+            .removePrefix("V")
+            .take(MAX_VERSION_LENGTH)
+
+        /**
+         * 设备短标签（契约 §5）：去首尾空白、连续空白合并为一个空格、截断 48。
+         *
+         * 例：`" Xiaomi   14 ·\tAndroid 15 "` → `Xiaomi 14 · Android 15`。
+         */
+        fun normalizeDeviceLabel(raw: String?): String = raw.orEmpty()
+            .trim()
+            .replace(WHITESPACE, " ")
+            .take(MAX_DEVICE_LENGTH)
     }
+}
+
+/** provider 抛异常时退回空串（新字段失败不阻断上报）。 */
+private fun safeProvider(provider: () -> String): String =
+    runCatching { provider() }.getOrDefault("")
+
+/**
+ * 安卓设备短标签（契约 §5 安卓行）：`<品牌> <机型> · Android <版本>`，截断 48。
+ *
+ * - 只读 `Build.MANUFACTURER/MODEL/VERSION.RELEASE`，**不含**任何账号/设备标识；
+ * - 型号已以品牌开头时不再重复品牌（如 `Xiaomi` + `Xiaomi 14` → `Xiaomi 14`）；
+ * - 参数可注入：纯 JVM 单测不触碰 `android.os.Build`（默认值才读 Build）。
+ */
+fun androidDeviceLabel(
+    manufacturer: String? = runCatching { android.os.Build.MANUFACTURER }.getOrNull(),
+    model: String? = runCatching { android.os.Build.MODEL }.getOrNull(),
+    release: String? = runCatching { android.os.Build.VERSION.RELEASE }.getOrNull(),
+): String {
+    fun clean(value: String?): String =
+        value?.trim().orEmpty().takeUnless { it.equals("unknown", ignoreCase = true) }.orEmpty()
+
+    val brand = clean(manufacturer)
+    val modelName = clean(model)
+    val device = when {
+        modelName.isEmpty() -> brand
+        brand.isEmpty() -> modelName
+        modelName.startsWith(brand, ignoreCase = true) -> modelName
+        else -> "$brand $modelName"
+    }
+    val system = clean(release).let { version -> if (version.isEmpty()) "Android" else "Android $version" }
+    return VisitReporter.normalizeDeviceLabel(
+        listOf(device, system).filter { it.isNotBlank() }.joinToString(" · "),
+    )
 }
 
 /**
