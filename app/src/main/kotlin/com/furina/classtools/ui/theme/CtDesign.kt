@@ -60,7 +60,7 @@ object CtPalette {
      * 大量工具页卡片）因此自动获得透光感 —— 光场颜色从卡片下透出来，不再是一块死白板。
      * 不透明度 0.60：实测在最强光斑上正文对比度仍 > 9:1（AA 双倍余量）。
      */
-    val ContainerLow = Color(0xFFFFFFFF)
+    val ContainerLow = Color(0xE0FFFFFF)
     val Container = Color(0xFFF4F6F6)
     val ContainerHigh = Color(0xFFEDF0F1)
     val ContainerHighest = Color(0xFFE6EAEC)

@@ -1211,14 +1211,9 @@ private fun RootTabs(
             )
         }
 
-        // 底部安全区背景：与页面底色一致，避免部分 ROM（ColorOS 等）在导航栏区域留下黑色系统条。
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .windowInsetsBottomHeight(WindowInsets.navigationBars)
-                .background(MaterialTheme.colorScheme.background),
-        )
+        // 底部安全区：2026-11-20 起**不再画不透明底色** —— App 根已把光场铺到屏幕最底端，
+        // 这一条灰底会把光场横向切断（用户反馈「只有工作台背景是全屏的」）。
+        // 系统导航栏本身是透明 + 无对比度蒙层（MainActivity 已设置），无需再垫底色。
 
         // 沉浸光感「底部渐变颜色蒙层」（官方：底部悬浮 = THIN + 渐变颜色蒙层延展底部）：
         // 页面内容滚动到底部时被柔和吞没，浮岛 dock 之外不再有硬边内容压边。

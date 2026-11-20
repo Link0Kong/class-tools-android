@@ -75,7 +75,14 @@ fun ExpressiveBackground(
         if (baseColorOverride != null) {
             Box(modifier = Modifier.fillMaxSize().background(baseColorOverride))
         } else {
-            val image = imageState?.value?.let { remember(it) { it.asComposeImageBitmap() } }
+            // 只有「当前确实在用自定义图片」时才把位图交给背景层；
+            // 否则切回预设后 bitmap 流仍持有旧照片，预设背景看起来"失效"（用户反馈的根因）。
+            val rawBitmap = imageState?.value
+            val image = if (selection.hasImage && rawBitmap != null) {
+                remember(rawBitmap) { rawBitmap.asComposeImageBitmap() }
+            } else {
+                null
+            }
             CtBackgroundLayer(
                 modifier = Modifier.fillMaxSize(),
                 selection = selection,

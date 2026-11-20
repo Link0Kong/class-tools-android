@@ -1,6 +1,7 @@
 package com.furina.classtools.ui.navigation
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -147,8 +148,10 @@ fun ToolTransitionOverlay(
         // 进入：最后 35% 淡出露出目标页；退出：全程不透明（底层是干净的根页）。
         val fade = when {
             reverse -> 1f
-            p <= 0.65f -> 1f
-            else -> (1f - (p - 0.65f) / 0.35f).coerceIn(0f, 1f)
+            // 提前到 45% 开始淡出、85% 完成交接：覆盖层只做「形体引导」，不长时间压住目标页，
+            // 避免整屏色块在交接瞬间形成「闪一下」的观感（用户反馈的打开工具闪烁）。
+            p <= 0.45f -> 1f
+            else -> (1f - (p - 0.45f) / 0.40f).coerceIn(0f, 1f)
         }
         Box(
             modifier = Modifier
@@ -161,10 +164,22 @@ fun ToolTransitionOverlay(
                 )
                 .graphicsLayer { alpha = fade },
         ) {
+            // 2026-11-20 修复「打开工具闪白」：覆盖层原先是**不透明白板**，从玻璃卡片长成全屏时
+            // 中途会形成整屏白闪。改成与页面同色系的半透明玻璃（+ 自上而下的微渐变），
+            // 形变过程读作「卡片材质延展」，与目标页交接更自然。
             Surface(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.94f),
+                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
+                            ),
+                        ),
+                    ),
                 shape = shape,
-                color = colors.containerLow,
+                color = androidx.compose.ui.graphics.Color.Transparent,
                 contentColor = colors.textPrimary,
                 shadowElevation = 0.dp,
             ) {

@@ -162,6 +162,10 @@ fun CtFloatingDock(
     // 不再按明暗自建两套手绘材质 —— 深浅色差异全部由 CtGlassTable 表达（深色更实、亮边代替投影）。
     val dockShape = RoundedCornerShape(CtRadius.hero)
     val glass = Modifier
+        // 先垫一层**不透明**页面底色（按浮岛圆角裁剪；导航浮层允许不实透）：玻璃再透也只是本页色调，
+        // 不会把下方卡片的文字「印」到浮岛上（用户反馈的「幽灵文字」）。
+        .clip(dockShape)
+        .background(MaterialTheme.colorScheme.background)
         .ctGlass(
             level = CtLightLevel.ULTRA_THICK,
             shape = dockShape,

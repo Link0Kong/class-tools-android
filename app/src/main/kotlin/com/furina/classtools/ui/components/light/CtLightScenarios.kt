@@ -238,9 +238,9 @@ fun CtLightBottomScrim(
             .background(
                 Brush.verticalGradient(
                     0f to Color.Transparent,
-                    0.45f to base.copy(alpha = 0.34f),
-                    0.78f to base.copy(alpha = 0.58f),
-                    1f to base.copy(alpha = 0.80f),
+                    0.45f to base.copy(alpha = 0.08f),
+                    0.78f to base.copy(alpha = 0.16f),
+                    1f to base.copy(alpha = 0.34f),
                 ),
             ),
     )
