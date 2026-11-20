@@ -1314,11 +1314,12 @@ private fun NoticeOverviewCards(
     )
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        // 统计筛选卡可点击：两张一组，间隔按鸿蒙「控件间距」留 8vp（2026-11-20）
+        verticalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
         ) {
             firstRow.forEach { (filter, value) ->
                 NoticeStatCard(
@@ -1332,7 +1333,7 @@ private fun NoticeOverviewCards(
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
         ) {
             secondRow.forEach { (filter, value) ->
                 NoticeStatCard(

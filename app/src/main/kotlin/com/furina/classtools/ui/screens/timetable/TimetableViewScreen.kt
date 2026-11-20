@@ -862,7 +862,8 @@ private fun WeekControlBar(
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            // 顶栏两组控件（周切换 / 视图切换）之间按鸿蒙「控件间距」留 8vp（2026-11-20）
+            verticalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onPrev, enabled = canGoPrev, modifier = Modifier.size(40.dp)) {

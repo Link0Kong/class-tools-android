@@ -346,7 +346,8 @@ fun IdentityScreen(
                         }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            // 两个协议文字按钮相邻：按鸿蒙「控件间距」留 8vp（2026-11-20）
+                            horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
                             modifier = Modifier.padding(start = 4.dp),
                         ) {
                             TextButton(onClick = { showAgreement = true }) {

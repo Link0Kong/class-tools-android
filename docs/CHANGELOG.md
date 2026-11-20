@@ -1,5 +1,27 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-20 · 1.0.0-beta19 / vc102：金标联盟 SharedView Kit 一镜到底（工具卡 → 工具页）
+
+> 用户 2026-11-20 要求：按 `https://gitee.com/itgsa_sharedviewkit/SharedViewDemo` 配置金标联盟手机的相关动效。
+
+- **依赖**：接入官方 Nexus `gsai.sdk:sharedview-kit:1.0.0.5`（`settings.gradle.kts` 仅对 `gsai.sdk`
+  放行内测期 HTTP 仓库；AAR 自带 R8 consumer 规则）。运行时只按
+  `ViewAnimationManager.isViewAnimationSupported()` 判断，不按品牌/系统版本硬编码。
+- **路径**：新增不导出的 `ToolActivity`，首屏直接 `tool/{id}`；点击工具卡时用 **Bitmap 源 + ActivityOptions**
+  启动，返回前 `overrideViewAnimationTransition` 回原卡片 bounds。目标 Activity 与 MainActivity 共用
+  `ClassToolsThemeHost`（主题/背景/系统栏），Session 由显式 Intent 传入，不落盘、不写日志。
+- **参数**：半径 dp×density 转 px（24dp 全部工具卡 / 14dp 首页快捷卡）；不传 `color`（动态壁纸无稳定底色）；
+  bounds 坐标系按 `getViewAnimationExtras()` 的 `WINDOW`/`SCREEN` 动态选择；半遮卡片、无锚点、截图失败、
+  Kit 返回 null 全部回退原 Compose 容器变换；源 Activity 销毁/旋屏时不 override，避免落点错位。
+- **导航**：ToolActivity 内「课表 → 地图」等 push 使用统一页间转场，返回逐层 pop，最后一层退出 Activity；
+  新增 `standaloneTool` 顶层 BackHandler 兜底；独立宿主不重复拉取根页数据，减少首帧阻塞。
+- **测试**：`:app:testDebugUnitTest` **1802 用例 / 0 失败 / 2 skipped**（新增 `SharedViewBoundsTest` 7 例）；
+  `:app:assembleDebug` 成功。AOSP API 37 模拟器 `protocol=0`，已验证降级 Compose 转场与独立
+  ToolActivity 的打开/嵌套/返回；**真实金标联盟机型的系统动画需真机验收**（模拟器不支持 Kit）。
+- **文档**：`docs/SHAREDVIEW_MOTION.md`（接入原理、参数口径、验收步骤、已知限制）。
+- **同树并行改动一并纳入**：工具页相邻可点控件间距统一到 `CtSpace.controlGap`（≥8vp），覆盖体测/点名/
+  通知/名单/课表/演示/文件传输/身份页；`CtSpacingTokensTest` 新增 8/12/16 三档断言。详见 `docs/DESIGN_SYSTEM.md` §13.4。
+
 ## 2026-11-20 · 1.0.0-beta18 / vc101：荣耀账号 + vivo 推送 + OPPO 推送/账号复核（含 beta15 统计、beta16 沉浸光感、beta18 顶部悬浮重做）
 
 > 用户 2026-11-20 要求：按 `honorid-opensdk-8.0.1.351.aar` 接入荣耀账号 OAuth；按 AppID/AppKey/AppSecret 接入 vivo 推送；再次检查 OPPO 账号服务与推送服务。

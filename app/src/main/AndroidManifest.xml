@@ -79,6 +79,18 @@
             </intent-filter>
         </activity>
 
+        <!--
+          金标 SharedView 的「工具卡 → 工具页」目标 Activity（一镜到底 / 无缝转场）。
+          - 不导出：只能由 MainActivity 的显式 Intent 启动，Session 由 Intent 传入；
+          - 独立任务栈位置：与 MainActivity 同任务，返回即回到原卡片（Kit 在 finish 前 override 落点）。
+          不支持的设备不会启动它，仍走 MainActivity 内 Compose 容器变换。
+        -->
+        <activity
+            android:name=".ToolActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ClassTools"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- vivo 推送回调 Receiver（SDK 按类名实例化；不得混淆，见 proguard-rules.pro）。 -->
         <receiver
             android:name=".data.push.VivoPushReceiver"

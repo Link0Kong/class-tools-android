@@ -84,7 +84,7 @@ internal fun AllToolCard(
     )
     val scale = 1f - (1f - HarmonyMotion.PressScale) * pressProgress
     val alpha = 1f - (1f - HarmonyMotion.PressAlpha) * pressProgress
-    val transitionSource = Modifier.ctToolTransitionSource(tool.id)
+    val transitionSource = Modifier.ctToolTransitionSource(tool.id, HarmonyTokens.RadiusCard)
     val shape = RoundedCornerShape(HarmonyTokens.RadiusCard)
 
     Box {

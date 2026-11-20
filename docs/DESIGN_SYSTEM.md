@@ -565,6 +565,37 @@ headline 行高 27→28、title 行高 32→36。
   字号层级 28/24/20/16/14/12、行高 1.4–1.6、字重三档、`CtTypeScale` 与令牌一致。
 - 硬编码自查 `docs/design/grep_hardcode.ps1` 仍为 **0**（本轮把 14 处 Snackbar 圆角、光感高光/折射色收敛进令牌）。
 
+### 13.4 工具页控件间隔（按钮 / 选项，2026-11-20）
+
+用户反馈「工具页内部的按钮/选项间隔过近」。按 [鸿蒙间隔参数](https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/interval-parameter-0000002562577161)
+对控件间距的三档（8 / 12 / 16vp）收敛成一条可核查的规则：
+
+| 场景 | 令牌 | 值 |
+|---|---|---|
+| 相邻两个**可点控件**（文字按钮 / 图标按钮 / 筛选胶囊 / 分段选项 / 统计筛选卡） | `CtSpace.controlGap` | **8vp（下限）** |
+| 有明显边界的控件成组（整块按钮、列表行） | `CtSpace.controlGapMedium` | 12vp |
+| 独立成块的操作区 | `CtSpace.controlGapLarge` | 16vp |
+
+不受这条约束的：图标与文字之间（4–6vp）、主次文本之间（`CtSpace.xxs` 4vp）、
+以及分段控件内部的两个选项（同一个复合控件）。
+
+本轮把工具页里低于 8vp 的控件间隔统一提到 `CtSpace.controlGap`：
+
+| 位置 | 原值 | 现值 |
+|---|---|---|
+| 体测 · 历史记录「回填 / 改名 / 删除」 | 4vp | 8vp |
+| 点名 · 操作行（沿用抽签名单 / 全选 / 清空 / 重置本轮） | 6 / 4vp | 8 / 8vp |
+| 通知 · 统计筛选卡（待处理 / 紧急 / 本周 / 长期） | 6vp | 8vp |
+| 通知 · 筛选胶囊行 | 6 / 6vp | 8 / 8vp |
+| 名单 · 筛选行（已加入点名 / 全选点名） | 6vp | 8vp |
+| 课表 · 顶栏两组控件（周切换 / 视图切换） | 6vp | 8vp |
+| 演示 · 下载详情「在线预览 / 重新处理」 | 4vp | 8vp |
+| 文件传输 · 下载 / 删除 | 4vp | 8vp |
+| 身份核验 · 《用户协议》/《隐私政策》 | 4vp | 8vp |
+
+`CtSpacingTokensTest` 新增 `control gap floor is 8vp and tiers are ascending` 锁定 8/12/16 三档与
+「控件间距不得大于卡片间距」。新增控件时请直接用 `CtSpace.controlGap`，不要写字面量 `4.dp`/`6.dp`。
+
 ---
 
 ## 14. 2026-11-19 深色工具栏优化（Dark Toolbars）

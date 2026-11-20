@@ -28,5 +28,6 @@ app/vivo.properties
 
 # 厂商 SDK 官方 demo/临时解压目录（仅本机参考，不入库；AAR 本体在 app/libs 入交付）
 _oppo_sdk_tmp/
+_oppo_oms_tmp/
 _honor_sdk_tmp/
 _vivo_sdk_tmp/

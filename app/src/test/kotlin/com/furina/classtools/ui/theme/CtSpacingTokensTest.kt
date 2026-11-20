@@ -82,6 +82,29 @@ class CtSpacingTokensTest {
         assertEquals(8f, dpOf(CtSpace.gridUnit), 0.0001f)
     }
 
+    /**
+     * 工具页控件间距（2026-11-20 用户反馈「按钮/选项间隔过近」）。
+     *
+     * 鸿蒙「间隔参数」对控件间距给到 8 / 12 / 16 三档；相邻可点控件的下限就是 8vp，
+     * 工具页里的按钮/选项一律取 [CtSpace.controlGap]，不允许再出现 4/6vp 的控件间空白。
+     */
+    @Test
+    fun `control gap floor is 8vp and tiers are ascending`() {
+        assertEquals("控件间距下限必须是 8vp", 8f, dpOf(CtSpace.controlGap), 0.0001f)
+        assertEquals(12f, dpOf(CtSpace.controlGapMedium), 0.0001f)
+        assertEquals(16f, dpOf(CtSpace.controlGapLarge), 0.0001f)
+        assertTrue(
+            "控件间距三档递增：${CtSpace.controlGap} < ${CtSpace.controlGapMedium} < ${CtSpace.controlGapLarge}",
+            dpOf(CtSpace.controlGap) < dpOf(CtSpace.controlGapMedium) &&
+                dpOf(CtSpace.controlGapMedium) < dpOf(CtSpace.controlGapLarge),
+        )
+        // 控件间距不得比「卡片间距」还宽松，否则分组层级会塌陷。
+        assertTrue(
+            "controlGap=${CtSpace.controlGap} 不应大于 cardGap=${CtSpace.cardGap}",
+            dpOf(CtSpace.controlGap) <= dpOf(CtSpace.cardGap),
+        )
+    }
+
     @Test
     fun `type scale uses the 28 24 20 16 14 12 ladder`() {
         assertEquals(28f, CtType.displayTitleSize.value, 0.0001f)

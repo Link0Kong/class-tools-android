@@ -279,7 +279,7 @@ fun RosterScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
                 ) {
                     CtToolChip(
                         text = "已加入点名 ${rosterState.rollSel.size}",

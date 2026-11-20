@@ -30,6 +30,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.ui.theme.CtMotion
@@ -63,25 +64,36 @@ import com.furina.classtools.ui.theme.uiAccentOf
  * `View.draw()` 成图片再缩小，属于补丁式遮底，且在 WebView/SurfaceView 页会空白）。
  */
 class ToolTransitionAnchors {
-    private val anchors = mutableStateMapOf<String, Rect>()
+    private val anchors = mutableStateMapOf<String, ToolTransitionAnchor>()
 
-    fun put(id: String, bounds: Rect) {
+    fun put(id: String, bounds: Rect, radius: Dp) {
         if (id.isBlank()) return
         if (bounds.width <= 0f || bounds.height <= 0f) return
-        anchors[id] = bounds
+        anchors[id] = ToolTransitionAnchor(bounds = bounds, radius = radius)
     }
 
-    fun get(id: String): Rect? = anchors[id]
+    fun get(id: String): ToolTransitionAnchor? = anchors[id]
 }
+
+/**
+ * 工具卡转场锚点：根坐标 bounds + 卡片真实圆角。
+ *
+ * SharedView Kit 的 Bitmap 源要求显式半径（px）；圆角传错会在 OPEN/CLOSE 之间跳闪。
+ * Compose 覆盖层仍只用 bounds；圆角供独立 Activity 的共享元素路径使用。
+ */
+data class ToolTransitionAnchor(
+    val bounds: Rect,
+    val radius: Dp,
+)
 
 val LocalToolTransitionAnchors = staticCompositionLocalOf<ToolTransitionAnchors?> { null }
 
 /** 工具卡上登记转场起点（preview / 无覆盖层时是 no-op）。 */
 @Composable
-fun Modifier.ctToolTransitionSource(toolId: String): Modifier {
+fun Modifier.ctToolTransitionSource(toolId: String, radius: Dp = CtRadius.card): Modifier {
     val anchors = LocalToolTransitionAnchors.current ?: return this
     return this.onGloballyPositioned { coordinates ->
-        anchors.put(toolId, coordinates.boundsInRoot())
+        anchors.put(toolId, coordinates.boundsInRoot(), radius)
     }
 }
 

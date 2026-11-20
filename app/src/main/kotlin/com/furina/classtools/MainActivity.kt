@@ -1,30 +1,18 @@
 package com.furina.classtools
 
 import android.content.Intent
-import android.graphics.Color
-import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.furina.classtools.data.background.BackgroundStore
 import com.furina.classtools.data.push.OppPushClick
 import com.furina.classtools.data.reminder.ReminderIntentFactory
-import com.furina.classtools.data.background.BackgroundStore
-import com.furina.classtools.data.background.LocalBackgroundStore
-import com.furina.classtools.data.settings.LocalAppSettingsStore
 import com.furina.classtools.ui.ClassToolsRoot
+import com.furina.classtools.ui.ClassToolsThemeHost
 import com.furina.classtools.ui.platform.VolumeKeyBridge
-import com.furina.classtools.ui.theme.ClassToolsTheme
-import com.furina.classtools.ui.theme.CtImmersiveStatusBar
+import com.furina.classtools.ui.platform.enableClassToolsEdgeToEdge
 
 class MainActivity : ComponentActivity() {
 
@@ -42,66 +30,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // 全透明系统栏：避免部分 ROM（ColorOS 等）在底部工具栏下画一条黑色导航栏色带。
-        // navigationBarStyle 使用 auto 仅控制图标深/浅，颜色始终透明；再关闭系统对比度蒙层。
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
-        )
+        enableClassToolsEdgeToEdge()
         super.onCreate(savedInstanceState)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window.isNavigationBarContrastEnforced = false
-        }
-        @Suppress("DEPRECATION")
-        window.navigationBarColor = Color.TRANSPARENT
         pendingToolId.value = toolIdFrom(intent)
         pendingNoticeId.value = noticeIdFrom(intent)
         val container = (application as ClassToolsApp).container
         // 自定义背景：本机存储（App 私有目录 + SharedPreferences）；只本机、不上传、不进云同步。
         val backgroundStore = BackgroundStore(this)
         setContent {
-            // 冷启动恢复已保存的背景位图（IO 线程解码，主线程不阻塞；失败静默回退预设）。
-            LaunchedEffect(backgroundStore) {
-                runCatching { backgroundStore.restoreBitmap() }
-            }
-            // 外观偏好存本机（不进 userdata）：壁纸取色 / 外观模式 / 隐藏状态栏均实时生效。
-            val dynamicColor by container.appSettings.dynamicColor
-                .collectAsStateWithLifecycle(initialValue = false)
-            // 首帧用 SharedPreferences 镜像同步初始化，避免冷启动先按系统/默认渲染一帧再跳变。
-            val initialAppearanceMode = remember { container.appSettings.startupAppearanceMode() }
-            val initialHideStatusBar = remember { container.appSettings.startupHideStatusBar() }
-            val initialImmersiveLight = remember { container.appSettings.startupImmersiveLight() }
-            val appearanceMode by container.appSettings.appearanceMode
-                .collectAsStateWithLifecycle(initialValue = initialAppearanceMode)
-            val hideStatusBar by container.appSettings.hideStatusBar
-                .collectAsStateWithLifecycle(initialValue = initialHideStatusBar)
-            // 沉浸光感（强 / 均衡 / 弱 / 关闭）：写入后全应用即时生效（含所有深层页面与弹层）。
-            val immersiveLight by container.appSettings.immersiveLight
-                .collectAsStateWithLifecycle(initialValue = initialImmersiveLight)
-            // 外观模式：跟随系统 / 强制浅色 / 强制深色（我的 → 外观 三选一）。
-            val darkTheme = appearanceMode.resolveDark(isSystemInDarkTheme())
-            val pendingTool by pendingToolId
-            val pendingNotice by pendingNoticeId
-            ClassToolsTheme(
-                darkTheme = darkTheme,
-                dynamicColor = dynamicColor,
-                immersiveLight = immersiveLight,
-            ) {
-                // 「我的 → 外观」直接读写本机设置；背景 Store 同层提供（全局背景层订阅）。
-                CompositionLocalProvider(
-                    LocalAppSettingsStore provides container.appSettings,
-                    LocalBackgroundStore provides backgroundStore,
-                ) {
-                    // 全局隐藏系统状态栏（下滑临时显示）；关闭时恢复 statusBarsPadding 的常规行为。
-                    CtImmersiveStatusBar(enabled = hideStatusBar) {
-                        ClassToolsRoot(
-                            container = container,
-                            pendingToolId = pendingTool,
-                            onPendingToolConsumed = { pendingToolId.value = null },
-                            pendingNoticeId = pendingNotice,
-                            onPendingNoticeConsumed = { pendingNoticeId.value = null },
-                        )
-                    }
-                }
+            // 主题/外观/背景/系统栏与 ToolActivity 共用同一宿主，保证共享元素两端视觉一致。
+            ClassToolsThemeHost(container = container, backgroundStore = backgroundStore) {
+                ClassToolsRoot(
+                    container = container,
+                    pendingToolId = pendingToolId.value,
+                    onPendingToolConsumed = { pendingToolId.value = null },
+                    pendingNoticeId = pendingNoticeId.value,
+                    onPendingNoticeConsumed = { pendingNoticeId.value = null },
+                )
             }
         }
     }

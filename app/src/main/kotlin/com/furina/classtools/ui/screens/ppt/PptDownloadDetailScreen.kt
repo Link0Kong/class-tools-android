@@ -563,7 +563,8 @@ private fun LegacyCard(
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // 两个文字按钮相邻：按鸿蒙「控件间距」留 8vp（2026-11-20）
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap)) {
                 if (canPreview) {
                     TextButton(onClick = onOpenPreview, modifier = Modifier.heightIn(min = 48.dp)) {
                         Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))

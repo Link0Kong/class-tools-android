@@ -89,6 +89,7 @@ import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -925,7 +926,7 @@ private fun FileActions(
     onDownload: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
-    horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(4.dp),
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(CtSpace.controlGap),
 ) {
     Row(
         modifier = modifier,

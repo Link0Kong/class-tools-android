@@ -56,6 +56,7 @@ import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtPalette
 import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlinx.coroutines.delay
 
@@ -335,8 +336,9 @@ internal fun NoticeFilterChips(
 ) {
     FlowRow(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        // 筛选选项（可点胶囊）之间按鸿蒙「控件间距」留 8vp（2026-11-20）
+        horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
+        verticalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
     ) {
         chips.forEach { chip ->
             NoticeElasticChip(

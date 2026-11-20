@@ -3,10 +3,12 @@
 > 目标：用 Android 17（API 37）的设计语言与 Compose-first 技术栈，把班级工具站重做成**真原生** Android App；数据与网页/小程序共用同一套 CloudBase 契约。
 
 - 包名：`com.furina.classtools`（早期草稿的 `fun.furina.classtools` 因 `fun` 是 Kotlin 硬关键字无法编译，已全量改名）
-- 版本：3.6.0（versionCode 12），Debug 后缀 `.debug`
+- 版本：1.0.0-beta19（versionCode 102），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v1.0.0-beta1（测试版本）**——11 项反馈修复：返回快照/下一节文案/顶栏瘦身/通知排序/去 OPPO/绿卡改版/学信网 Cookie/活动微信引导/地图离线/课表接入 WakeUp+系统日历。单测 **1624/0**，E2E 44/0。详见 [REPORT_ROUND67](docs/REPORT_ROUND67_20261116.md)。
+- 状态：**v1.0.0-beta19（测试版本）**——金标联盟 SharedView Kit 一镜到底（工具卡 → 工具页；不支持机型回退 Compose 转场）；
+  之前 beta18 已含荣耀账号 / vivo 推送 / OPPO 复核、beta15 统计、beta16 沉浸光感、beta18 顶部悬浮。详见
+  [SHAREDVIEW_MOTION](docs/SHAREDVIEW_MOTION.md) 与 [REPORT_ROUND70](docs/REPORT_ROUND70_20261119.md)。
 
 ## 目录
 

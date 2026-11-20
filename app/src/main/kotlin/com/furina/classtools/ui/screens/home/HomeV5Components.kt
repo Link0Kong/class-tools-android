@@ -342,7 +342,7 @@ internal fun QuickToolTile(
     val accent = uiAccentOf(tool)
     val interaction = remember { MutableInteractionSource() }
     val press = ctPressFeedback(interaction, reduceMotion)
-    val transitionSource = Modifier.ctToolTransitionSource(tool.id)
+    val transitionSource = Modifier.ctToolTransitionSource(tool.id, CtRadius.input)
     Surface(
         onClick = onClick,
         modifier = modifier

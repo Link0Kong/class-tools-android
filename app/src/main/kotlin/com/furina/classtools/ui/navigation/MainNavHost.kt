@@ -102,6 +102,7 @@ import com.furina.classtools.ui.components.dock.CtPageTransitions
 import com.furina.classtools.ui.components.dock.CtTabPager
 import com.furina.classtools.ui.components.dock.rememberCtTabPagerState
 import com.furina.classtools.ui.components.light.CtLightBottomScrim
+import com.furina.classtools.ui.motion.SharedViewMotion
 import com.furina.classtools.ui.screens.all.AllToolsScreen
 import com.furina.classtools.ui.screens.cloudspace.CloudSpaceScreen
 import com.furina.classtools.ui.screens.data.DataPrivacyScreen
@@ -165,6 +166,16 @@ fun MainNavHost(
     /** OPPO PUSH 通知点击带入的通知 id（登录/进入主界面后进通知页并定位一次）。 */
     initialNoticeId: String? = null,
     onInitialNoticeConsumed: () -> Unit = {},
+    /**
+     * 独立工具页启动（金标 SharedView 的 Activity 目标）：直接把 NavHost 起点设为该工具，
+     * 不再先渲染根页。为空 = 正常 MainActivity 根导航。
+     */
+    startToolId: String? = null,
+    startToolPick: Boolean = false,
+    /** true = ToolActivity 独立宿主：不渲染根 Tab、不显示容器变换覆盖层、返回起点工具时结束 Activity。 */
+    standaloneTool: Boolean = false,
+    /** 独立宿主从起点工具返回时调用（由 ToolActivity 执行 SharedView override + finish）。 */
+    onCloseStandaloneTool: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
@@ -192,12 +203,14 @@ fun MainNavHost(
     }
 
     // 启动主界面时后台刷新：名单 / marks / userdata（TTL 内不重复请求）。
-    LaunchedEffect(Unit) {
-        runCatching { container.refreshCoreData() }
+    // 独立 ToolActivity 不重复拉取：MainActivity 已加载，工具页自己的仓库按需刷新，
+    // 避免目标 Activity 首帧被重复网络/状态更新拖慢（共享元素要尽快出内容）。
+    LaunchedEffect(standaloneTool) {
+        if (!standaloneTool) runCatching { container.refreshCoreData() }
     }
     // 回前台刷新（marks 强拉由 refreshCoreData 内部 TTL/节流控制）。
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        scope.launch { runCatching { container.refreshCoreData() } }
+        if (!standaloneTool) scope.launch { runCatching { container.refreshCoreData() } }
     }
 
     // 根页 Pager 状态 hoist 到 NavHost 外层：进入工具页再返回时保持当前 Tab。
@@ -215,8 +228,9 @@ fun MainNavHost(
     val reduceMotion = rememberReduceMotion()
 
     // 通知点击带入的工具（hw/tt）：登录/进入主界面后消费一次。
-    LaunchedEffect(initialToolId) {
-        if (!initialToolId.isNullOrBlank()) {
+    // 独立工具宿主已经直接以目标工具为起点，不能再 navigate 一次（会叠一层工具页）。
+    LaunchedEffect(initialToolId, standaloneTool) {
+        if (!standaloneTool && !initialToolId.isNullOrBlank()) {
             navController.navigate(Routes.tool(initialToolId))
             onInitialToolConsumed()
         }
@@ -224,7 +238,8 @@ fun MainNavHost(
 
     // OPPO PUSH 通知点击：进入通知页并定位到该通知（NoticesScreen 消费后清空）。
     var pendingFocusNoticeId by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(initialNoticeId) {
+    LaunchedEffect(initialNoticeId, standaloneTool) {
+        if (standaloneTool) return@LaunchedEffect
         val noticeId = initialNoticeId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
         pendingFocusNoticeId = noticeId
         val targetTool = OppPushClick.targetToolId(noticeId) ?: OppPushClick.NOTICE_TOOL_ID
@@ -250,7 +265,17 @@ fun MainNavHost(
         // 有卡片锚点且未移除动画时，走容器变换「卡片长成页面」；否则直接导航。
         val anchor = toolTransitionAnchors.get(tool.id)
         if (!reduceMotion && anchor != null && transitionTool == null) {
-            transitionStart = anchor
+            // 金标 SharedView：仅支持「工具卡 → 工具页」这种可直接映射到 ToolActivity 的路径。
+            // 投票是独立 Routes.VOTE 页面，映射不到 tool/{id}，继续走现有 Compose 容器变换。
+            val sharedViewStarted = tool.id != "vote" && SharedViewMotion.tryLaunchTool(
+                activity = context.findActivity(),
+                rootView = rootView,
+                tool = tool,
+                anchor = anchor,
+                session = session,
+            )
+            if (sharedViewStarted) return
+            transitionStart = anchor.bounds
             transitionTool = tool
             transitionRoute = route
             transitionReverse = false
@@ -271,6 +296,16 @@ fun MainNavHost(
      * 无锚点/移除动画/已有转场进行中时直接 pop。
      */
     fun popTool(toolId: String) {
+        // 独立 ToolActivity：起点工具没有上一页，直接结束 Activity（由 SharedView override 回卡片）；
+        // 工具内部再打开的页面（如 课表 → 地图）仍有上一页，正常 pop。
+        if (standaloneTool) {
+            if (navController.previousBackStackEntry == null) {
+                onCloseStandaloneTool()
+            } else {
+                navController.popBackStack()
+            }
+            return
+        }
         val tool = ToolCatalog.byId(toolId)
         val anchor = toolTransitionAnchors.get(toolId)
         if (reduceMotion || tool == null || anchor == null || transitionTool != null) {
@@ -280,10 +315,24 @@ fun MainNavHost(
         // 先 pop：底层回到根页；pendingPop 仅作 onDone 兜底（pop 失败时强制再 pop 一次）。
         val popped = runCatching { navController.popBackStack() }.getOrDefault(false)
         transitionPendingPop = !popped
-        transitionStart = anchor
+        transitionStart = anchor.bounds
         transitionTool = tool
         transitionRoute = null
         transitionReverse = true
+    }
+
+    // 独立 ToolActivity 的返回兜底：
+    // - 工具内部 push 了其它页面（如 课表 → 地图）→ 先 pop；
+    // - 已在起点工具 → 结束 Activity（SharedView override 回卡片）；
+    // - 弹层/对话框自己的 BackHandler 后注册，优先消费，不会走到这里。
+    if (standaloneTool) {
+        BackHandler {
+            if (navController.previousBackStackEntry == null) {
+                onCloseStandaloneTool()
+            } else {
+                navController.popBackStack()
+            }
+        }
     }
 
     // 统一导出：渲染 → 保存相册（Android 10+）/ 分享兜底，Toast 反馈。
@@ -375,7 +424,12 @@ fun MainNavHost(
         CompositionLocalProvider(LocalToolTransitionAnchors provides toolTransitionAnchors) {
             NavHost(
                 navController = navController,
-                startDestination = Routes.ROOT,
+                // 独立 ToolActivity 直接以工具页为起点，首帧就是目标内容，SharedView 才不会捕到根页。
+                startDestination = if (standaloneTool && !startToolId.isNullOrBlank()) {
+                    Routes.tool(startToolId, startToolPick)
+                } else {
+                    Routes.ROOT
+                },
                 modifier = modifier.fillMaxSize(),
             ) {
         composable(
@@ -436,12 +490,20 @@ fun MainNavHost(
                     defaultValue = false
                 },
             ),
-            // 进入/返回都由 ToolTransitionOverlay 的容器变换覆盖层负责（卡片 ⇄ 页面 连续形变），
-            // NavHost 不再叠加 push/pop 位移，否则会出现「页面滑走 + 卡片收回」两重动画。
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None },
+            // MainActivity 内：进入/返回由 ToolTransitionOverlay 负责，NavHost 不再叠加位移。
+            // ToolActivity 独立宿主：起点工具没有栈内转场；工具内部 push（如 课表 → 地图）用统一页间转场。
+            enterTransition = {
+                if (standaloneTool) CtPageTransitions.harmonyPushEnter() else EnterTransition.None
+            },
+            exitTransition = {
+                if (standaloneTool) CtPageTransitions.harmonyPushExit() else ExitTransition.None
+            },
+            popEnterTransition = {
+                if (standaloneTool) CtPageTransitions.harmonyPopEnter() else EnterTransition.None
+            },
+            popExitTransition = {
+                if (standaloneTool) CtPageTransitions.harmonyPopExit() else ExitTransition.None
+            },
         ) { entry ->
             val toolId = entry.arguments?.getString(Routes.TOOL_ARG).orEmpty()
             val pickInTool = entry.arguments?.getBoolean(Routes.TOOL_PICK_ARG) == true
@@ -958,33 +1020,35 @@ fun MainNavHost(
         }
             }
         }
-        ToolTransitionOverlay(
-            tool = transitionTool,
-            startBounds = transitionStart,
-            reverse = transitionReverse,
-            onHalfway = {
-                if (transitionPendingPop) {
-                    transitionPendingPop = false
-                    navController.popBackStack()
-                } else {
-                    transitionRoute?.let { route ->
-                        transitionRoute = null
-                        navController.navigate(route)
+        if (!standaloneTool) {
+            ToolTransitionOverlay(
+                tool = transitionTool,
+                startBounds = transitionStart,
+                reverse = transitionReverse,
+                onHalfway = {
+                    if (transitionPendingPop) {
+                        transitionPendingPop = false
+                        navController.popBackStack()
+                    } else {
+                        transitionRoute?.let { route ->
+                            transitionRoute = null
+                            navController.navigate(route)
+                        }
                     }
-                }
-            },
-            onDone = {
-                // 兜底：若开始返回时 pop 未成功（当前仍在工具页），动画结束后强制 pop，绝不把工具内部界面留在屏上。
-                if (transitionPendingPop) {
-                    transitionPendingPop = false
-                    runCatching { navController.popBackStack() }
-                }
-                transitionTool = null
-                transitionStart = null
-                transitionRoute = null
-                transitionReverse = false
-            },
-        )
+                },
+                onDone = {
+                    // 兜底：若开始返回时 pop 未成功（当前仍在工具页），动画结束后强制 pop，绝不把工具内部界面留在屏上。
+                    if (transitionPendingPop) {
+                        transitionPendingPop = false
+                        runCatching { navController.popBackStack() }
+                    }
+                    transitionTool = null
+                    transitionStart = null
+                    transitionRoute = null
+                    transitionReverse = false
+                },
+            )
+        }
     }
 }
 

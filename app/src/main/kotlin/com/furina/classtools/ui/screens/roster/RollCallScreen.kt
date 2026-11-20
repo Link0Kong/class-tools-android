@@ -69,6 +69,7 @@ import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtSpace
 import kotlinx.coroutines.launch
 
 /**
@@ -229,8 +230,8 @@ fun RollCallScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 16.dp, vertical = 2.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
+                                    verticalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
                                 ) {
                                     CtToolChip(
                                         text = "沿用抽签名单",

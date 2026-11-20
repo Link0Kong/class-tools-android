@@ -781,7 +781,8 @@ private fun HistoryCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // 相邻可点按钮之间按鸿蒙「控件间距」留 8vp，避免三个文字按钮贴在一起（2026-11-20）
+                    Row(horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap)) {
                         TextButton(onClick = { onRestore(index) }) { Text("回填") }
                         TextButton(onClick = { onRename(index) }) { Text("改名") }
                         TextButton(onClick = { onDelete(index) }) { Text("删除") }

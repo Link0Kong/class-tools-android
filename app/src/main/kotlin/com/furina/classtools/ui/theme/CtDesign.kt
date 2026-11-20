@@ -309,7 +309,13 @@ object CtSpace {
     val sectionGap = 24.dp
     val groupGap = 32.dp
 
-    /** 控件间距（官方 8 / 12 / 16 三档）。 */
+    /**
+     * 控件间距（官方 8 / 12 / 16 三档）。
+     *
+     * 规则（2026-11-20 按鸿蒙「间隔参数」统一）：**相邻两个可点控件之间的空白 ≥ [controlGap]（8vp）**——
+     * 文字按钮、图标按钮、筛选胶囊、分段选项、统计筛选卡都算；有明显边界（卡片 / 整块按钮）的分组用
+     * [controlGapMedium] 或 [controlGapLarge]。图标与文字之间的 4–6vp 属于控件内部排版，不受这条约束。
+     */
     val controlGap = 8.dp
     val controlGapMedium = 12.dp
     val controlGapLarge = 16.dp
