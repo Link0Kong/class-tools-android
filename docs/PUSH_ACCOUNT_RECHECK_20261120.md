@@ -44,6 +44,9 @@
   与仓库现有官方 `account-oauth-web-sdk:1.1.3` 重复；不建议降级接入（会新增 READ_PHONE_STATE/旧 IPC，且不解决 invalid_client）。
 - 服务端已按官方文档收敛为单域名/单 `appSecret`（不再尝试 heytap 域名或 MasterSecret），
   错误文案直接给出 `2020003 invalid_client（账号服务未激活/未申请 openid 权限，或 appSecret 非账号服务应用）`。
+- 签名核对：OPPO 控制台「调试签名」`aa6d41754e38b9ad9aaaf65a98f189e1` = 本仓库 release 证书 SHA-1 前 32 位，
+  与更新渠道 beta18 APK 的证书一致；「线上签名暂无」表示未上架，不是签名错误，也不影响服务端 `invalid_client`
+  （服务端只校验 appKey/appSecret）。
 
 **需要的修复材料（本机无法自行生成）**：
 1. 登录 OPPO 开放平台 → **产品 → 账号服务** → 申请接入 → 选择应用 `38092999`；

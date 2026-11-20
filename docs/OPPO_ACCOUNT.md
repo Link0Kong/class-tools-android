@@ -159,6 +159,22 @@ $env:JAVA_HOME='C:\AndroidToolchain\jdk17'; $env:ANDROID_HOME='C:\AndroidToolcha
 2. **服务端**：ECS `/account` 接口下线后，客户端登录/绑定返回网络/404 错误提示（只影响 OPPO 入口，不影响学号+姓名登录）；
 3. 版本回退到上一版 `1.0.0-beta2 / vc85` 构建即可（vc86 不会被旧版本覆盖）。
 
+## 9.1 签名信息（2026-11-20 核对）
+
+release APK（`app/oppo.properties` 对应的 `key/release.jks`）证书指纹：
+
+| 类型 | 值 |
+| --- | --- |
+| SHA-256 | `97:48:54:DF:1C:BE:D0:D2:F4:19:1A:3E:ED:0C:F9:46:5C:87:52:D9:E1:89:5D:7F:D6:C0:BC:74:8B:EC:4A:1A` |
+| SHA-1 | `AA:6D:41:75:4E:38:B9:AD:9A:AA:F6:5A:98:F1:89:E1:B3:68:94:6B` |
+| MD5 | `FD:87:BB:87:9E:78:FC:7C:8C:39:DC:9B:DF:8B:2E:F5` |
+
+- 用户在 OPPO 控制台看到的「调试签名」`aa6d41754e38b9ad9aaaf65a98f189e1`（32 位）**正好是本 release 证书 SHA-1 的前 32 位**，
+  说明 OPPO 识别到的就是本仓库 release 签名；更新渠道 beta18 APK 实测同一证书。
+- 「线上签名：暂无（会自动读取上架应用的签名信息）」表示应用尚未上架 OPPO 软件商店，不是签名错误；上架后平台会自动读取。
+- 若控制台该字段要求的是 **MD5**（32 位），应填 `fd87bb879e78fc7c8c39dc9bdf8b2ef5`；若要求 SHA-1，则填完整 40 位。
+- **签名不影响服务端 `invalid_client`**：`/oauth2/token/token-code` 只校验 appKey/appSecret，不读取 APK 签名；签名问题只会在客户端授权阶段报 `1117001`。
+
 ## 10. 未验证项（如实）
 
 - **真实 OPPO 账号 OAuth 联调仍未完成**：本机 `app/oppo.properties` 已填账号服务 AppID/AppKey（不入库、不打印），
