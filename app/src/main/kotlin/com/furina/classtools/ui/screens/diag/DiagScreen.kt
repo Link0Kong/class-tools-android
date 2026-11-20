@@ -378,41 +378,47 @@ fun DiagScreen(
                     title = "诊断",
                     onBack = onBack,
                     actions = {
-                        if (agent?.online == true) {
-                            CtPill(
-                                text = "代理在线",
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        } else if (agent != null) {
-                            CtPill(
-                                text = "代理离线",
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                        }
-                        TextButton(onClick = { simpleMode = !simpleMode }) {
-                            Text(if (simpleMode) "详细" else "简洁")
-                        }
-                        IconButton(onClick = { autoRefresh = !autoRefresh }) {
-                            Icon(
-                                imageVector = if (autoRefresh) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                contentDescription = if (autoRefresh) "暂停自动刷新" else "恢复自动刷新",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(onClick = {
-                            if (skipLoad) return@IconButton
-                            scope.launch {
-                                refreshRemote()
-                                runDeviceChecks()
+                        // 顶栏动作（代理胶囊 / 简洁·详细 / 暂停 / 刷新）按 8vp 控件间距排开（2026-11-21）
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
+                        ) {
+                            if (agent?.online == true) {
+                                CtPill(
+                                    text = "代理在线",
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            } else if (agent != null) {
+                                CtPill(
+                                    text = "代理离线",
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                )
                             }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Rounded.Refresh,
-                                contentDescription = "刷新诊断数据",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            TextButton(onClick = { simpleMode = !simpleMode }) {
+                                Text(if (simpleMode) "详细" else "简洁")
+                            }
+                            IconButton(onClick = { autoRefresh = !autoRefresh }) {
+                                Icon(
+                                    imageVector = if (autoRefresh) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                    contentDescription = if (autoRefresh) "暂停自动刷新" else "恢复自动刷新",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            IconButton(onClick = {
+                                if (skipLoad) return@IconButton
+                                scope.launch {
+                                    refreshRemote()
+                                    runDeviceChecks()
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Refresh,
+                                    contentDescription = "刷新诊断数据",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     },
                 )
@@ -438,7 +444,8 @@ fun DiagScreen(
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = spec.horizontalPadding),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    // 卡片之间按「卡片间距」取 12vp（原 10vp 不在 4/8 栅格上，2026-11-21）
+                    verticalArrangement = Arrangement.spacedBy(CtSpace.sm),
                 ) {
                     if (loading) {
                         LoadingRow()
@@ -530,7 +537,11 @@ private fun SummaryStrip(
     horizontalPadding: androidx.compose.ui.unit.Dp,
 ) {
     CtToolCard(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding),
+        // 摘要卡与下方列表之间补 12vp：此前两张卡直接贴在一起（2026-11-21）
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding)
+            .padding(bottom = CtSpace.sm),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Row(
@@ -569,6 +580,8 @@ private fun SummaryStrip(
             }
         }
         if (lastUpdated.isNotBlank()) {
+            // 主次文本之间留 4vp，此前「最后更新」紧贴上面一行（2026-11-21）
+            Spacer(modifier = Modifier.height(CtSpace.xxs))
             Text(
                 text = "最后更新 $lastUpdated",
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
@@ -605,7 +618,11 @@ private fun DiagCard(
     content: @Composable () -> Unit,
 ) {
     CtToolCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            // 标题 / 状态胶囊 / 右上角操作之间统一 8vp（2026-11-21）
+            horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
+        ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
@@ -620,7 +637,9 @@ private fun DiagCard(
             if (status != null) StatusPill(status)
             trailing?.invoke()
         }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // 标题行与正文之间按「标题—正文」留 8vp：此前正文直接贴在标题下（2026-11-21）
+        Spacer(modifier = Modifier.height(CtSpace.controlGap))
+        Column(verticalArrangement = Arrangement.spacedBy(CtSpace.controlGap)) {
             content()
         }
     }
@@ -1062,6 +1081,8 @@ private fun DeviceCheckBlock(
                 TextButton(onClick = { onReport(check) }, enabled = !reporting) {
                     Text(if (reporting) "…" else "上报", style = MaterialTheme.typography.labelSmall)
                 }
+                // 「上报」与状态胶囊是两个相邻控件，留 8vp 避免贴在一起（2026-11-21）
+                Spacer(modifier = Modifier.width(CtSpace.controlGap))
             }
             StatusPill(check.status, statusLabelOf(check.status))
         }

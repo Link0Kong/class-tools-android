@@ -593,6 +593,21 @@ headline 行高 27→28、title 行高 32→36。
 | 文件传输 · 下载 / 删除 | 4vp | 8vp |
 | 身份核验 · 《用户协议》/《隐私政策》 | 4vp | 8vp |
 
+诊断页（2026-11-21 第 2 轮，用户反馈「诊断页的间距还是有问题」）：
+
+| 位置 | 原值 | 现值 |
+|---|---|---|
+| 摘要卡 ↔ 下方第一张卡片 | 0vp（两卡圆角相压） | 12vp（`CtSpace.sm`） |
+| 诊断页卡片 ↔ 卡片 | 10vp（不在 4/8 栅格） | 12vp（`CtSpace.sm`） |
+| 摘要卡「最后更新」↔ 上一行 | 0vp | 4vp（`CtSpace.xxs`） |
+| `DiagCard` 标题行 ↔ 正文 | 0vp | 8vp（`CtSpace.controlGap`） |
+| `DiagCard` 内容行之间 | 6vp | 8vp |
+| `DiagCard` 标题 / 状态胶囊 / 右上角操作 | 0vp | 8vp |
+| 设备检查行「上报」↔ 状态胶囊 | 0vp | 8vp |
+| 诊断顶栏动作（胶囊 / 简洁·详细 / 暂停 / 刷新） | 4vp（顶栏默认） | 8vp（仅本页） |
+
+前后对照实拍：`docs/design/shots/diag-before.png` / `diag-after.png`。
+
 `CtSpacingTokensTest` 新增 `control gap floor is 8vp and tiers are ascending` 锁定 8/12/16 三档与
 「控件间距不得大于卡片间距」。新增控件时请直接用 `CtSpace.controlGap`，不要写字面量 `4.dp`/`6.dp`。
 
