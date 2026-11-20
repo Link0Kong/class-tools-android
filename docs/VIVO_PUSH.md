@@ -67,7 +67,7 @@
 - **vivo 真机注册未联调**（本机无 vivo 设备）：`getRegId` 真实回调、通知到达、点击拉起。
 - vivo 开放平台需把 **包名 `com.furina.classtools`** 与 AppID/AppKey 绑定；签名不参与校验。
 - 消息分类 `category=IM` 需在平台申请；未通过前 `send` 会失败（代码已可配置）。
-- 云端当前没有 vivo token；需安装 beta17 后在 vivo 设备登录一次才会产生。
+- 云端当前没有 vivo token；需安装 beta18 后在 vivo 设备登录一次才会产生。
 
 ## 5. 回滚
 
@@ -75,4 +75,5 @@
 2. 服务端：删除/改名 `briefdesk/secrets/vivo-push.json` → `vivo_push.py` 安全跳过；
    把 `ClasstoolsPushWatch` 指回 `harmony-class-tools/scripts/push_tick.py` 可只停 vivo/OPPO 调度。
 3. DB：`DELETE FROM public.push_tokens WHERE provider='vivo'`，再收紧 CHECK。
+
 

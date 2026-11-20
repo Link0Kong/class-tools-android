@@ -13,7 +13,7 @@
 | 客户端注册链路 | 代码完整；未在真机验证 | `OppoPushManager.onAppCreated` → `HeytapPushManager.init/register`；需 ColorOS 手机 + 正式 AppKey/AppSecret + 包名/签名登记 |
 | 服务端字段 | `channel_id=class_notice`、`clickActionType=4`、`actionParameters={"noticeId":…}` | 与客户端 `PushChannels`/`OppPushClick` 一致 |
 
-**结论**：OPPO 推送「收不到」不是密钥问题，而是（a）没有调度器调用 `oppo_push.py`（已修）；（b）云端没有 OPPO 设备 token（当前没有 ColorOS 真机登录过 beta 包）。装 beta17 到 ColorOS 手机并登录后，可在 `push_tokens` 看到 `provider=oppo`，再用
+**结论**：OPPO 推送「收不到」不是密钥问题，而是（a）没有调度器调用 `oppo_push.py`（已修）；（b）云端没有 OPPO 设备 token（当前没有 ColorOS 真机登录过 beta 包）。装 beta18 到 ColorOS 手机并登录后，可在 `push_tokens` 看到 `provider=oppo`，再用
 `python oppo_push.py --test <regId>` 验证到达与点击。
 
 ## 2. OPPO 账号服务（复核结果：服务已部署，但账号服务凭证被 OPPO 判为 invalid_client）
@@ -58,4 +58,5 @@
 `2026-11-20_push_vivo_account_honor.sql` 已应用：
 - `push_tokens_provider_check` → `('oppo','harmony','vivo')`
 - `account_bindings_provider_check` → `('oppo','honor')`
+
 

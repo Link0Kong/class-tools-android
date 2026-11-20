@@ -1,9 +1,9 @@
 # 版本记录（Android 客户端）
 
-## 2026-11-20 · 1.0.0-beta17 / vc100：荣耀账号 + vivo 推送 + OPPO 推送/账号复核（含 beta15 统计与 beta16 沉浸光感修复）
+## 2026-11-20 · 1.0.0-beta18 / vc101：荣耀账号 + vivo 推送 + OPPO 推送/账号复核（含 beta15 统计、beta16 沉浸光感、beta18 顶部悬浮重做）
 
 > 用户 2026-11-20 要求：按 `honorid-opensdk-8.0.1.351.aar` 接入荣耀账号 OAuth；按 AppID/AppKey/AppSecret 接入 vivo 推送；再次检查 OPPO 账号服务与推送服务。
-> 本版同时包含 beta15 访问统计可视化与 beta16 沉浸光感修复（并行会话已发布 vc99；本版为叠加荣耀/vivo 后的新版本号）。
+> 本版同时包含 beta15 访问统计可视化、beta16 沉浸光感修复与 beta18 顶部悬浮重做（并行会话已把版本号推到 beta18/vc101；本版在同一棵树上叠加荣耀/vivo 并统一发布）。
 
 ### 荣耀账号（新增）
 - 客户端：本地 AAR `honorid-opensdk-8.0.1.351.aar`；`HonorAccountConfig/HonorAuthSdk/HonorAccountManager`；
@@ -35,7 +35,7 @@
 - **数据**：`VisitRow` 增 `ver/dev/did`；`VisitReporter` 写版本与 `品牌 机型 · Android 版本`；`VisitsRepository` 查询/解析对应列。
 - **统计页**：摘要 4 格（账号/次数/今日活跃/设备）、24 小时/近 7 天趋势、登录端堆叠条+图例、版本/设备分布、账号明细可展开；不显示学号/did；非管理员不发请求。
 - **测试**：全量 `:app:testDebugUnitTest` **1794 用例 / 0 失败（2 skipped）**（含访问统计 51 + 荣耀 16 + vivo 8 新增）。
-- **发布**：`assembleRelease` 自动上传 beta17（vc100）；APK 大小/sha256 回读见下方（发布后回填）。
+- **发布**：`assembleRelease` 自动上传 beta18（vc101）；APK 大小/sha256 回读见下方（发布后回填）。
 
 ## 2026-11-19 18:0x · 1.0.0-beta10 / vc93：宿舍人数 1–6 自选
 
@@ -752,5 +752,6 @@ otices?select=* 全表 13.9MB 超 10s 超时；改为最新 20 条分页首屏 +
 - 隐私合规：同意门禁 + 用户协议/隐私政策 + 数据与隐私页（导出我的数据/清除云端/清除本机）。
 - 修复：底部导航吞点击、抽签/分组返回状态丢失、课表空态文案三态、通知附件按需加载。
 - 交付：签名 Release APK（2.26 MB）+ 安装说明（桌面）。
+
 
 
