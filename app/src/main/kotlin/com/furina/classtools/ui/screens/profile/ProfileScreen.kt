@@ -304,7 +304,6 @@ fun ProfileScreen(
                     .statusBarsPadding()
                     .padding(horizontal = com.furina.classtools.ui.theme.HarmonyTokens.PagePadding),
             ) {
-                ProfileHeader()
                 // 鸿蒙 MeScreen：单列滚动（内容最大宽 720，居中留白）。
                 Column(
                     modifier = Modifier
@@ -314,6 +313,9 @@ fun ProfileScreen(
                         .padding(bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp),
                 ) {
+                    // 2026-11-20：大标题放进滚动内容 —— 此前它在滚动区外，下拉时始终钉在顶部，
+                    // 并与悬浮玻璃条叠字（用户反馈「顶部的字在下拉时还是固定在上面」）。
+                    ProfileHeader()
                     IdentitySection(session)
                     NotificationPermissionBanner(
                         visible = showNotificationPermissionBanner,

@@ -6,20 +6,23 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.Icon
@@ -47,6 +50,8 @@ import com.furina.classtools.data.background.CtBackgroundImage
 import com.furina.classtools.data.background.CtBackgroundPalette
 import com.furina.classtools.data.background.CtBackgroundPreset
 import com.furina.classtools.data.background.CtBackgroundSelection
+import com.furina.classtools.ui.components.expressive.CtBottomSheet
+import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
 import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtSize
 import com.furina.classtools.ui.theme.CtSpace
@@ -54,19 +59,32 @@ import com.furina.classtools.ui.theme.CtText
 import com.furina.classtools.ui.theme.CtTypeScale
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import com.furina.classtools.ui.theme.rememberCtColors
-import com.furina.classtools.ui.components.glass.CtGlassCard
 import kotlinx.coroutines.launch
 
+// =============================================================================
+// 「我的 → 外观 → 背景」—— 2026-11-20 简洁化重做
+//
+// 改造前：一张卡片里塞 9 个色块（3×3）+ 选图行 + 模糊四档 + 状态文案，
+// 在「我的」页占了将近一屏，信息密度过高、每次进设置都要滚很久。
+//
+// 改造后：**一行摘要 + 底部弹层**。
+//   · 摘要行：当前背景缩略图 + 名称 + 一句说明 + 「更换 ›」；
+//   · 点任意位置拉起 [BackgroundSheet]：预设横向色卡（一屏 4–5 个，可横滑）、
+//     从相册选择、模糊档（仅自定义图片时出现）、删除自定义图片；
+//   · 选完即生效并自动收起，回到「我的」只有一行。
+// =============================================================================
+
+/** 当前背景的一句话描述（摘要行副标题）。 */
+private fun backgroundSummary(selection: CtBackgroundSelection): String = when {
+    selection.hasImage ->
+        "自定义图片 · 模糊${CtBackgroundImage.blurLabel(selection.customBlur)}"
+
+    selection.preset.isGradient -> "预设渐变 · ${selection.preset.label}"
+    else -> "预设 · ${selection.preset.label}"
+}
+
 /**
- * 「我的 → 外观 → 背景」设置块。
- *
- * 三种入口：
- * 1) **预设**：9 个色块（暖白/雾青/灰蓝/暖沙/深空 + 4 组渐变），3 列网格，点按即生效；
- * 2) **自定义图片**：系统照片选择器（`PickVisualMedia`，Android 13+ 走系统照片选择器，
- *    低版本自动回退 `GetContent`），选图后由 [BackgroundStore] 压缩落盘；
- * 3) **模糊档**：不模糊 / 轻 / 标准 / 强（只作用在背景图片层，前景永远清晰）。
- *
- * 所有设置**只存本机**（SharedPreferences + App 私有目录），不上传、不进云同步。
+ * 背景设置块（简洁版）。
  *
  * @param store 本机背景存储（预览为 null → 只读入参，不落盘）
  */
@@ -78,6 +96,7 @@ internal fun BackgroundSection(
     val dark = LocalCtDarkTheme.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var showSheet by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
 
@@ -91,70 +110,189 @@ internal fun BackgroundSection(
             val ok = store.importImage(uri)
             importing = false
             message = if (ok) "已应用自定义背景" else (store.lastError.value ?: "导入失败")
+            if (ok) showSheet = false
         }
     }
 
     SectionTitle("背景")
     GroupCard {
-        // ---- 预设色块（3 列网格） ----
-        Column(modifier = Modifier.padding(CtSpace.md)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .clickable(role = Role.Button) { showSheet = true }
+                .padding(horizontal = CtSpace.md, vertical = CtSpace.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(CtSpace.md),
+        ) {
+            BackgroundThumb(selection = selection, dark = dark)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (importing) "正在导入…" else "当前背景",
+                    style = CtText.body,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = backgroundSummary(selection) + " · 点击更换",
+                    style = CtTypeScale.caption,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = "更换",
+                style = CtTypeScale.label,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(CtSize.iconSmall),
+            )
+        }
+        message?.let { text ->
+            Text(
+                text = text,
+                style = CtTypeScale.caption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = CtSpace.md, end = CtSpace.md, bottom = CtSpace.sm),
+            )
+        }
+    }
+
+    if (showSheet) {
+        BackgroundSheet(
+            selection = selection,
+            dark = dark,
+            importing = importing,
+            onDismiss = { showSheet = false },
+            onPickPreset = { preset ->
+                message = null
+                store?.selectPreset(preset)
+            },
+            onPickImage = {
+                pickImage.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                )
+            },
+            onBlurChange = { level -> store?.setCustomBlur(level) },
+            onDeleteImage = {
+                scope.launch {
+                    store?.deleteImage()
+                    message = "已恢复默认背景"
+                    showSheet = false
+                }
+            },
+        )
+    }
+}
+
+/** 摘要行左侧缩略图（预设渐变 / 自定义图片图标）。 */
+@Composable
+private fun BackgroundThumb(
+    selection: CtBackgroundSelection,
+    dark: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(CtRadius.tile)
+    val colors = CtBackgroundPalette.of(selection.preset, dark = false)
+    Box(
+        modifier = modifier
+            .size(40.dp)
+            .clip(shape)
+            .background(
+                if (colors.gradient) {
+                    Brush.linearGradient(listOf(colors.base, colors.second))
+                } else {
+                    Brush.linearGradient(listOf(colors.base, colors.base))
+                },
+            )
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (selection.hasImage) {
+            Icon(
+                imageVector = Icons.Rounded.PhotoLibrary,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(CtSize.iconSmall),
+            )
+        }
+    }
+}
+
+/** 背景选择弹层（预设横滑 + 相册 + 模糊 + 删除）。 */
+@Composable
+private fun BackgroundSheet(
+    selection: CtBackgroundSelection,
+    dark: Boolean,
+    importing: Boolean,
+    onDismiss: () -> Unit,
+    onPickPreset: (CtBackgroundPreset) -> Unit,
+    onPickImage: () -> Unit,
+    onBlurChange: (Int) -> Unit,
+    onDeleteImage: () -> Unit,
+) {
+    val c = rememberCtColors()
+    CtBottomSheet(
+        onDismissRequest = onDismiss,
+        // 不透明容器：半透明会让下方「外观」文字透上来（实测背景模块弹层显脏）。
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        CtBottomSheetHeader(
+            title = "背景",
+            subtitle = "只存本机 · 不上传、不进云同步",
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = CtSpace.lg)
+                .padding(bottom = CtSpace.lg),
+        ) {
+            // ---- 预设：横向色卡（一屏 4–5 个，可横滑） ----
             Text(
                 text = "预设",
-                style = CtTypeScale.label,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = CtTypeScale.caption,
+                color = c.textSecondary,
             )
-            Spacer(Modifier.size(CtSpace.sm))
-            CtBackgroundPreset.grid.chunked(3).forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(CtSpace.sm),
-                ) {
-                    row.forEach { preset ->
-                        BackgroundSwatch(
-                            preset = preset,
-                            dark = dark,
-                            selected = !selection.hasImage && selection.preset == preset,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                message = null
-                                store?.selectPreset(preset)
-                            },
-                        )
-                    }
-                    // 补齐空位（9 个预设恰为 3×3；保留以兼容以后增删）
-                    repeat(3 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
+            Spacer(Modifier.size(CtSpace.xs))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(CtSpace.sm),
+            ) {
+                CtBackgroundPreset.grid.forEach { preset ->
+                    PresetChip(
+                        preset = preset,
+                        selected = !selection.hasImage && selection.preset == preset,
+                        onClick = { onPickPreset(preset) },
+                    )
                 }
-                Spacer(Modifier.size(CtSpace.sm))
             }
 
-            RowDivider()
+            Spacer(Modifier.size(CtSpace.lg))
 
-            // ---- 自定义图片 ----
+            // ---- 相册 ----
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = CtSize.minTouch)
-                    .clickable(enabled = !importing) {
-                        pickImage.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                        )
-                    },
+                    .clip(RoundedCornerShape(CtRadius.cardCompact))
+                    .background(c.container)
+                    .clickable(enabled = !importing, role = Role.Button, onClick = onPickImage)
+                    .padding(horizontal = CtSpace.md, vertical = CtSpace.sm),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(CtSpace.sm),
             ) {
-                Surface(
-                    shape = RoundedCornerShape(CtRadius.tile),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    contentColor = MaterialTheme.colorScheme.primary,
-                ) {
-                    Box(modifier = Modifier.size(CtSize.glyphBox), contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Rounded.PhotoLibrary,
-                            contentDescription = null,
-                            modifier = Modifier.size(CtSize.icon),
-                        )
-                    }
-                }
+                Icon(
+                    imageVector = Icons.Rounded.PhotoLibrary,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(CtSize.icon),
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (importing) "正在导入…" else "从相册选择图片",
@@ -162,56 +300,59 @@ internal fun BackgroundSection(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = "只存本机 · 长边 ≤${CtBackgroundImage.MAX_LONG_EDGE} · JPEG ${CtBackgroundImage.JPEG_QUALITY}",
+                        text = "长边 ≤${CtBackgroundImage.MAX_LONG_EDGE} · JPEG ${CtBackgroundImage.JPEG_QUALITY}",
                         style = CtTypeScale.caption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (selection.hasImage && store != null) {
-                    IconTextButton(
-                        icon = Icons.Rounded.Delete,
-                        text = "删除",
-                        tint = rememberCtColors().error,
-                        onClick = {
-                            scope.launch {
-                                store.deleteImage()
-                                message = "已恢复默认背景"
-                            }
-                        },
+                if (selection.hasImage) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = "删除自定义背景",
+                        tint = c.error,
+                        modifier = Modifier
+                            .size(CtSize.minTouch)
+                            .clip(CircleShape)
+                            .clickable(role = Role.Button, onClick = onDeleteImage)
+                            .padding(CtSpace.sm),
                     )
                 }
             }
 
-            // ---- 模糊档（仅自定义图片时可用） ----
+            // ---- 模糊档（仅自定义图片时出现） ----
             if (selection.hasImage) {
-                RowDivider()
+                Spacer(Modifier.size(CtSpace.md))
                 Text(
-                    text = "背景模糊（不模糊前景文字）",
+                    text = "图片模糊（不影响前景文字）",
                     style = CtTypeScale.caption,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = c.textSecondary,
                 )
-                Spacer(Modifier.size(CtSpace.sm))
+                Spacer(Modifier.size(CtSpace.xs))
                 Row(horizontalArrangement = Arrangement.spacedBy(CtSpace.sm)) {
                     (0..CtBackgroundSelection.MAX_CUSTOM_BLUR).forEach { level ->
                         val selected = selection.customBlur == level
                         Surface(
-                            onClick = { store?.setCustomBlur(level) },
+                            onClick = { onBlurChange(level) },
                             shape = CircleShape,
                             color = if (selected) {
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                             } else {
-                                MaterialTheme.colorScheme.surfaceContainerHigh
+                                c.container
                             },
                             contentColor = if (selected) {
                                 MaterialTheme.colorScheme.primary
                             } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                                c.textSecondary
                             },
                             modifier = Modifier.heightIn(min = 40.dp),
                         ) {
-                            Box(modifier = Modifier.heightIn(min = 40.dp).padding(horizontal = 16.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .heightIn(min = 40.dp)
+                                    .padding(horizontal = 16.dp),
+                            ) {
                                 Text(
                                     text = CtBackgroundImage.blurLabel(level),
                                     style = CtTypeScale.label,
@@ -223,35 +364,23 @@ internal fun BackgroundSection(
                     }
                 }
             }
-
-            message?.let { text ->
-                Spacer(Modifier.size(CtSpace.sm))
-                Text(
-                    text = text,
-                    style = CtTypeScale.caption,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }
 
-/** 预设色块（点按区 ≥48dp；选中 = 2dp 主色描边 + ✓）。 */
+/** 预设色卡（竖向：色块 + 名称；横滑用）。 */
 @Composable
-private fun BackgroundSwatch(
+private fun PresetChip(
     preset: CtBackgroundPreset,
-    dark: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    // 缩略图始终用浅色参数展示「这个预设是什么颜色」；实际应用时按当前明暗取 dark/light 参数。
-    // 否则深色模式下所有浅色预设都显示为接近黑色，用户无法分辨。
+    // 缩略图始终用浅色参数展示「这个预设是什么颜色」，避免深色模式下所有浅色预设都发黑。
     val colors = CtBackgroundPalette.of(preset, dark = false)
     val shape = RoundedCornerShape(CtRadius.tile)
     Column(
-        modifier = modifier
-            .heightIn(min = CtSize.minTouch)
+        modifier = Modifier
+            .width(84.dp)
             .clip(shape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -259,7 +388,7 @@ private fun BackgroundSwatch(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 52.dp)
+                .heightIn(min = 56.dp)
                 .clip(shape)
                 .background(
                     if (colors.gradient) {
@@ -307,23 +436,3 @@ private fun BackgroundSwatch(
     }
 }
 
-/** 行内的图标+文字小按钮（删除背景）。 */
-@Composable
-private fun IconTextButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String,
-    tint: Color,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .heightIn(min = CtSize.minTouch)
-            .clip(CircleShape)
-            .clickable(role = Role.Button, onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(CtSpace.xs),
-    ) {
-        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(CtSize.iconSmall))
-        Text(text = text, style = CtTypeScale.label, color = tint)
-    }
-}
