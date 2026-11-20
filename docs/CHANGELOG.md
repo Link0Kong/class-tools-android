@@ -14,8 +14,11 @@
 - **顶栏动作**：代理胶囊 / 简洁·详细 / 暂停 / 刷新 四个动作由 4vp（`CtTopBar` 默认）改为 8vp，
   仅在诊断页生效（外层包一层 `Row`），不影响其它页面顶栏。
 - **验收**：AOSP API 37 模拟器（411dp 宽）实拍 `docs/design/shots/diag-before.png` →
-  `diag-after.png`（摘要卡/卡片间/标题-正文/上报按钮四处肉眼可见拉开，排版无溢出错行）。
-- **发布**：beta20（vc103）。
+  `diag-after.png`（摘要卡/卡片间/标题-正文/上报按钮四处肉眼可见拉开，排版无溢出错行）；
+  `:app:testDebugUnitTest` **1802 用例 / 0 失败 / 2 skipped**；`:app:assembleDebug` / `:app:assembleRelease` 均成功。
+- **发布**：beta20（vc103）已上线 ECS+OSS；APK **6,065,079 B / SHA-256
+  `851FDCE44E71C92830BA5C21EA4F163D101B0045A885E87C80D80874D9D6BE11`**，
+  `latest.json` 回读 `versionCode=103 / versionName=1.0.0-beta20` 且 sha256 与本地包一致。
 
 ## 2026-11-20 · 1.0.0-beta19 / vc102：金标联盟 SharedView Kit 一镜到底（工具卡 → 工具页）
 
