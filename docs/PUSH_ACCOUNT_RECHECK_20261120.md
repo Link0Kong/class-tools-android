@@ -30,28 +30,33 @@
 但 OPPO **账号服务**的 AppKey/AppSecret 是另一套（账号服务未开通或未在开放平台「账号服务」里生成）。
 `invalid_client` 在 OPPO 文档中的含义是「未知的应用，检查 appid 和环境是否正确」，与授权码无关。
 
-**2026-11-20 22:5x 补充（用户提供 appServerSecret + OMS SDK 后复测）**：
-- 用户提供的 `appserversecret` 经比对等于现有 `oppo-push.json.master_secret`，即 **OPPO Push 的 MasterSecret**（推送服务端鉴权已用它并通过）；它不是账号服务凭证。
-- 账号服务端兑换已扩展为 **两套域名 × 两套密钥**：
-  `client-uc.heytapmobi.com`（当前 1.1.3 SDK 的 account-env 实际环境，XOR 解出）与旧 `api.uc.oppomobile.com`；
-  密钥分别用 `app_secret` 与 `app_server_secret` 尝试。
-  用无效 code 实测 **4 种组合全部返回 `2020003 invalid_client`**（而非 `invalid code`），说明账号服务端仍未认可该 AppID/AppKey。
+**2026-11-20 23:0x 补充（按官方服务端文档复核）**：
+- 官方文档《OPPO 账号OAuth授权SDK服务端API》（`open.oppomobile.com/documentation/page/info?id=10155`）确认：
+  国内生产域 `https://api.uc.oppomobile.com`，`POST /oauth2/token/token-code`，JSON
+  `{"appKey": "...", "appSecret": "...", "code": "..."}`；`appSecret` = **开平申请的应用 appSecret**。
+- 用户提供的 `appserversecret` 经比对等于现有 `oppo-push.json.master_secret`（**推送 MasterSecret**，推送鉴权已通过），不是账号服务参数。
+- 用 `appKey=11ea…` + `appSecret=bcf0…` + 无效 code 调上述官方接口，返回 `2020003 invalid_client`（不是 `invalid code`），
+  说明请求格式正确、**但应用在账号服务侧未激活/未获 openid 权限**（或这个 appSecret 不属于账号服务应用）。
+- 官方“开发准备”明确要求：产品 → 账号服务 → 申请接入 → 选择应用 → **激活账号** → 在能力项中依次申请
+  **openid、公开信息、unionid**。未完成这些步骤时服务端一律 `invalid_client`。
 - 用户提供的 RAR（`OMSBase.aar` + `OMSOAuth.aar`，2018 年旧 OMS 账号 SDK）已核对：
   它是**旧版客户端授权 SDK**（AIDL 绑定 `com.oppo.service.account`，不提供 server 兑换接口），
   与仓库现有官方 `account-oauth-web-sdk:1.1.3` 重复；不建议降级接入（会新增 READ_PHONE_STATE/旧 IPC，且不解决 invalid_client）。
-- 结论不变：**OPPO 账号服务未对该应用开通，或账号服务的 AppID/AppKey/AppSecret 与推送不是同一套**。
+- 服务端已按官方文档收敛为单域名/单 `appSecret`（不再尝试 heytap 域名或 MasterSecret），
+  错误文案直接给出 `2020003 invalid_client（账号服务未激活/未申请 openid 权限，或 appSecret 非账号服务应用）`。
 
 **需要的修复材料（本机无法自行生成）**：
-1. 登录 OPPO 开放平台 → **账号服务** → 创建/开通应用（不是推送服务页面），确认应用状态可用；
-2. 取该服务的 **AppID / AppKey / AppSecret**，写入
+1. 登录 OPPO 开放平台 → **产品 → 账号服务** → 申请接入 → 选择应用 `38092999`；
+2. 点击 **激活账号**（若未激活）；
+3. 在「账号服务能力项」中依次对 **openid、公开信息、unionid** 点击「申请开通」并等待通过；
+4. 同一应用的账号服务 AppKey/AppSecret 应与开放平台「账号服务」页显示一致；若该页给出的是另一套，写入
    `G:\ClassTools\briefdesk\secrets\oppo-account.json`：
    ```json
-   {"app_id":"<账号服务 AppID>","app_key":"<账号服务 AppKey>","app_secret":"<账号服务 AppSecret>",
-    "app_server_secret":"<可选，账号服务若单独给 server secret 再填>"}
+   {"app_id":"38092999","app_key":"<账号服务显示 AppKey>","app_secret":"<账号服务显示 AppSecret>"}
    ```
-3. 在账号服务里登记包名 `com.furina.classtools` + release 签名 SHA-1/SHA-256；
-4. 重新 `cd web && python deploy\ecs_account.py deploy`，再在 ColorOS 真机点「OPPO 账号快捷登录」。
-   若仍返回 `invalid_client`，把该接口返回的 code/message 发给 OPPO 开放平台工单确认应用开通状态。
+5. 在账号服务登记包名 `com.furina.classtools` + release 签名 SHA-1/SHA-256；
+6. 重新 `cd web && python deploy\ecs_account.py deploy`，再在 ColorOS 真机点「OPPO 账号快捷登录」。
+   若仍返回 `invalid_client`，把该接口返回的 code/message 发给 OPPO 开放平台工单确认开通状态。
 
 客户端已将 `invalid_client` 转成可诊断文案（`OppoAccountText.exchangeFailedMessage`），不会崩溃。
 
