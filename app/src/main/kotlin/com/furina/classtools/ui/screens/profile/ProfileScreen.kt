@@ -138,6 +138,8 @@ import com.furina.classtools.ui.theme.rememberHarmonyColors
 import com.furina.classtools.ui.theme.rememberProfileHeroColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
+import com.furina.classtools.ui.components.ctRootPageEdgeFade
+import com.furina.classtools.ui.components.ctHeaderCollapseProgress
 
 /**
  * 「我的」（v5 重做：对齐微信小程序 `pages/me` 的信息架构）。
@@ -313,13 +315,14 @@ fun ProfileScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .hazeSource(meHazeState)
+                        .ctRootPageEdgeFade()
                         .verticalScroll(meScrollState)
                         .padding(bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp),
                 ) {
                     // 2026-11-20：大标题放进滚动内容 —— 此前它在滚动区外，下拉时始终钉在顶部，
                     // 并与悬浮玻璃条叠字（用户反馈「顶部的字在下拉时还是固定在上面」）。
-                    ProfileHeader()
+                    ProfileHeader(collapse = ctHeaderCollapseProgress(meScrollState.value.toFloat()))
                     IdentitySection(session)
                     NotificationPermissionBanner(
                         visible = showNotificationPermissionBanner,
@@ -457,9 +460,10 @@ fun ProfileScreen(
 // =============================================================================
 
 @Composable
-private fun ProfileHeader() {
+private fun ProfileHeader(collapse: Float) {
     CtRootHeader(
         title = "我的",
+        collapse = collapse,
         eyebrow = "账号与偏好",
         subtitle = "身份、数据同步、提醒与外观",
     )

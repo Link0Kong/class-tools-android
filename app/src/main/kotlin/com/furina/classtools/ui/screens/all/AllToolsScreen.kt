@@ -84,6 +84,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import com.furina.classtools.ui.components.ctRootPageEdgeFade
+import com.furina.classtools.ui.components.ctHeaderCollapseProgress
 
 /**
  * 「全部工具」页（2026-11-17 按鸿蒙 `AllScreen.ets` 重做）：
@@ -335,9 +337,11 @@ fun AllToolsScreen(
                         .statusBarsPadding()
                         .padding(horizontal = pagePadding)
                         .hazeSource(hazeState)
+                        .ctRootPageEdgeFade()
                         .verticalScroll(scrollState),
                 ) {
                     HarmonyAllToolsHeader(
+                        collapse = ctHeaderCollapseProgress(scrollState.value.toFloat()),
                         editing = editing,
                         toolCount = toolsInOrder.size,
                         columns = columns,
@@ -605,6 +609,7 @@ private fun CategoryGrid(
 /** 页头（2026-11-20 重做）：大标题「全部工具」+ 玻璃动作（编辑/完成）+ 副标题统计。 */
 @Composable
 private fun HarmonyAllToolsHeader(
+    collapse: Float,
     editing: Boolean,
     toolCount: Int,
     columns: Int,
@@ -613,6 +618,7 @@ private fun HarmonyAllToolsHeader(
 ) {
     CtRootHeader(
         title = "全部工具",
+        collapse = collapse,
         eyebrow = "工具库",
         subtitle = when {
             dragging -> "松手保存顺序"

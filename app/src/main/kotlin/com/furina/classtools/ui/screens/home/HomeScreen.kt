@@ -124,6 +124,8 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
+import com.furina.classtools.ui.components.ctRootPageEdgeFade
+import com.furina.classtools.ui.components.ctHeaderCollapseProgress
 
 /**
  * 工作台 v5（参考 HFUT-Schedule 卡片层次 + xiaoying 渐变 hero / 快捷图标行；只借鉴设计）。
@@ -436,6 +438,8 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .statusBarsPadding()
                             .padding(horizontal = com.furina.classtools.ui.theme.HarmonyTokens.PagePadding)
+                            // 顶部/底部渐隐：内容滑到标题栏/浮岛附近时逐像素淡出（官方参考的顶部悬浮行为）。
+                            .ctRootPageEdgeFade()
                             .verticalScroll(scrollState)
                             .padding(top = com.furina.classtools.ui.theme.HarmonyTokens.BreathTop, bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
@@ -443,6 +447,7 @@ fun HomeScreen(
                         HomeReveal(enabled = animateEntrance, index = 0) {
                             CtRootHeader(
                                 title = "工作台",
+                                collapse = ctHeaderCollapseProgress(scrollState.value.toFloat()),
                                 eyebrow = "班级工具站",
                                 subtitle = "$todayLabel · $greeting",
                                 actions = {

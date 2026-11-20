@@ -162,9 +162,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 100
+        versionCode = 101
     // 测试版本 17：1.0.0-beta17（荣耀账号 + vivo 推送 + OPPO 复核；含 beta15 统计与 beta16 沉浸光感修复）。
-        versionName = "1.0.0-beta17"
+        versionName = "1.0.0-beta18"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -195,7 +195,7 @@ android {
         buildConfigField("String", "VIVO_PUSH_API_KEY", buildConfigString(vivoApiKey))
 
         // 测试版本标识（当前为「测试版本 8」）：App 内版本行使用。
-        buildConfigField("int", "TEST_VERSION", "17")
+        buildConfigField("int", "TEST_VERSION", "18")
         buildConfigField("String", "TEST_VERSION_LABEL", buildConfigString("测试版本"))
     }
 

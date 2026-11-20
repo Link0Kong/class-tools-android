@@ -80,7 +80,7 @@ import dev.chrisbanes.haze.HazeState
 // =============================================================================
 
 /** 悬浮条开始显现的滚动阈值（px→dp）：滚过 12dp 后开始淡入。 */
-private const val STICKY_START_DP = 12f
+private const val STICKY_START_DP = 88f
 
 /** 悬浮条完全显现所需的额外滚动距离（dp）。 */
 private const val STICKY_FADE_DP = 36f
@@ -115,12 +115,25 @@ fun CtRootHeader(
     modifier: Modifier = Modifier,
     eyebrow: String? = null,
     subtitle: String? = null,
+    /** 折叠进度 0..1：向上滑动时大标题**轻微缩小 + 上移 + 淡出**（官方参考的顶部悬浮行为）。 */
+    collapse: Float = 0f,
     actions: @Composable () -> Unit = {},
 ) {
     val c = rememberCtColors()
+    val p = collapse.coerceIn(0f, 1f)
+    val headerAlpha = (1f - p * 1.15f).coerceIn(0f, 1f)
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                // 稍微缩小 + 上移：0 → 0.94 倍、向上 10dp，收得克制（官方示例幅度很小）
+                val s = 1f - 0.06f * p
+                scaleX = s
+                scaleY = s
+                translationY = -10.dp.toPx() * p
+                alpha = headerAlpha
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
+            }
             .padding(top = CtSpace.sm, bottom = CtSpace.xs),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
