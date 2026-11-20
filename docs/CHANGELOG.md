@@ -21,6 +21,9 @@
 - **文档**：`docs/SHAREDVIEW_MOTION.md`（接入原理、参数口径、验收步骤、已知限制）。
 - **同树并行改动一并纳入**：工具页相邻可点控件间距统一到 `CtSpace.controlGap`（≥8vp），覆盖体测/点名/
   通知/名单/课表/演示/文件传输/身份页；`CtSpacingTokensTest` 新增 8/12/16 三档断言。详见 `docs/DESIGN_SYSTEM.md` §13.4。
+- **发布**：beta19（vc102）已上线 ECS+OSS；APK **6,065,079 B / SHA-256
+  `1FE2FBAC29E848AF8B0F8390F698C1CDF12F10A643EB218A035A4282E781A6AF`**，`latest.json` 回读一致；
+  release 包在 AOSP API 37 模拟器安装/启动成功（版本行 v1.0.0-beta19）。
 
 ## 2026-11-20 · 1.0.0-beta18 / vc101：荣耀账号 + vivo 推送 + OPPO 推送/账号复核（含 beta15 统计、beta16 沉浸光感、beta18 顶部悬浮重做）
 
