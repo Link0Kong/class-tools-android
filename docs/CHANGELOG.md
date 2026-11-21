@@ -37,7 +37,15 @@
 
 ### 四、发布
 
-- 待填。
+- `assembleRelease` 在**独立 worktree**（提交 `eeecf38`）干净构建，避开并行会话未提交改动：
+  APK **6,074,882 B / SHA-256 `406eedb8b8345ff44a0f856618975bd4fce3998e8f0e1cd0218e47b8863f04ee`**（beta27 / vc110）。
+- 渠道清单回读 `versionCode=110 / versionName=1.0.0-beta27`、sha256 与 APK 一致；ECS
+  `http://121.196.47.2/android/latest.json`、OSS `android/latest.json` 与 APK / APK.bin 均 HTTP 200
+  （脚本日志 `ECS_ANDROID_OK`）。
+- 真实目录接口核验（测试身份 `3260799999`，只读）：`GET power?select=id,label,building,room&order=id.asc&limit=200`
+  返回 17 间宿舍（13号楼308/324、16号楼305/306、23A 321/323–330、23B 422–425），排序与网页/小程序一致。
+- 双远端：GitHub `origin` 与 Gitee `gitee` 均指向 `eeecf38`（GitHub 直连失败时按 `docs/GitHub推送兜底.md` 临时代理推送）。
+- 说明：beta26/vc109 由并行 M3 会话发布（本版已顺延版本号，未覆盖其清单）；本版 APK 从同一 `master` 的干净提交构建。
 
 
 ## 2026-11-21 · 1.0.0-beta22 / vc105：通知模块化（对齐鸿蒙）+ 统一分享弹层（对齐小程序）
