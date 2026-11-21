@@ -19,7 +19,7 @@ class DiagSanitizerTest {
 
     @Test
     fun sanitizeText_removesWindowsAbsolutePaths() {
-        assertEquals("[path]", DiagSanitizer.sanitizeText("""C:\Users\Ko_Li\secret\a.txt"""))
+        assertEquals("[path]", DiagSanitizer.sanitizeText("""C:\Users\<用户>\secret\a.txt"""))
         assertEquals("日志 [path] 读取失败", DiagSanitizer.sanitizeText("""日志 D:\briefdesk\logs\agent.log 读取失败"""))
     }
 

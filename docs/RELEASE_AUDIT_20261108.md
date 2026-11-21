@@ -1,9 +1,9 @@
 # v1.0.1 发布前只读审计（2026-11-08）
 
 > 审计性质：**只读**。未修改任何 app 源码/构建文件；本文件是唯一写入。
-> 审计对象：`C:\Users\Ko_Li\.openclaw\workspace\android-class-tools`（包 `com.furina.classtools`，v1.0.1 / versionCode 2）。
+> 审计对象：`<项目根>`（包 `com.furina.classtools`，v1.0.1 / versionCode 2）。
 > 审计人：contract（Team）；审计时间：2026-11-08 01:33–01:42；代码快照：工作区 01:38 编译绿树。
-> 说明：该工作区 git 仓库（`C:/Users/Ko_Li/.openclaw/workspace`）**尚无任何 commit**（`git rev-list HEAD` 失败），因此无法以 commit hash 固定快照；本报告对应“2026-11-08 01:38 编译通过 + 01:40 成功 assembleRelease 的工作树”。
+> 说明：该工作区 git 仓库（`<工作区>`）**尚无任何 commit**（`git rev-list HEAD` 失败），因此无法以 commit hash 固定快照；本报告对应“2026-11-08 01:38 编译通过 + 01:40 成功 assembleRelease 的工作树”。
 
 ---
 
@@ -97,7 +97,7 @@
 - ✅ 权限最小：`AndroidManifest.xml:4-5` 仅 `INTERNET` + `ACCESS_NETWORK_STATE`；无存储/定位/通讯录/相册读取权限。
 - ✅ `allowBackup="false"`（`:9`）；仅 `MainActivity` exported（`:19`）；FileProvider `exported=false`（`:31-32`），无其它导出组件；默认禁 cleartext（targetSdk 37 未配置 `usesCleartextTraffic`）。
 - ✅ **身份门禁**：Release 无“开发预览”入口（`IdentityScreen.kt:267` 在 `BuildConfig.DEBUG` 内）；核对同意勾选后才可提交；29 天本地过期与 401 自动清会话（`Session.kt`/`AppContainer.kt:72`）。
-- ✅ **token/学号不外泄**：全仓仅 1 条日志（`AppContainer.kt:72`，不含 token/学号/姓名）；token 仅进 `X-Class-Token` 请求头与私有 DataStore；导出 JSON 用 `PrivacyExportBuilder` 脱敏（`32***24`）、无 token、**power 电费不导出**、`roster.rollNames`（名单原文）清空、`tt` 不导出；`privacy` 仓库 16 单测覆盖（含“导出文本不包含 sid/token”断言）。
+- ✅ **token/学号不外泄**：全仓仅 1 条日志（`AppContainer.kt:72`，不含 token/学号/姓名）；token 仅进 `X-Class-Token` 请求头与私有 DataStore；导出 JSON 用 `PrivacyExportBuilder` 脱敏（`20***01`）、无 token、**power 电费不导出**、`roster.rollNames`（名单原文）清空、`tt` 不导出；`privacy` 仓库 16 单测覆盖（含“导出文本不包含 sid/token”断言）。
 - ✅ **导出卡隐私**：抽签/分组/体测导出内容与文件名不含学号/手机号/宿舍号（分组仅姓名+座号，页面本就展示）；电费/水量不提供导出入口；导出图仅写相册/分享。
 - ✅ **清除云端**：userdata 空 v6 blob（upsert）、marks 逐条 `val=false`、fitrecs 逐条 `PATCH arch=true`，**全部无 DELETE**（契约）；部分失败逐项报告可读错误。
 - ✅ **零外部请求**：主源码无第三方 URL；网络仅 `BuildConfig.REST_BASE_URL`（CloudBase 网关）；无 WebView / CDN / 统计 SDK；README/依赖表无第三方采集库。

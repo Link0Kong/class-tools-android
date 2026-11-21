@@ -20,7 +20,7 @@ import org.junit.Test
 
 class FitRecsRepositoryTest {
 
-    private val sid = "3260707024"
+    private val sid = "2024000001"
 
     private fun record(
         id: String,

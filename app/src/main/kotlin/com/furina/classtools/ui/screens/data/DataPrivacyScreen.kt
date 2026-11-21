@@ -99,7 +99,7 @@ enum class DataPrivacyDialog {
  * 契约：`docs/PRIVACY_COMPLIANCE.md` 待办 #1/#2；`docs/api/ENDPOINTS.md`（userdata E13 / marks E11 / fitrecs E15/E16）。
  *
  * 隐私口径：
- * - 导出 JSON 不含 token、学号脱敏（`32***24`）、电费（power）不导出、名单原文/课表快照不导出；
+ * - 导出 JSON 不含 token、学号脱敏（`20***01`）、电费（power）不导出、名单原文/课表快照不导出；
  * - 清除云端为不可恢复操作，二次确认；网页/小程序同账号数据同样会被清空；
  * - 清除本机保留身份会话（重新同步可恢复可重建缓存）。
  *
@@ -434,7 +434,7 @@ private fun PrivacyContent(
                 }
                 // M-08：按「收集与展示 / 存储与同步 / 你的控制」分组，长段说明更易扫读。
                 PrivacySectionLabel("收集与展示")
-                PrivacyBullet("不显示手机号；学号仅脱敏展示（如 32***24）")
+                PrivacyBullet("不显示手机号；学号仅脱敏展示（如 20***01）")
                 PrivacyBullet("页面与导出图不含宿舍号；电费数据不导出")
                 PrivacySectionLabel("存储与同步")
                 PrivacyBullet("数据仅存于班级云服务，仅本人可读写；不接入第三方统计或广告")

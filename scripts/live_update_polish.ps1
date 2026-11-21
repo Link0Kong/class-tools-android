@@ -1,6 +1,6 @@
 # Live Updates polish: transient result notification + availability helper.
 $ErrorActionPreference = 'Stop'
-$root = 'G:\ClassTools\android-class-tools'
+$root = Split-Path -Parent $PSScriptRoot
 $base = Join-Path $root 'app\src\main\kotlin\com\furina\classtools'
 
 # 1) LiveUpdateNotifier: expose availability + transient result notification

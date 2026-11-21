@@ -37,8 +37,8 @@ import com.furina.classtools.ui.theme.ClassToolsTheme
 private const val T50_NOW: Long = 1_794_016_800_000L // 2026-11-07 10:00 Asia/Shanghai
 
 private val t50Session = Session(
-    sid = "3260707024",
-    name = "陈子麒",
+    sid = "2024000001",
+    name = "陈同学",
     token = "preview-token",
     role = "副团支部书记",
     badge = "班委",

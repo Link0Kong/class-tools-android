@@ -15,11 +15,13 @@ if (-not $OutDir) { $OutDir = Join-Path $root 'artifacts\previews_diag_v21' }
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 $copy = 'C:\Temp\ct-preview'
-$env:JAVA_HOME = 'G:\Dev\AndroidToolchain\jdk17'
-$env:ANDROID_HOME = 'G:\Dev\AndroidToolchain\sdk'
+# Toolchain root: set CT_TOOLCHAIN_ROOT, or install it at the default below.
+$toolRoot = if ($env:CT_TOOLCHAIN_ROOT) { $env:CT_TOOLCHAIN_ROOT } else { 'C:\AndroidToolchain' }
+$env:JAVA_HOME = Join-Path $toolRoot 'jdk17'
+$env:ANDROID_HOME = Join-Path $toolRoot 'sdk'
 $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
-$env:PATH = "G:\Dev\AndroidToolchain\jdk17\bin;G:\Dev\AndroidToolchain\sdk\cmdline-tools\latest\bin;$env:PATH"
-$androidCli = 'G:\Dev\AndroidToolchain\sdk\cmdline-tools\latest\bin\android.exe'
+$env:PATH = "$(Join-Path $toolRoot 'jdk17\bin');$(Join-Path $toolRoot 'sdk\cmdline-tools\latest\bin');$env:PATH"
+$androidCli = Join-Path $toolRoot 'sdk\cmdline-tools\latest\bin\android.exe'
 
 if (-not $NoSync) {
     Write-Output "syncing project -> $copy"

@@ -7,7 +7,7 @@
 
 | 项 | 结果 |
 |---|---|
-| APK | `C:\Users\Ko_Li\OneDrive\桌面\班级工具站_v4.41.0_安卓.apk`，**3,026,713 B** |
+| APK | `<下载目录>\班级工具站_v4.41.0_安卓.apk`，**3,026,713 B** |
 | SHA-256 | `E663D882F9EE20794169ED5C6ACF94FB8E854F1C65F2B53944E2A5DB7F2CA25E` |
 | 版本 | versionCode 57 / versionName 4.41.0 / minSdk 26 / targetSdk 37 |
 | 签名 | 自签名 V2（CN=ClassTools），与历史版本同 keystore |

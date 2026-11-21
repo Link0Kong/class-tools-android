@@ -139,7 +139,7 @@ class TtLocalTest {
                 "power" -> put(
                     "power",
                     buildJsonObject {
-                        put("sel", JsonPrimitive("4-23A---321"))
+                        put("sel", JsonPrimitive("4-23A---305"))
                         put("at", JsonPrimitive(1L))
                         put("low", JsonPrimitive(30))
                     },
@@ -164,13 +164,13 @@ class TtLocalTest {
 
         // 其它 section 原样保留（power 选择未被覆盖）
         val power = userData.currentSections.value["power"] as JsonObject
-        assertEquals("4-23A---321", (power["sel"] as JsonPrimitive).contentOrNull)
+        assertEquals("4-23A---305", (power["sel"] as JsonPrimitive).contentOrNull)
 
         store.clear()
         assertNull(store.read())
         val clearedTt = userData.currentSections.value["tt"] as JsonObject
         assertEquals("week", (clearedTt["ttView"] as JsonPrimitive).content)
-        assertEquals("4-23A---321", ((userData.currentSections.value["power"] as JsonObject)["sel"] as JsonPrimitive).content)
+        assertEquals("4-23A---305", ((userData.currentSections.value["power"] as JsonObject)["sel"] as JsonPrimitive).content)
     }
 
     // ------------------------------------------------------------ 仓库优先级

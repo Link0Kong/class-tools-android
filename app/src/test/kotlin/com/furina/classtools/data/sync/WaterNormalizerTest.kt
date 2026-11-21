@@ -22,8 +22,8 @@ class WaterNormalizerTest {
         val section = parse(
             """
             {"rooms":{
-              "4-23A---321":{"p":6,"recs":[{"m":"2026-10","r":100.456,"ts":1}]},
-              "1-13---324":{"p":9,"recs":[]},
+              "4-23A---305":{"p":6,"recs":[{"m":"2026-10","r":100.456,"ts":1}]},
+              "1-13---301":{"p":9,"recs":[]},
               "bad-room":"oops",
               "arr-room":[1,2],
               "no-room":{}
@@ -35,12 +35,12 @@ class WaterNormalizerTest {
         val rooms = normalized["rooms"]!!.jsonObject
 
         // 与网页 normWater 一致：坏房间（非对象）丢弃；空对象房间保留并补默认 {p:4,recs:[]}。
-        assertEquals(setOf("4-23A---321", "1-13---324", "no-room"), rooms.keys)
-        assertEquals(6, rooms["4-23A---321"]!!.jsonObject["p"]!!.jsonPrimitive.int)
-        val recs = rooms["4-23A---321"]!!.jsonObject["recs"]!! as JsonArray
+        assertEquals(setOf("4-23A---305", "1-13---301", "no-room"), rooms.keys)
+        assertEquals(6, rooms["4-23A---305"]!!.jsonObject["p"]!!.jsonPrimitive.int)
+        val recs = rooms["4-23A---305"]!!.jsonObject["recs"]!! as JsonArray
         assertEquals(100.46, recs[0].jsonObject["r"]!!.jsonPrimitive.content.toDouble(), 1e-9)
         // p=9 → 默认 4
-        assertEquals(4, rooms["1-13---324"]!!.jsonObject["p"]!!.jsonPrimitive.int)
+        assertEquals(4, rooms["1-13---301"]!!.jsonObject["p"]!!.jsonPrimitive.int)
         assertEquals(4, rooms["no-room"]!!.jsonObject["p"]!!.jsonPrimitive.int)
         assertTrue((rooms["no-room"]!!.jsonObject["recs"]!! as JsonArray).isEmpty())
     }

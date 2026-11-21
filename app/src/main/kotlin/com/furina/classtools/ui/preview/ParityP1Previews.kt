@@ -22,8 +22,8 @@ import com.furina.classtools.ui.theme.ClassToolsTheme
  */
 
 private val previewSession = Session(
-    sid = "3260707024",
-    name = "陈子麒",
+    sid = "2024000001",
+    name = "陈同学",
     token = "preview-token",
     role = "班长",
 )
@@ -32,14 +32,14 @@ private val previewRows = listOf(
     FeedbackRow(
         id = "f_1",
         content = "课表页能按周切换了，建议在无课时也显示下一节课。",
-        acc = "3260707024",
+        acc = "2024000001",
         done = false,
         ts = 1_741_000_000_000L,
     ),
     FeedbackRow(
         id = "f_2",
         content = "希望作业提醒增加「提前 3 天」选项。",
-        acc = "3260707024",
+        acc = "2024000001",
         done = true,
         ts = 1_740_900_000_000L,
     ),
@@ -69,8 +69,8 @@ private fun FeedbackAdminDarkPreview() {
             session = admin,
             repository = null,
             skipLoad = true,
-            initialRows = previewRows + previewRows.map { it.copy(id = it.id + "_x", acc = "3260707999") },
-            nameOfSid = { sid -> if (sid == "3260707024") "陈子麒" else "李同学" },
+            initialRows = previewRows + previewRows.map { it.copy(id = it.id + "_x", acc = "2024000004") },
+            nameOfSid = { sid -> if (sid == "2024000001") "陈同学" else "李同学" },
         )
     }
 }
@@ -98,7 +98,7 @@ private fun FeedbackTabletPreview() {
             repository = null,
             skipLoad = true,
             initialRows = previewRows,
-            nameOfSid = { "陈子麒" },
+            nameOfSid = { "陈同学" },
         )
     }
 }
@@ -134,7 +134,7 @@ private fun MeStatsPreview() {
                         pendingNotices = 5,
                         classMembers = 68,
                         powerRemaining = 36.5,
-                        powerRoomLabel = "23号楼A座321",
+                        powerRoomLabel = "23号楼A座305",
                     ),
                     reminder = ReminderStatus(
                         enabled = true,

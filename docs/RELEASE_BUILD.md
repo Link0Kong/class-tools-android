@@ -24,7 +24,7 @@
 ```powershell
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'
 $env:ANDROID_HOME='C:\AndroidToolchain\sdk'
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 
 .\gradlew.bat assembleDebug    --console=plain   # Debug（含「开发预览」入口，仅调试用）
 .\gradlew.bat assembleRelease  --console=plain   # Release（R8 + 签名）
@@ -79,7 +79,7 @@ cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
 ```powershell
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'
 $env:ANDROID_HOME='C:\AndroidToolchain\sdk'; $env:ANDROID_SDK_ROOT=$env:ANDROID_HOME
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 .\gradlew.bat :app:assembleRelease --console=plain --no-daemon
 
 $apk = 'app\build\outputs\apk\release\app-release.apk'
@@ -139,7 +139,7 @@ cmd /c "`"$adb`" exec-out screencap -p > artifacts\e2e\release_launch.png"
 | 项 | 结果 |
 |---|---|
 | `:app:assembleRelease` | **BUILD SUCCESSFUL in 13 s**（52 tasks；增量，packageRelease/assembleRelease 复用已构建产物） |
-| Release APK | `C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\app\build\outputs\apk\release\app-release.apk` |
+| Release APK | `<项目根>\app\build\outputs\apk\release\app-release.apk` |
 | 交付副本 | `android-class-tools\artifacts\classtools-1.0.1-release-signed.apk`（与构建产物逐字节一致，供交付桌面） |
 | APK 字节数 | **2,274,622 B**（约 2.17 MiB） |
 | APK SHA-256 | `72135018511DE666CB1AF6222988FD7FE39FF527F21C20D70C1B80D98D144DD2`（构建产物与交付副本实测一致） |
@@ -187,7 +187,7 @@ Release 包**真实账号业务全链路**（真实身份登录 → 云端数据
 | 项 | 结果 |
 |---|---|
 | `:app:assembleRelease` | **BUILD SUCCESSFUL**（修复 R8 规则后，11 s；52 tasks） |
-| Release APK | `C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\app\build\outputs\apk\release\app-release.apk` |
+| Release APK | `<项目根>\app\build\outputs\apk\release\app-release.apk` |
 | 交付副本（Lead） | `android-class-tools\artifacts\classtools-2.1.0-release-signed.apk`（与构建产物 SHA-256 实测一致） |
 | APK 字节数 | **2,478,833 B**（约 2.36 MiB） |
 | APK SHA-256 | **`DCBB1EAE01D79BF3EFF5A70B02742CDC08FA65922C9C9CA8CD9C3DC7FB490B93`** |

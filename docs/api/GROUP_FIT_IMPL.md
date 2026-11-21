@@ -1,6 +1,6 @@
 # `GROUP_FIT_IMPL.md` — 分组 + 体测原生实现说明
 
-> 工程：`C:\Users\Ko_Li\.openclaw\workspace\android-class-tools`（包 `com.furina.classtools`）
+> 工程：`<项目根>`（包 `com.furina.classtools`）
 > 契约：`docs/BACKEND_CONTRACT.md` §7.2/§7.3、`docs/api/USERDATA_V6.md`（group/fit section）、
 > `docs/api/ENDPOINTS.md` E14/E15/E16（fitrecs）、`web/tools/tests/export_card_v2_spec.md`
 > 交付：task-10（领域层 + Compose 页面 + 单测 + 预览 + 两处小修复）
@@ -151,7 +151,7 @@ MainNavHost 接线建议：
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'
 $env:ANDROID_HOME='C:\AndroidToolchain\sdk'
 $env:ANDROID_SDK_ROOT='C:\AndroidToolchain\sdk'
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 & 'C:\AndroidToolchain\gradle\gradle-9.9.0\bin\gradle.bat' :app:compileDebugKotlin :app:testDebugUnitTest --console=plain
 ```
 

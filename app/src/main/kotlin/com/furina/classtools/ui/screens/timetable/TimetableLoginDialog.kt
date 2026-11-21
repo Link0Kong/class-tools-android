@@ -284,7 +284,7 @@ private fun TimetableLoginPreview() {
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 TimetableLoginForm(
-                    sid = "3260707024",
+                    sid = "2024000001",
                     password = "********",
                     submitting = false,
                     statusText = "",
@@ -314,7 +314,7 @@ private fun TimetableLoginErrorPreview() {
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 TimetableLoginForm(
-                    sid = "3260707024",
+                    sid = "2024000001",
                     password = "",
                     submitting = false,
                     statusText = "",

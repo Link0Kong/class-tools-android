@@ -29,7 +29,7 @@ for (row in rows) {
 
 ### 1.2 数据层原因（云端行为何会重复；按行结构与管线逻辑分析）
 
-治理管线（`briefdesk/scripts/sync_notices_cloud.py` + `ai_triage.py`）正常路径是
+治理管线（`scripts/sync_notices_cloud.py` + `ai_triage.py`）正常路径是
 `id = auto_<group.id>`、并把不再存在的 auto 行归档；但下列情况会留下**同一逻辑通知多行**：
 
 1. **历史遗留行**：早期采集/合并产生的 `auto_<旧gid>` 行未被本轮 `archived=true` 覆盖（归档步骤失败、

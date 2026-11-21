@@ -24,7 +24,7 @@ import org.junit.Test
 
 class UserDataRepositoryTest {
 
-    private val sid = "3260707024"
+    private val sid = "2024000001"
     private val fixedNow = 1_700_000_000_000L
 
     // ------------------------------------------------------------ helpers
@@ -363,7 +363,7 @@ class UserDataRepositoryTest {
         val current = LinkedHashMap<String, JsonElement>()
         UserdataV6.SECTION_KEYS.forEach { current[it] = UserdataV6.defaultSection(it) }
         current["power"] = buildJsonObject {
-            put("sel", JsonPrimitive("4-23A---321"))
+            put("sel", JsonPrimitive("4-23A---305"))
             put("at", JsonPrimitive(fixedNow))
             put("low", JsonPrimitive(30))
         }
@@ -374,7 +374,7 @@ class UserDataRepositoryTest {
 
         val pushed = postBlob(transport)
         assertEquals(
-            "4-23A---321",
+            "4-23A---305",
             ((pushed["power"] as JsonObject)["sel"] as JsonPrimitive).content,
         )
         // 已有基线（pull 建立）后本地值稳定落库

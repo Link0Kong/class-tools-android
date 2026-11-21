@@ -23,7 +23,7 @@
 | Gradle 可执行 | `C:\AndroidToolchain\gradle\gradle-9.9.0\bin\gradle.bat` | 无 wrapper 时可直接用 |
 | emulator | `C:\AndroidToolchain\sdk\emulator\emulator.exe` | **37.2.13.0**（build_id 16740729） |
 | system image | `C:\AndroidToolchain\sdk\system-images\android-37.0\google_apis\x86_64` | 包版本 **8.0.0**，约 **5.3 GB**（解压后；官方索引标称压缩包 2 GB 级别，实际更大） |
-| AVD | `C:\Users\Ko_Li\.android\avd\ct-api37.avd` | Android **17.0（"CinnamonBun"）**，google_apis/x86_64，medium_phone 配置 |
+| AVD | `<AVD 目录>\ct-api37.avd` | Android **17.0（"CinnamonBun"）**，google_apis/x86_64，medium_phone 配置 |
 | 冒烟工程 | `C:\AndroidToolchain\smoke`、`C:\AndroidToolchain\smoke-k24`、`C:\AndroidToolchain\smoke-kgp` | 三套 Kotlin 接线各一（§5） |
 | 安装/构建日志 | `C:\AndroidToolchain\work\*.log` | 见 §11 |
 | 仓库产物目录 | `android-class-tools\artifacts\` | APK + Previews + 模拟器截图 |
@@ -46,7 +46,7 @@ $env:PATH = "C:\AndroidToolchain\jdk\bin;C:\AndroidToolchain\sdk\cmdline-tools\l
 可复用脚本（本次新增）：`android-class-tools\scripts\toolchain\toolchain-env.ps1`（纯 ASCII 编写，Windows PowerShell 5.1 与 pwsh 7 均可加载），用法：
 
 ```powershell
-. C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\scripts\toolchain\toolchain-env.ps1   # 默认 JDK21
+. <项目根>\scripts\toolchain\toolchain-env.ps1   # 默认 JDK21
 . .\scripts\toolchain\toolchain-env.ps1 -Jdk 17                                                # 切 JDK17
 ```
 
@@ -297,13 +297,13 @@ $android = 'C:\AndroidToolchain\sdk\cmdline-tools\latest\bin\android.exe'
 `android-class-tools\scripts\render_previews.ps1`：robocopy 同步到 `C:\Temp\ct-preview`（排除 build/.gradle/.kotlin/artifacts/design/docs/scripts）→ 删副本 build 目录 → `preview list app` 取全部 FQN → `preview render app --output artifacts\previews`。用法：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\scripts\render_previews.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File <项目根>\scripts\render_previews.ps1
 # 输出默认到 <repo>\artifacts\previews
 ```
 
 ### 7.4 本次渲染产物（8 张 PNG，实测 1082 宽）
 
-目录：`C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\artifacts\previews\com\furina\classtools\ui\preview\ScreenPreviewsKt\`
+目录：`<项目根>\artifacts\previews\com\furina\classtools\ui\preview\ScreenPreviewsKt\`
 
 | 文件 | 字节 | 像素 |
 |---|---|---|
@@ -351,7 +351,7 @@ $avdmanager = 'C:\AndroidToolchain\sdk\cmdline-tools\latest\bin\avdmanager.bat'
 'no' | & $avdmanager create avd -n ct-api37 -k 'system-images;android-37.0;google_apis;x86_64' -d medium_phone --force
 ```
 
-- AVD 路径：`C:\Users\Ko_Li\.android\avd\ct-api37.avd`
+- AVD 路径：`<AVD 目录>\ct-api37.avd`
 - 实测 `avdmanager list avd`：`Based on: Android 17.0 ("CinnamonBun") Tag/ABI: google_apis/x86_64`
 - `config.ini`：`image.sysdir.1=system-images\android-37.0\google_apis\x86_64\`、`hw.ramSize=2G`
 - 注意：`android emulator create medium_phone`（新 CLI）会**自己选默认镜像**（本机实测选成 android-36 google_apis_playstore，2.3 GB），要指定 android-37.0 镜像请用 `avdmanager`。
@@ -378,7 +378,7 @@ do { Start-Sleep -Seconds 5 } until ((& $adb shell getprop sys.boot_completed).T
 & $adb shell getprop ro.build.version.release    # 17
 & $adb shell getprop ro.product.cpu.abi          # x86_64
 
-& $adb install -r 'C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\artifacts\classtools-1.0.0-debug.apk'
+& $adb install -r '<项目根>\artifacts\classtools-1.0.0-debug.apk'
 & $adb shell am start -n 'com.furina.classtools.debug/com.furina.classtools.MainActivity'
 Start-Sleep -Seconds 8
 & adb exec-out screencap -p > <repo>\artifacts\emulator-home.png
@@ -422,7 +422,7 @@ Start-Sleep -Seconds 8
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'
 $env:ANDROID_HOME='C:\AndroidToolchain\sdk'; $env:ANDROID_SDK_ROOT=$env:ANDROID_HOME
 $env:PATH="C:\AndroidToolchain\jdk17\bin;C:\AndroidToolchain\sdk\platform-tools;$env:PATH"
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 
 .\gradlew.bat :app:assembleDebug --console=plain          # 构建 debug APK
 # 产物：app\build\outputs\apk\debug\app-debug.apk；正式工程另存一份→ artifacts\classtools-1.0.0-debug.apk
@@ -462,7 +462,7 @@ cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
 - **命令**：
 
   ```powershell
-  cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+  cd <项目根>
   pwsh -NoProfile -File .\scripts\e2e_smoke.ps1 -Build -Install   # 完整验收
   pwsh -NoProfile -File .\scripts\e2e_smoke.ps1                   # 快速回归（复用已装 APK）
   pwsh -NoProfile -File .\scripts\e2e_smoke.ps1 -Screens D:\e2e   # 自定义截图目录

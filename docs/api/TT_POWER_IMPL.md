@@ -1,6 +1,6 @@
 # `TT_POWER_IMPL.md` — 课表 + 电费原生实现说明
 
-> 工程：`C:\Users\Ko_Li\.openclaw\workspace\android-class-tools`（包 `com.furina.classtools`）
+> 工程：`<项目根>`（包 `com.furina.classtools`）
 > 契约：`docs/api/ENDPOINTS.md` E22/E23/E24、`docs/BACKEND_CONTRACT.md` §7.4/§7.5、`web/AGENTS.md` §4b-8/11/16/17
 > 交付：task-8（课表 + 电费 数据层 + Compose 页面 + 单测 + 预览）
 
@@ -132,7 +132,7 @@
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'
 $env:ANDROID_HOME='C:\AndroidToolchain\sdk'
 $env:ANDROID_SDK_ROOT='C:\AndroidToolchain\sdk'
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 & 'C:\AndroidToolchain\gradle\gradle-9.9.0\bin\gradle.bat' :app:testDebugUnitTest --console=plain
 ```
 

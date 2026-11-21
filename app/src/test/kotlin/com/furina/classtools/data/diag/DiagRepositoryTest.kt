@@ -24,7 +24,7 @@ import org.junit.Test
  */
 class DiagRepositoryTest {
 
-    private val sid = "3260707024"
+    private val sid = "2024000001"
 
     private fun repository(
         transport: FakeTransport,

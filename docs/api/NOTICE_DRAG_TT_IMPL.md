@@ -1,6 +1,6 @@
 # `NOTICE_DRAG_TT_IMPL.md` — 通知附件预览 + 全部工具拖动排序 + 课表空数据文案
 
-> task-14 实现说明（工程 `C:\Users\Ko_Li\.openclaw\workspace\android-class-tools`，包 `com.furina.classtools`）
+> task-14 实现说明（工程 `<项目根>`，包 `com.furina.classtools`）
 > 契约参考：`web/AGENTS.md` §4b-10（拖动排序 + prefs.toolOrder）、`mp-class-tools/pages/all/all.js`、
 > `mp-class-tools/utils/tools.js`/`cloud.js`（toolOrder 归一/同步）、`docs/api/USERDATA_V6.md`（prefs section）、
 > `docs/api/NOTICES.md`（items 结构）、`docs/api/ENDPOINTS.md` E24（课表快照）。
@@ -127,7 +127,7 @@ MainNavHost 接线（Lead 只需加参数）：
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'
 $env:ANDROID_HOME='C:\AndroidToolchain\sdk'
 $env:ANDROID_SDK_ROOT='C:\AndroidToolchain\sdk'
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 & 'C:\AndroidToolchain\gradle\gradle-9.9.0\bin\gradle.bat' :app:testDebugUnitTest --console=plain
 ```
 

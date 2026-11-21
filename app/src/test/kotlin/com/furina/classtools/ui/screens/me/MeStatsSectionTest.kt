@@ -78,7 +78,7 @@ class MeStatsSectionTest {
         assertNull(MeStatsBuilder.formatPower(null))
         assertNull(MeStatsBuilder.formatPower(Double.NaN))
         assertEquals("36.5 度", MeStatsBuilder.formatPower(36.5))
-        assertEquals("23号楼A座321 · 36.5 度", MeStatsBuilder.formatPower(36.5, "23号楼A座321"))
+        assertEquals("23号楼A座305 · 36.5 度", MeStatsBuilder.formatPower(36.5, "23号楼A座305"))
     }
 
     @Test

@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">班级工具站</string>
-    <string name="identity_title">身份核验</string>
-    <string name="identity_hint_sid">学号</string>
-    <string name="identity_hint_name">姓名</string>
-    <string name="identity_submit">进入工具站</string>
-</resources>

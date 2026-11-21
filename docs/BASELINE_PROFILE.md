@@ -28,7 +28,7 @@ android-class-tools/
 ```powershell
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'
 $env:ANDROID_HOME='C:\AndroidToolchain\sdk'
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 .\gradlew.bat :app:generateBaselineProfile --console=plain
 ```
 

@@ -1,13 +1,13 @@
 # 班级工具站 · 后端与数据层实现契约（Android 原生 App 版）
 
-> **文档定位**：把现有「班级工具站」网页端（`web/tools/index.html`，646,956 B / 8,897 行）与微信小程序端（`mp-class-tools/`，`utils/cloud.js` 1,721 行）的**数据层 + 同步层 + 导出层**逆向成 Android 原生 App 可直接照做的实现契约。
+> **文档定位**：把现有「班级工具站」网页端（`tools/index.html`，646,956 B / 8,897 行）与微信小程序端（`utils/cloud.js`，1,721 行）的**数据层 + 同步层 + 导出层**逆向成 Android 原生 App 可直接照做的实现契约。
 >
-> **证据基准（2026-11-07 快照）**
-> - 网页端：`C:\Users\Ko_Li\.openclaw\workspace\web\tools\index.html`（下文简称 **WEB**，行号以当前文件为准）
-> - 小程序端：`C:\Users\Ko_Li\.openclaw\workspace\mp-class-tools\`（下文简称 **MP**；`utils/cloud.js` 简称 **CLOUD**）
-> - 契约文档：`web/CLOUDBASE.md`（**CB**）、`web/HANDOFF.md`（**HANDOFF**）、`web/tools/tests/_water_contract.md`（**WATER-C**）、`web/tools/tests/export_card_v2_spec.md`（**CARD**）、`web/tools/tests/dns_pause_tt_health_spec.md`（**DNSSPEC**）
-> - 同步 v6 契约原文（归档）：`archive/_sync_trash_20261105/_sync_task/CONTRACT.md`（**SYNC-C**）
-> - 云端 DDL 迁移：`web/deploy/cloudbase/*.sql`
+> **证据基准（2026-11-07 快照；网页端/小程序端源码不随本仓库分发）**
+> - 网页端：`tools/index.html`（下文简称 **WEB**，行号以该文件为准）
+> - 小程序端：`utils/cloud.js`（下文简称 **MP**，其云访问模块简称 **CLOUD**）
+> - 契约文档：`CLOUDBASE.md`（**CB**）、`HANDOFF.md`（**HANDOFF**）、`_water_contract.md`（**WATER-C**）、`export_card_v2_spec.md`（**CARD**）、`dns_pause_tt_health_spec.md`（**DNSSPEC**）
+> - 同步 v6 契约原文（归档）：`CONTRACT.md`（**SYNC-C**）
+> - 云端 DDL 迁移：`deploy/cloudbase/*.sql`
 >
 > **标记法**：`[已核实]` = 本文件直接从代码/DDL/实测文档读到；`[推断]` = 代码行为推导、未见显式文档；`[待确认]` = 现有代码中找不到权威依据，**不要臆造**，按节末清单找 Lead/服务端确认。
 >
@@ -24,7 +24,7 @@
 5. **通知是「行 + JSON body」结构，不是 HTML 站点抓取内容**：自动通知 `notices.id = auto_<gid>`、`body = [[CLASS_NOTICE_V1]] + <JSON>`；网页用 iframe 包了一份 HTML 模板渲染（**只是网页实现手段**），小程序已证明**可以用结构化 JSON 完全原生渲染**。结论：**Android 原生渲染可行，WebView 仅作附件预览兜底** `[已核实 WEB:2470-2506, WEB:2619-2650; MP/pages/nt/nt.js:157-333; 结论为推断-高置信]`。
 6. **Android 端真正需要实现的核心端点约 15 个**（不含管理员专用与查询变体；详见 §3 与 `api/ENDPOINTS.md`）：`rpc/class_verify`、`rpc/class_members`、`rpc/class_set_role`（管理员）、`homework`(GET/POST/PATCH)、`notices`(GET lite/full、管理员 PATCH)、`marks`(GET/upsert)、`userdata`(GET/upsert)、`fitrecs`(GET/upsert/PATCH arch)、`visits`(POST/管理员 GET)、`feedback`(POST/GET/PATCH)、`power`(GET)、`power_history`(GET)、`site_assets`(GET)、`service_health`(GET 管理员)、`tt.json`(静态 GET 旧兜底)。
 7. **所有表 anon 角色基本「无 DELETE」**：删除一律软删（`homework/notices.archived`、`fitrecs.arch`、`marks.val=false`、`notices.hidden`、`userdata` 覆盖空 blob）。仅 `power/power_history` 对管理员 token 放开 DELETE `[已核实 WEB:1864-1872, MP/cloud.js:190-208; CB:152-155, CB:224-234, DDL:2026-11-05_power.sql:54-72]`。
-8. **风险提示**：CloudBase 环境 **2026-12-10 到期**（需续费/迁移），且 `class_verify`/`private.class_sessions` 的服务端实现**不在仓库内**（无法从代码核实 token 生成算法、TTL 常量、限流），见 §11 `[已核实 CB:690, _compliance/audit_current_state.md:329]`。
+8. **风险提示**：CloudBase 环境 **2026-12-10 到期**（需续费/迁移），且 `class_verify`/`private.class_sessions` 的服务端实现**不在仓库内**（无法从代码核实 token 生成算法、TTL 常量、限流），见 §11 `[已核实 CB:690, 内部合规审计记录:329]`。
 
 ---
 
@@ -96,7 +96,7 @@ Content-Type: application/json
 - 成功即写入本机身份 `{token,sid,name,role,badge,is_admin,ts}`，`ts=Date.now()`。
 - 失败原因直接展示云端 `reason`；网络异常/云端不可达给通用文案 `[已核实 MP/cloud.js:241-246]`。
 - 网页还会把最近一次 `{sid,name}` 存 `zq_last_identity` 用于回填输入框 `[已核实 WEB:8843, 8868-8871]`。
-- **管理员**：`is_admin=true` 即陈子麒（学号 3260707024）；管理员专属能力 = `class_set_role`、通知编辑/隐藏、`service_health` 读、`site_assets` 写（服务端脚本）、`visits` 全表读、`feedback` 列表 `[已核实 CB:74, CB:390-401; WEB:3591-3593]`。
+- **管理员**：`is_admin=true` 即陈同学（学号 2024000001）；管理员专属能力 = `class_set_role`、通知编辑/隐藏、`service_health` 读、`site_assets` 写（服务端脚本）、`visits` 全表读、`feedback` 列表 `[已核实 CB:74, CB:390-401; WEB:3591-3593]`。
 
 ### 2.2 测试身份（is_test）`[已核实 CB:634-647, DDL:2026-11-05_test_account.sql]`
 
@@ -113,7 +113,7 @@ Content-Type: application/json
   - 网页启动时若 `localStorage.zq_class_identity` 的 `ts` 距今 **< 29 天**则直接进入班级（不重新 verify）；否则回到身份门禁 `[已核实 WEB:8880-8885]`。
   - 小程序不校验 ts，依赖服务端 401 → 数据为空/报错，用户手动退出重登 `[已核实 MP/utils/identity.js（无过期处理）；MP/cloud.js:355-383 失败静默]`。
 - **Android 建议（推断/推荐）**：本地存 `token + issuedAt`；启动时 `now-issuedAt < 29d` 直接进入并后台静默拉一次数据；若任意数据请求连续返回 401，则清除 token 回身份页（现有两端没有统一 401 拦截，这是 Android 要补的健壮性）。
-- **无令牌吊销入口**（CloudBase 控制台删会话除外）`[已核实 _compliance/audit_current_state.md:78]`。
+- **无令牌吊销入口**（CloudBase 控制台删会话除外）`[已核实 内部合规审计记录:78]`。
 
 ### 2.4 本机身份存储与退出 `[已核实 WEB:3161-3163; MP/utils/identity.js:13,41-67]`
 
@@ -382,7 +382,7 @@ else:   Fisher-Yates 洗牌 pool 后取前 count 个（不重复）
 
 ### 7.5 宿舍电费（当前值 + 趋势 + 估算）`[已核实 WEB:4273-4700, 4470-4600; MP/utils/power.js]`
 
-**数据**：`PW_ROOMS` **17 间**宿舍目录（硬编码常量，顺序即 UI 顺序；`rv` = roomverify 形如 `4-23A---321`，`label/building/room`）`[已核实 WEB:4286-4304; MP/power.js:86-105]`。
+**数据**：`PW_ROOMS` **17 间**宿舍目录（硬编码常量，顺序即 UI 顺序；`rv` = roomverify 形如 `4-23A---305`，`label/building/room`）`[已核实 WEB:4286-4304; MP/power.js:86-105]`。
 `power` 行：`{id(=rv),label,building,room,quantity,unit,low,updated_at}`；`power_history` 采样：`{roomverify,quantity,ts}` 按 `ts.asc`，区间 `24h|7d|30d`。
 
 **状态**：`low` 阈值用户可调（档位 `[10,20,30,40,50,60,80,100]`，默认 30，随 `userdata.power.low` 同步）；`q<low` 低电 / `low≤q<low*2` 偏低 / 其余充足 `[已核实 WEB:4283, 4366-4374; MP/power.js:19-24]`。
@@ -428,7 +428,7 @@ U = 所有 dq>0.05 的中位数（空=0）
 
 ## 8. 导出卡片 v2（网页/小程序同一版式）
 
-> 完整参数、逐像素版式、Android Canvas 数据模型见 `api/EXPORT_CARD_V2.md`；唯一真源 `web/tools/tests/export_card_v2_spec.md`（134 行）。
+> 完整参数、逐像素版式、Android Canvas 数据模型见 `api/EXPORT_CARD_V2.md`；唯一真源 `网页端/tools/tests/export_card_v2_spec.md`（134 行）。
 
 要点 `[已核实 CARD:1-134]`：
 - 逻辑宽度 `W=760`、`DPR=2`（成图 1520 px 宽、高度自适应）；主卡内缩 22、圆角 22、白底 + 柔和投影；画布垂直渐变底。
@@ -482,7 +482,7 @@ U = 所有 dq>0.05 的中位数（空=0）
 
 | # | 待确认项 | 现状/线索 | 建议确认方式 |
 |---|---|---|---|
-| Q1 | `class_verify` / `class_members` / `auth_ok` / `auth_sid` 的**服务端实现**（token 生成算法、随机源、TTL 常量、过期清理任务、失败限流） | 仓库无 `create function public.class_verify`；`private.class_sessions` DDL 也不在库；只有文档描述「30 天」`[CB:18, CB:67; _compliance/audit_current_state.md:329]` | CloudBase 控制台 `select proname,pg_get_functiondef(oid) from pg_proc where proname like 'class_%' or proname in ('auth_ok','auth_sid','auth_admin')`（只读，管理员执行） |
+| Q1 | `class_verify` / `class_members` / `auth_ok` / `auth_sid` 的**服务端实现**（token 生成算法、随机源、TTL 常量、过期清理任务、失败限流） | 仓库无 `create function public.class_verify`；`private.class_sessions` DDL 也不在库；只有文档描述「30 天」`[CB:18, CB:67; 内部合规审计记录:329]` | CloudBase 控制台 `select proname,pg_get_functiondef(oid) from pg_proc where proname like 'class_%' or proname in ('auth_ok','auth_sid','auth_admin')`（只读，管理员执行） |
 | Q2 | token 过期时各端点的**具体状态码/响应体**（401？403？还是 200+空数组） | 文档说「token 失效后页面回身份门禁」，但网页代码没有 401 处理（只是请求失败静默）；MP 失败静默 `[CB:22; WEB:2704-2722 无 401 分支]` | 用一个过期/伪造 token 实测（只读 GET），记录状态码 + body |
 | Q3 | 通知 `audience` 的完整取值与 RLS 是否最终版（`all/committee/league/sid:<学号>/admin`） | CB 记录 2026-11-04 两次迁移，均已应用；仓库无对应 SQL | 管理员身份只读 `select distinct audience from public.notices`（或查 pg_policies） |
 | Q4 | `service_health` 18 行 id 清单与 App 是否需要 | CB 列 18 行分组、13 项采集；诊断页纯管理员可选功能 `[CB:576-632; WEB:7990-8008]` | 产品决定：Android v1 可不做诊断页 |
@@ -502,9 +502,9 @@ U = 所有 dq>0.05 的中位数（空=0）
 | 请求头/PostgREST 基座 | `WEB:1846-1872`；`MP/utils/cloud.js:127-208` |
 | 身份 RPC / 名单 RPC / 改职务 | `WEB:3308-3331, 3591-3593`；`MP/utils/cloud.js:214-325`；`CB:24-60` |
 | token 生命周期 / 自动登录 | `CB:16-22`；`WEB:8880-8885`；`MP/utils/identity.js:41-67` |
-| 表结构（早期） | `web/deploy/cloudbase/schema.sql` |
-| 通知覆盖 4 列 | `web/deploy/cloudbase/2026-11-05_notice_admin_override.sql` |
-| 电费/电量历史/site_assets/service_health | `web/deploy/cloudbase/2026-11-05_power.sql`、`2026-11-06_power_history.sql`、`2026-11-07_site_assets.sql`、`2026-11-05_service_health.sql` |
+| 表结构（早期） | `网页端/deploy/cloudbase/schema.sql` |
+| 通知覆盖 4 列 | `网页端/deploy/cloudbase/2026-11-05_notice_admin_override.sql` |
+| 电费/电量历史/site_assets/service_health | `网页端/deploy/cloudbase/2026-11-05_power.sql`、`2026-11-06_power_history.sql`、`2026-11-07_site_assets.sql`、`2026-11-05_service_health.sql` |
 | marks / v6 同步 | `SYNC-C:42-149`；`CB:523-573`；`WEB:2670-3149`；`MP/utils/cloud.js:327-449,811-1384` |
 | v6 权威键序 / water | `WATER-C:48-58,168-199`；`MP/utils/privacy.js:10-31` |
 | 通知可见性/audience | `CB:367-464` |
@@ -513,8 +513,8 @@ U = 所有 dq>0.05 的中位数（空=0）
 | 抽签/分组 | `WEB:6303-6358,6397-6433,6478-6535` |
 | 体测 | `WEB:7517-7611,7523-7564,7567-7579,7678-7727` |
 | 课表 | `WEB:6591-6628,6958-7067`；`MP/utils/ttplan.js`；`CB:649-690`；`DNSSPEC:35-70` |
-| 电费算法 | `WEB:4273-4700,4405-4622,5076-5124`；`MP/utils/power.js:1-765`；`WATER-C:119-143`；`web/tools/tests/power_cadence_spec.md`（慢频/估算 §1.1-§1.5） |
-| 同步 golden 测试/夹具 | `web/tools/tests/sync_check.py`；`mp-class-tools-tests/sync_contract_test.js`；`mp-class-tools-tests/_sync_fixtures/`（`merge_ref.js` + 6 个 JSON，见 `api/USERDATA_V6.md` §6） |
+| 电费算法 | `WEB:4273-4700,4405-4622,5076-5124`；`MP/utils/power.js:1-765`；`WATER-C:119-143`；`网页端/tools/tests/power_cadence_spec.md`（慢频/估算 §1.1-§1.5） |
+| 同步 golden 测试/夹具 | `网页端/tools/tests/sync_check.py`；`小程序端-tests/sync_contract_test.js`；`小程序端-tests/_sync_fixtures/`（`merge_ref.js` + 6 个 JSON，见 `api/USERDATA_V6.md` §6） |
 | 水量 | `WEB:5207-5669`；`MP/utils/water.js`；`WATER-C:0-200` |
 | 导卡 v2 | `CARD:0-134`；`WEB:5746-5749,5853-6290,6441-6457,6522-6535`；`MP/utils/canvas.js` |
 | visits / feedback | `WEB:4256-4271,7884-7976`；`MP/utils/cloud.js:1386-1494`；`CB:481-521` |
@@ -525,4 +525,4 @@ U = 所有 dq>0.05 的中位数（空=0）
 ## 附录：与任务描述的两点口径修正
 
 1. **「userdata v6 13 键」→ 实际 14 键**：任务描述沿用 2026-11-05 的 13 键口径（`v,at,homeTools,fit,draw,group,roster,hide,tt,prefs,nick,power,homeToolsAt`）；2026-11-06 水量上线后 `UD_KEYS` 末尾追加 `water`，`WATER-C:54` 明确定稿为 **14 键**，两端代码（`WEB:2746-2758`、`MP/utils/privacy.js:15`）一致。本契约按 **14 键**实现。
-2. **「通知能否原生渲染」→ 能**：网页 iframe 只是渲染手段；数据层是自动通知 JSON + 行级覆盖字段。小程序已原生实现并上线（`mp-class-tools/pages/nt`），Android 可以照做。
+2. **「通知能否原生渲染」→ 能**：网页 iframe 只是渲染手段；数据层是自动通知 JSON + 行级覆盖字段。小程序已原生实现并上线（`小程序端/pages/nt`），Android 可以照做。

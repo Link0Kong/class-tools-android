@@ -30,8 +30,8 @@ import java.time.ZoneId
 // =============================================================================
 
 private val previewSession = Session(
-    sid = "3260707024",
-    name = "陈子麒",
+    sid = "2024000001",
+    name = "陈同学",
     token = "preview-token",
     role = "副团支部书记",
     badge = "班委",
@@ -56,7 +56,7 @@ private fun previewHomeworkRows(): List<HomeworkRow> {
             date = dateText(1),
             time = "23:59",
             author = "学习委员",
-            owner = "3260707001",
+            owner = "2024000002",
             attachments = """[{"n":"第三章习题.pdf","t":"application/pdf","s":245760,"d":"data:application/pdf;base64,AAAA"}]""",
             ts = now - 3_600_000,
         ),
@@ -67,7 +67,7 @@ private fun previewHomeworkRows(): List<HomeworkRow> {
             due = "3 天后",
             date = dateText(3),
             time = "18:00",
-            author = "陈子麒",
+            author = "陈同学",
             ts = now - 7_200_000,
         ),
         HomeworkRow(
@@ -101,7 +101,7 @@ private fun previewNoticesData(): NoticesData {
         title = "关于 11 月主题班会的通知",
         cat = "班会",
         source = "班级通知群",
-        senderName = "陈子麒",
+        senderName = "陈同学",
         senderRole = "副团支部书记",
         aiSummary = "本周五下午 4 点在 01104 教室召开主题班会，请全体同学准时参加并签到。",
         aiPoints = listOf("时间：周五 16:00", "地点：01104", "需要签到"),
@@ -154,7 +154,7 @@ private fun previewNoticesData(): NoticesData {
                 NoticeItemMeta.Text(
                     kind = "text",
                     label = "原始消息",
-                    fromName = "陈子麒",
+                    fromName = "陈同学",
                     fromRole = "副团支部书记",
                     timeText = "11-05 12:00",
                     text = "请大家准时参加班会，记得签到。",

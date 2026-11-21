@@ -93,7 +93,7 @@ private fun v6NoticesData(fromCache: Boolean = false): NoticesData {
             title = "关于 11 月主题班会的通知",
             cat = "团务",
             source = "班级通知群",
-            senderName = "陈子麒",
+            senderName = "陈同学",
             senderRole = "团支部书记",
             aiSummary = "本周五下午 4 点在 01104 教室召开主题班会，请全体同学准时参加并签到。",
             aiPoints = listOf("时间：周五 16:00", "地点：01104", "需要签到"),
@@ -111,7 +111,7 @@ private fun v6NoticesData(fromCache: Boolean = false): NoticesData {
             NoticeItemMeta.Text(
                 kind = "text",
                 label = "原始消息",
-                fromName = "陈子麒",
+                fromName = "陈同学",
                 fromRole = "团支部书记",
                 timeText = "11-12 20:10",
                 text = "请大家准时参加班会，记得签到。地点在自强楼 01104。",
@@ -196,7 +196,7 @@ private fun v6NoticeMarks(): MarksSnapshot = MarksSnapshot(
 // -----------------------------------------------------------------------------
 
 private fun v6RosterMembers(): List<RosterMember> = listOf(
-    RosterMember(seat = 1, name = "陈子麒", role = "副团支部书记", badge = "班委"),
+    RosterMember(seat = 1, name = "陈同学", role = "副团支部书记", badge = "班委"),
     RosterMember(seat = 2, name = "周雨桐", role = "班长", badge = "班委"),
     RosterMember(seat = 3, name = "王思远", role = "学习委员", badge = "班委"),
     RosterMember(seat = 4, name = "刘一诺", role = "生活委员", badge = "班委"),
@@ -209,7 +209,7 @@ private fun v6RosterMembers(): List<RosterMember> = listOf(
 )
 
 private fun v6RosterLeagueMembers(): List<RosterMember> = listOf(
-    RosterMember(seat = 1, name = "陈子麒", badge = "团员"),
+    RosterMember(seat = 1, name = "陈同学", badge = "团员"),
     RosterMember(seat = 2, name = "周雨桐", badge = "团员"),
     RosterMember(seat = 5, name = "赵子涵", badge = "团员"),
     RosterMember(seat = 6, name = "李若曦", badge = "团员"),
@@ -223,7 +223,7 @@ private fun v6RosterState(): RosterState = RosterState(
         1 to RollStatus.IN,
         2 to RollStatus.AB,
     ),
-    rollNamesText = "1 陈子麒\n2 周雨桐\n5 赵子涵\n6 李若曦",
+    rollNamesText = "1 陈同学\n2 周雨桐\n5 赵子涵\n6 李若曦",
 )
 
 // -----------------------------------------------------------------------------
@@ -246,7 +246,7 @@ private fun v6VoteSummaries(): List<PollSummary> {
             title = "本周班会时间投票",
             description = "两个时间段选一个，周五前确定。",
             mode = PollMode.QUICK,
-            ownerName = "陈子麒",
+            ownerName = "陈同学",
             settings = v6VoteSettings(),
             deadline = now + 30 * 60_000L,
             createdAt = now - 2 * 3_600_000L,
@@ -303,7 +303,7 @@ private fun v6PollDetail(): PollDetail {
         title = "本周班会时间投票",
         description = "两个时间段选一个，周五前确定；如都有空请选第一项。",
         mode = PollMode.QUICK,
-        ownerName = "陈子麒",
+        ownerName = "陈同学",
         settings = v6VoteSettings(),
         options = listOf(
             PollOption(id = "o1", text = "周五 16:00 - 17:00", desc = "01104 教室"),
@@ -325,7 +325,7 @@ private fun v6PollDetail(): PollDetail {
         mine = true,
         canManage = true,
         voters = listOf(
-            PollVoter(name = "陈子麒", choices = listOf("o1")),
+            PollVoter(name = "陈同学", choices = listOf("o1")),
             PollVoter(name = "周雨桐", choices = listOf("o1")),
             PollVoter(name = "王思远", choices = listOf("o2")),
         ),
@@ -383,18 +383,18 @@ private val v6PreviewVoteRepository = V6PreviewVoteRepository(
 private val v6PreviewMemberSource = object : VoteMemberSource {
     override suspend fun load(category: MemberCategory): List<MemberEntry> = when (category) {
         MemberCategory.COMMITTEE -> listOf(
-            MemberEntry(seat = 1, name = "陈子麒", badge = "副团支部书记"),
+            MemberEntry(seat = 1, name = "陈同学", badge = "副团支部书记"),
             MemberEntry(seat = 2, name = "周雨桐", badge = "班长"),
             MemberEntry(seat = 3, name = "王思远", badge = "学习委员"),
         )
 
         MemberCategory.LEAGUE -> listOf(
-            MemberEntry(seat = 1, name = "陈子麒", badge = "团员"),
+            MemberEntry(seat = 1, name = "陈同学", badge = "团员"),
             MemberEntry(seat = 2, name = "周雨桐", badge = "团员"),
         )
 
         MemberCategory.ALL -> listOf(
-            MemberEntry(seat = 1, name = "陈子麒"),
+            MemberEntry(seat = 1, name = "陈同学"),
             MemberEntry(seat = 2, name = "周雨桐"),
             MemberEntry(seat = 5, name = "赵子涵"),
         )

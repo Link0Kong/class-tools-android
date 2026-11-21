@@ -218,7 +218,7 @@ class UserdataMergeTest {
             put(
                 "power",
                 buildJsonObject {
-                    put("sel", JsonPrimitive("4-23A---321"))
+                    put("sel", JsonPrimitive("4-23A---305"))
                     put("at", JsonPrimitive(0L))
                     put("low", JsonPrimitive(30))
                 },
@@ -230,7 +230,7 @@ class UserdataMergeTest {
         val atPower = UserdataV6.atValue(view, "power")
         assertEquals(atPower, UserdataV6.numMs(power["at"]))
         assertEquals(2_000L, atPower)
-        assertEquals("4-23A---321", (power["sel"] as JsonPrimitive).content)
+        assertEquals("4-23A---305", (power["sel"] as JsonPrimitive).content)
     }
 
     @Test

@@ -42,8 +42,8 @@ class PptRepositoryTest {
 
     private val now = 1_791_590_400_000L
     private val session = Session(
-        sid = "3260707024",
-        name = "陈子麒",
+        sid = "2024000001",
+        name = "陈同学",
         token = "class-token",
         issuedAt = now,
     )
@@ -52,7 +52,7 @@ class PptRepositoryTest {
                                     "updated_at":"2026-11-09T12:00:00+00:00"}]"""
 
     private val listJson = """[
-        {"id":"dmg2k4x9ab12c","title":"班会 PPT","owner_sid":"3260707024","owner_name":"陈子麒",
+        {"id":"dmg2k4x9ab12c","title":"班会 PPT","owner_sid":"2024000001","owner_name":"陈同学",
          "status":"ready","progress":100,"error":"","slide_count":12,"step_count":37,
          "aspect":"16:9","cover_url":"https://x/c.webp","source_name":"班会.pptx","source_size":100,
          "created_at":$now,"converted_at":$now,"client":"android"},
@@ -239,8 +239,8 @@ class PptRepositoryTest {
         assertEquals(deckId, createRow["id"]!!.jsonPrimitive.content)
         assertTrue(deckId.startsWith("d"))
         assertEquals("班会", createRow["title"]!!.jsonPrimitive.content) // 空标题 → 文件名去扩展名
-        assertEquals("3260707024", createRow["owner_sid"]!!.jsonPrimitive.content)
-        assertEquals("陈子麒", createRow["owner_name"]!!.jsonPrimitive.content)
+        assertEquals("2024000001", createRow["owner_sid"]!!.jsonPrimitive.content)
+        assertEquals("陈同学", createRow["owner_name"]!!.jsonPrimitive.content)
         assertEquals("android", createRow["client"]!!.jsonPrimitive.content)
         assertEquals("uploading", createRow["status"]!!.jsonPrimitive.content)
         assertEquals(3, createRow["chunk_count"]!!.jsonPrimitive.int)
@@ -254,7 +254,7 @@ class PptRepositoryTest {
         chunkPosts.forEach { request ->
             val row = parsedBody(request)[0].jsonObject
             assertEquals(deckId, row["deck_id"]!!.jsonPrimitive.content)
-            assertEquals("3260707024", row["owner_sid"]!!.jsonPrimitive.content)
+            assertEquals("2024000001", row["owner_sid"]!!.jsonPrimitive.content)
             assertEquals("resolution=merge-duplicates,return=minimal", request.headers["Prefer"])
             val decoded = Base64.getDecoder().decode(row["data"]!!.jsonPrimitive.content)
             assertTrue(decoded.size in 1..4)
@@ -469,7 +469,7 @@ class PptRepositoryTest {
         val transport = FakeTransport {
             ApiResponse(
                 200,
-                """[{"title":"班会","status":"ready","progress":100,"owner_name":"陈子麒",
+                """[{"title":"班会","status":"ready","progress":100,"owner_name":"陈同学",
                        "slide_count":16,"source_size":17825792,"cover_url":"https://x/c.webp",
                        "manifest":$v2Manifest}]""",
             )
@@ -479,7 +479,7 @@ class PptRepositoryTest {
         assertTrue(result is PptDetailResult.Success)
         val detail = (result as PptDetailResult.Success).detail
         assertTrue(detail.isReady)
-        assertEquals("陈子麒", detail.ownerName)
+        assertEquals("陈同学", detail.ownerName)
         assertEquals(16, detail.slideCount)
         assertTrue(detail.manifest.hasCompatFile)
         assertTrue(detail.manifest.hasPdfFile)

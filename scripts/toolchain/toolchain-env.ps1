@@ -1,8 +1,8 @@
 # Class Tools Android - toolchain environment setup (dot-source this file).
 #
-# Usage (PowerShell):
-#   . G:\ClassTools\android-class-tools\scripts\toolchain\toolchain-env.ps1
-#   . G:\ClassTools\android-class-tools\scripts\toolchain\toolchain-env.ps1 -Jdk 17
+# Usage (PowerShell, from the repository root):
+#   . .\scripts\toolchain\toolchain-env.ps1
+#   . .\scripts\toolchain\toolchain-env.ps1 -Jdk 17
 #
 # Sets JAVA_HOME / ANDROID_HOME / ANDROID_SDK_ROOT / PATH and prints a short self-check.
 # NOTE: keep this file pure ASCII - Windows PowerShell 5.1 parses non-BOM .ps1 as ANSI
@@ -12,7 +12,8 @@ param(
     [string]$Jdk = '21'
 )
 
-$toolRoot   = 'G:\Dev\AndroidToolchain'
+# Toolchain root: set CT_TOOLCHAIN_ROOT, or install it at the default below.
+$toolRoot   = if ($env:CT_TOOLCHAIN_ROOT) { $env:CT_TOOLCHAIN_ROOT } else { 'C:\AndroidToolchain' }
 $jdkHome    = if ($Jdk -eq '17') { Join-Path $toolRoot 'jdk17' } else { Join-Path $toolRoot 'jdk' }
 $sdkHome    = Join-Path $toolRoot 'sdk'
 $gradleHome = Join-Path $toolRoot 'gradle\gradle-9.9.0'

@@ -9,7 +9,7 @@ import org.junit.Test
 /** 列表过滤/排序/入口可见性（契约 §4.4/§4.6）。 */
 class PptDeckListLogicTest {
 
-    private val me = "3260707024"
+    private val me = "2024000001"
 
     private fun deck(
         id: String,
@@ -18,7 +18,7 @@ class PptDeckListLogicTest {
         createdAt: Long = 1_000L,
         slideCount: Int = 12,
         stepCount: Int = 0,
-        ownerName: String = "陈子麒",
+        ownerName: String = "陈同学",
         title: String = "班会",
     ) = PptDeck(
         id = id,
@@ -89,8 +89,8 @@ class PptDeckListLogicTest {
 
     @Test
     fun ownerLabelFallback() {
-        assertEquals("陈子麒", PptDeckListLogic.ownerLabel(deck("x", "ready")))
-        assertEquals("同学 24", PptDeckListLogic.ownerLabel(deck("x", "ready", ownerSid = "3260707024", ownerName = "")))
+        assertEquals("陈同学", PptDeckListLogic.ownerLabel(deck("x", "ready")))
+        assertEquals("同学 24", PptDeckListLogic.ownerLabel(deck("x", "ready", ownerSid = "2024000001", ownerName = "")))
         assertEquals("未知同学", PptDeckListLogic.ownerLabel(deck("x", "ready", ownerSid = "", ownerName = "")))
     }
 

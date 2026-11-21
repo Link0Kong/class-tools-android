@@ -32,8 +32,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * task-25 v2 自适应收尾预览：工具网格 3/4 列拖动、我的平板双栏、权限/提醒深色、小屏身份页。
  */
 private val polishSession = Session(
-    sid = "3260707024",
-    name = "陈子麒",
+    sid = "2024000001",
+    name = "陈同学",
     token = "preview-token",
     role = "副团支部书记",
     badge = "班委",

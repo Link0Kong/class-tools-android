@@ -22,7 +22,7 @@ class NoticesDedupeIntegrationTest {
     ): String {
         val sources = mergedSources.joinToString(",") { "\"$it\"" }
         return """{"id":"$id","title":"$title","cat":"$cat","source":"2026级信管1班",""" +
-            """"senderName":"陈子麒","deadline":"$deadline","mergedSources":[$sources],""" +
+            """"senderName":"陈同学","deadline":"$deadline","mergedSources":[$sources],""" +
             """"items":$items}"""
     }
 

@@ -33,8 +33,8 @@ import java.time.ZoneId
  * - 175 水量 · 上一月（左右滑动切换后）· 深色。
  */
 private val v6Session = Session(
-    sid = "3260707024",
-    name = "陈子麒",
+    sid = "2024000001",
+    name = "陈同学",
     token = "preview-token",
     role = "副团支部书记",
     badge = "班委",
@@ -60,7 +60,7 @@ private fun v6HomeworkRows(): List<HomeworkRow> {
             date = v6DateText(1),
             time = "23:59",
             author = "学习委员",
-            owner = "3260707001",
+            owner = "2024000002",
             attachments = """[{"n":"第三章习题.pdf","t":"application/pdf","s":245760,"d":"data:application/pdf;base64,AAAA"}]""",
             ts = now - 3_600_000,
         ),
@@ -71,7 +71,7 @@ private fun v6HomeworkRows(): List<HomeworkRow> {
             due = "3 天后",
             date = v6DateText(3),
             time = "18:00",
-            author = "陈子麒",
+            author = "陈同学",
             ts = now - 7_200_000,
         ),
         HomeworkRow(
@@ -104,8 +104,8 @@ private val v6Marks: MarksSnapshot = MarksSnapshot(hwDone = mapOf("hw-3" to true
 
 private fun v6PowerRow(
     q: Double = 86.42,
-    rv: String = "4-23A---321",
-    label: String = "23号楼A座321",
+    rv: String = "4-23A---305",
+    label: String = "23号楼A座305",
     building: String = "23号楼A座",
 ): PowerRow = PowerRow(
     id = rv,
@@ -155,7 +155,7 @@ private object V6PreviewPowerRepository : PowerRepository {
 // =============================================================================
 
 private fun v6WaterRooms(): Map<String, WaterRoomState> = mapOf(
-    "1-13---324" to WaterRoomState(
+    "1-13---301" to WaterRoomState(
         persons = 4,
         records = listOf(
             WaterRecord("2026-06", 112.40),
@@ -166,7 +166,7 @@ private fun v6WaterRooms(): Map<String, WaterRoomState> = mapOf(
             WaterRecord("2026-11", 130.75),
         ),
     ),
-    "4-23A---321" to WaterRoomState(
+    "4-23A---305" to WaterRoomState(
         persons = 6,
         records = listOf(
             WaterRecord("2026-09", 235.00),
@@ -223,7 +223,7 @@ private fun PowerV1LightPreview() {
             onBack = {},
             repository = V6PreviewPowerRepository,
             clock = { V6_PREVIEW_NOW },
-            initialSelectedRv = "4-23A---321",
+            initialSelectedRv = "4-23A---305",
             initialRow = v6PowerRow(),
             initialHistories = mapOf(
                 PowerRange.H24 to v6Histories24h(),
@@ -244,7 +244,7 @@ private fun PowerV1SevenDaysDarkPreview() {
             onBack = {},
             repository = V6PreviewPowerRepository,
             clock = { V6_PREVIEW_NOW },
-            initialSelectedRv = "4-23A---321",
+            initialSelectedRv = "4-23A---305",
             initialRow = v6PowerRow(),
             initialHistories = mapOf(
                 PowerRange.H24 to v6Histories24h(),
@@ -266,7 +266,7 @@ private fun WaterV1CurrentLightPreview() {
             session = v6Session,
             userDataRepository = null,
             initialRooms = v6WaterRooms(),
-            initialSelectedRv = "1-13---324",
+            initialSelectedRv = "1-13---301",
             initialMonth = "2026-11",
             skipLoad = true,
         )
@@ -282,7 +282,7 @@ private fun WaterV1PrevMonthDarkPreview() {
             session = v6Session,
             userDataRepository = null,
             initialRooms = v6WaterRooms(),
-            initialSelectedRv = "4-23A---321",
+            initialSelectedRv = "4-23A---305",
             initialMonth = "2026-10",
             skipLoad = true,
         )

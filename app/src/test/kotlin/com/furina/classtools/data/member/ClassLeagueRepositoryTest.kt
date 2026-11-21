@@ -17,7 +17,7 @@ class ClassLeagueRepositoryTest {
 
     private val now: Long = 1_760_000_000_000L
 
-    private fun repo(transport: FakeTransport, sid: String? = "3260707001"): DefaultClassLeagueRepository =
+    private fun repo(transport: FakeTransport, sid: String? = "2024000002"): DefaultClassLeagueRepository =
         DefaultClassLeagueRepository(
             api = testApiClient(transport),
             currentSid = { sid },

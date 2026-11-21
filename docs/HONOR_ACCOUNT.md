@@ -54,7 +54,7 @@ POST https://account-drcn.platform.hihonorcloud.com/rest.php?nsp_svc=GOpen.User.
 - 荣耀 token 响应**不含 openid**；openid 必须从 `GOpen.User.getInfo` 取（要求 scope 含 `profile`；若未授予则回退 `hihonor.oauth2.user.getTokenInfo`）。
 - `redirect_uri` 默认 `honorid://redirect_url`；若返回 1101 且非 invalid code，会再尝试省略该参数（兼容未登记回调的应用）。
 - 错误体映射：`{error: 1101, sub_error: 20152, error_description: "invalid code"}` → `honor_exchange_failed` + `1101/20152 invalid code`。
-- 凭证文件（本机，不入库）：`G:\ClassTools\briefdesk\secrets\honor-account.json`
+- 凭证文件（本机，不入库）：`部署机密钥目录（不入库）`
   ```json
   {"client_id":"<Client ID>","client_secret":"<Client Secret>","redirect_uri":"honorid://redirect_url"}
   ```

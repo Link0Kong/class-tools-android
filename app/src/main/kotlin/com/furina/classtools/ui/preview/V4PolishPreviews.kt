@@ -41,15 +41,15 @@ import com.furina.classtools.ui.theme.GradeColors
 private const val V4_PREVIEW_NOW: Long = 1_793_930_400_000L // 2026-11-06 10:00 +08（周五）
 
 private val v4Session = Session(
-    sid = "3260707024",
-    name = "陈子麒",
+    sid = "2024000001",
+    name = "陈同学",
     token = "preview-token",
     role = "副团支部书记",
     badge = "班委",
 )
 
 private fun v4RosterMembers(): List<RosterMember> = listOf(
-    RosterMember(1, "陈子麒", "副团支部书记", "班委"),
+    RosterMember(1, "陈同学", "副团支部书记", "班委"),
     RosterMember(2, "张三", "班长", "班委"),
     RosterMember(3, "李四", "团支书", "班委"),
     RosterMember(4, "王五", "学习委员", "班委"),
@@ -69,7 +69,7 @@ private fun v4RosterState(): RosterState = RosterState(
 )
 
 private fun v4LeagueMembers(): List<RosterMember> = listOf(
-    RosterMember(1, "陈子麒"),
+    RosterMember(1, "陈同学"),
     RosterMember(2, "张三"),
     RosterMember(3, "李四"),
     RosterMember(4, "王五"),
@@ -104,8 +104,8 @@ private fun v4SlowHistories30d(): List<PowerPoint> = listOf(
 
 private fun v4PowerRow(
     q: Double = 86.42,
-    rv: String = "4-23A---321",
-    label: String = "23号楼A座321",
+    rv: String = "4-23A---305",
+    label: String = "23号楼A座305",
     building: String = "23号楼A座",
 ): PowerRow = PowerRow(
     id = rv,
@@ -215,7 +215,7 @@ private fun PowerCompareLightPreview() {
             onBack = {},
             repository = V4PreviewPowerRepository,
             clock = { V4_PREVIEW_NOW },
-            initialSelectedRv = "4-23A---321",
+            initialSelectedRv = "4-23A---305",
             initialRow = v4PowerRow(),
             initialHistories = mapOf(PowerRange.D7 to v4CompareHistories()),
             initialRange = PowerRange.H24,
@@ -232,7 +232,7 @@ private fun PowerCompareDarkPreview() {
             onBack = {},
             repository = V4PreviewPowerRepository,
             clock = { V4_PREVIEW_NOW },
-            initialSelectedRv = "4-23A---321",
+            initialSelectedRv = "4-23A---305",
             initialRow = v4PowerRow(),
             initialHistories = mapOf(PowerRange.D7 to v4CompareHistories()),
             initialRange = PowerRange.H24,
@@ -249,8 +249,8 @@ private fun PowerSlowHiddenLightPreview() {
             onBack = {},
             repository = V4PreviewPowerRepository,
             clock = { V4_PREVIEW_NOW },
-            initialSelectedRv = "1-13---324",
-            initialRow = v4PowerRow(q = 42.5, rv = "1-13---324", label = "13号楼324", building = "13号楼"),
+            initialSelectedRv = "1-13---301",
+            initialRow = v4PowerRow(q = 42.5, rv = "1-13---301", label = "13号楼301", building = "13号楼"),
             initialHistories = mapOf(
                 PowerRange.H24 to v4SlowHistories24h(),
                 PowerRange.D7 to v4SlowHistories24h(),
@@ -271,8 +271,8 @@ private fun PowerSlowHiddenDarkPreview() {
             onBack = {},
             repository = V4PreviewPowerRepository,
             clock = { V4_PREVIEW_NOW },
-            initialSelectedRv = "1-16---305",
-            initialRow = v4PowerRow(q = 30.5, rv = "1-16---305", label = "16号楼305", building = "16号楼"),
+            initialSelectedRv = "1-16---303",
+            initialRow = v4PowerRow(q = 30.5, rv = "1-16---303", label = "16号楼303", building = "16号楼"),
             initialHistories = mapOf(
                 PowerRange.H24 to v4SlowHistories24h(),
                 PowerRange.D7 to v4SlowHistories24h(),

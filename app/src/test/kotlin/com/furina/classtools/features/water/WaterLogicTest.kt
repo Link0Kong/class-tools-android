@@ -37,7 +37,7 @@ class WaterLogicTest {
     fun `脏数据归一 人数非法 月份非法 读数负数 重复月份后者覆盖`() {
         val state = WaterCodec.fromJson(
             json(
-                """{"rooms":{"1-13---324":{"p":7,
+                """{"rooms":{"1-13---301":{"p":7,
                     "recs":[
                       {"m":"2026-13","r":1},
                       {"m":"2026-10","r":130.123,"ts":5},
@@ -48,7 +48,7 @@ class WaterLogicTest {
                    "bad-room": 1}""",
             ),
         )
-        val room = state.rooms.getValue("1-13---324")
+        val room = state.rooms.getValue("1-13---301")
         assertEquals(4, room.persons)
         assertEquals(1, room.records.size)
         assertEquals(WaterRecord("2026-10", 131.5, 6), room.records.single())
@@ -75,7 +75,7 @@ class WaterLogicTest {
     fun `编码往返保留人数与记录`() {
         val state = WaterState(
             mapOf(
-                "4-23A---321" to room(
+                "4-23A---305" to room(
                     persons = 6,
                     records = listOf(
                         WaterRecord("2026-09", 235.0, 1),
@@ -89,14 +89,14 @@ class WaterLogicTest {
         val decoded = WaterCodec.fromJson(encoded)
         assertEquals(state, decoded)
         // 整数读数按整数输出
-        val firstRecs = ((encoded["rooms"] as JsonObject)["4-23A---321"] as JsonObject)["recs"] as kotlinx.serialization.json.JsonArray
+        val firstRecs = ((encoded["rooms"] as JsonObject)["4-23A---305"] as JsonObject)["recs"] as kotlinx.serialization.json.JsonArray
         assertEquals(235L.toDouble(), ((firstRecs[0] as JsonObject)["r"] as kotlinx.serialization.json.JsonPrimitive).content.toDouble(), 0.0)
     }
 
     @Test
     fun `与既有 WaterNormalizer 归一结果对齐`() {
         val dirty = json(
-            """{"rooms":{"1-13---324":{"p":6,
+            """{"rooms":{"1-13---301":{"p":6,
                 "recs":[
                   {"m":"2026-11","r":130.123,"ts":5},
                   {"m":"2026-10","r":-1},
@@ -107,8 +107,8 @@ class WaterLogicTest {
         val normalized = com.furina.classtools.data.sync.WaterNormalizer.normalize(dirty)
         val fromNormalized = WaterCodec.fromJson(normalized)
         assertEquals(WaterCodec.fromJson(dirty), fromNormalized)
-        assertEquals(2, fromNormalized.rooms.getValue("1-13---324").records.size)
-        assertEquals(6, fromNormalized.rooms.getValue("1-13---324").persons)
+        assertEquals(2, fromNormalized.rooms.getValue("1-13---301").records.size)
+        assertEquals(6, fromNormalized.rooms.getValue("1-13---301").persons)
         // 编码后再解码语义稳定（整数读数输出 130 而非 130.0 的兼容）
         assertEquals(fromNormalized, WaterCodec.fromJson(WaterCodec.toJson(fromNormalized)))
     }
@@ -304,28 +304,28 @@ class WaterLogicTest {
     fun `写入 覆盖 排序 删除 人数与清除`() {
         var state = WaterMutator.put(
             WaterState(),
-            "1-13---324",
+            "1-13---301",
             WaterRecord("2026-11", 130.0, 1),
         )
-        state = WaterMutator.put(state, "1-13---324", WaterRecord("2026-10", 125.5, 2))
-        state = WaterMutator.put(state, "1-13---324", WaterRecord("2026-11", 130.9, 3))
-        val room = state.rooms.getValue("1-13---324")
+        state = WaterMutator.put(state, "1-13---301", WaterRecord("2026-10", 125.5, 2))
+        state = WaterMutator.put(state, "1-13---301", WaterRecord("2026-11", 130.9, 3))
+        val room = state.rooms.getValue("1-13---301")
         assertEquals(listOf("2026-10", "2026-11"), room.records.map { it.month })
         assertEquals(130.9, room.records.last().reading, 0.0001)
 
-        state = WaterMutator.delete(state, "1-13---324", "2026-10")
-        assertEquals(1, state.rooms.getValue("1-13---324").records.size)
+        state = WaterMutator.delete(state, "1-13---301", "2026-10")
+        assertEquals(1, state.rooms.getValue("1-13---301").records.size)
 
-        state = WaterMutator.withPersons(state, "1-13---324", 6)
-        assertEquals(6, state.rooms.getValue("1-13---324").persons)
+        state = WaterMutator.withPersons(state, "1-13---301", 6)
+        assertEquals(6, state.rooms.getValue("1-13---301").persons)
 
-        state = WaterMutator.withPersons(state, "1-13---324", 5)
-        assertEquals(5, state.rooms.getValue("1-13---324").persons) // 5 人间合法
+        state = WaterMutator.withPersons(state, "1-13---301", 5)
+        assertEquals(5, state.rooms.getValue("1-13---301").persons) // 5 人间合法
 
-        state = WaterMutator.withPersons(state, "1-13---324", 9)
-        assertEquals(4, state.rooms.getValue("1-13---324").persons) // 非法人数回落默认 4
+        state = WaterMutator.withPersons(state, "1-13---301", 9)
+        assertEquals(4, state.rooms.getValue("1-13---301").persons) // 非法人数回落默认 4
 
-        state = WaterMutator.clearRoom(state, "1-13---324")
+        state = WaterMutator.clearRoom(state, "1-13---301")
         assertTrue(state.rooms.isEmpty())
     }
 

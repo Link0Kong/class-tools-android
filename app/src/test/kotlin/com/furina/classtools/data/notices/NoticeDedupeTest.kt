@@ -19,7 +19,7 @@ class NoticeDedupeTest {
         title: String = "关于主题班会的通知",
         cat: String = "班会",
         source: String = "2026级信管1班",
-        sender: String = "陈子麒",
+        sender: String = "陈同学",
         deadline: String = "",
         eventAt: String = "",
         mergedSources: List<String> = emptyList(),
@@ -54,7 +54,7 @@ class NoticeDedupeTest {
     private fun text(text: String, follow: Boolean = false): NoticeItemMeta = NoticeItemMeta.Text(
         kind = if (follow) "follow" else "text",
         label = if (follow) "补充通知" else "原始消息",
-        fromName = "陈子麒",
+        fromName = "陈同学",
         fromRole = "班长",
         timeText = "11-10 10:00",
         text = text,

@@ -11,7 +11,7 @@ class PptStatusTextsTest {
 
     private fun deck(
         id: String = "d1",
-        ownerSid: String = "3260707024",
+        ownerSid: String = "2024000001",
         status: String = PptDeck.STATUS_READY,
         createdAt: Long = 1_000L,
     ) = PptDeck(id = id, ownerSid = ownerSid, status = status, createdAt = createdAt)
@@ -78,9 +78,9 @@ class PptStatusTextsTest {
 
     @Test
     fun ownInProgress() {
-        assertTrue(PptStatusTexts.isOwnInProgress(deck(status = "queued"), "3260707024"))
+        assertTrue(PptStatusTexts.isOwnInProgress(deck(status = "queued"), "2024000001"))
         assertFalse(PptStatusTexts.isOwnInProgress(deck(status = "queued"), "other"))
-        assertFalse(PptStatusTexts.isOwnInProgress(deck(status = "ready"), "3260707024"))
+        assertFalse(PptStatusTexts.isOwnInProgress(deck(status = "ready"), "2024000001"))
         assertFalse(PptStatusTexts.isOwnInProgress(deck(status = "queued"), null))
     }
 }

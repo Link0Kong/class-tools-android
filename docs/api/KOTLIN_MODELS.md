@@ -223,7 +223,7 @@ data class FeedbackRow(
 
 @Serializable
 data class PowerRow(
-    val id: String,                 // = roomverify，如 "4-23A---321"
+    val id: String,                 // = roomverify，如 "4-23A---305"
     val label: String = "",
     val building: String = "",
     val room: String = "",

@@ -19,12 +19,24 @@ artifacts/
 
 # 本机签名与密钥（绝不提交）
 key/
-keystore.properties
+keystore.properties*
+*.pem
+*.keystore
 *.jks
+*.bks
+*.p12
+*.key
+*.env
 # 厂商密钥（本机填写，不入库；模板见 app/*.properties.example）
-app/oppo.properties
-app/honor.properties
-app/vivo.properties
+app/*.properties
+!app/*.properties.example
+
+# 备份 / 临时产物 / 内部运维文件（保留在磁盘，不入库）
+_backup*/
+*.bak
+AGENTS.md
+sync_repos.py
+sync-repos.cmd
 
 # 厂商 SDK 官方 demo/临时解压目录（仅本机参考，不入库；AAR 本体在 app/libs 入交付）
 _oppo_sdk_tmp/

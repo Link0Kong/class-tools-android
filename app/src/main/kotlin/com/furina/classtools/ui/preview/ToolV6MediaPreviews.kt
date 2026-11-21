@@ -52,7 +52,7 @@ private fun deck(
     title: String,
     status: String = PptDeck.STATUS_READY,
     slideCount: Int = 16,
-    ownerName: String = "陈子麒",
+    ownerName: String = "陈同学",
     progress: Int = 100,
     error: String = "",
     hasCompat: Boolean = true,
@@ -159,7 +159,7 @@ private fun previewDetail(): PptDeckDetail = PptDeckDetail(
     coverUrl = "",
     status = PptDeck.STATUS_READY,
     progress = 100,
-    ownerName = "陈子麒",
+    ownerName = "陈同学",
 )
 
 @Composable

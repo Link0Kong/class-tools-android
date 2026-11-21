@@ -1,7 +1,7 @@
 # vivo 推送接入说明（vpush 4.1.7.0_517）
 
-> 2026-11-20 · 用户要求「AppID 106177851 / AppKey … / AppSecret … 接入 vivo 推送服务」。
-> AppID/AppKey 由 vivo 设计要求编译进 APK；**AppSecret 只在服务端**，不进客户端/仓库。
+> 2026-11-20 · 用户要求接入 vivo 推送服务。
+> AppID/AppKey 由 vivo 设计要求编译进 APK（具体值见厂商后台配置）；**AppSecret 只在服务端**，不进客户端/仓库。
 
 ## 1. 交付内容
 
@@ -17,8 +17,8 @@
 | `data/push/VivoPushReceiver.kt` | `OpenClientPushMessageReceiver`：`onReceiveRegId` 上传；点击兜底 |
 | `data/push/VivoPushManager.kt` | 编排：登录后初始化 → 注册 → 缓存 → 上传 `push_tokens(provider='vivo')` |
 | `data/push/PushTokenUploader.kt` | `PROVIDER_VIVO` + `of(provider=…)` |
-| ECS/本机 `briefdesk/scripts/vivo_push.py` | 服务端发送器（auth + 单推 + 增量水位 + `--test/--notice/--dry-run`） |
-| `briefdesk/scripts/push_tick_all.py` | 推送巡检统一调度（鸿蒙 + OPPO + vivo） |
+| ECS/本机 `scripts/vivo_push.py` | 服务端发送器（auth + 单推 + 增量水位 + `--test/--notice/--dry-run`） |
+| `scripts/push_tick_all.py` | 推送巡检统一调度（鸿蒙 + OPPO + vivo） |
 
 ## 2. 客户端流程
 
@@ -37,22 +37,19 @@
 
 ## 3. 服务端
 
-`briefdesk/scripts/vivo_push.py`（与 `oppo_push.py` 同水位模型）：
+`scripts/vivo_push.py`（与 `oppo_push.py` 同水位模型）：
 
 - 鉴权：`POST https://api-push.vivo.com.cn/message/auth`
   `sign = md5(str(appId)+appKey+timestamp+appSecret)` 小写，13 位毫秒；authToken 缓存 20h。
 - 发送：`POST /message/send`（header `authToken`）：
   `notifyType=4`、`title ≤40`、`content ≤100`、`timeToLive=86400`、`skipType=4`、`skipContent=intent URI`、
-  `category`（本机 secrets，默认 `IM`）、`requestId`、`notifyId`、`pushMode=0`。
+  `category`（服务端配置，默认 `IM`）、`requestId`、`notifyId`、`pushMode=0`。
 - 增量：首轮只记录水位；新通知合并一条；`--notice` 强制补推；`--test <regId>` 单推测试。
 - 无效设备：`10302/10311` 计入日志（不自动删云端行）。
 - **category 必须在 vivo 开放平台申请并通过**（即时消息 `IM`）；未通过会返回 `10096/10097`。
   运营消息仅 07:00–23:00 可发，`IM` 属系统消息不受限。
-- 凭证文件（本机，不入库）：`G:\ClassTools\briefdesk\secrets\vivo-push.json`
-  ```json
-  {"app_id":106177851,"app_key":"…","app_secret":"…","category":"IM",
-   "click_scheme":"classtools","click_host":"com.furina.classtools","click_path":"/notice"}
-  ```
+- 凭证文件（部署机，不入库）：路径与内容见运维文档；字段为 app_id / app_key / app_secret / category / click 配置，
+  **具体值见厂商后台配置**。
 
 ## 4. 已验证 / 未验证（如实）
 
@@ -72,7 +69,7 @@
 ## 5. 回滚
 
 1. 客户端：清空 `app/vivo.properties`（AppID/APIKey）→ manager 显示「未配置」，不初始化/注册/上传。
-2. 服务端：删除/改名 `briefdesk/secrets/vivo-push.json` → `vivo_push.py` 安全跳过；
+2. 服务端：删除/改名 `部署机密钥文件（不入库）` → `vivo_push.py` 安全跳过；
    把 `ClasstoolsPushWatch` 指回 `harmony-class-tools/scripts/push_tick.py` 可只停 vivo/OPPO 调度。
 3. DB：`DELETE FROM public.push_tokens WHERE provider='vivo'`，再收紧 CHECK。
 

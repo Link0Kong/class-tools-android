@@ -47,7 +47,7 @@ private val v5TermStart = LocalDate.of(2026, 8, 31)
 
 private val v5Snapshot: TtSnapshot = TtSnapshot(
     c = listOf(
-        Course("数据结构", "龚志伟", "明理楼(教室02201)", day = 0, start = 1, end = 2, weeks = "1-16"),
+        Course("数据结构", "王老师", "明理楼(教室02201)", day = 0, start = 1, end = 2, weeks = "1-16"),
         Course("高等数学", "刘老师", "自强楼(教室01104)", day = 0, start = 3, end = 4, weeks = "1-16"),
         Course("大学英语", "王老师", "明理楼(教室02301)", day = 1, start = 6, end = 7, weeks = "2-15", parity = "odd"),
         Course("大学物理", "陈老师", "格物楼(教室03201)", day = 2, start = 1, end = 2, weeks = "1-18"),

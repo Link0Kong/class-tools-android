@@ -138,7 +138,7 @@ CLASSES=35  TOTAL=451  FAIL=0  ERR=0  SKIP=0
 
 **结果：PASS（2026-11-08 01:09，`ct-api37` 模拟器，Debug 包 `com.furina.classtools.debug`）**
 
-截图目录：`C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\artifacts\e2e_state_fix\`
+截图目录：`<项目根>\artifacts\e2e_state_fix\`
 
 | 文件 | 内容 |
 |---|---|

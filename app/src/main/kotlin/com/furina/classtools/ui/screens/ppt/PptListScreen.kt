@@ -813,7 +813,7 @@ private fun PptListTag(text: String) {
     }
 }
 
-/** 卡片元信息：就绪「12 页 · 陈子麒」（DESIGN §4.1）；上传占位没有上传者/页数 → 不显示。 */
+/** 卡片元信息：就绪「12 页 · 陈同学」（DESIGN §4.1）；上传占位没有上传者/页数 → 不显示。 */
 private fun metaLine(deck: PptDeck): String {
     val owner = PptDeckListLogic.ownerLabel(deck).takeUnless { it == "未知同学" }.orEmpty()
     val pages = deck.slideCount

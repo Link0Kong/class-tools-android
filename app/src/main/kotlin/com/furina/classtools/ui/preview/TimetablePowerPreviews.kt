@@ -29,7 +29,7 @@ private const val PREVIEW_NOW: Long = 1_793_930_400_000L // 2026-11-06 10:00 Asi
 
 private val previewTtSnapshot = TtSnapshot(
     c = listOf(
-        Course("高等数学", "龚志伟", "自强楼(教室01104)", day = 0, start = 1, end = 2, weeks = "1-16"),
+        Course("高等数学", "王老师", "自强楼(教室01104)", day = 0, start = 1, end = 2, weeks = "1-16"),
         Course("大学英语", "李晓", "明理楼(教室02201)", day = 2, start = 3, end = 4, weeks = "1-16"),
         Course("数据结构", "王强", "知行楼(教室03105)", day = 1, start = 3, end = 4, weeks = "2-15", parity = "odd"),
         Course("大学物理", "陈晨", "明理楼(教室02102)", day = 3, start = 6, end = 7, weeks = "1-16", parity = "even"),
@@ -62,7 +62,7 @@ private object PreviewPowerRepository : PowerRepository {
 private fun hourOf(offsetHours: Int): Long = PREVIEW_NOW + offsetHours * 3_600_000L
 private fun dayOf(offsetDays: Int): Long = PREVIEW_NOW + offsetDays * 24L * 3_600_000L
 
-private fun powerRow(q: Double, rv: String = "4-23A---321", label: String = "23号楼A座321", building: String = "23号楼A座"): PowerRow =
+private fun powerRow(q: Double, rv: String = "4-23A---305", label: String = "23号楼A座305", building: String = "23号楼A座"): PowerRow =
     PowerRow(
         id = rv,
         label = label,
@@ -273,7 +273,7 @@ private fun PowerReadyLightPreview() {
         PowerScreen(
             onBack = {},
             repository = PreviewPowerRepository,
-            initialSelectedRv = "4-23A---321",
+            initialSelectedRv = "4-23A---305",
             initialRow = powerRow(86.42),
             initialHistories = mapOf(
                 PowerRange.H24 to previewHistories24h(),
@@ -298,7 +298,7 @@ private fun PowerReadyLargeFontPreview() {
         PowerScreen(
             onBack = {},
             repository = PreviewPowerRepository,
-            initialSelectedRv = "4-23A---321",
+            initialSelectedRv = "4-23A---305",
             initialRow = powerRow(86.42),
             initialHistories = mapOf(
                 PowerRange.H24 to previewHistories24h(),
@@ -317,7 +317,7 @@ private fun PowerReadyDarkPreview() {
         PowerScreen(
             onBack = {},
             repository = PreviewPowerRepository,
-            initialSelectedRv = "4-23A---321",
+            initialSelectedRv = "4-23A---305",
             initialRow = powerRow(86.42),
             initialHistories = mapOf(
                 PowerRange.H24 to previewHistories24h(),
@@ -336,11 +336,11 @@ private fun PowerSlowRoomPreview() {
         PowerScreen(
             onBack = {},
             repository = PreviewPowerRepository,
-            initialSelectedRv = "1-13---324",
+            initialSelectedRv = "1-13---301",
             initialRow = powerRow(
                 q = 42.5,
-                rv = "1-13---324",
-                label = "13号楼324",
+                rv = "1-13---301",
+                label = "13号楼301",
                 building = "13号楼",
             ),
             initialHistories = mapOf(
@@ -387,7 +387,7 @@ private fun PowerErrorPreview() {
         PowerScreen(
             onBack = {},
             repository = PreviewPowerRepository,
-            initialSelectedRv = "4-23A---321",
+            initialSelectedRv = "4-23A---305",
             initialError = "网络不可用，请稍后重试",
             skipLoad = true,
         )

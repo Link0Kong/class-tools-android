@@ -21,15 +21,15 @@ class ApiAuthRepositoryTest {
     @Test
     fun `对象响应解析成功并构造 30 天会话`() = runTest {
         val body = """
-            {"ok":true,"token":"fake-token-1","sid":"3260707001","name":"张三",
+            {"ok":true,"token":"fake-token-1","sid":"2024000002","name":"张三",
              "role":"副团支书","badge":"班委","is_admin":true}
         """.trimIndent()
         val transport = FakeTransport { ApiResponse(200, body) }
-        val result = repository(transport).verify("3260707001", "张三")
+        val result = repository(transport).verify("2024000002", "张三")
 
         val session = (result as VerifyResult.Success).session
         assertEquals("fake-token-1", session.token)
-        assertEquals("3260707001", session.sid)
+        assertEquals("2024000002", session.sid)
         assertEquals("张三", session.name)
         assertEquals("副团支书", session.role)
         assertEquals("班委", session.badge)
@@ -42,17 +42,17 @@ class ApiAuthRepositoryTest {
             "https://example.invalid/v1/rdb/rest/rpc/class_verify",
             request.url,
         )
-        assertTrue(request.body!!.contains("\"p_sid\":\"3260707001\""))
+        assertTrue(request.body!!.contains("\"p_sid\":\"2024000002\""))
         assertTrue(request.body!!.contains("\"p_name\":\"张三\""))
         assertNull(request.headers["X-Class-Token"])
     }
 
     @Test
     fun `单元素数组响应同样解析`() = runTest {
-        val body = """[{"ok":true,"token":"fake-token-2","sid":"3260707002","name":"李四"}]"""
+        val body = """[{"ok":true,"token":"fake-token-2","sid":"2024000003","name":"李四"}]"""
         val transport = FakeTransport { ApiResponse(200, body) }
 
-        val session = (repository(transport).verify("3260707002", "李四") as VerifyResult.Success).session
+        val session = (repository(transport).verify("2024000003", "李四") as VerifyResult.Success).session
 
         assertEquals("fake-token-2", session.token)
         assertEquals("李四", session.name)
@@ -115,7 +115,7 @@ class ApiAuthRepositoryTest {
     fun `空姓名不发请求`() = runTest {
         val transport = FakeTransport { ApiResponse(200, "{}") }
 
-        val failure = repository(transport).verify("3260707001", "   ") as VerifyResult.Failure
+        val failure = repository(transport).verify("2024000002", "   ") as VerifyResult.Failure
 
         assertEquals(VerifyErrorCode.INVALID_INPUT, failure.code)
         assertEquals(0, transport.requests.size)
@@ -125,7 +125,7 @@ class ApiAuthRepositoryTest {
     fun `ok true 但缺 token 判失败`() = runTest {
         val transport = FakeTransport { ApiResponse(200, """{"ok":true}""") }
 
-        val failure = repository(transport).verify("3260707001", "张三") as VerifyResult.Failure
+        val failure = repository(transport).verify("2024000002", "张三") as VerifyResult.Failure
 
         assertEquals(VerifyErrorCode.TOKEN_MISSING, failure.code)
     }
@@ -134,7 +134,7 @@ class ApiAuthRepositoryTest {
     fun `坏 JSON 判解析错误`() = runTest {
         val transport = FakeTransport { ApiResponse(200, "<html>oops</html>") }
 
-        val failure = repository(transport).verify("3260707001", "张三") as VerifyResult.Failure
+        val failure = repository(transport).verify("2024000002", "张三") as VerifyResult.Failure
 
         assertEquals(VerifyErrorCode.PARSE_ERROR, failure.code)
     }
@@ -143,7 +143,7 @@ class ApiAuthRepositoryTest {
     fun `空数组响应判解析错误`() = runTest {
         val transport = FakeTransport { ApiResponse(200, "[]") }
 
-        val failure = repository(transport).verify("3260707001", "张三") as VerifyResult.Failure
+        val failure = repository(transport).verify("2024000002", "张三") as VerifyResult.Failure
 
         assertEquals(VerifyErrorCode.PARSE_ERROR, failure.code)
     }

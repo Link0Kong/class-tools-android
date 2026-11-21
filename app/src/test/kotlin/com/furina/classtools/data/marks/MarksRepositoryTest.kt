@@ -21,7 +21,7 @@ import org.junit.Test
 
 class MarksRepositoryTest {
 
-    private val sid = "3260707024"
+    private val sid = "2024000001"
     private val fixedNow = 1_700_000_000_000L
 
     private fun repository(

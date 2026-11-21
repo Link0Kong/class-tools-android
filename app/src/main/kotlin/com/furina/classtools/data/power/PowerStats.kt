@@ -373,7 +373,7 @@ object PowerStats {
      * 最近一次充值/上调：按时间升序扫描，取最后一次相邻上升（`Δq > [minDelta]`）。
      *
      * 与 [deriveRange] 的 `lastUp` 不同，本函数**不限制所选区间**：调用方传入 30d 全量历史
-     * （云端历史保留 30 天，见 `briefdesk/scripts/sync_power_cloud.py` 的 `HISTORY_KEEP_DAYS`），
+     * （云端历史保留 30 天，见 `scripts/sync_power_cloud.py` 的 `HISTORY_KEEP_DAYS`），
      * 因此用户切到 24h/7d 时「上次充值」仍能显示最近一次充值。
      *
      * @return [RechargePoint.delta] = 本次充值量（度），[RechargePoint.reset] = 充值后余额。

@@ -87,7 +87,7 @@
 2. 复制模板并填写：
 
 ```powershell
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools\app
+cd <项目根>\app
 Copy-Item oppo.properties.example oppo.properties
 notepad oppo.properties      # 填 oppo.appKey= / oppo.appSecret=
 ```
@@ -106,7 +106,7 @@ Test-Path app\oppo.properties
 ## 3. 构建
 
 ```powershell
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'
 $env:ANDROID_HOME='C:\AndroidToolchain\sdk'
 & 'C:\AndroidToolchain\gradle\gradle-9.9.0\bin\gradle.bat' :app:testDebugUnitTest

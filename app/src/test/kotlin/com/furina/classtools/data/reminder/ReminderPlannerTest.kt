@@ -85,7 +85,7 @@ class ReminderPlannerTest {
         deadline: String = "",
         eventAt: String = "",
         signupStart: String = "",
-        senderName: String = "陈子麒",
+        senderName: String = "陈同学",
     ): NoticeGroupDto = NoticeGroupDto(
         id = id,
         title = title,
@@ -472,7 +472,7 @@ class ReminderPlannerTest {
         assertEquals(ReminderKind.NOTICE_NEW, event.kind)
         assertEquals("nt-new:g-new", event.key)
         assertEquals("新通知", event.title)
-        assertTrue(event.body.contains("陈子麒"))
+        assertTrue(event.body.contains("陈同学"))
         assertTrue(event.body.contains("图书馆闭馆通知"))
         assertEquals("nt", event.toolId)
     }
@@ -624,11 +624,11 @@ class ReminderPlannerTest {
             WaterRecord(month = "2026-11", reading = 110.0),
         )
         val event = ReminderPlanner.planWater(
-            roomKey = "4-23A---321",
+            roomKey = "4-23A---305",
             room = room,
             nowMillis = now,
             settings = defaultSettings(),
-            snapshot = baseline(waterKey = "4-23A---321|2026-10|100.00"),
+            snapshot = baseline(waterKey = "4-23A---305|2026-10|100.00"),
             zone = zone,
         ).single()
         assertEquals(ReminderKind.WATER_DEDUCT, event.kind)

@@ -284,7 +284,7 @@ class OppoPushManagerTest {
         advanceUntilIdle()
         assertEquals(1, uploader.payloads.size)
 
-        currentSession = session.copy(sid = "3260707024")
+        currentSession = session.copy(sid = "2024000001")
         push.onSessionChanged()
         advanceUntilIdle()
         assertEquals(2, uploader.payloads.size)

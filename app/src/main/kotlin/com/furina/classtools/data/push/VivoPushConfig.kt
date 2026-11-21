@@ -4,7 +4,7 @@ package com.furina.classtools.data.push
  * vivo 推送客户端配置（构建期来自 `app/vivo.properties` → BuildConfig）。
  *
  * 空值 = 未配置：不初始化 SDK、不注册、不上传 token；其余功能不受影响。
- * AppSecret **不在客户端**（只在服务端 briefdesk/secrets/vivo-push.json）。
+ * AppSecret **不在客户端**（只在服务端 部署机密钥文件（不入库））。
  */
 data class VivoPushConfig(
     val appId: String = "",

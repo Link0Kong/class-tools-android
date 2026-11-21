@@ -44,7 +44,14 @@
 - 新增 `docs/api/NOTIFICATION_V4_IMPL.md`、`docs/SHARE_IMPL.md`；文档记录模块表、内容文案、迁移与隐私口径。
 - 单测：`ShareSpecsTest` 15 个（链接/导出卡派生/通知字段优先级/投票不出现结果/绘制层截断/文件名）；
   通知侧 `ReminderPlannerTest` / `NoticeReminderPlannerTest` / `ReminderEngineTest` / `ReminderOneShotTest` / `MeStatsSectionTest` 同步更新；
-  `:app:testDebugUnitTest` 全量通过。
+  `:app:testDebugUnitTest` **1844 用例 / 0 失败 / 2 skipped**。
+
+### 四、发布
+
+- 双远端已推送（GitHub `origin` + Gitee `gitee`，HEAD 一致）；`assembleRelease` 自动发布 beta 渠道。
+- **beta22（vc105）已上线 ECS+OSS**：APK **6,097,875 B / SHA-256 `658552aa97c8fc7d9afb903e7dba97f1465761f5ad4bef15413845d079ed24be`**，
+  `latest.json` 回读 versionCode=105、sha256 一致，ECS/OSS 两处 `latest.json` 与 APK 均 HTTP 200。
+
 
 ## 2026-11-21 · 1.0.0-beta21 / vc104：电费「上次充值」跨区间查找并显示充值量
 
@@ -59,7 +66,7 @@
 - **展示**：tile4 值改为 `+<delta>` 度（充值量），副标保持 `MM-dd HH:mm`；切 24h/7d/30d 不再改变；无记录「—/暂无记录」；
   30d 未加载/失败或预览场景回退旧区间口径，不出现空白。
 - **真实数据核对（测试身份只读）**：17 间宿舍 30d 各 684 条采样（无重复时间戳），7 间存在上升；
-  如 23号楼A座327 +187.19（11-17 14:46）、13号楼324 +68.16（11-11 10:01）、16号楼305 +174.27（11-11 10:01）均在 24h 之外，
+  如 23号楼A座310 +187.19（11-17 14:46）、13号楼301 +68.16（11-11 10:01）、16号楼303 +174.27（11-11 10:01）均在 24h 之外，
   旧口径在 24h 档只能显示「—」。
 - **验收**：`PowerStatsTest` 31 用例（新增 lastRecharge 跨区间、slowStats.delta、tilesOf 充值量/回退三组断言）；
   `:app:testDebugUnitTest` **1803 用例 / 0 失败 / 2 skipped**；`assembleRelease` 成功。
@@ -130,7 +137,7 @@
 - 客户端：本地 AAR `vpush_clientSDK_v4.1.7.0_517.aar`；`VivoPushConfig/Sdk/Store/Receiver/Manager`；
   Manifest `app_id/api_key` + `VivoPushReceiver` + `classtools://com.furina.classtools/notice` deeplink；
   登录后（已同意隐私）才 `initialize(agreePrivacyStatement=true)` → `turnOnPush` → `getRegId` → 上传 `push_tokens(provider='vivo')`；AppSecret 只在服务端。
-- 服务端：`briefdesk/scripts/vivo_push.py`（auth + `/message/send`，skipType=4 intent URI 点击直达通知详情）；
+- 服务端：`scripts/vivo_push.py`（auth + `/message/send`，skipType=4 intent URI 点击直达通知详情）；
   统一推送巡检 `push_tick_all.py`（harmony→oppo→vivo），`ClasstoolsPushWatch` 已改指向它。
 - DB：`push_tokens.provider` 放开 `vivo`。
 - 详见 `docs/VIVO_PUSH.md`。

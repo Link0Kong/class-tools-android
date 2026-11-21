@@ -58,11 +58,12 @@ $ErrorActionPreference = 'Stop'
 
 # ---------------------------------------------------------------- paths / consts
 $Root    = Split-Path -Parent $PSScriptRoot
-$Adb     = 'G:\Dev\AndroidToolchain\sdk\platform-tools\adb.exe'
-$Emu     = 'G:\Dev\AndroidToolchain\sdk\emulator\emulator.exe'
-$Gradle  = 'G:\Dev\AndroidToolchain\gradle\gradle-9.9.0\bin\gradle.bat'
-$Jdk17   = 'G:\Dev\AndroidToolchain\jdk17'
-$SdkRoot = 'G:\Dev\AndroidToolchain\sdk'
+$toolRoot = if ($env:CT_TOOLCHAIN_ROOT) { $env:CT_TOOLCHAIN_ROOT } else { 'C:\AndroidToolchain' }
+$Adb     = Join-Path $toolRoot 'sdk\platform-tools\adb.exe'
+$Emu     = Join-Path $toolRoot 'sdk\emulator\emulator.exe'
+$Gradle  = Join-Path $toolRoot 'gradle\gradle-9.9.0\bin\gradle.bat'
+$Jdk17   = Join-Path $toolRoot 'jdk17'
+$SdkRoot = Join-Path $toolRoot 'sdk'
 $Pkg     = 'com.furina.classtools.debug'
 $Act     = 'com.furina.classtools.debug/com.furina.classtools.MainActivity'
 $Apk     = Join-Path $Root 'app\build\outputs\apk\debug\app-debug.apk'

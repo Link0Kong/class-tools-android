@@ -82,7 +82,7 @@ class DefaultPrivacyRepository(
 object PrivacyExportBuilder {
     val WHITELIST: List<String>      // homeTools, fit, draw, group, roster, hide, prefs, nick, water
     val EXCLUDED: List<String>       // power（电费）, tt（课表快照）
-    fun maskSid(sid: String?): String          // 3260707024 → 32***24
+    fun maskSid(sid: String?): String          // 2024000001 → 20***01
     fun fileName(nowMillis: Long): String      // 我的数据_YYYYMMDD-HHmm.json
     fun filteredSections(sections: JsonObject): JsonObject   // 白名单 + roster.rollNames 清空
     fun build(session, sid, sections, marks, fitRecords, fitError, nowMillis): String
@@ -110,7 +110,7 @@ fun DataPrivacyScreen(
 
 ### 3.1 导出 JSON（`buildExport`）
 
-- 身份：`sidMasked`（`32***24`）、姓名、角色、徽章、`isAdmin`；**不含 token、不含学号明文**。
+- 身份：`sidMasked`（`20***01`）、姓名、角色、徽章、`isAdmin`；**不含 token、不含学号明文**。
 - `userdata`：白名单 9 个 section —— `homeTools/fit/draw/group/roster/hide/prefs/nick/water`；
   - **`power`（电费）不导出**（web 红线：电费不导出/不分享）；
   - **`tt`（班级课表快照）不导出**（非个人数据且体积大）；
@@ -135,7 +135,7 @@ fun DataPrivacyScreen(
 
 ### 3.4 隐私口径（页面顶部展示）
 
-- 不显示手机号；学号仅脱敏（`32***24`）；
+- 不显示手机号；学号仅脱敏（`20***01`）；
 - 页面与导出图不含宿舍号；**电费数据不导出**；
 - 导出文件只保存在本机，由本人主动分享；
 - 账号注销/数据删除请求：联系班级管理员人工处理（页脚说明）。

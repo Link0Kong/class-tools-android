@@ -22,13 +22,13 @@ X-Class-Token: <班级 token>        # 或 X-Device-Id；class_verify 时不要�
 - 请求：
 
 ```json
-{"p_sid":"3260707024","p_name":"陈子麒"}
+{"p_sid":"2024000001","p_name":"陈同学"}
 ```
 
 - 成功（`ok:true`）：
 
 ```json
-{"ok":true,"token":"<token>","sid":"3260707024","name":"陈子麒",
+{"ok":true,"token":"<token>","sid":"2024000001","name":"陈同学",
  "role":"副团支部书记","badge":"班委","is_admin":true}
 ```
 
@@ -44,7 +44,7 @@ X-Class-Token: <班级 token>        # 或 X-Device-Id；class_verify 时不要�
 - 响应（数组，约 70 人；`is_test` 已被服务端过滤）：
 
 ```json
-[{"seat":1,"sid":"3260707001","name":"张三","role":"","badge":"","is_admin":false}, ...]
+[{"seat":1,"sid":"2024000002","name":"张三","role":"","badge":"","is_admin":false}, ...]
 ```
 
 - `role` 非空 = 班委；`is_admin=true` = 管理员。客户端按 `seat` 归一（整数 1–70）；空数组视为失败并**保留旧缓存** `[已核实 MP/cloud.js:283-291]`。
@@ -73,7 +73,7 @@ GET {REST}homework?select=*&order=ts.asc&archived=eq.false
 
 ```json
 [{"id":"m9x2k1ab","subject":"高等数学","content":"P42 习题 1-5",
-  "due":"10-12","date":"2026-10-12","time":"23:59","author":"李四","owner":"3260707002",
+  "due":"10-12","date":"2026-10-12","time":"23:59","author":"李四","owner":"2024000003",
   "attachments":"[{\"n\":\"p42.jpg\",\"t\":\"image/jpeg\",\"s\":12345,\"d\":\"<base64>\"}]",
   "done":false,"archived":false,"ts":1760000000000}]
 ```
@@ -109,7 +109,7 @@ GET {REST}marks?select=*&seat=eq.<sid>
 ```
 
 ```json
-[{"id":"3260707024|hw|m9x2k1ab","seat":"3260707024","kind":"hw","ref":"m9x2k1ab","val":true,"ts":1760000001000}]
+[{"id":"2024000001|hw|m9x2k1ab","seat":"2024000001","kind":"hw","ref":"m9x2k1ab","val":true,"ts":1760000001000}]
 ```
 
 - 只认 `val===true`；`kind ∈ {hw,nt,ntdone}`。
@@ -122,7 +122,7 @@ GET {REST}userdata?select=*&id=eq.<sid>
 ```
 
 ```json
-[{"id":"3260707024","blob":"{\"v\":6,\"at\":{...},\"homeTools\":[...], ...}","ts":1760000002000}]
+[{"id":"2024000001","blob":"{\"v\":6,\"at\":{...},\"homeTools\":[...], ...}","ts":1760000002000}]
 ```
 
 - 0 行或 `blob` 为空/坏 JSON = 无云端数据，**不要覆盖本机**，只把本机合并结果推上去。
@@ -135,7 +135,7 @@ GET {REST}fitrecs?select=*&acc=eq.<sid>&arch=eq.false&order=ts.desc
 ```
 
 ```json
-[{"id":"f_abc123","acc":"3260707024",
+[{"id":"f_abc123","acc":"2024000001",
   "data":"{\"id\":\"f_abc123\",\"ts\":1760000000000,\"n\":\"体测 11-05 20:00\",\"sex\":\"m\",\"gr\":\"12\",\"fields\":{\"h\":\"175\",...},\"total\":78.5,\"grade\":\"及格\"}",
   "arch":false,"ts":1760000000000}]
 ```
@@ -163,11 +163,11 @@ GET {REST}power?select=id,label,building,room,quantity,unit,low,updated_at&id=eq
 ```
 
 ```json
-[{"id":"4-23A---321","label":"23号楼A座321","building":"23号楼A座","room":"321",
+[{"id":"4-23A---305","label":"23号楼A座305","building":"23号楼A座","room":"305",
   "quantity":35.62,"unit":"度","low":false,"updated_at":"2026-11-07T03:01:00.123+00:00"}]
 ```
 
-- `id` 即 roomverify（如 `4-23A---321`），目录 17 间见主文档 §7.5；未选择宿舍时**不要发请求**。
+- `id` 即 roomverify（如 `4-23A---305`），目录 17 间见主文档 §7.5；未选择宿舍时**不要发请求**。
 
 ### E23 电费历史采样（趋势）
 
@@ -189,7 +189,7 @@ GET {REST}site_assets?select=body,meta,updated_at&id=eq.tt
 ```
 
 ```json
-[{"body":{"c":[{"name":"高等数学","teacher":"龚志伟","room":"自强楼(教室01104)",
+[{"body":{"c":[{"name":"高等数学","teacher":"王老师","room":"自强楼(教室01104)",
    "day":0,"start":1,"end":2,"weeks":"2-4","parity":"all"}],
   "t":"2026-08-31",
   "meta":{"source":"jwxt","fetchedAt":1760000000000,"count":29,"termStart":"2026-08-31","syncedAt":"2026-11-07T..."}},
@@ -244,12 +244,12 @@ Prefer: return=representation
 PATCH {REST}notices?id=eq.auto_<gid>
 Content-Type: application/json
 
-{"override_json":"{\"title\":\"新标题\",\"deadline\":null}","edited_at":1760000000000,"edited_by":"3260707024"}
+{"override_json":"{\"title\":\"新标题\",\"deadline\":null}","edited_at":1760000000000,"edited_by":"2024000001"}
 ```
 
 ```http
 PATCH {REST}notices?id=eq.auto_<gid>
-{"hidden":true,"edited_at":1760000000000,"edited_by":"3260707024"}
+{"hidden":true,"edited_at":1760000000000,"edited_by":"2024000001"}
 ```
 
 - `override_json` 白名单 `title,cat,summary,aiSummary,deadline,eventAt,expireAt,timeLabel`；`null` 表示清空覆盖。

@@ -90,7 +90,7 @@ ui/preview/PptPreviews.kt    + 67 下载详情（三行+大小）、68 兼容提
 
 ```
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'; $env:ANDROID_HOME='C:\AndroidToolchain\sdk'
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 .\gradlew.bat :app:testDebugUnitTest --console=plain
 BUILD SUCCESSFUL
 全量 982 tests / 0 failures / 0 errors / 0 skipped（79 suites）
@@ -108,7 +108,7 @@ v2.0 新增 **28 项**（原有 954 基线无回退）：
 
 ```
 $env:JAVA_HOME=''C:\AndroidToolchain\jdk17''; $env:ANDROID_HOME=''C:\AndroidToolchain\sdk''
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 .\gradlew.bat assembleRelease --console=plain
 BUILD SUCCESSFUL in 1m 45s（R8 + 资源压缩 + lintVitalRelease 通过）
 ```
@@ -195,7 +195,7 @@ Android 容错解析（`PptParsers.parseMediaFiles`）：
 
 ```
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'; $env:ANDROID_HOME='C:\AndroidToolchain\sdk'
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 .\gradlew.bat :app:testDebugUnitTest --console=plain
 BUILD SUCCESSFUL
 全量 994 tests / 0 failures / 0 errors / 0 skipped（80 suites）
@@ -209,7 +209,7 @@ v2.3 新增 **12 项**（原 982 基线无回退）：
 
 ```
 $env:JAVA_HOME=''C:\AndroidToolchain\jdk17''; $env:ANDROID_HOME=''C:\AndroidToolchain\sdk''
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 .\gradlew.bat assembleRelease --console=plain
 BUILD SUCCESSFUL in 2m 20s（R8 + 资源压缩 + lintVitalRelease 通过）
 ```

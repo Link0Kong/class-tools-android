@@ -19,7 +19,7 @@ class PowerStatsTest {
     private val hour = 3_600_000L
 
     private fun pp(q: Double, t: Long) = PowerPoint(q = q, t = t)
-    private fun row(q: Double) = PowerRow(id = "4-23A---321", label = "23号楼A座321", q = q)
+    private fun row(q: Double) = PowerRow(id = "4-23A---305", label = "23号楼A座305", q = q)
 
     // ---- 基础 / 低电状态 ----------------------------------------------------
 
@@ -277,14 +277,14 @@ class PowerStatsTest {
     @Test
     fun isSlowRoom_dependsOnBuildingAndChanges() {
         val flat24 = (0..23).map { pp(42.5, now - (23 - it) * hour) }
-        assertTrue(PowerStats.isSlowRoom("1-13---324", flat24))
-        assertTrue(PowerStats.isSlowRoom("1-16---305", flat24))
-        assertFalse(PowerStats.isSlowRoom("4-23A---321", flat24))
+        assertTrue(PowerStats.isSlowRoom("1-13---301", flat24))
+        assertTrue(PowerStats.isSlowRoom("1-16---303", flat24))
+        assertFalse(PowerStats.isSlowRoom("4-23A---305", flat24))
         assertFalse(PowerStats.isSlowRoom("unknown", flat24))
 
         // 24h 变化 ≥6 次 → 自动降级实时口径
         val many = (0..10).map { pp(42.5 - it * 0.1, now - (10 - it) * hour) }
-        assertFalse(PowerStats.isSlowRoom("1-13---324", many))
+        assertFalse(PowerStats.isSlowRoom("1-13---301", many))
     }
 
     @Test

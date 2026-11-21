@@ -3,7 +3,7 @@
 # 复制本文件为 app/honor.properties 后填写真实值（app/honor.properties 已在 .gitignore）。
 # 获取位置：荣耀开发者服务平台 → 应用 → 账号服务 / OAuth 2.0 客户端凭据。
 # Client ID 会随 SDK 编译进 APK（荣耀 SDK 要求运行时传入）；Client Secret 只在服务端
-# （briefdesk/secrets/honor-account.json），绝不能进客户端或仓库。
+# （部署机密钥目录（不入库）），绝不能进客户端或仓库。
 #
 # 未配置（ClientId 为空）时：身份页不显示「荣耀账号快捷登录」，「我的 → 账号」不显示荣耀入口；
 # 其它功能不受影响。

@@ -13,7 +13,7 @@ class FeedbackRulesTest {
 
     private fun row(
         id: String = "f1",
-        acc: String = "3260707001",
+        acc: String = "2024000002",
         content: String = "建议",
         done: Boolean = false,
         ts: Long = 1_740_000_000_000L,

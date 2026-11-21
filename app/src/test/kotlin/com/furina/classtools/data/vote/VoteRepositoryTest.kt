@@ -18,7 +18,7 @@ class VoteRepositoryTest {
 
     private fun repo(
         transport: FakeTransport,
-        sid: String? = "3260707001",
+        sid: String? = "2024000002",
     ): DefaultVoteRepository = DefaultVoteRepository(
         api = testApiClient(transport),
         currentSid = { sid },
@@ -27,7 +27,7 @@ class VoteRepositoryTest {
 
     private val listJson = """
         {"ok":true,"now":1760000000000,"polls":[
-          {"id":"pabc123","title":"班会主题","description":"","mode":"quick","owner_name":"陈子麒",
+          {"id":"pabc123","title":"班会主题","description":"","mode":"quick","owner_name":"陈同学",
            "settings":{"multi":false,"maxChoices":1,"anonymous":true,"allowChange":true,"resultVisibility":"afterVote"},
            "deadline":1760001000000,"status":"open","closed_at":0,"created_at":10,"updated_at":20,
            "audience":"committee","audience_count":0,"closed":false,"total":3,
@@ -38,7 +38,7 @@ class VoteRepositoryTest {
 
     private val detailJson = """
         {"ok":true,"now":1760000000000,
-         "poll":{"id":"pabc123","title":"班会主题","description":"说明","mode":"long","owner_name":"陈子麒",
+         "poll":{"id":"pabc123","title":"班会主题","description":"说明","mode":"long","owner_name":"陈同学",
            "settings":{"multi":true,"maxChoices":2,"anonymous":false,"allowChange":true,"resultVisibility":"afterVote"},
            "options":[{"id":"o1","text":"选项A","desc":"补充","img":"data:image/jpeg;base64,xx"},{"id":"o2","text":"选项B"}],
            "deadline":0,"status":"open","closed_at":0,"created_at":1,"updated_at":2,

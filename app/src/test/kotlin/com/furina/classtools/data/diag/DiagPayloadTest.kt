@@ -22,7 +22,7 @@ import org.junit.Test
  */
 class DiagPayloadTest {
 
-    private val sid = "3260707024"
+    private val sid = "2024000001"
 
     private fun stringOf(row: JsonObject, key: String): String =
         (row[key] as? JsonPrimitive)?.contentOrNull.orEmpty()

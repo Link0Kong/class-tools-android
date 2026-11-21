@@ -27,7 +27,7 @@
 ### 1.2 命令
 
 ```powershell
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 
 # 完整验收（构建 + 安装 + 全链路 + 工具页 + 鉴权失败 + 隐私页 + 导航探测）
 pwsh -NoProfile -File .\scripts\e2e_smoke.ps1 -Build -Install

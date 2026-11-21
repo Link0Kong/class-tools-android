@@ -431,7 +431,7 @@ fun IdentityScreen(
                         uiState = IdentityUiState.Idle
                         onVerified(
                             Session(
-                                sid = studentId.ifBlank { "3260707024" },
+                                sid = studentId.ifBlank { "2024000001" },
                                 name = name.ifBlank { "开发预览" },
                                 token = "",
                                 debug = true,

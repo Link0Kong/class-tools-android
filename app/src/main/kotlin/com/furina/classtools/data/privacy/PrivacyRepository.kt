@@ -35,7 +35,7 @@ import kotlinx.serialization.json.putJsonObject
  *
  * 契约与红线：
  * - `docs/PRIVACY_COMPLIANCE.md` 待办 #1/#2、`web/AGENTS.md` 隐私红线；
- * - 导出 JSON：**不含 token、不出现学号明文（脱敏 `32***24`）**、**电费（power）不导出**、
+ * - 导出 JSON：**不含 token、不出现学号明文（脱敏 `20***01`）**、**电费（power）不导出**、
  *   名单原文（roster.rollNames）不导出、课表快照（tt）不导出（非个人数据且体积大）；
  * - 清除云端：`userdata` 覆盖为空 v6 blob（POST upsert）、`marks` 相关行 `val=false`（逐条 upsert，不发 DELETE）、
  *   `fitrecs` 全部 `arch=true`（逐条 PATCH，不发 DELETE）；部分失败返回可读错误；
@@ -390,7 +390,7 @@ object PrivacyExportBuilder {
     private val isoFormatter: DateTimeFormatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.CHINA)
 
-    /** 学号脱敏：`3260707024` → `32***24`；短学号 → `***`。 */
+    /** 学号脱敏：`2024000001` → `20***01`；短学号 → `***`。 */
     fun maskSid(sid: String?): String {
         val value = sid?.trim().orEmpty()
         return when {

@@ -37,11 +37,11 @@ import org.junit.Test
 
 class PrivacyRepositoryTest {
 
-    private val sid = "3260707024"
+    private val sid = "2024000001"
     private val fixedNow = 1_760_000_000_000L
     private val session = Session(
         sid = sid,
-        name = "陈子麒",
+        name = "陈同学",
         token = "secret-token-xyz",
         role = "副团支部书记",
         badge = "班委",
@@ -183,7 +183,7 @@ class PrivacyRepositoryTest {
         put("prefs", buildJsonObject { put("hwRemind", buildJsonObject { }) })
         put("nick", JsonPrimitive("小陈"))
         put("water", buildJsonObject { put("rooms", buildJsonObject { }) })
-        put("power", buildJsonObject { put("sel", JsonPrimitive("1-13---324")) })
+        put("power", buildJsonObject { put("sel", JsonPrimitive("1-13---301")) })
         put("tt", buildJsonObject { put("ttView", JsonPrimitive("week")) })
     }
 
@@ -191,7 +191,7 @@ class PrivacyRepositoryTest {
 
     @Test
     fun `学号脱敏`() {
-        assertEquals("32***24", PrivacyExportBuilder.maskSid("3260707024"))
+        assertEquals("20***01", PrivacyExportBuilder.maskSid("2024000001"))
         assertEquals("***", PrivacyExportBuilder.maskSid("1234"))
         assertEquals("***", PrivacyExportBuilder.maskSid(""))
         assertEquals("***", PrivacyExportBuilder.maskSid(null))
@@ -240,8 +240,8 @@ class PrivacyRepositoryTest {
 
         assertFalse(text.contains(sid))
         assertFalse(text.contains("secret-token"))
-        assertEquals("32***24", root["identity"]!!.jsonObject["sidMasked"]!!.jsonPrimitive.content)
-        assertEquals("陈子麒", root["identity"]!!.jsonObject["name"]!!.jsonPrimitive.content)
+        assertEquals("20***01", root["identity"]!!.jsonObject["sidMasked"]!!.jsonPrimitive.content)
+        assertEquals("陈同学", root["identity"]!!.jsonObject["name"]!!.jsonPrimitive.content)
         assertEquals(3, result.export.summary.marksCount)
         assertEquals(1, result.export.summary.fitRecsCount)
         assertEquals("我的数据_20251009-1653.json", result.export.fileName)

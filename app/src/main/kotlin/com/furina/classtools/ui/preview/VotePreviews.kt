@@ -57,7 +57,7 @@ private val previewPollList = PollList(
             title = "本周班会时间投票",
             description = "选一下这周班会开在什么时候",
             mode = PollMode.QUICK,
-            ownerName = "陈子麒",
+            ownerName = "陈同学",
             settings = previewSettings,
             deadline = VOTE_PREVIEW_NOW + 2L * 60 * 60 * 1000,
             createdAt = VOTE_PREVIEW_NOW - 30L * 60 * 1000,
@@ -129,7 +129,7 @@ private val previewVotingDetail = PollDetail(
         title = "本周班会时间投票",
         description = "选一下这周班会开在什么时候，截止前可改票。",
         mode = PollMode.QUICK,
-        ownerName = "陈子麒",
+        ownerName = "陈同学",
         settings = previewSettings,
         options = previewPollOptions,
         deadline = VOTE_PREVIEW_NOW + 2L * 60 * 60 * 1000,
@@ -177,7 +177,7 @@ private val previewResultDetail = PollDetail(
     canManage = false,
     resultsHidden = false,
     voters = listOf(
-        PollVoter(name = "陈子麒", choices = listOf("c2")),
+        PollVoter(name = "陈同学", choices = listOf("c2")),
         PollVoter(name = "李四", choices = listOf("c2")),
         PollVoter(name = "王五", choices = listOf("c1", "c2")),
         PollVoter(name = "赵六", choices = listOf("c3")),
@@ -250,7 +250,7 @@ private val previewClosedManageDetail = PollDetail(
     canManage = true,
     resultsHidden = false,
     voters = listOf(
-        PollVoter(name = "陈子麒", choices = listOf("s1")),
+        PollVoter(name = "陈同学", choices = listOf("s1")),
         PollVoter(name = "李四", choices = listOf("s2")),
     ),
 )
@@ -302,7 +302,7 @@ private object PreviewVoteRepository : VoteRepository {
 
 private object PreviewVoteMemberSource : VoteMemberSource {
     private val members = listOf(
-        MemberEntry(seat = 1, name = "陈子麒", badge = "班长"),
+        MemberEntry(seat = 1, name = "陈同学", badge = "班长"),
         MemberEntry(seat = 2, name = "李四", badge = "团支书"),
         MemberEntry(seat = 3, name = "王五", badge = "学习委员"),
         MemberEntry(seat = 4, name = "赵六"),

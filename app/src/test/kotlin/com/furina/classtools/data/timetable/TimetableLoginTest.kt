@@ -251,7 +251,7 @@ class TimetableLoginTest {
 
     @Test
     fun studentIdRegex_matchesTenDigits() {
-        assertTrue(DefaultTimetableLoginRepository.STUDENT_ID_REGEX.matches("3260707024"))
+        assertTrue(DefaultTimetableLoginRepository.STUDENT_ID_REGEX.matches("2024000001"))
         assertFalse(DefaultTimetableLoginRepository.STUDENT_ID_REGEX.matches("123"))
         assertFalse(DefaultTimetableLoginRepository.STUDENT_ID_REGEX.matches("abcdefghij"))
     }

@@ -88,8 +88,8 @@ private fun deck(
     id: String,
     title: String,
     status: String,
-    ownerSid: String = "3260707024",
-    ownerName: String = "陈子麒",
+    ownerSid: String = "2024000001",
+    ownerName: String = "陈同学",
     slideCount: Int = 12,
     stepCount: Int = 37,
     progress: Int = 0,
@@ -129,7 +129,7 @@ private val previewDecks = listOf(
         stepCount = 0,
         progress = 61,
         ownerName = "李同学",
-        ownerSid = "3260707001",
+        ownerSid = "2024000002",
         createdAt = PREVIEW_NOW - 200_000,
     ),
     deck(
@@ -140,7 +140,7 @@ private val previewDecks = listOf(
         stepCount = 0,
         error = "转换超时：PowerPoint 渲染超过 15 分钟",
         ownerName = "王同学",
-        ownerSid = "3260707002",
+        ownerSid = "2024000003",
         createdAt = PREVIEW_NOW - 300_000,
     ),
 )
@@ -261,7 +261,7 @@ private fun PptListStatesPreview() {
         PptListContent(
             decks = previewDecks,
             agentOnline = false,
-            mySid = "3260707024",
+            mySid = "2024000001",
             imageLoader = PptPreviewImageLoader,
             loading = false,
             errorMessage = null,
@@ -300,7 +300,7 @@ private fun PptListLargeFontPreview() {
         PptListContent(
             decks = previewDecks,
             agentOnline = false,
-            mySid = "3260707024",
+            mySid = "2024000001",
             imageLoader = PptPreviewImageLoader,
             loading = false,
             errorMessage = null,
@@ -326,7 +326,7 @@ private fun PptListEmptyPreview() {
         PptListContent(
             decks = emptyList(),
             agentOnline = null,
-            mySid = "3260707024",
+            mySid = "2024000001",
             imageLoader = PptPreviewImageLoader,
             loading = false,
             errorMessage = null,
@@ -476,14 +476,14 @@ private fun downloadFilesManifest(warnings: List<String> = emptyList()): PptMani
 private fun downloadDetail(warnings: List<String> = emptyList()): PptDeckDetail = playerDetail().copy(
     manifest = downloadFilesManifest(warnings),
     status = "ready",
-    ownerName = "陈子麒",
+    ownerName = "陈同学",
     sourceSize = 17_825_792L,
     coverUrl = "preview://cover/dmg2k4x9ab12c",
 )
 
 private fun legacyDetail(): PptDeckDetail = playerDetail().copy(
     status = "ready",
-    ownerName = "陈子麒",
+    ownerName = "陈同学",
     sourceSize = 17_825_792L,
     coverUrl = "preview://cover/dmg2k4x9ab12c",
 )

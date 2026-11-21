@@ -158,25 +158,25 @@ class HomeWorkbenchLogicTest {
 
     @Test
     fun powerCard_loadingAndReady() {
-        val loading = HomeWorkbenchLogic.powerCard("4-23A---321", null, 30)
+        val loading = HomeWorkbenchLogic.powerCard("4-23A---305", null, 30)
         assertEquals(false, loading!!.hasReading)
         assertEquals("读取中", loading.stateText)
 
         val row = PowerRow(
-            id = "4-23A---321",
+            id = "4-23A---305",
             building = "23号楼A座",
             room = "321",
             q = 86.42,
             unit = "度",
             updatedAt = "2026-11-06T09:40:00+08:00",
         )
-        val ready = HomeWorkbenchLogic.powerCard("4-23A---321", row, 30)!!
+        val ready = HomeWorkbenchLogic.powerCard("4-23A---305", row, 30)!!
         assertTrue(ready.hasReading)
         assertEquals("23号楼A座 321", ready.label)
         assertEquals("86.4", ready.qText.trim())
         assertEquals("ok", ready.stateKey)
 
-        val low = HomeWorkbenchLogic.powerCard("4-23A---321", row.copy(q = 5.0), 30)!!
+        val low = HomeWorkbenchLogic.powerCard("4-23A---305", row.copy(q = 5.0), 30)!!
         assertEquals("low", low.stateKey)
     }
 

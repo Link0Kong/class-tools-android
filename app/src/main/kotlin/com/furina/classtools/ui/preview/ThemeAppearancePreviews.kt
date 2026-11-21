@@ -33,8 +33,8 @@ import com.furina.classtools.ui.theme.ClassToolsTheme
  */
 
 private val appearancePreviewSession = Session(
-    sid = "3260707024",
-    name = "陈子麒",
+    sid = "2024000001",
+    name = "陈同学",
     token = "preview-token",
     role = "副团支部书记",
     badge = "班委",

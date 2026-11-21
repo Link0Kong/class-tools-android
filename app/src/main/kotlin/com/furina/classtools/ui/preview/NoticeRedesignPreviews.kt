@@ -79,7 +79,7 @@ private fun previewNoticesData(fromCache: Boolean = false): NoticesData {
             title = "关于 11 月主题班会的通知",
             cat = "团务",
             source = "班级通知群",
-            senderName = "陈子麒",
+            senderName = "陈同学",
             senderRole = "副团支部书记",
             aiSummary = "本周五下午 4 点在 01104 教室召开主题班会，请全体同学准时参加并签到。",
             aiPoints = listOf("时间：周五 16:00", "地点：01104", "需要签到"),
@@ -97,7 +97,7 @@ private fun previewNoticesData(fromCache: Boolean = false): NoticesData {
             NoticeItemMeta.Text(
                 kind = "text",
                 label = "原始消息",
-                fromName = "陈子麒",
+                fromName = "陈同学",
                 fromRole = "副团支部书记",
                 timeText = "11-12 20:10",
                 text = "请大家准时参加班会，记得签到。地点在自强楼 01104。",
@@ -137,7 +137,7 @@ private fun previewNoticesData(fromCache: Boolean = false): NoticesData {
                 count = 3,
                 messages = listOf(
                     MergedMessage(
-                        fromName = "陈子麒",
+                        fromName = "陈同学",
                         fromBadge = "副团支部书记",
                         timeText = "11-12 20:12",
                         text = "投影仪已确认可用，提前 10 分钟到教室。",
@@ -238,7 +238,7 @@ private fun previewNoticesData(fromCache: Boolean = false): NoticesData {
             cat = "团务",
             source = "团员通知群",
             senderRole = "团支书",
-            senderName = "陈子麒",
+            senderName = "陈同学",
             aiSummary = "每周一 19:00 前完成青年大学习并截图打卡。",
             recurrence = NoticeRecurrenceDto(freq = "weekly", weekday = 1, time = "19:00", label = "每周一 19:00"),
         ),

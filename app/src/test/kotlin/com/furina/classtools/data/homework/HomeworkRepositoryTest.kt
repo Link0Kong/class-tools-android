@@ -16,7 +16,7 @@ class HomeworkRepositoryTest {
     private val rowsJson = """
         [
           {"id":"h1","subject":"高等数学","content":"P42","date":"2026-11-10","time":"23:59",
-           "author":"李四","owner":"3260707002","attachments":"","done":false,"archived":false,"ts":100},
+           "author":"李四","owner":"2024000003","attachments":"","done":false,"archived":false,"ts":100},
           {"id":"h2","subject":"英语","content":"Unit 5","date":"2026-11-08","time":"18:00",
            "author":"","owner":"","attachments":"","done":false,"archived":false,"ts":200}
         ]

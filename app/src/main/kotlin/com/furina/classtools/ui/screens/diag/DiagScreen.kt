@@ -1364,7 +1364,7 @@ private fun parseTimeMillisSafe(text: String): Long? =
 private const val PREVIEW_NOW: Long = 1_793_930_400_000L // 2026-11-06 10:00 +08
 
 private val previewSession = Session(
-    sid = "3260707024",
+    sid = "2024000001",
     name = "开发者",
     token = "preview-token",
 )

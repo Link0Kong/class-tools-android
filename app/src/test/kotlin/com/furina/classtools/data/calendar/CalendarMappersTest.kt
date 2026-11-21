@@ -26,7 +26,7 @@ class CalendarMappersTest {
 
     private fun course(
         name: String = "高等数学",
-        teacher: String = "龚志伟",
+        teacher: String = "王老师",
         room: String = "自强楼(教室01104)",
         day: Int = 0,
         start: Int = 1,
@@ -51,7 +51,7 @@ class CalendarMappersTest {
         id = "g_1",
         title = title,
         source = source,
-        senderName = "陈子麒",
+        senderName = "陈同学",
         aiSummary = summary,
         deadline = deadline,
         deadlineAction = "截止",
@@ -75,7 +75,7 @@ class CalendarMappersTest {
         assertEquals("Asia/Shanghai", event.timeZone)
         assertTrue(event.description.contains("第 1 周"))
         assertTrue(event.description.contains("每周"))
-        assertTrue(event.description.contains("龚志伟"))
+        assertTrue(event.description.contains("王老师"))
         assertTrue(event.sourceKey.startsWith("course:高等数学"))
     }
 

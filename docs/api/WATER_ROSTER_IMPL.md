@@ -91,8 +91,8 @@ MainNavHost 接线（由 Lead 完成，`ToolCatalog` 已有 `water` / `roster` i
 
 ```kotlin
 val state = WaterCodec.fromJson(userDataRepository.currentSections.first()["water"])
-val next = WaterMutator.put(state, "1-13---324", WaterRecord("2026-11", 130.75, now))
-val stats = WaterCalculator.stats(next.rooms.getValue("1-13---324"), "2026-11", now)
+val next = WaterMutator.put(state, "1-13---301", WaterRecord("2026-11", 130.75, now))
+val stats = WaterCalculator.stats(next.rooms.getValue("1-13---301"), "2026-11", now)
 
 val roster = RosterCodec.fromJson(userDataRepository.currentSections.first()["roster"])
 val members = RosterLogic.membersOf((repository.load() as ClassMembersResult.Success).members)
@@ -131,7 +131,7 @@ val roll = RosterLogic.withRollSel(roster, seats, members) // 按姓名保留到
 ```powershell
 $env:JAVA_HOME='C:\AndroidToolchain\jdk17'
 $env:ANDROID_HOME='C:\AndroidToolchain\sdk'
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
+cd <项目根>
 & 'C:\AndroidToolchain\gradle\gradle-9.9.0\bin\gradle.bat' :app:testDebugUnitTest --console=plain
 ```
 

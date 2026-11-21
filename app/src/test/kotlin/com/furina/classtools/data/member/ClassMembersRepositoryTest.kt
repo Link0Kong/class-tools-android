@@ -15,17 +15,17 @@ class ClassMembersRepositoryTest {
 
     private val membersJson = """
         [
-          {"seat":2,"sid":"3260707002","name":"李四","role":"","badge":"","is_admin":false},
-          {"seat":1,"sid":"3260707001","name":"张三","role":"副团支书","badge":"班委","is_admin":false},
+          {"seat":2,"sid":"2024000003","name":"李四","role":"","badge":"","is_admin":false},
+          {"seat":1,"sid":"2024000002","name":"张三","role":"副团支书","badge":"班委","is_admin":false},
           {"seat":3,"sid":"","name":"  ","role":"","badge":"","is_admin":false},
-          {"seat":4,"sid":"3260707004","name":"陈子麒","role":"","badge":"","is_admin":true,"extra":"ignored"}
+          {"seat":4,"sid":"3260707004","name":"陈同学","role":"","badge":"","is_admin":true,"extra":"ignored"}
         ]
     """.trimIndent()
 
     private fun repository(
         transport: FakeTransport,
         dir: File = createTempDir(),
-        sid: String = "3260707001",
+        sid: String = "2024000002",
         clock: () -> Long = { 1_700_000_000_000L },
     ): DefaultClassMembersRepository = DefaultClassMembersRepository(
         api = testApiClient(transport),
@@ -132,19 +132,19 @@ class ClassMembersRepositoryTest {
     fun `落盘缓存按 sid 隔离且新实例可直接读`() = runTest {
         val dir = createTempDir()
         val transportA = FakeTransport { ApiResponse(200, membersJson) }
-        val repoA = repository(transportA, dir = dir, sid = "3260707001")
+        val repoA = repository(transportA, dir = dir, sid = "2024000002")
         repoA.load()
 
         // 同 sid 新实例：TTL 内直接命中文件缓存，0 请求。
         val transportA2 = FakeTransport { ApiResponse(200, "[]") }
-        val repoA2 = repository(transportA2, dir = dir, sid = "3260707001")
+        val repoA2 = repository(transportA2, dir = dir, sid = "2024000002")
         val cached = repoA2.load() as ClassMembersResult.Success
         assertEquals(true, cached.fromCache)
         assertEquals(0, transportA2.requests.size)
 
         // 换 sid：不能命中别人的缓存。
         val transportB = FakeTransport { ApiResponse(200, """[{"seat":1,"sid":"x","name":"王五"}]""") }
-        val repoB = repository(transportB, dir = dir, sid = "3260707999")
+        val repoB = repository(transportB, dir = dir, sid = "2024000004")
         val loadedB = repoB.load() as ClassMembersResult.Success
         assertEquals(false, loadedB.fromCache)
         assertEquals("王五", loadedB.members.single().name)

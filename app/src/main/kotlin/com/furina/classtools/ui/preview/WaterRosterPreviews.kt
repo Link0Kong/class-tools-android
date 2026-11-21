@@ -41,15 +41,15 @@ import com.furina.classtools.ui.theme.CtShapeTokens
 // =============================================================================
 
 private val previewSession = Session(
-    sid = "3260707024",
-    name = "陈子麒",
+    sid = "2024000001",
+    name = "陈同学",
     token = "preview-token",
     role = "副团支部书记",
     badge = "班委",
 )
 
 private fun waterRooms(): Map<String, WaterRoomState> = mapOf(
-    "1-13---324" to WaterRoomState(
+    "1-13---301" to WaterRoomState(
         persons = 4,
         records = listOf(
             WaterRecord("2026-06", 112.40),
@@ -60,7 +60,7 @@ private fun waterRooms(): Map<String, WaterRoomState> = mapOf(
             WaterRecord("2026-11", 130.75),
         ),
     ),
-    "4-23A---321" to WaterRoomState(
+    "4-23A---305" to WaterRoomState(
         persons = 6,
         records = listOf(
             WaterRecord("2026-09", 235.00),
@@ -71,7 +71,7 @@ private fun waterRooms(): Map<String, WaterRoomState> = mapOf(
 )
 
 private fun rosterMembers(): List<RosterMember> = listOf(
-    RosterMember(1, "陈子麒", "副团支部书记", "班委"),
+    RosterMember(1, "陈同学", "副团支部书记", "班委"),
     RosterMember(2, "张三", "班长", "班委"),
     RosterMember(3, "李四", "团支书", "班委"),
     RosterMember(4, "王五", "学习委员", "班委"),
@@ -105,7 +105,7 @@ private fun WaterListLightPreview() {
             session = previewSession,
             userDataRepository = null,
             initialRooms = waterRooms(),
-            initialSelectedRv = "1-13---324",
+            initialSelectedRv = "1-13---301",
             initialMonth = "2026-11",
             skipLoad = true,
         )
@@ -121,7 +121,7 @@ private fun WaterSixPersonsDarkPreview() {
             session = previewSession,
             userDataRepository = null,
             initialRooms = waterRooms(),
-            initialSelectedRv = "4-23A---321",
+            initialSelectedRv = "4-23A---305",
             initialMonth = "2026-11",
             skipLoad = true,
         )

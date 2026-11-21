@@ -39,7 +39,7 @@ class NoticeReminderPlannerTest {
         id = id,
         title = title,
         source = source,
-        senderName = "陈子麒",
+        senderName = "陈同学",
         deadline = deadline,
         deadlineAction = deadlineAction,
         eventAt = eventAt,

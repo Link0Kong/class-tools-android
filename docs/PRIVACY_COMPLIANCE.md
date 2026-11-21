@@ -10,7 +10,7 @@
 | 首次同意门禁 | 身份页必须勾选「我已阅读并同意《用户协议》《隐私政策》」才能提交；两协议可点开为应用内弹层（静态文本、零外部请求） | `ui/screens/identity/IdentityScreen.kt` |
 | 隐私政策 / 用户协议 | 内嵌静态文本（版本 2026-11-08）：收集范围、用途、存储与同步、导出分享、未成年人、联系方式、协议变更 | `ui/screens/privacy/PrivacyTexts.kt`、`PrivacyDialogs.kt` |
 | 协议回看 | 「我的 → 关于」提供「用户协议」「隐私政策」查看入口 | `ui/screens/profile/ProfileScreen.kt` |
-| 身份脱敏展示 | 学号仅脱敏展示（`32***24` 形式），token 不打印、不写日志；`allowBackup=false` 不进系统云备份 | `data/session/*`、`AndroidManifest.xml` |
+| 身份脱敏展示 | 学号仅脱敏展示（`20***01` 形式），token 不打印、不写日志；`allowBackup=false` 不进系统云备份 | `data/session/*`、`AndroidManifest.xml` |
 | 最小权限 | 只申请 `INTERNET` / `ACCESS_NETWORK_STATE`；不申请定位/通讯录/存储读取；分享走 FileProvider + 系统分享 | `AndroidManifest.xml`、`features/export/ExportCardFiles.kt` |
 | 云同步可关闭 | 「我的 → 同步 → 云同步」开关（关闭后仅本机使用） | `ProfileScreen` + `UserDataRepository.setSyncEnabled` |
 | 本机数据清理 | 「我的 → 数据与隐私 → 清除本机缓存」（名单等可重建缓存） | `AppContainer.clearLocalCaches` |

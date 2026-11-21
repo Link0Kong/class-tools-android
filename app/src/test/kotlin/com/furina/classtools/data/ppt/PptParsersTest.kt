@@ -184,7 +184,7 @@ class PptParsersTest {
     // ------------------------------------------------------------ 列表
 
     private val listJson = """
-        [{"id":"dmg2k4x9ab12c","title":"班会 PPT","owner_sid":"3260707024","owner_name":"陈子麒",
+        [{"id":"dmg2k4x9ab12c","title":"班会 PPT","owner_sid":"2024000001","owner_name":"陈同学",
           "status":"READY","progress":"100","error":"","slide_count":12,"step_count":37,"aspect":"16:9",
           "cover_url":"https://x/c.webp","source_name":"班会.pptx","source_size":"12345678",
           "created_at":1791590400000,"converted_at":1791590500000,"client":"android","unknown":1},
@@ -201,7 +201,7 @@ class PptParsersTest {
         val first = decks[0]
         assertEquals("dmg2k4x9ab12c", first.id)
         assertEquals("班会 PPT", first.title)
-        assertEquals("3260707024", first.ownerSid)
+        assertEquals("2024000001", first.ownerSid)
         assertEquals("ready", first.status) // 小写归一
         assertEquals(100, first.progress)
         assertEquals(12, first.slideCount)
@@ -514,12 +514,12 @@ class PptParsersTest {
 
     @Test
     fun parseDeckDetail_v2StatusFields() {
-        val raw = """[{"title":"班会","status":"processing","progress":61,"error":"","owner_name":"陈子麒",
+        val raw = """[{"title":"班会","status":"processing","progress":61,"error":"","owner_name":"陈同学",
                        "source_size":123456,"slide_count":16,"manifest":{"v":2,"files":{"compat":{"s":"c.pptx"}}}}]"""
         val detail = PptParsers.parseDeckDetail(NetJson, raw)!!
         assertEquals("processing", detail.status)
         assertEquals(61, detail.progress)
-        assertEquals("陈子麒", detail.ownerName)
+        assertEquals("陈同学", detail.ownerName)
         assertEquals(123456L, detail.sourceSize)
         assertTrue(detail.manifest.hasCompatFile)
         assertFalse(detail.isReady)

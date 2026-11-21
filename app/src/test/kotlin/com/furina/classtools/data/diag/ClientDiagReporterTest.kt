@@ -23,7 +23,7 @@ import org.junit.Test
  */
 class ClientDiagReporterTest {
 
-    private val sid = "3260707024"
+    private val sid = "2024000001"
     private val appVersion = "3.0.0"
 
     private fun row(

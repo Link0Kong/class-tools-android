@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$root = 'G:\Dev\AndroidToolchain'
+$root = if ($env:CT_TOOLCHAIN_ROOT) { $env:CT_TOOLCHAIN_ROOT } else { Join-Path $env:USERPROFILE 'AndroidToolchain' }
 $dl   = Join-Path $root 'downloads'
 $sdk  = Join-Path $root 'sdk'
 $jdk  = Join-Path $root 'jdk'

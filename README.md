@@ -1,80 +1,143 @@
-# 班级工具站 · Android 原生 App
+# 班级工具站 · Android 客户端
 
-> 目标：用 Android 17（API 37）的设计语言与 Compose-first 技术栈，把班级工具站重做成**真原生** Android App；数据与网页/小程序共用同一套 CloudBase 契约。
+[![version](https://img.shields.io/badge/version-1.0.0--beta22-blue)](https://github.com/Link0Kong/class-tools-android/releases)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![platform](https://img.shields.io/badge/platform-Android-3DDC84)](https://developer.android.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-Compose-7F52FF)](https://kotlinlang.org)
 
-- 包名：`com.furina.classtools`（早期草稿的 `fun.furina.classtools` 因 `fun` 是 Kotlin 硬关键字无法编译，已全量改名）
-- 版本：1.0.0-beta22（versionCode 105），Debug 后缀 `.debug`
-- minSdk 26 / targetSdk 37 / compileSdk 37
-- 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v1.0.0-beta22（测试版本）**——通知模块化（对齐鸿蒙「通知设置」：新作业/截止/上课/新通知/活动截止/开抢/
-  新投票/投票结果/水费扣除/每日汇总 + 发送测试通知）与统一分享弹层（对齐小程序：5:4 分享卡 / 分享图片 /
-  保存相册 / 分享链接 / 复制文案）。详见 [NOTIFICATION_V4_IMPL](docs/api/NOTIFICATION_V4_IMPL.md) 与
-  [SHARE_IMPL](docs/SHARE_IMPL.md)；beta19 的 SharedView 一镜到底见 [SHAREDVIEW_MOTION](docs/SHAREDVIEW_MOTION.md)。
+「班级工具站」的 Android 原生客户端：Kotlin + Jetpack Compose，与网页端、微信小程序、鸿蒙端、Windows 端共用同一套云端数据契约。
 
-## 目录
+## 简介
 
+- **真原生**：不是 WebView 套壳；抽签、分组、课表、通知、电费、水量等均为 Compose 页面 + Kotlin 业务层。
+- **多端同源**：身份核验、`userdata` v6 同步、marks、通知、投票、电费/水量等数据结构与网页端、小程序端、鸿蒙端、Windows 端一致。
+- **离线可用**：先读本机缓存再后台刷新；断网时可继续查看与操作，恢复后自动补发。
+- **隐私优先**：身份核验走云端名单；App 内不完整展示学号，导出图片不含学号/手机号/宿舍号。
+
+## 功能
+
+- **身份核验**：学号 + 姓名与班级云端名单比对，换取约 30 天有效的班级访问令牌。
+- **工作台**：今日课程、待办作业、最新通知、电费/水量卡片聚合。
+- **抽签**：范围、人数、排除序号、参与名单、可重复/不重复、剔除重抽、导出分享。
+- **分组**：按组数/每组人数、随机打乱、名单来源（上一步结果或班级名单）、导出分享。
+- **课表**：周/日视图、周次与单双周、个人导入、教务快照、下一节课。
+- **作业**：列表、截止提醒、完成勾选、跨端同步。
+- **通知**：自动通知 + 人工通知、分类/状态机、已处理标记、附件预览、提醒设置与测试通知。
+- **体测**：国家学生体质健康标准评分、历史记录、补填合并、导出分享。
+- **名单 / 点名**：班级名单、座号选择、点名状态、随机点名。
+- **电费**：当前电量、24h/7d/30d 趋势、异常扣减识别、可用天数估算、上次充值。
+- **水量**：按宿舍抄表、人数与免费额度、水费与折合扣电。
+- **投票**：单选/多选、截止时间、结果查看、分享（不泄露票数）。
+- **演示（PPT）**：列表、下载、分片上传、原样视频播放、下载中心。
+- **文件传输**：临时中转、上传/下载、过期清理提示。
+- **校园地图**：校内地点与路线（本地资源，离线可用）。
+- **统计**：访问统计（管理员）、个人数据概览。
+- **诊断**：设备信息、接口连通性、脱敏日志、异常上报。
+
+> 桌面小组件当前版本未实现，故不在此列出。
+
+## 下载
+
+- 测试版 APK 见 [GitHub Releases](https://github.com/Link0Kong/class-tools-android/releases)。
+- 当前为 **1.0.0-beta** 测试版本，功能和稳定性可能变化；正式上架前请以 Release 说明为准。
+- 安装前需允许「安装未知应用」；App 内更新会校验版本与 SHA-256。
+
+## 开发与构建
+
+### 前置条件
+
+- JDK **17**（Gradle 构建用）
+- Android SDK **37**（platforms;android-37.0、build-tools 37.0.0、platform-tools）
+- Windows / macOS / Linux 均可；仓库自带 Gradle Wrapper，无需单独安装 Gradle
+
+```powershell
+$env:JAVA_HOME = '<JDK 17 路径>'
+$env:ANDROID_HOME = '<Android SDK 路径>'
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 ```
-app/                     Android 应用模块
+
+### 常用命令
+
+```powershell
+.\gradlew.bat assembleDebug        # Debug APK: app\build\outputs\apk\debug\
+.\gradlew.bat assembleRelease      # Release APK: app\build\outputs\apk\release\（需自备 keystore）
+.\gradlew.bat testDebugUnitTest    # JVM 单元测试
+```
+
+- Release 签名：把 keystore 放在本机，按 [docs/RELEASE_BUILD.md](docs/RELEASE_BUILD.md) 配置 `keystore.properties`（已被 `.gitignore` 排除，绝不入库）。
+- 依赖与 SDK 版本矩阵见 [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md)。
+- 无设备 UI 验收（Compose `@Preview` 渲染 PNG）：`.\scripts\render_previews.ps1`。
+- 厂商推送/账号配置模板：`app/*.properties.example`；真实密钥只放本机或服务端，不入库。
+
+## 项目结构
+
+```text
+app/                       应用模块
+  libs/                    厂商 AAR（OPPO / 荣耀 / vivo）
   src/main/kotlin/com/furina/classtools/
-    data/                数据层：network(OkHttp/PostgREST)、auth(class_verify)、member(名单)、ppt(演示/分片上传)、
-                         sync(userdata v6 合并/防抖/离线补发)、marks、session、tool 目录
-    features/            业务领域层（draw 抽签、group、fit、ppt 演示…纯 Kotlin，可单测）
-    ui/                  Compose UI
-      theme/             设计令牌（颜色/字体/形状/动效/主题/Tokens）
-      components/        通用组件 + expressive 自建组件
-      screens/           页面（identity/home/all/profile/tools/draw…ppt 列表/播放器）
-      navigation/        自适应导航（底部 NavigationBar / NavigationRail）
-      preview/           全部 @Preview（android preview render 无设备截图验收）
-design/                  Android 17 设计规格（事实核验 + token + 45 组件对照 + 16 页面方案）
-docs/                    后端契约、数据层实现、工具链、架构、路线图、验收
-scripts/                 工具链安装 / preview 渲染 / 构建脚本
-artifacts/               APK、预览 PNG 等构建产物（不提交）
+    data/                  网络、身份、同步、名单、作业、通知、电费、水量、投票等数据层
+    features/              纯 Kotlin 业务逻辑（抽签、分组、体测、导出、分享等）
+    ui/                    Compose UI（theme / components / screens / navigation / preview）
+  src/test/                单元测试与同步契约夹具
+design/                    设计规格、组件清单与 design tokens
+docs/                      架构、后端契约、构建、工具链、路线图
+scripts/                   工具链安装、preview 渲染、E2E 脚本
+gradle/                    版本目录与 Gradle Wrapper
 ```
 
-## 构建
+## 技术栈
 
-本机工具链（已安装）：
+| 类别 | 选型 |
+| --- | --- |
+| 语言 | Kotlin 2.4（协程、Serialization） |
+| UI | Jetpack Compose + Material 3（自建 Expressive 组件层） |
+| 架构 | 分层 + 单向数据流；`data` / `features` / `ui` 三层 |
+| 网络 | OkHttp + 手写 PostgREST/RPC 客户端（不接 CloudBase SDK） |
+| 本地存储 | DataStore Preferences、SharedPreferences、应用私有文件 |
+| 后台任务 | WorkManager（提醒调度、离线补发、低频同步） |
+| 图片/绘制 | Compose Canvas、自绘导出卡与分享卡 |
+| 构建 | AGP 9.5、Gradle Wrapper、Version Catalog |
+| 最低版本 | minSdk 26 / targetSdk 37 / compileSdk 37 |
 
-| 项 | 路径/版本 |
-|---|---|
-| JDK | `G:\Dev\AndroidToolchain\jdk17`（OpenJDK 17.0.2，Gradle 构建用）、`G:\Dev\AndroidToolchain\jdk`（21.0.2） |
-| Android SDK | `G:\Dev\AndroidToolchain\sdk`（platforms/android-37.0、build-tools/37.0.0 + 36.0.0、platform-tools 37.0.2） |
-| Gradle | `G:\Dev\AndroidToolchain\gradle\gradle-9.9.0`（项目内 `gradlew.bat` 已生成，distributionUrl 指向腾讯镜像） |
+## 相关仓库
 
-```powershell
-$env:JAVA_HOME='G:\Dev\AndroidToolchain\jdk17'
-$env:ANDROID_HOME='G:\Dev\AndroidToolchain\sdk'
-cd C:\Users\Ko_Li\.openclaw\workspace\android-class-tools
-.\gradlew.bat assembleDebug --console=plain     # Debug APK -> app\build\outputs\apk\debug\app-debug.apk
-.\gradlew.bat assembleRelease --console=plain   # Release 签名 APK -> app\build\outputs\apk\release\app-release.apk
-.\gradlew.bat :app:testDebugUnitTest --console=plain
-```
-
-无设备 UI 验收（Compose @Preview → PNG，Android CLI 33+）：
-
-```powershell
-.\scripts\render_previews.ps1 -OutDir artifacts\previews
-```
-
-> Release 签名说明见 [docs/RELEASE_BUILD.md](docs/RELEASE_BUILD.md)（keystore 与密码只存本机，不入库；已产 1.75MB 签名 APK）。
-
-> 注意：`android preview` 在 Windows 上会把项目根 `build/` 目录误判为 Bazel 的 `BUILD` 标记，
-> 因此脚本在 `C:\Temp\ct-preview` 的干净副本里渲染（robocopy 源码 → 删 build 目录 → `preview render app --fqn ...`）。
+| 端 | 仓库 |
+| --- | --- |
+| 网页 / 部署 | <https://github.com/Link0Kong/class-tools-site> |
+| Android（本仓库） | <https://github.com/Link0Kong/class-tools-android> |
+| 微信小程序 | <https://github.com/Link0Kong/class-tools-mp> |
+| 鸿蒙 | <https://github.com/Link0Kong/class-tools-harmony> |
+| Windows | <https://github.com/Link0Kong/class-tools-windows> |
 
 ## 文档
 
-- `docs/ARCHITECTURE.md` — 分层、同步、网络、验证策略
-- `docs/ROADMAP.md` — 里程碑与当前进度
-- `docs/BACKEND_CONTRACT.md` + `docs/api/` — 后端契约（ENDPOINTS / USERDATA_V6 / KOTLIN_MODELS / NOTICES / EXPORT_CARD_V2 / DATA_LAYER_IMPL）
-- `docs/TOOLCHAIN.md` — 工具链与版本矩阵（进行中）
-- `docs/PPT_20261109.md` — 「演示」v1.1 分步播放器实现/契约对应/已知限制/构建与测试证据
-- `docs/PPT_VIDEO_20261110.md` — 「演示」v1.2 原样播放视频模式/章节/倍速/续播/降级链/OSS 域名与下载限制/构建证据
-- `docs/PPT_DOWNLOAD_20261110.md` — 「演示」v2.0 下载中心 + v2.3 视频/音频单独下载：兼容性处理/详情页下载/FileProvider 打开分享/旧 deck/构建证据
-- `design/ANDROID17_DESIGN.md`、`design/tokens.json`、`design/COMPONENTS.md`、`design/SCREENS.md`
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — 分层、同步、网络与验证策略
+- [docs/BACKEND_CONTRACT.md](docs/BACKEND_CONTRACT.md) — 后端与数据层契约
+- [docs/api/ENDPOINTS.md](docs/api/ENDPOINTS.md) — 端点参考（PostgREST / RPC）
+- [docs/api/USERDATA_V6.md](docs/api/USERDATA_V6.md) — `userdata` v6 同步规格
+- [docs/RELEASE_BUILD.md](docs/RELEASE_BUILD.md) — 签名与发版
+- [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md) — 工具链与版本矩阵
+- [docs/ROADMAP.md](docs/ROADMAP.md) — 里程碑与进度
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) — 版本记录
+- [design/README.md](design/README.md) — 设计规格入口
 
-## 红线（继承自 `web/AGENTS.md`）
+## 隐私与数据
 
-1. 不读取/不复制 `web/deploy/creds.env`、`web/tools/cert/` 等机密；APK 只内嵌公开 Publishable Key（role=anon，与网页/小程序一致），不内嵌任何服务端高权限 key。
-2. 不修改 `web/`、`mp-class-tools/` 现有代码；两端继续独立可用。
-3. 班级数据必须先过「学号+姓名」云端核验（token）才加载；不导出手机号/学号/宿舍号等隐私（电费页仅显示本人关注宿舍的楼栋房间+电量，不导出）。
-4. App 不申请定位/通讯录/存储读取权限；分享/下载走系统 FileProvider。
+- **身份核验**：学号 + 姓名只用于与班级云端名单比对，换取班级访问令牌；不做公开注册。
+- **最小展示**：App 内学号以脱敏形式展示（如 `20***01`），不展示手机号；导出图片不含学号、手机号、宿舍号。
+- **本机优先**：身份令牌与缓存保存在应用私有目录；`allowBackup=false`，不进入系统云备份。
+- **权限克制**：不申请定位、通讯录、短信、通话记录、相册全量、相机、麦克风权限。
+- **诊断脱敏**：上报前移除 token、学号、姓名、宿舍号与本机路径。
+- **测试身份**：自动化测试与联调只使用测试身份，不登录真实同学或管理员账号。
+- 完整口径见 [docs/PRIVACY_COMPLIANCE.md](docs/PRIVACY_COMPLIANCE.md) 与 App 内隐私政策/用户协议。
+
+## 免责声明
+
+- 本项目是**班级自用的非官方工具**，不代表学校、学院或任何官方机构。
+- OPPO / 荣耀 / vivo 推送与账号 SDK 的版权归各厂商所有，使用需遵守其开发者协议；详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+- 第三方云服务、教务系统、推送通道的可用性由其提供方决定；因第三方原因导致的功能受限，本项目不承担其责任。
+- 本项目按「现状」提供，不附带任何明示或暗示担保。
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE)。第三方组件与厂商 SDK 的授权见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

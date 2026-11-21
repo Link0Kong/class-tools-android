@@ -19,7 +19,7 @@ class TimetableRepositoryTest {
 
     private val rowWithObjectBody = """
         [{"body":{"c":[
-            {"name":"高等数学","teacher":"龚志伟","room":"自强楼(教室01104)","day":0,"start":1,"end":2,"weeks":"1-16","parity":"all"},
+            {"name":"高等数学","teacher":"王老师","room":"自强楼(教室01104)","day":0,"start":1,"end":2,"weeks":"1-16","parity":"all"},
             {"name":"大学英语","room":"明理楼(教室02201)","day":4,"start":6,"end":7,"weeks":"2-15","parity":"odd"}
           ],"t":"2026-08-31"},
           "meta":{"source":"jwxt","fetchedAt":1760000000000,"count":2,"termStart":"2026-08-31"},
