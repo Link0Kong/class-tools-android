@@ -261,3 +261,25 @@ OPPO/一加/realme 的系统推送服务（MCS）通过这两个权限向应用�
   保存后约 5 分钟生效 → 手机结束 App 进程重开 → 状态应变为「已注册」。
 - 注意：此前文档记录的「调试签名与 release 证书 SHA-1 前 32 位一致」是错误口径——
   OPPO 要的是**证书 MD5（32 位）**，不是 SHA-1 前缀。
+
+### 11.2 正确填法：控制台要的是 **OPPOSign**，不是普通证书 MD5（2026-11-21 22:30 更正）
+
+OPPO 开放平台的「应用签名 / OPPOSign」是**应用签名摘要经 OPPO 算法再哈希**得到的 32 位大写串，
+不是 `apksigner`/`keytool` 直接打印的证书 MD5。用官方 `OPPOSign` 工具（本机
+`C:\Users\Ko_Li\Downloads\...\OPPOSign\OPPOSign.exe`，内含 `OPPOSign.jar`）里的
+`ApkSignatureUtils.getOPPOSign(cert.getEncoded())` 对 release 包实测：
+
+| 项（OPPOSign 工具会显示） | 值 |
+|---|---|
+| MD5（普通证书 MD5，带空格） | `FD 87 BB 87 9E 78 FC 7C 8C 39 DC 9B DF 8B 2E F5` |
+| SHA-1 | `AA 6D 41 75 4E 38 B9 AD 9A AA F6 5A 98 F1 89 E1 B3 68 94 6B` |
+| SHA-256 | `97 48 54 DF 1C BE D0 D2 F4 19 1A 3E ED 0C F9 46 5C 87 52 D9 E1 89 5D 7F D6 C0 BC 74 8B EC 4A 1A` |
+| **OPPOSign（控制台要填这个）** | **`BEDF093E86536CB7DB36CCCDBFCB0EA0`** |
+
+算法（工具内实现，已独立复算一致）：`MD5( uppercaseHex(certificate.getEncoded()) )` 大写输出，32 位。
+
+> 之前 §11 按「证书 MD5 `fd87...`」填写是错误口径：那只在 OPPOSign 工具里显示为 `MD5` 行；
+> 控制台的「应用签名」校验用的是 OPPOSign 值，所以填 `fd87...` 后仍报 16。
+
+**操作**：OPPO 开放平台 → 应用信息 → 「OPPOSign / 应用签名」填 `BEDF093E86536CB7DB36CCCDBFCB0EA0`
+→ 保存（约 5 分钟生效）→ 手机结束 App 进程重开 → 状态应变为「已注册」。
