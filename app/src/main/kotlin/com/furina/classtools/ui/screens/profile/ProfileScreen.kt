@@ -56,6 +56,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Feedback
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Shield
@@ -178,6 +179,8 @@ fun ProfileScreen(
     onOpenPermissions: () -> Unit = {},
     showNotificationPermissionBanner: Boolean = false,
     onOpenReminderSettings: () -> Unit = {},
+    /** 分享给同学（生成 5:4 班级工具站分享卡，与小程序端「转发给朋友」同口径）。 */
+    onShareApp: () -> Unit = {},
     dynamicColorEnabled: Boolean = false,
     onDynamicColorChange: (Boolean) -> Unit = {},
     appearanceMode: AppearanceMode = AppearanceMode.SYSTEM,
@@ -347,6 +350,7 @@ fun ProfileScreen(
                         reminderStatus = reminderStatus,
                         onOpenPermissions = onOpenPermissions,
                         onOpenReminderSettings = onOpenReminderSettings,
+                        onShareApp = onShareApp,
                     )
                     BackgroundSection(store = backgroundStore, selection = storedBackground)
                     AppearanceSection(
@@ -732,6 +736,7 @@ private fun NotifySection(
     reminderStatus: ReminderStatus,
     onOpenPermissions: () -> Unit,
     onOpenReminderSettings: () -> Unit,
+    onShareApp: () -> Unit = {},
 ) {
     SectionTitle("通知与权限")
     GroupCard {
@@ -744,10 +749,17 @@ private fun NotifySection(
         RowDivider()
         ActionRow(
             icon = Icons.Rounded.Schedule,
-            title = "提醒设置",
+            title = "通知设置",
             subtitle = reminderStatus.label,
             subtitleHighlight = reminderStatus.isWarning,
             onClick = onOpenReminderSettings,
+        )
+        RowDivider()
+        ActionRow(
+            icon = Icons.Rounded.IosShare,
+            title = "分享给同学",
+            subtitle = "把班级工具站发给同学（图片 / 链接）",
+            onClick = onShareApp,
         )
     }
 }

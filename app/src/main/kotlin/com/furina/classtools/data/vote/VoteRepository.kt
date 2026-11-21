@@ -30,6 +30,14 @@ import kotlinx.serialization.json.put
 interface VoteRepository {
     suspend fun list(force: Boolean = false): VoteResult<PollList>
 
+    /**
+     * 本机缓存中的投票摘要（**不联网**；后台通知/角标用）。
+     *
+     * 通知 Worker 每 15 分钟跑一次，不能为此额外发起网络请求，因此只读列表缓存
+     * （用户打开投票页后 15s TTL 内的缓存、或上次成功列表）。
+     */
+    fun cachedPolls(): List<PollSummary> = emptyList()
+
     suspend fun detail(pollId: String, force: Boolean = false): VoteResult<PollDetail>
 
     suspend fun create(draft: PollDraft): VoteResult<PollDetail>
@@ -334,6 +342,8 @@ class DefaultVoteRepository(
             }
         }
     }
+
+    override fun cachedPolls(): List<PollSummary> = cachedList?.polls.orEmpty()
 
     override suspend fun detail(pollId: String, force: Boolean): VoteResult<PollDetail> {
         val sid = sidOrNull() ?: return VoteResult.Failure(VoteError.IdentityInvalid)

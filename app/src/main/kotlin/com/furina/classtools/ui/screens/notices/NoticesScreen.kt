@@ -378,6 +378,8 @@ fun NoticesScreen(
     onAddToCalendar: ((NoticeGroupDto) -> Unit)? = null,
     /** v3：单条通知提醒（Lead 弹出提醒时间选项并排程）。 */
     onRemindNotice: ((NoticeGroupDto) -> Unit)? = null,
+    /** 分享通知（Lead 生成 5:4 分享卡并弹出分享层）。 */
+    onShareNotice: ((NoticeGroupDto, Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
     initialData: NoticesData? = null,
     initialMarks: MarksSnapshot? = null,
@@ -1007,6 +1009,7 @@ fun NoticesScreen(
             onDismiss = { selectedKey = null },
             onToggleDone = { toggleDone(item) },
             onTogglePin = { togglePin(item) },
+            onShare = onShareNotice,
             nowMillis = nowMillis,
         )
     }

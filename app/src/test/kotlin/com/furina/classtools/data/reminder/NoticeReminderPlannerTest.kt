@@ -181,9 +181,9 @@ class NoticeReminderPlannerTest {
     }
 
     @Test
-    fun `已进入 24 小时窗口且早于汇总时间的通知立即提醒`() {
-        // 今天 18:00 截止：早于今晚 20:00 汇总窗口 → 24h 临近提醒（立即）
-        val data = notices(entry(group(id = "g1", title = "材料提交", deadline = "2026-11-09T18:00:00+08:00")))
+    fun `已进入提前窗口且早于汇总时间的通知立即提醒`() {
+        // 今天 12:30 截止：早于今晚 20:00 汇总窗口，且已进入 60 分钟提前窗口 → 临近提醒（立即）
+        val data = notices(entry(group(id = "g1", title = "材料提交", deadline = "2026-11-09T12:30:00+08:00")))
         val events = ReminderPlanner.planNotices(data, nowMillis = now, zone = zone)
         val due = events.firstOrNull { it.kind == ReminderKind.NOTICE_DUE }
         assertNotNull(due)
@@ -232,7 +232,7 @@ class NoticeReminderPlannerTest {
             ReminderPlanner.planNotices(
                 data,
                 nowMillis = now,
-                settings = defaultSettings().copy(noticeEnabled = false),
+                settings = defaultSettings().copy(noticeDeadlineEnabled = false, digestEnabled = false),
                 zone = zone,
             ).isEmpty(),
         )
@@ -276,7 +276,7 @@ class NoticeReminderPlannerTest {
 
     @Test
     fun `通知开关默认开启且渠道与去重键口径正确`() {
-        assertTrue(ReminderSettings.DEFAULT.noticeEnabled)
+        assertTrue(ReminderSettings.DEFAULT.noticeDeadlineEnabled)
         assertEquals("nt", ReminderIntentFactory.toolIdFor(ReminderKind.NOTICE_DIGEST))
         assertEquals("nt", ReminderIntentFactory.toolIdFor(ReminderKind.NOTICE_DUE))
         assertEquals("nt", ReminderIntentFactory.toolIdFromExtras("nt"))

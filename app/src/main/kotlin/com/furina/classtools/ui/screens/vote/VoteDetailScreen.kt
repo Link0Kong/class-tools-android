@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.HowToVote
+import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
@@ -67,6 +68,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.furina.classtools.data.notify.LiveUpdateNotifier
+import com.furina.classtools.data.vote.Poll
 import com.furina.classtools.data.vote.PollDetail
 import com.furina.classtools.data.vote.PollManageAction
 import com.furina.classtools.data.vote.PollManageResult
@@ -120,6 +122,8 @@ fun VoteDetailScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
     onEdit: (String) -> Unit = {},
+    /** 分享投票（生成 5:4 分享卡；**不展示票数/百分比**）。 */
+    onShare: ((Poll, PollDetail) -> Unit)? = null,
     nowMillis: Long = System.currentTimeMillis(),
     initialDetail: PollDetail? = null,
     initialError: VoteError? = null,
@@ -273,6 +277,15 @@ fun VoteDetailScreen(
                     subtitle = current?.poll?.let { if (it.isClosedStatus) "已结束" else current.statusText() },
                     onBack = onBack,
                     actions = {
+                        if (current != null && onShare != null) {
+                            IconButton(onClick = { onShare(current.poll, current) }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.IosShare,
+                                    contentDescription = "分享投票",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                         IconButton(onClick = { reloadToken += 1 }) {
                             Icon(
                                 imageVector = Icons.Rounded.Refresh,

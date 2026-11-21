@@ -33,10 +33,7 @@ private val profilePreviewStats = MeStats(
 private val profilePreviewReminder = ReminderStatus(
     enabled = true,
     notificationPermission = true,
-    homeworkEnabled = true,
-    courseEnabled = true,
-    homeworkLeadDays = 1,
-    courseLeadMinutes = 15,
+    enabledModuleCount = 9,
 )
 
 private val emptyStats = MeStats()

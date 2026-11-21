@@ -162,9 +162,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 104
-    // 测试版本 21：电费「上次充值」跨区间查找并显示充值量。
-        versionName = "1.0.0-beta21"
+        versionCode = 105
+    // 测试版本 22：通知模块化（对齐鸿蒙）+ 统一分享弹层（对齐小程序）。
+        versionName = "1.0.0-beta22"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。

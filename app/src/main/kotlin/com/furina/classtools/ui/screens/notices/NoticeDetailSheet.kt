@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Hub
+import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Replay
@@ -92,6 +93,8 @@ internal fun NoticeDetailSheet(
     onDismiss: () -> Unit,
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
+    /** 分享这条通知（生成 5:4 分享卡；标题/分类/状态/摘要/要点/时间地点/来源）。 */
+    onShare: ((NoticeGroupDto, Int) -> Unit)? = null,
     /** 渲染时 now（§3 时间显示按渲染时算相对周；由页面每分钟刷新）。 */
     nowMillis: Long = System.currentTimeMillis(),
 ) {
@@ -113,6 +116,7 @@ internal fun NoticeDetailSheet(
                 onDismiss = onDismiss,
                 onToggleDone = onToggleDone,
                 onTogglePin = onTogglePin,
+                onShare = onShare,
                 bodyMaxHeight = bodyMaxHeight,
                 nowMillis = nowMillis,
             )
@@ -135,6 +139,8 @@ internal fun NoticeDetailSheetContent(
     onDismiss: () -> Unit = {},
     onToggleDone: () -> Unit = {},
     onTogglePin: () -> Unit = {},
+    /** 分享这条通知（详情底栏「分享」）。 */
+    onShare: ((NoticeGroupDto, Int) -> Unit)? = null,
     /** 正文可滚动区最大高度（弹层按屏幕剩余空间传入；预览默认 460dp）。 */
     bodyMaxHeight: androidx.compose.ui.unit.Dp = 460.dp,
     /** 渲染时 now（§3 时间显示：所有日期 token → `M月D日（相对周）`）。 */
@@ -250,6 +256,7 @@ internal fun NoticeDetailSheetContent(
             onToggleDone = onToggleDone,
             onTogglePin = onTogglePin,
             onDismiss = onDismiss,
+            onShare = onShare,
         )
     }
 }
@@ -870,6 +877,7 @@ private fun DetailActions(
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
     onDismiss: () -> Unit,
+    onShare: ((NoticeGroupDto, Int) -> Unit)? = null,
 ) {
     val group = item.auto?.group
     FlowRow(
@@ -879,6 +887,21 @@ private fun DetailActions(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (onShare != null && item.isAuto && group != null) {
+            OutlinedButton(
+                onClick = { onShare(group, item.attachmentCount) },
+                modifier = Modifier.heightIn(min = 48.dp),
+                shape = CtShapeTokens.pill,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.IosShare,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("分享")
+            }
+        }
         if (item.isAuto && group != null) {
             if (onAddToCalendar != null) {
                 OutlinedButton(

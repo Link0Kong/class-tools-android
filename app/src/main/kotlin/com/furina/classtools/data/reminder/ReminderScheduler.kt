@@ -22,6 +22,9 @@ import com.furina.classtools.data.permission.PermissionState
 import com.furina.classtools.data.permission.PermissionType
 import com.furina.classtools.data.timetable.TtCalendar
 import com.furina.classtools.data.timetable.TtPlan
+import com.furina.classtools.data.vote.PollSummary
+import com.furina.classtools.features.water.WaterCodec
+import com.furina.classtools.features.water.WaterRoomState
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 
@@ -124,7 +127,19 @@ interface ReminderDataProvider {
 
     /** 已处理通知组 id（marks `ntdone` 命中）。 */
     suspend fun handledNoticeIds(): Set<String>
+
+    /** 投票摘要（只读本机缓存，不联网；没有则空）。 */
+    suspend fun votePolls(): List<PollSummary> = emptyList()
+
+    /** 关注宿舍的水量记录（`userdata.power.sel` → `userdata.water`；没有则 null）。 */
+    suspend fun watchedWaterRoom(): WaterWatch? = null
 }
+
+/** 关注宿舍 + 水量记录（水费提醒用；只读本机缓存）。 */
+data class WaterWatch(
+    val roomKey: String,
+    val room: WaterRoomState,
+)
 
 class ContainerReminderDataProvider(context: Context) : ReminderDataProvider {
 
@@ -159,6 +174,31 @@ class ContainerReminderDataProvider(context: Context) : ReminderDataProvider {
             ?.keys
             .orEmpty()
     }.getOrDefault(emptySet())
+
+    /** 只读投票列表缓存（不发起网络；列表缓存由投票页刷新）。 */
+    override suspend fun votePolls(): List<PollSummary> = runCatching {
+        container()?.voteRepository?.cachedPolls().orEmpty()
+    }.getOrDefault(emptyList())
+
+    /**
+     * 关注宿舍的水量记录：
+     * 1) `userdata.power.sel`（关注宿舍）→ `water.rooms[sel]`；
+     * 2) 未选关注宿舍时退回第一条有记录的宿舍（与鸿蒙端一致，避免漏提醒）。
+     */
+    override suspend fun watchedWaterRoom(): WaterWatch? = runCatching {
+        val sections = container()?.userDataRepository?.cachedBlob() ?: return@runCatching null
+        val state = WaterCodec.fromJson(sections["water"])
+        if (state.rooms.isEmpty()) return@runCatching null
+        val sel = ((sections["power"] as? kotlinx.serialization.json.JsonObject)
+            ?.get("sel") as? kotlinx.serialization.json.JsonPrimitive)
+            ?.content
+            ?.trim()
+            .orEmpty()
+        val key = sel.takeIf { state.rooms.containsKey(it) }
+            ?: state.rooms.keys.firstOrNull().orEmpty()
+        val room = state.rooms[key] ?: return@runCatching null
+        WaterWatch(roomKey = key, room = room)
+    }.getOrNull()
 }
 
 /**
@@ -179,6 +219,7 @@ class ReminderEngine(
     private val dataProvider: ReminderDataProvider,
     private val runStateStore: ReminderRunStateStore = InMemoryReminderRunStateStore(),
     private val pendingStore: ReminderPendingEventStore = InMemoryReminderPendingEventStore(),
+    private val snapshotStore: ReminderSnapshotStore = InMemoryReminderSnapshotStore(),
     private val clock: () -> Long = System::currentTimeMillis,
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val catchUpMaxMillis: Long = ReminderCatchUp.MAX_LOOKBACK_MS,
@@ -192,6 +233,7 @@ class ReminderEngine(
         dataProvider = ContainerReminderDataProvider(context),
         runStateStore = SharedPrefsReminderRunStateStore(context),
         pendingStore = SharedPrefsReminderPendingEventStore(context),
+        snapshotStore = SharedPrefsReminderSnapshotStore(context),
     )
 
     /** 兼容旧名（v3 起语义等价于 [runNow]）。 */
@@ -209,12 +251,32 @@ class ReminderEngine(
         val ttPlan = runCatching { dataProvider.timetablePlan(now, zone) }.getOrNull()
         val notices = runCatching { dataProvider.noticesData() }.getOrNull()
         val handledNoticeIds = runCatching { dataProvider.handledNoticeIds() }.getOrDefault(emptySet())
+        val polls = runCatching { dataProvider.votePolls() }.getOrDefault(emptyList())
+        val water = runCatching { dataProvider.watchedWaterRoom() }.getOrNull()
+        val snapshot = runCatching { snapshotStore.load() }.getOrDefault(ReminderSnapshot())
         val cacheSummary = buildString {
             append("作业 ").append(rows.size).append(" 条")
             append(" · 课表").append(if (ttPlan?.hasData == true) "可用" else "无")
             append(" · 通知 ").append(notices?.auto?.size ?: 0).append(" 条")
+            append(" · 投票 ").append(polls.size).append(" 条")
+            append(" · 水量").append(if (water != null) "可用" else "无")
         }
         val settingsSummary = settingsSummaryOf(settings)
+
+        suspend fun saveSnapshot() {
+            runCatching {
+                snapshotStore.save(
+                    ReminderPlanner.nextSnapshot(
+                        rows = rows,
+                        notices = notices,
+                        polls = polls,
+                        waterRoomKey = water?.roomKey.orEmpty(),
+                        waterRoom = water?.room,
+                        previous = snapshot,
+                    ),
+                )
+            }
+        }
 
         suspend fun finish(result: ReminderRunResult): ReminderRunResult {
             val enriched = result.copy(
@@ -228,12 +290,14 @@ class ReminderEngine(
         }
 
         if (!settings.enabled) {
-            return finish(ReminderRunResult(disabledReason = "提醒总开关已关闭", reason = "总开关关闭"))
+            return finish(ReminderRunResult(disabledReason = "通知总开关已关闭", reason = "总开关关闭"))
         }
-        if (!settings.anySectionEnabled) {
-            return finish(ReminderRunResult(disabledReason = "作业/课表/通知提醒均已关闭", reason = "全部类型关闭"))
+        if (!settings.anyModuleEnabled) {
+            return finish(ReminderRunResult(disabledReason = "所有通知类型均已关闭", reason = "全部类型关闭"))
         }
         if (!permission.isGranted) {
+            // 权限缺失时仍建立基线：用户授权后不会把历史消息当成「新增」轰炸。
+            saveSnapshot()
             return finish(ReminderRunResult(disabledReason = "通知权限未开启", reason = "通知权限未开启"))
         }
 
@@ -246,6 +310,10 @@ class ReminderEngine(
             zone = zone,
             notices = notices,
             handledNoticeIds = handledNoticeIds,
+            snapshot = snapshot,
+            polls = polls,
+            waterRoomKey = water?.roomKey.orEmpty(),
+            waterRoom = water?.room,
         )
 
         // Doze/省电延迟补偿：
@@ -273,6 +341,7 @@ class ReminderEngine(
             runCatching {
                 pendingStore.save(ReminderPendingCatchUp.pendingForNextRun(plan.events, now))
             }
+            saveSnapshot()
             return finish(
                 ReminderRunResult(
                     candidates = plan.events.size,
@@ -302,6 +371,7 @@ class ReminderEngine(
         runCatching {
             pendingStore.save(ReminderPendingCatchUp.pendingForNextRun(plan.events, now))
         }
+        saveSnapshot()
         val reason = when {
             sent > 0 && catchUpSent > 0 -> "已发送 $sent 条（含补发 $catchUpSent 条）"
             sent > 0 -> "已发送 $sent 条"
@@ -329,6 +399,8 @@ class ReminderEngine(
         val rows = runCatching { dataProvider.homeworkRows() }.getOrDefault(emptyList())
         val ttPlan = runCatching { dataProvider.timetablePlan(now, zone) }.getOrNull()
         val notices = runCatching { dataProvider.noticesData() }.getOrNull()
+        val polls = runCatching { dataProvider.votePolls() }.getOrDefault(emptyList())
+        val water = runCatching { dataProvider.watchedWaterRoom() }.getOrNull()
         val lastRunAt = runCatching { runStateStore.lastRunAt() }.getOrNull()
         val lastRunSummary = runCatching { runStateStore.lastRunSummary() }.getOrNull()
         return ReminderDiagnostics(
@@ -339,16 +411,38 @@ class ReminderEngine(
             lastRunSummary = lastRunSummary,
             homeworkCacheCount = rows.size,
             noticeCacheCount = notices?.auto?.size ?: 0,
+            voteCacheCount = polls.size,
+            waterReady = water != null,
             timetableReady = ttPlan?.hasData == true,
             catchUpLookbackMillis = ReminderCatchUp.lookbackMillis(now, lastRunAt),
         )
     }
 
+    /**
+     * 「发送测试通知」（对齐鸿蒙 `NotifyCenter.sendTest`）：
+     * 立即发一条固定内容的本地通知，用于检查系统权限与通知样式。
+     */
+    suspend fun testNotification(): ReminderTestNotificationResult {
+        val permission = runCatching {
+            permissionController.state(PermissionType.NOTIFICATIONS)
+        }.getOrDefault(PermissionState.REQUESTABLE)
+        if (!permission.isGranted) return ReminderTestNotificationResult.PermissionMissing
+        notifier.ensureChannels()
+        val sent = runCatching {
+            notifier.notify(ReminderTestNotification.event(clock()))
+        }.getOrDefault(false)
+        return if (sent) {
+            ReminderTestNotificationResult.Sent
+        } else {
+            ReminderTestNotificationResult.Failed("通知发送失败（系统限制或通知渠道被关闭）")
+        }
+    }
+
     private fun settingsSummaryOf(settings: ReminderSettings): String = buildString {
         append("总开关=").append(if (settings.enabled) "开" else "关")
-        append("；作业=").append(if (settings.homeworkEnabled) "开" else "关")
-        append("；课表=").append(if (settings.courseEnabled) "开" else "关")
-        append("；通知=").append(if (settings.noticeEnabled) "开" else "关")
+        append("；模块=").append(settings.enabledCount()).append("/10 开")
+        append("；截止提前=").append(ReminderSettings.leadLabel(settings.leadMinutes))
+        append("；上课提前=").append(ReminderSettings.leadLabel(settings.classLeadMinutes))
     }
 }
 

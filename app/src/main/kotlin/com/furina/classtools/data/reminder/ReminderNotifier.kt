@@ -32,17 +32,30 @@ object ReminderGrouping {
     const val GROUP_HOMEWORK: String = "ct_reminder_group_hw"
     const val GROUP_COURSE: String = "ct_reminder_group_tt"
     const val GROUP_NOTICE: String = "ct_reminder_group_nt"
+    const val GROUP_VOTE: String = "ct_reminder_group_vote"
+    const val GROUP_WATER: String = "ct_reminder_group_water"
+    const val GROUP_TEST: String = "ct_reminder_group_test"
 
     fun groupKey(kind: ReminderKind): String = when (kind) {
-        ReminderKind.HOMEWORK_DIGEST, ReminderKind.HOMEWORK_DUE -> GROUP_HOMEWORK
+        ReminderKind.HOMEWORK_NEW, ReminderKind.HOMEWORK_DIGEST, ReminderKind.HOMEWORK_DUE -> GROUP_HOMEWORK
         ReminderKind.COURSE_SOON -> GROUP_COURSE
-        ReminderKind.NOTICE_DIGEST, ReminderKind.NOTICE_DUE -> GROUP_NOTICE
+        ReminderKind.NOTICE_NEW, ReminderKind.NOTICE_DIGEST, ReminderKind.NOTICE_DUE,
+        ReminderKind.NOTICE_SIGNUP,
+        -> GROUP_NOTICE
+        ReminderKind.VOTE_NEW, ReminderKind.VOTE_RESULT -> GROUP_VOTE
+        ReminderKind.WATER_DEDUCT -> GROUP_WATER
+        ReminderKind.SYSTEM_TEST -> GROUP_TEST
     }
 
     fun summaryTitle(kind: ReminderKind): String = when (kind) {
-        ReminderKind.HOMEWORK_DIGEST, ReminderKind.HOMEWORK_DUE -> "作业提醒"
+        ReminderKind.HOMEWORK_NEW, ReminderKind.HOMEWORK_DIGEST, ReminderKind.HOMEWORK_DUE -> "作业提醒"
         ReminderKind.COURSE_SOON -> "上课提醒"
-        ReminderKind.NOTICE_DIGEST, ReminderKind.NOTICE_DUE -> "通知提醒"
+        ReminderKind.NOTICE_NEW, ReminderKind.NOTICE_DIGEST, ReminderKind.NOTICE_DUE,
+        ReminderKind.NOTICE_SIGNUP,
+        -> "通知提醒"
+        ReminderKind.VOTE_NEW, ReminderKind.VOTE_RESULT -> "投票提醒"
+        ReminderKind.WATER_DEDUCT -> "水费提醒"
+        ReminderKind.SYSTEM_TEST -> "通知测试"
     }
 
     /** 组摘要 id：固定值（每组一个摘要通知，不堆叠）。 */

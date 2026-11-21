@@ -32,7 +32,10 @@ object ReminderIntentFactory {
 
     /** 读取 Intent 中的工具 id（仅接受已知提醒工具，防脏数据）。 */
     fun toolIdFromExtras(toolId: String?): String? =
-        toolId?.trim()?.takeIf { it == "hw" || it == "tt" || it == "nt" }
+        toolId?.trim()?.takeIf { it in TOOL_IDS }
+
+    /** 可被通知点击直达的工具 id（与 [ReminderKind.toolId] 一致；`""` = 测试通知不跳转）。 */
+    val TOOL_IDS: Set<String> = setOf("hw", "tt", "nt", "vote", "water")
 
     /** 稳定 requestCode：同一提醒覆盖、不同提醒隔离（OEM 上避免 PendingIntent 复用串数据）。 */
     fun requestCodeFor(key: String): Int = key.hashCode()

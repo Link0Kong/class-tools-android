@@ -3,7 +3,6 @@ package com.furina.classtools.ui.navigation
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import android.Manifest
-import android.content.Intent
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -84,8 +83,6 @@ import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
 import com.furina.classtools.features.export.ExportCardSpec
-import com.furina.classtools.features.export.ExportOutcome
-import com.furina.classtools.features.export.ExportPresenter
 import com.furina.classtools.features.export.toCardSpec
 import com.furina.classtools.features.fit.FitRecord
 import com.furina.classtools.features.group.GroupMember
@@ -335,27 +332,21 @@ fun MainNavHost(
         }
     }
 
-    // 统一导出：渲染 → 保存相册（Android 10+）/ 分享兜底，Toast 反馈。
-    fun launchExport(spec: ExportCardSpec) {
-        scope.launch {
-            when (val outcome = ExportPresenter.renderAndSave(context, spec)) {
-                is ExportOutcome.Saved -> android.widget.Toast.makeText(
-                    context,
-                    "已保存到相册：${spec.file}",
-                    android.widget.Toast.LENGTH_LONG,
-                ).show()
+    // 统一分享：所有「导出/分享」入口先弹出 5:4 分享卡（分享图片 / 保存相册 / 分享链接）。
+    var shareCard by remember { mutableStateOf<com.furina.classtools.features.share.ShareCardView?>(null) }
+    val shareTimeLabel = remember {
+        java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date())
+    }
 
-                is ExportOutcome.Share -> runCatching {
-                    context.startActivity(Intent.createChooser(outcome.intent, "分享导出卡片"))
-                }
-
-                is ExportOutcome.Failed -> android.widget.Toast.makeText(
-                    context,
-                    "导出失败：${outcome.message}",
-                    android.widget.Toast.LENGTH_LONG,
-                ).show()
-            }
-        }
+    /** 把既有导出卡（抽签/分组/体测/课表）转成 5:4 分享卡并打开分享层。 */
+    fun launchExport(spec: ExportCardSpec, kind: com.furina.classtools.features.share.ShareKind) {
+        shareCard = com.furina.classtools.features.share.ShareSpecs.fromExportCard(
+            spec = spec,
+            kind = kind,
+            baseUrl = com.furina.classtools.BuildConfig.WEB_BASE_URL,
+            timeLabel = shareTimeLabel,
+        )
     }
 
     /** 写系统日历：有权限直接插入；无权限先请求权限，再退回系统 ACTION_INSERT 界面。 */
@@ -478,6 +469,7 @@ fun MainNavHost(
                     }
                 },
                 onOpenPowerPicker = { navController.navigate(Routes.tool("power", pick = true)) },
+                onShareCard = { card -> shareCard = card },
             )
         }
 
@@ -514,7 +506,7 @@ fun MainNavHost(
                     onBack = { popTool(toolId) },
                     session = session,
                     userDataRepository = container.userDataRepository,
-                    onExport = { payload -> launchExport(payload.toCardSpec()) },
+                    onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW) },
                     onGroup = { result ->
                         // 抽签结果（座号+姓名）→ 分组页「上一步抽签序号」来源
                         drawGroupMembers = result.entries.map { entry ->
@@ -522,7 +514,7 @@ fun MainNavHost(
                         }
                         navController.navigate(Routes.tool("group"))
                     },
-                    onExportSheet = { payload -> launchExport(payload.toCardSpec()) },
+                    onExportSheet = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW) },
                 )
 
                 "group" -> GroupScreen(
@@ -530,7 +522,7 @@ fun MainNavHost(
                     session = session,
                     userDataRepository = container.userDataRepository,
                     prevMembers = drawGroupMembers,
-                    onExport = { payload -> launchExport(payload.toCardSpec()) },
+                    onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.GROUP) },
                 )
 
                 "map" -> CampusMapScreen(
@@ -593,7 +585,7 @@ fun MainNavHost(
                                 )
                             }
                         },
-                        onExport = { payload -> launchExport(payload.toCardSpec()) },
+                        onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.FITNESS) },
                     )
                 }
 
@@ -685,6 +677,15 @@ fun MainNavHost(
                             }
                         },
                         onRemindNotice = { group -> remindTarget = group },
+                        onShareNotice = { group, attachmentCount ->
+                            shareCard = com.furina.classtools.features.share.ShareSpecs.noticeCard(
+                                input = com.furina.classtools.features.share.ShareMappers.notice(
+                                    group = group,
+                                    attachmentCount = attachmentCount,
+                                ),
+                                baseUrl = com.furina.classtools.BuildConfig.WEB_BASE_URL,
+                            )
+                        },
                     )
                     remindTarget?.let { group ->
                         NoticeReminderDialog(
@@ -736,7 +737,7 @@ fun MainNavHost(
                     onAddToCalendar = { course, week, termStart ->
                         writeCalendarEvent(CourseCalendarMapper.eventFor(course, week, termStart))
                     },
-                    onExportTimetable = { spec -> launchExport(spec) },
+                    onExportTimetable = { spec -> launchExport(spec, com.furina.classtools.features.share.ShareKind.TIMETABLE) },
                 )
 
                 "power" -> PowerScreen(
@@ -1016,6 +1017,12 @@ fun MainNavHost(
                 repository = container.voteRepository,
                 onBack = { navController.popBackStack() },
                 onEdit = { id -> navController.navigate(Routes.voteCreate(id)) },
+                onShare = { poll, detail ->
+                    shareCard = com.furina.classtools.features.share.ShareSpecs.voteCard(
+                        input = com.furina.classtools.features.share.ShareMappers.vote(poll, detail),
+                        baseUrl = com.furina.classtools.BuildConfig.WEB_BASE_URL,
+                    )
+                },
             )
         }
             }
@@ -1047,6 +1054,15 @@ fun MainNavHost(
                     transitionRoute = null
                     transitionReverse = false
                 },
+            )
+        }
+
+        // 统一分享层（5:4 分享卡预览 + 分享图片 / 保存相册 / 分享链接 / 复制文案）。
+        shareCard?.let { view ->
+            com.furina.classtools.ui.components.share.ShareSheet(
+                view = view,
+                onDismiss = { shareCard = null },
+                onMessage = { message -> toast(context, message) },
             )
         }
     }
@@ -1081,6 +1097,8 @@ private fun RootTabs(
     onOpenTool: (AppTool) -> Unit,
     onHomeToolsChange: (List<String>) -> Unit,
     onOpenPowerPicker: () -> Unit,
+    /** 根页发起的分享（我的 → 分享给同学）：交给宿主弹出统一分享层。 */
+    onShareCard: (com.furina.classtools.features.share.ShareCardView) -> Unit = {},
 ) {
     val hazeState = remember { HazeState() }
     val spec = rememberCtAdaptiveSpec()
@@ -1125,10 +1143,10 @@ private fun RootTabs(
     val reminderStatus = ReminderStatus(
         enabled = reminderSettings.enabled,
         notificationPermission = notificationGranted,
-        homeworkEnabled = reminderSettings.homeworkEnabled,
-        courseEnabled = reminderSettings.courseEnabled,
-        homeworkLeadDays = reminderSettings.homeworkLeadDays,
-        courseLeadMinutes = reminderSettings.courseLeadMinutes,
+        enabledModuleCount = reminderSettings.enabledCount(),
+        totalModuleCount = 10,
+        leadMinutes = reminderSettings.leadMinutes,
+        classLeadMinutes = reminderSettings.classLeadMinutes,
     )
 
     // OPPO PUSH 状态不再在「我的」页展示（用户要求移除 OPPO 通知配置入口）；
@@ -1319,6 +1337,13 @@ private fun RootTabs(
                         onOpenPermissions = onOpenPermissions,
                         showNotificationPermissionBanner = showNotificationPermissionBanner,
                         onOpenReminderSettings = onOpenReminderSettings,
+                        onShareApp = {
+                            onShareCard(
+                                com.furina.classtools.features.share.ShareSpecs.appCard(
+                                    baseUrl = com.furina.classtools.BuildConfig.WEB_BASE_URL,
+                                ),
+                            )
+                        },
                         meStats = meStats,
                         reminderStatus = reminderStatus,
                         oppoAccountAvailable = oppoAccountManager.bindingsAvailable,

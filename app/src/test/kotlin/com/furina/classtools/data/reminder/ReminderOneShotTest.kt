@@ -341,11 +341,14 @@ class ReminderOneShotTest {
             noticeCacheCount = 2,
             timetableReady = true,
         )
-        assertTrue(diagnostics.settingsSummary.contains("作业=开"))
+        assertTrue(diagnostics.settingsSummary.contains("模块=10/10 开"))
         assertTrue(diagnostics.cacheSummary.contains("作业 3 条"))
         assertTrue(diagnostics.cacheSummary.contains("课表可用"))
+        assertTrue(diagnostics.cacheSummary.contains("投票 0 条"))
         assertEquals(2, diagnostics.noticeCacheCount)
         assertTrue(diagnostics.channelIds.contains("notice_due"))
+        assertTrue(diagnostics.channelIds.contains("vote_alert"))
+        assertTrue(diagnostics.channelIds.contains("water_alert"))
         assertEquals(ReminderSmallIcon.RES_NAME, diagnostics.smallIconName)
     }
 }

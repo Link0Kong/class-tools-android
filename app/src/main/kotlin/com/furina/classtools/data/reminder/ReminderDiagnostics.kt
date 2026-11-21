@@ -104,9 +104,11 @@ data class ReminderDiagnostics(
     val lastRunAtMillis: Long? = null,
     val lastRunSummary: String? = null,
     val lastRunResult: ReminderRunResult? = null,
-    /** 本机缓存摘要（作业/通知条数、课表是否可用）。 */
+    /** 本机缓存摘要（作业/通知/投票条数、课表/水量是否可用）。 */
     val homeworkCacheCount: Int = 0,
     val noticeCacheCount: Int = 0,
+    val voteCacheCount: Int = 0,
+    val waterReady: Boolean = false,
     val timetableReady: Boolean = false,
     /** 通知渠道 id 与专用小图标回溯名（由 Notifier 侧常量提供）。 */
     val channelIds: List<String> = ReminderKind.entries.map { it.channelId }.distinct(),
@@ -119,13 +121,14 @@ data class ReminderDiagnostics(
     val settingsSummary: String
         get() = buildString {
             append("总开关=").append(if (settings.enabled) "开" else "关")
-            append("；作业=").append(if (settings.homeworkEnabled) "开" else "关")
-            append("；课表=").append(if (settings.courseEnabled) "开" else "关")
-            append("；通知=").append(if (settings.noticeEnabled) "开" else "关")
+            append("；模块=").append(settings.enabledCount()).append("/10 开")
+            append("；截止提前=").append(ReminderSettings.leadLabel(settings.leadMinutes))
+            append("；上课提前=").append(ReminderSettings.leadLabel(settings.classLeadMinutes))
         }
 
     val cacheSummary: String
-        get() = "作业 $homeworkCacheCount 条 · 课表${if (timetableReady) "可用" else "无"} · 通知 $noticeCacheCount 条"
+        get() = "作业 $homeworkCacheCount 条 · 课表${if (timetableReady) "可用" else "无"} · " +
+            "通知 $noticeCacheCount 条 · 投票 $voteCacheCount 条 · 水量${if (waterReady) "可用" else "无"}"
 }
 
 /** Worker/诊断用日志摘要（不包含通知标题/正文/学号）。 */
@@ -156,9 +159,13 @@ object ReminderSmallIcon {
     fun isFallback(resolved: Int): Boolean = resolved == FALLBACK_RES
 }
 
-/** UI 便捷入口（设置页诊断按钮；内部构造 [ReminderEngine] 并调用 suspend API）。 */
+/** UI 便捷入口（设置页诊断/测试按钮；内部构造 [ReminderEngine] 并调用 suspend API）。 */
 object ReminderActions {
 
     /** 设置页「通知诊断」：权限/设置/缓存/上次运行摘要。 */
     suspend fun diagnostics(context: Context): ReminderDiagnostics = ReminderEngine(context).diagnostics()
+
+    /** 设置页「发送测试通知」：立即发一条固定内容的本地通知。 */
+    suspend fun testNotification(context: Context): ReminderTestNotificationResult =
+        ReminderEngine(context).testNotification()
 }

@@ -4,6 +4,7 @@ package com.furina.classtools.ui.screens.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,8 +21,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
-import com.furina.classtools.ui.components.light.CtLightAlertDialog
+import androidx.compose.material.icons.rounded.WaterDrop
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -38,34 +41,40 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.data.permission.PermissionController
-import com.furina.classtools.data.permission.PermissionState
 import com.furina.classtools.data.permission.PermissionType
 import com.furina.classtools.data.reminder.ReminderActions
 import com.furina.classtools.data.reminder.ReminderDiagnostics
 import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.data.reminder.ReminderSettingsStore
+import com.furina.classtools.data.reminder.ReminderTestNotificationResult
 import com.furina.classtools.ui.components.CtLightTopBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.glass.CtGlassCard
-import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtTokens
 import kotlinx.coroutines.launch
 
 /**
- * 提醒设置（v2.0.0）：
- * - 作业截止汇总/提前提醒、课表下一节提醒的开关与提前量；
- * - 本机通知（WorkManager，15 分钟周期；省电/Doze 下可能延迟）；
- * - 通知权限未开启时引导到「权限与提醒」页。
+ * 通知设置（v4：与鸿蒙端「通知设置」面板对齐，2026-11-21）。
+ *
+ * 结构（分组 + 内容对齐 `MeScreen.ets → notifyPanel`）：
+ * 1. 允许通知（总开关，附系统权限状态）；
+ * 2. 作业提醒：新作业通知 / 作业即将截止 / 每日汇总（安卓保留）；
+ * 3. 上课提醒 + 提前时间（5/10/15/30 分钟）；
+ * 4. 通知提醒：新通知 / 活动截止 / 活动开抢；
+ * 5. 投票与水费：新投票 / 投票结果 / 水费扣除；
+ * 6. 提醒时间：截止类提醒统一提前（10 分钟 / 30 分钟 / 1 小时 / 2 小时 / 1 天）；
+ * 7. 确认提醒效果：发送测试通知（本地立即发一条，检查权限与样式）；
+ * 8. 检查与诊断：立即检查 + 诊断摘要。
+ *
+ * 全部为本机通知（WorkManager，约 15 分钟检查一次），设置只存本机、不随账号同步。
  */
 @Composable
 fun ReminderSettingsScreen(
@@ -84,13 +93,18 @@ fun ReminderSettingsScreen(
     val notificationsGranted =
         permissionController.state(PermissionType.NOTIFICATIONS).isGranted
     var diagnostics by remember { mutableStateOf<ReminderDiagnostics?>(null) }
-    // 沉浸光感顶栏「滚动 → 浮层」：顶栏固定、内容独立滚动（8dp 起 40dp 内渐显材质）。
+    var testBusy by remember { mutableStateOf(false) }
+    var testHint by remember { mutableStateOf("") }
+    // 沉浸光感顶栏「滚动 → 浮层」：顶栏固定、内容独立滚动。
     val ctTopBarScroll = rememberScrollState()
 
     fun update(transform: (ReminderSettings) -> ReminderSettings) {
         scope.launch {
             val updated = runCatching { settingsStore.update { transform(it).sanitized() } }.getOrNull()
-            if (updated != null) onSettingsChanged(updated)
+            if (updated != null) {
+                testHint = ""
+                onSettingsChanged(updated)
+            }
         }
     }
 
@@ -102,7 +116,7 @@ fun ReminderSettingsScreen(
         ) {
             CtLightTopBar(
                 scrollPx = ctTopBarScroll.value.toFloat(),
-                title = "提醒",
+                title = "通知",
                 subtitle = "本机通知 · 不联网",
                 onBack = onBack,
             )
@@ -113,8 +127,8 @@ fun ReminderSettingsScreen(
                     .verticalScroll(ctTopBarScroll)
                     .padding(
                         horizontal = CtTokens.Spacing.pageHorizontalCompact,
-                    vertical = 8.dp,
-                ),
+                        vertical = 8.dp,
+                    ),
                 verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
             ) {
                 NotificationPermissionBanner(
@@ -122,82 +136,195 @@ fun ReminderSettingsScreen(
                     onOpenPermissions = onOpenPermissions,
                 )
 
-                ReminderCard(
-                    title = "提醒总开关",
-                    description = "关闭后不再调度/发送任何本机提醒",
+                MasterCard(
                     checked = settings.enabled,
+                    granted = notificationsGranted,
+                    moduleCount = settings.enabledCount(),
                     onCheckedChange = { value -> update { it.copy(enabled = value) } },
+                    onOpenPermissions = onOpenPermissions,
                 )
 
-                ReminderCard(
-                    title = "作业提醒",
-                    description = "每日 ${settings.homeworkDigestHour.toString().padStart(2, '0')}:${
-                        settings.homeworkDigestMinute.toString().padStart(2, '0')
-                    } 汇总「明天/后天截止」，并在截止前提醒",
-                    checked = settings.homeworkEnabled && settings.enabled,
-                    enabled = settings.enabled,
-                    onCheckedChange = { value -> update { it.copy(homeworkEnabled = value) } },
-                    icon = { Icon(Icons.Rounded.Schedule, contentDescription = null) },
-                ) {
-                    Text(
-                        "截止前额外提醒",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                NotifySection("作业提醒")
+                NotifyGroup {
+                    NotifySwitchRow(
+                        title = "新作业通知",
+                        description = "有新的作业发布时提醒",
+                        checked = settings.homeworkNewEnabled,
+                        enabled = settings.enabled,
+                        onCheckedChange = { value -> update { it.copy(homeworkNewEnabled = value) } },
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ReminderSettings.HOMEWORK_LEAD_DAY_OPTIONS.forEach { days ->
-                            FilterChip(
-                                selected = settings.homeworkLeadDays == days,
-                                onClick = { update { it.copy(homeworkLeadDays = days) } },
-                                label = { Text(if (days == 0) "当天" else "$days 天前") },
-                            )
-                        }
+                    NotifyDivider()
+                    NotifySwitchRow(
+                        title = "作业即将截止",
+                        description = "按下方提前时间提醒（当前 ${ReminderSettings.leadLabel(settings.leadMinutes)}）",
+                        checked = settings.homeworkDueEnabled,
+                        enabled = settings.enabled,
+                        onCheckedChange = { value -> update { it.copy(homeworkDueEnabled = value) } },
+                    )
+                    NotifyDivider()
+                    NotifySwitchRow(
+                        title = "每日汇总",
+                        description = "每天 ${settings.homeworkDigestHour.toString().padStart(2, '0')}:${
+                            settings.homeworkDigestMinute.toString().padStart(2, '0')
+                        } 汇总未来 48 小时截止的作业/通知（可选）",
+                        checked = settings.digestEnabled,
+                        enabled = settings.enabled,
+                        onCheckedChange = { value -> update { it.copy(digestEnabled = value) } },
+                    )
+                }
+
+                NotifySection("上课提醒")
+                NotifyGroup {
+                    NotifySwitchRow(
+                        title = "上课提醒",
+                        description = "按课表在课前 ${settings.classLeadMinutes} 分钟提醒",
+                        checked = settings.classRemindEnabled,
+                        enabled = settings.enabled,
+                        icon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = null) },
+                        onCheckedChange = { value -> update { it.copy(classRemindEnabled = value) } },
+                    )
+                    NotifyDivider()
+                    LeadChipsRow(
+                        label = "提前时间",
+                        options = ReminderSettings.CLASS_LEAD_OPTIONS,
+                        selected = settings.classLeadMinutes,
+                        enabled = settings.enabled && settings.classRemindEnabled,
+                        onSelect = { minutes -> update { it.copy(classLeadMinutes = minutes) } },
+                    )
+                }
+
+                NotifySection("通知提醒")
+                NotifyGroup {
+                    NotifySwitchRow(
+                        title = "新通知提醒",
+                        description = "班委发布新通知时提醒",
+                        checked = settings.noticeNewEnabled,
+                        enabled = settings.enabled,
+                        icon = { Icon(Icons.Rounded.NotificationsActive, contentDescription = null) },
+                        onCheckedChange = { value -> update { it.copy(noticeNewEnabled = value) } },
+                    )
+                    NotifyDivider()
+                    NotifySwitchRow(
+                        title = "活动截止提醒",
+                        description = "活动/报名截止前提醒",
+                        checked = settings.noticeDeadlineEnabled,
+                        enabled = settings.enabled,
+                        onCheckedChange = { value -> update { it.copy(noticeDeadlineEnabled = value) } },
+                    )
+                    NotifyDivider()
+                    NotifySwitchRow(
+                        title = "活动开抢提醒",
+                        description = "报名开始时提前 5 分钟提醒",
+                        checked = settings.noticeSignupEnabled,
+                        enabled = settings.enabled,
+                        onCheckedChange = { value -> update { it.copy(noticeSignupEnabled = value) } },
+                    )
+                }
+
+                NotifySection("投票与水费")
+                NotifyGroup {
+                    NotifySwitchRow(
+                        title = "新投票提醒",
+                        description = "发起新投票时提醒",
+                        checked = settings.voteNewEnabled,
+                        enabled = settings.enabled,
+                        onCheckedChange = { value -> update { it.copy(voteNewEnabled = value) } },
+                    )
+                    NotifyDivider()
+                    NotifySwitchRow(
+                        title = "投票结果可查看",
+                        description = "投票结束后提醒查看结果",
+                        checked = settings.voteResultEnabled,
+                        enabled = settings.enabled,
+                        onCheckedChange = { value -> update { it.copy(voteResultEnabled = value) } },
+                    )
+                    NotifyDivider()
+                    NotifySwitchRow(
+                        title = "水费扣除提醒",
+                        description = "抄表产生用量/水费时提醒（只在本机计算）",
+                        checked = settings.waterDeductEnabled,
+                        enabled = settings.enabled,
+                        icon = { Icon(Icons.Rounded.WaterDrop, contentDescription = null) },
+                        onCheckedChange = { value -> update { it.copy(waterDeductEnabled = value) } },
+                    )
+                }
+
+                NotifySection("提醒时间")
+                NotifyGroup {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "截止类提醒统一提前",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "对新作业截止、活动截止生效",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        LeadChips(
+                            options = ReminderSettings.LEAD_OPTIONS,
+                            selected = settings.leadMinutes,
+                            enabled = settings.enabled,
+                            onSelect = { minutes -> update { it.copy(leadMinutes = minutes) } },
+                            labelOf = { minutes -> ReminderSettings.leadLabel(minutes) },
+                        )
                     }
                 }
 
-                ReminderCard(
-                    title = "上课提醒",
-                    description = "下一节课开始前 ${settings.courseLeadMinutes} 分钟提醒",
-                    checked = settings.courseEnabled && settings.enabled,
-                    enabled = settings.enabled,
-                    onCheckedChange = { value -> update { it.copy(courseEnabled = value) } },
-                    icon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = null) },
-                ) {
-                    Text(
-                        "提前时间",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ReminderSettings.COURSE_LEAD_MINUTE_OPTIONS.forEach { minutes ->
-                            FilterChip(
-                                selected = settings.courseLeadMinutes == minutes,
-                                onClick = { update { it.copy(courseLeadMinutes = minutes) } },
-                                label = { Text("$minutes 分钟") },
+                NotifySection("确认提醒效果")
+                NotifyGroup {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Button(
+                            onClick = {
+                                if (testBusy) return@Button
+                                testBusy = true
+                                testHint = ""
+                                scope.launch {
+                                    val result = runCatching {
+                                        ReminderActions.testNotification(context)
+                                    }.getOrNull()
+                                    testBusy = false
+                                    testHint = when (result) {
+                                        ReminderTestNotificationResult.Sent ->
+                                            "测试通知已发送，请下拉通知中心查看"
+                                        ReminderTestNotificationResult.PermissionMissing ->
+                                            "请先在系统设置中允许通知，再发送测试"
+                                        is ReminderTestNotificationResult.Failed -> result.message
+                                        null -> "发送失败，请稍后重试"
+                                    }
+                                }
+                            },
+                            enabled = !testBusy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp),
+                        ) {
+                            Text(if (testBusy) "正在发送…" else "发送测试通知")
+                        }
+                        if (testHint.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                testHint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (testHint.startsWith("测试通知已发送")) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                },
                             )
                         }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "立即发出一条本地通知，用于检查系统权限和通知样式。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
 
-                ReminderCard(
-                    title = "通知提醒",
-                    description = "每日汇总「明天/后天」截止或开始的通知，并在临近 24 小时内提醒",
-                    checked = settings.noticeEnabled && settings.enabled,
-                    enabled = settings.enabled,
-                    onCheckedChange = { value -> update { it.copy(noticeEnabled = value) } },
-                    icon = { Icon(Icons.Rounded.NotificationsActive, contentDescription = null) },
-                )
-
-                ReminderCard(
-                    title = "安静时段",
-                    description = "${settings.quietStartHour}:00 – ${settings.quietEndHour}:00 不弹提醒（避免夜间打扰）",
-                    checked = settings.quietHoursEnabled,
-                    onCheckedChange = { value -> update { it.copy(quietHoursEnabled = value) } },
-                )
-
-                CtGlassCard(
-                    shape = CtShapeTokens.hero,
-                ) {
+                CtGlassCard(shape = CtShapeTokens.hero) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             "检查与诊断",
@@ -206,7 +333,7 @@ fun ReminderSettingsScreen(
                         )
                         Spacer(Modifier.height(CtSpace.xs))
                         Text(
-                            "立即检查本机通知链路，并查看缓存与上次运行摘要。",
+                            "立即检查本机通知链路，并查看缓存、权限与上次运行摘要（不含通知正文）。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -225,9 +352,7 @@ fun ReminderSettingsScreen(
                     }
                 }
 
-                CtGlassCard(
-                    shape = CtShapeTokens.hero,
-                ) {
+                CtGlassCard(shape = CtShapeTokens.hero) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             "说明",
@@ -236,8 +361,9 @@ fun ReminderSettingsScreen(
                         )
                         Spacer(Modifier.height(CtSpace.xs))
                         Text(
-                            "提醒由本机调度（Android WorkManager，约 15 分钟检查一次）；手机省电/息屏时可能延迟。" +
-                                "提醒设置只保存在本机，不随账号同步；点击通知可直接打开作业/课表。",
+                            "通知由本机调度（Android WorkManager，约 15 分钟检查一次）；手机省电/息屏时可能延迟。" +
+                                "通知设置只保存在本机，不随账号同步；点击通知可直达作业/课表/通知/投票/水量。" +
+                                "系统通知权限只会在你首次开启通知或发送测试时请求。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -251,7 +377,7 @@ fun ReminderSettingsScreen(
     }
 
     diagnostics?.let { diag ->
-        CtLightAlertDialog(
+        com.furina.classtools.ui.components.light.CtLightAlertDialog(
             onDismissRequest = { diagnostics = null },
             title = { Text("通知诊断") },
             text = {
@@ -259,10 +385,7 @@ fun ReminderSettingsScreen(
                     buildString {
                         appendLine("权限：${diag.permission.name}")
                         appendLine("设置：${diag.settingsSummary}")
-                        appendLine(
-                            "缓存：作业 ${diag.homeworkCacheCount} 条 / 通知 ${diag.noticeCacheCount} 条 / " +
-                                "课表${if (diag.timetableReady) "可用" else "不可用"}",
-                        )
+                        appendLine("缓存：${diag.cacheSummary}")
                         appendLine(
                             "小图标：${if (diag.smallIconFallback) "系统占位（待加专用图标）" else "专用图标"}",
                         )
@@ -272,9 +395,10 @@ fun ReminderSettingsScreen(
                         } ?: "尚未运行"
                         appendLine("上次运行：$lastRun")
                         diag.lastRunSummary?.let { appendLine("摘要：$it") }
-                        (diag.lastRunResult?.reason)?.takeIf { it.isNotBlank() }?.let {
+                        diag.lastRunResult?.reason?.takeIf { it.isNotBlank() }?.let {
                             appendLine("原因：$it")
                         }
+                        appendLine("补发回看：${diag.catchUpLookbackMillis / 60_000} 分钟")
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -286,62 +410,204 @@ fun ReminderSettingsScreen(
     }
 }
 
+// ------------------------------------------------------------------ 组件
+
+/** 分组小标题（与鸿蒙 `notifySection` 一致）。 */
 @Composable
-private fun ReminderCard(
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    icon: (@Composable () -> Unit)? = null,
-    extra: (@Composable () -> Unit)? = null,
-) {
+private fun NotifySection(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+    )
+}
+
+/** 分组容器（圆角白底卡片 + 行间分割线）。 */
+@Composable
+private fun NotifyGroup(content: @Composable () -> Unit) {
     Surface(
         shape = CtShapeTokens.hero,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (icon != null) {
-                    Surface(
-                        shape = CtShapeTokens.pill,
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) { icon() }
-                    }
-                    Spacer(Modifier.width(10.dp))
-                }
-                Column(modifier = Modifier.weight(1f)) {
+        Column { content() }
+    }
+}
+
+@Composable
+private fun NotifyDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+    )
+}
+
+/** 总开关（允许通知）：状态徽标 + 系统权限说明。 */
+@Composable
+private fun MasterCard(
+    checked: Boolean,
+    granted: Boolean,
+    moduleCount: Int,
+    onCheckedChange: (Boolean) -> Unit,
+    onOpenPermissions: () -> Unit,
+) {
+    Surface(
+        shape = CtShapeTokens.hero,
+        color = if (checked) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = CtShapeTokens.pill,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.size(36.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) { Icon(Icons.Rounded.Schedule, contentDescription = null) }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        title,
+                        "允许通知",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (enabled) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Text(
-                        description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Spacer(Modifier.width(8.dp))
+                    Surface(
+                        shape = CtShapeTokens.pill,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Text(
+                            if (checked) "已开启" else "已关闭",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
                 }
-                Switch(
-                    checked = checked,
-                    onCheckedChange = onCheckedChange,
-                    enabled = enabled,
+                Text(
+                    when {
+                        !granted -> "系统通知未授权，开启开关将请求授权"
+                        checked -> "已开启 $moduleCount 项 · 新通知/作业到达时由系统提醒"
+                        else -> "关闭后不再调度/发送任何本机通知"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (!granted) {
+                    TextButton(onClick = onOpenPermissions) { Text("去开启权限") }
+                }
             }
-            if (extra != null && checked) {
-                Spacer(Modifier.height(10.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { extra() }
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
+        }
+    }
+}
+
+/** 一行开关（标题 + 说明 + 右侧 Switch）。 */
+@Composable
+private fun NotifySwitchRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    icon: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Surface(
+                shape = CtShapeTokens.pill,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.size(32.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) { icon() }
             }
+            Spacer(Modifier.width(10.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+    }
+}
+
+/** 提前时间一行（标题 + 胶囊选项）。 */
+@Composable
+private fun LeadChipsRow(
+    label: String,
+    options: List<Int>,
+    selected: Int,
+    enabled: Boolean,
+    onSelect: (Int) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(6.dp))
+        LeadChips(options = options, selected = selected, enabled = enabled, onSelect = onSelect)
+    }
+}
+
+@Composable
+private fun LeadChips(
+    options: List<Int>,
+    selected: Int,
+    enabled: Boolean,
+    onSelect: (Int) -> Unit,
+    labelOf: (Int) -> String = { minutes -> "$minutes 分钟" },
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options.forEach { minutes ->
+            FilterChip(
+                selected = selected == minutes,
+                enabled = enabled,
+                onClick = { onSelect(minutes) },
+                label = { Text(labelOf(minutes)) },
+            )
         }
     }
 }

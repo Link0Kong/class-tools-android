@@ -139,8 +139,7 @@ private fun MeStatsPreview() {
                     reminder = ReminderStatus(
                         enabled = true,
                         notificationPermission = true,
-                        homeworkEnabled = true,
-                        courseEnabled = true,
+                        enabledModuleCount = 9,
                     ),
                     onOpenReminder = {},
                 )
@@ -165,8 +164,7 @@ private fun MeStatsDarkPreview() {
                     reminder = ReminderStatus(
                         enabled = true,
                         notificationPermission = false,
-                        homeworkEnabled = true,
-                        courseEnabled = false,
+                        enabledModuleCount = 4,
                     ),
                     onOpenReminder = {},
                 )

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.data.marks.MarkKind
 import com.furina.classtools.data.marks.MarksSnapshot
+import com.furina.classtools.data.reminder.ReminderSettings
 import com.furina.classtools.ui.theme.CtShapeTokens
 
 /**
@@ -45,31 +46,29 @@ data class MeStats(
 )
 
 /**
- * 提醒聚合状态（供「我的」页提醒入口展示）。
+ * 通知聚合状态（供「我的」页通知设置入口展示）。
  *
  * 由 Lead 从 `ReminderSettingsStore.settings` + `PermissionController(NOTIFICATIONS)` 组合传入。
+ * 文案口径对齐鸿蒙端「我的 → 通知设置」：未开启 / 已开启 N 项。
  */
 data class ReminderStatus(
     val enabled: Boolean = false,
     val notificationPermission: Boolean = false,
-    val homeworkEnabled: Boolean = true,
-    val courseEnabled: Boolean = true,
-    val homeworkLeadDays: Int = 1,
-    val courseLeadMinutes: Int = 15,
+    /** 已开启的通知模块数（10 个模块：新作业/作业截止/上课/新通知/活动截止/活动开抢/新投票/投票结果/水费/每日汇总）。 */
+    val enabledModuleCount: Int = 0,
+    val totalModuleCount: Int = 10,
+    /** 截止类统一提前分钟数（展示用）。 */
+    val leadMinutes: Int = ReminderSettings.DEFAULT_LEAD_MINUTES,
+    /** 上课提前分钟数（展示用）。 */
+    val classLeadMinutes: Int = ReminderSettings.DEFAULT_CLASS_LEAD_MINUTES,
 ) {
-    val sections: List<String>
-        get() = buildList {
-            if (homeworkEnabled) add("作业")
-            if (courseEnabled) add("课表")
-        }
-
-    /** 入口副标题：优先提示未开启原因，其次展示已开启范围。 */
+    /** 入口副标题：优先提示未开启原因，其次展示已开启项数。 */
     val label: String
         get() = when {
             !enabled -> "未开启 · 点击设置"
             !notificationPermission -> "通知权限未开启 · 点击设置"
-            sections.isEmpty() -> "未选择提醒类型 · 点击设置"
-            else -> "已开启 · ${sections.joinToString(" + ")}提醒"
+            enabledModuleCount <= 0 -> "未选择通知类型 · 点击设置"
+            else -> "已开启 $enabledModuleCount 项 · 截止提前 ${ReminderSettings.leadLabel(leadMinutes)}"
         }
 
     val isWarning: Boolean

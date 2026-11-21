@@ -111,8 +111,7 @@ class MeStatsSectionTest {
         val status = ReminderStatus(
             enabled = true,
             notificationPermission = false,
-            homeworkEnabled = true,
-            courseEnabled = true,
+            enabledModuleCount = 10,
         )
         assertEquals("通知权限未开启 · 点击设置", status.label)
         assertTrue(status.isWarning)
@@ -123,12 +122,10 @@ class MeStatsSectionTest {
         val status = ReminderStatus(
             enabled = true,
             notificationPermission = true,
-            homeworkEnabled = true,
-            courseEnabled = true,
+            enabledModuleCount = 10,
         )
-        assertEquals("已开启 · 作业 + 课表提醒", status.label)
+        assertEquals("已开启 10 项 · 截止提前 1 小时", status.label)
         assertFalse(status.isWarning)
-        assertEquals(listOf("作业", "课表"), status.sections)
     }
 
     @Test
@@ -136,19 +133,17 @@ class MeStatsSectionTest {
         val homeworkOnly = ReminderStatus(
             enabled = true,
             notificationPermission = true,
-            homeworkEnabled = true,
-            courseEnabled = false,
+            enabledModuleCount = 3,
         )
-        assertEquals("已开启 · 作业提醒", homeworkOnly.label)
+        assertEquals("已开启 3 项 · 截止提前 1 小时", homeworkOnly.label)
 
         val none = ReminderStatus(
             enabled = true,
             notificationPermission = true,
-            homeworkEnabled = false,
-            courseEnabled = false,
+            enabledModuleCount = 0,
         )
-        assertEquals("未选择提醒类型 · 点击设置", none.label)
-        assertTrue(none.sections.isEmpty())
+        assertEquals("未选择通知类型 · 点击设置", none.label)
+        assertEquals(0, none.enabledModuleCount)
     }
 
     @Test
@@ -163,7 +158,7 @@ class MeStatsSectionTest {
         val reminder = ReminderStatus()
         assertFalse(reminder.enabled)
         assertFalse(reminder.notificationPermission)
-        assertEquals(1, reminder.homeworkLeadDays)
-        assertEquals(15, reminder.courseLeadMinutes)
+        assertEquals(60, reminder.leadMinutes)
+        assertEquals(10, reminder.classLeadMinutes)
     }
 }

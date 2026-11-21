@@ -11,6 +11,9 @@ import com.furina.classtools.data.timetable.SessionInfo
 import com.furina.classtools.data.timetable.SessionState
 import com.furina.classtools.data.timetable.TodayState
 import com.furina.classtools.data.timetable.TtPlan
+import com.furina.classtools.data.vote.PollSummary
+import com.furina.classtools.features.water.WaterRecord
+import com.furina.classtools.features.water.WaterRoomState
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -104,12 +107,16 @@ class ReminderEngineTest {
         var ttPlan: TtPlan? = null,
         var notices: NoticesData? = null,
         var handledIds: Set<String> = emptySet(),
+        var polls: List<PollSummary> = emptyList(),
+        var water: WaterWatch? = null,
     ) : ReminderDataProvider {
         override suspend fun homeworkRows(): List<HomeworkRow> = rows
         override suspend fun homeworkDoneIds(): Set<String> = emptySet()
         override suspend fun timetablePlan(nowMillis: Long, zone: ZoneId): TtPlan? = ttPlan
         override suspend fun noticesData(): NoticesData? = notices
         override suspend fun handledNoticeIds(): Set<String> = handledIds
+        override suspend fun votePolls(): List<PollSummary> = polls
+        override suspend fun watchedWaterRoom(): WaterWatch? = water
     }
 
     private fun engine(
@@ -119,6 +126,7 @@ class ReminderEngineTest {
         data: FakeDataProvider = FakeDataProvider(),
         runStateStore: ReminderRunStateStore = InMemoryReminderRunStateStore(),
         pendingStore: ReminderPendingEventStore = InMemoryReminderPendingEventStore(),
+        snapshotStore: ReminderSnapshotStore = InMemoryReminderSnapshotStore(),
         clock: () -> Long = { now },
     ): ReminderEngine = ReminderEngine(
         settingsStore = FakeSettingsStore(settings),
@@ -128,6 +136,7 @@ class ReminderEngineTest {
         dataProvider = data,
         runStateStore = runStateStore,
         pendingStore = pendingStore,
+        snapshotStore = snapshotStore,
         clock = clock,
         zone = zone,
     )
@@ -145,7 +154,7 @@ class ReminderEngineTest {
         assertTrue(result.enabled)
         assertEquals("GRANTED", result.permission)
         assertEquals(now, result.checkedAtMillis)
-        assertTrue(result.settingsSummary.contains("作业=开"))
+        assertTrue(result.settingsSummary.contains("模块="))
         assertTrue(result.cacheSummary.contains("作业 1 条"))
         assertTrue(notifier.events.isEmpty())
         assertEquals(0, notifier.channelsEnsured)
@@ -184,16 +193,23 @@ class ReminderEngineTest {
     @Test
     fun `总开关关闭与全部类型关闭时禁用`() = runTest {
         val off = engine(settings = ReminderSettings.DEFAULT.copy(enabled = false)).runNow()
-        assertEquals("提醒总开关已关闭", off.disabledReason)
+        assertEquals("通知总开关已关闭", off.disabledReason)
 
         val sectionsOff = engine(
             settings = ReminderSettings.DEFAULT.copy(
-                homeworkEnabled = false,
-                courseEnabled = false,
-                noticeEnabled = false,
+                homeworkNewEnabled = false,
+                homeworkDueEnabled = false,
+                classRemindEnabled = false,
+                noticeNewEnabled = false,
+                noticeDeadlineEnabled = false,
+                noticeSignupEnabled = false,
+                voteNewEnabled = false,
+                voteResultEnabled = false,
+                waterDeductEnabled = false,
+                digestEnabled = false,
             ),
         ).runNow()
-        assertEquals("作业/课表/通知提醒均已关闭", sectionsOff.disabledReason)
+        assertEquals("所有通知类型均已关闭", sectionsOff.disabledReason)
     }
 
     @Test
@@ -210,7 +226,7 @@ class ReminderEngineTest {
         assertEquals(now - 30 * 60_000L, diagnostics.lastRunAtMillis)
         assertEquals("sent=1", diagnostics.lastRunSummary)
         assertEquals(ReminderCatchUp.DEFAULT_GRACE_MS * 3, diagnostics.catchUpLookbackMillis)
-        assertTrue(diagnostics.settingsSummary.contains("通知=开"))
+        assertTrue(diagnostics.settingsSummary.contains("模块="))
     }
 
     // ------------------------------------------------------------ 错过补发
@@ -287,5 +303,110 @@ class ReminderEngineTest {
         assertEquals(now, runState.lastRunAt())
         assertTrue(runState.lastRunSummary().orEmpty().contains("sent="))
         assertFalse(runState.lastRunSummary().orEmpty().contains("通知即将"))
+    }
+
+    // ------------------------------------------------------------ 测试通知（系统通知工具）
+
+    @Test
+    fun `发送测试通知成功`() = runTest {
+        val notifier = FakeNotifier()
+        val result = engine(notifier = notifier).testNotification()
+        assertEquals(ReminderTestNotificationResult.Sent, result)
+        assertEquals(ReminderKind.SYSTEM_TEST, notifier.events.single().kind)
+        assertEquals("班级工具站 · 测试通知", notifier.events.single().title)
+        assertEquals(1, notifier.channelsEnsured)
+    }
+
+    @Test
+    fun `发送测试通知在权限缺失时返回明确结果`() = runTest {
+        val notifier = FakeNotifier()
+        val result = engine(permission = PermissionState.REQUESTABLE, notifier = notifier).testNotification()
+        assertEquals(ReminderTestNotificationResult.PermissionMissing, result)
+        assertTrue(notifier.events.isEmpty())
+    }
+
+    @Test
+    fun `发送测试通知在系统拒绝时返回失败`() = runTest {
+        val notifier = FakeNotifier(succeed = false)
+        val result = engine(notifier = notifier).testNotification()
+        assertTrue(result is ReminderTestNotificationResult.Failed)
+    }
+
+    // ------------------------------------------------------------ 新增类通知（基线）
+
+    @Test
+    fun `首轮只建基线 后续新增作业才提醒`() = runTest {
+        val snapshotStore = InMemoryReminderSnapshotStore()
+        val notifier = FakeNotifier()
+        val data = FakeDataProvider(rows = listOf(homework("hw1")))
+        val engine = engine(notifier = notifier, data = data, snapshotStore = snapshotStore)
+
+        val first = engine.runNow()
+        assertEquals(0, first.sent)
+        assertTrue(snapshotStore.load().initialized)
+        assertTrue(snapshotStore.load().hwIds.contains("hw1"))
+
+        data.rows = listOf(homework("hw1"), homework("hw2"))
+        val second = engine.runNow()
+        assertEquals(1, second.sent)
+        assertEquals(ReminderKind.HOMEWORK_NEW, notifier.events.single().kind)
+        assertEquals("hw-new:hw2", notifier.events.single().key)
+    }
+
+    @Test
+    fun `通知权限缺失时仍建立基线`() = runTest {
+        val snapshotStore = InMemoryReminderSnapshotStore()
+        val engine = engine(
+            permission = PermissionState.REQUESTABLE,
+            data = FakeDataProvider(rows = listOf(homework("hw1"))),
+            snapshotStore = snapshotStore,
+        )
+        engine.runNow()
+        assertTrue(snapshotStore.load().initialized)
+    }
+
+    @Test
+    fun `投票结果与新增投票接入引擎`() = runTest {
+        val notifier = FakeNotifier()
+        val snapshotStore = InMemoryReminderSnapshotStore(
+            ReminderSnapshot(initialized = true, pollIds = listOf("p1"), closedPollIds = emptyList()),
+        )
+        val data = FakeDataProvider(
+            polls = listOf(
+                PollSummary(id = "p1", title = "班服颜色", status = "closed", closed = true),
+                PollSummary(id = "p2", title = "班会时间", status = "open"),
+            ),
+        )
+        val result = engine(notifier = notifier, data = data, snapshotStore = snapshotStore).runNow()
+        assertEquals(2, result.sent)
+        assertTrue(notifier.events.any { it.kind == ReminderKind.VOTE_RESULT && it.body == "班服颜色" })
+        assertTrue(notifier.events.any { it.kind == ReminderKind.VOTE_NEW && it.body == "班会时间" })
+        assertTrue(snapshotStore.load().pollIds.contains("p2"))
+        assertTrue(snapshotStore.load().closedPollIds.contains("p1"))
+    }
+
+    @Test
+    fun `水费提醒接入引擎并写回水费指纹`() = runTest {
+        val notifier = FakeNotifier()
+        val snapshotStore = InMemoryReminderSnapshotStore(
+            ReminderSnapshot(initialized = true, waterKey = "rv|2026-10|100.00"),
+        )
+        val data = FakeDataProvider(
+            water = WaterWatch(
+                roomKey = "rv",
+                room = WaterRoomState(
+                    persons = 4,
+                    records = listOf(
+                        WaterRecord(month = "2026-10", reading = 100.0),
+                        WaterRecord(month = "2026-11", reading = 110.0),
+                    ),
+                ),
+            ),
+        )
+        val result = engine(notifier = notifier, data = data, snapshotStore = snapshotStore).runNow()
+        assertEquals(1, result.sent)
+        assertEquals(ReminderKind.WATER_DEDUCT, notifier.events.single().kind)
+        assertTrue(notifier.events.single().body.contains("用量 10"))
+        assertEquals("rv|2026-11|110.00", snapshotStore.load().waterKey)
     }
 }

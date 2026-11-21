@@ -3,12 +3,13 @@
 > 目标：用 Android 17（API 37）的设计语言与 Compose-first 技术栈，把班级工具站重做成**真原生** Android App；数据与网页/小程序共用同一套 CloudBase 契约。
 
 - 包名：`com.furina.classtools`（早期草稿的 `fun.furina.classtools` 因 `fun` 是 Kotlin 硬关键字无法编译，已全量改名）
-- 版本：1.0.0-beta19（versionCode 102），Debug 后缀 `.debug`
+- 版本：1.0.0-beta22（versionCode 105），Debug 后缀 `.debug`
 - minSdk 26 / targetSdk 37 / compileSdk 37
 - 语言/UI：Kotlin + Jetpack Compose + Material 3（Expressive 自建层）+ 自绘组件
-- 状态：**v1.0.0-beta19（测试版本）**——金标联盟 SharedView Kit 一镜到底（工具卡 → 工具页；不支持机型回退 Compose 转场）；
-  之前 beta18 已含荣耀账号 / vivo 推送 / OPPO 复核、beta15 统计、beta16 沉浸光感、beta18 顶部悬浮。详见
-  [SHAREDVIEW_MOTION](docs/SHAREDVIEW_MOTION.md) 与 [REPORT_ROUND70](docs/REPORT_ROUND70_20261119.md)。
+- 状态：**v1.0.0-beta22（测试版本）**——通知模块化（对齐鸿蒙「通知设置」：新作业/截止/上课/新通知/活动截止/开抢/
+  新投票/投票结果/水费扣除/每日汇总 + 发送测试通知）与统一分享弹层（对齐小程序：5:4 分享卡 / 分享图片 /
+  保存相册 / 分享链接 / 复制文案）。详见 [NOTIFICATION_V4_IMPL](docs/api/NOTIFICATION_V4_IMPL.md) 与
+  [SHARE_IMPL](docs/SHARE_IMPL.md)；beta19 的 SharedView 一镜到底见 [SHAREDVIEW_MOTION](docs/SHAREDVIEW_MOTION.md)。
 
 ## 目录
 
