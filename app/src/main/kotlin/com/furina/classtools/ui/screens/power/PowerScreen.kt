@@ -69,6 +69,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.data.power.PowerDirectoryRepository
+import com.furina.classtools.data.power.PowerDirectoryResult
 import com.furina.classtools.data.power.PowerHistoryResult
 import com.furina.classtools.data.power.PowerHistoryWindowResult
 import com.furina.classtools.data.power.PowerPoint
@@ -85,6 +87,7 @@ import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.features.power.PowerCompareLogic
 import com.furina.classtools.features.power.PowerCompareResult
+import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
@@ -143,6 +146,7 @@ private const val TILE_KEY_USE = "use"
  * @param initialSelectedRv 预览注入：初始关注宿舍
  * @param initialRow 预览注入：电量行
  * @param initialHistories 预览注入：各区间采样
+ * @param initialRooms 预览注入：宿舍目录（真实运行时由 [directoryRepository] 从云端读取）
  * @param skipLoad 预览/测试：跳过仓库请求
  * @param initialError 预览注入：错误态
  */
@@ -152,12 +156,14 @@ fun PowerScreen(
     repository: PowerRepository,
     modifier: Modifier = Modifier,
     userDataRepository: UserDataRepository? = null,
+    directoryRepository: PowerDirectoryRepository? = null,
     session: Session? = null,
     clock: () -> Long = System::currentTimeMillis,
     initialSelectedRv: String? = null,
     initialLow: Int? = null,
     initialRow: PowerRow? = null,
     initialHistories: Map<PowerRange, List<PowerPoint>> = emptyMap(),
+    initialRooms: List<RoomInfo> = emptyList(),
     initialRange: PowerRange = PowerRange.H24,
     initialSlowRoom: Boolean = false,
     skipLoad: Boolean = false,
@@ -206,6 +212,40 @@ fun PowerScreen(
     var cursorIndex by remember { mutableStateOf<Int?>(null) }
     var showHousePicker by remember { mutableStateOf(false) }
     var showLowPicker by remember { mutableStateOf(false) }
+
+    // 宿舍目录（E21）：不硬编码房号；失败只影响「换宿舍」，已关注宿舍仍按 roomverify 展示。
+    var rooms by remember { mutableStateOf(PowerRooms.sortRooms(initialRooms)) }
+    var roomsLoading by remember { mutableStateOf(directoryRepository != null && rooms.isEmpty()) }
+    var roomsError by remember { mutableStateOf<String?>(null) }
+    var directoryToken by remember { mutableIntStateOf(0) }
+    var staleSelection by remember { mutableStateOf(false) }
+    LaunchedEffect(directoryRepository, directoryToken) {
+        val repo = directoryRepository ?: return@LaunchedEffect
+        roomsLoading = rooms.isEmpty()
+        roomsError = null
+        when (val result = runCatching { repo.load(force = directoryToken > 0) }.getOrNull()) {
+            is PowerDirectoryResult.Success -> rooms = result.rooms
+            is PowerDirectoryResult.Failure -> roomsError = result.message
+            null -> roomsError = "宿舍目录加载失败"
+        }
+        roomsLoading = false
+    }
+
+    // 云端旧值（如历史版本写入的虚构房号）不在当前目录：回到未选择，但**不回写云端空值**。
+    LaunchedEffect(rooms, sel) {
+        if (rooms.isEmpty() || sel.isBlank()) return@LaunchedEffect
+        if (!PowerRooms.contains(rooms, sel)) {
+            staleSelection = true
+            sel = ""
+            row = null
+            histories = emptyMap()
+            compareExtraHistories = emptyMap()
+            loadedRange = null
+            cursorIndex = null
+            slowRoom = false
+            phase = PowerPhase.IDLE
+        }
+    }
 
     // H-04：从工作台「未关注宿舍」卡进入时，首帧直接弹出选择器（一步完成关注）。
     LaunchedEffect(Unit) {
@@ -376,6 +416,7 @@ fun PowerScreen(
         val normalized = PowerRooms.normalizeSel(rv)
         if (normalized.isEmpty()) return
         showHousePicker = false
+        staleSelection = false
         if (normalized == sel) return
         sel = normalized
         row = null
@@ -420,6 +461,7 @@ fun PowerScreen(
             when (phase) {
                 PowerPhase.IDLE -> IdleGuide(
                     onPick = { showHousePicker = true },
+                    hint = if (staleSelection) "原关注宿舍已失效，请重新选择" else null,
                 )
 
                 PowerPhase.LOADING -> LoadingState()
@@ -462,6 +504,10 @@ fun PowerScreen(
         if (showHousePicker) {
             HousePickerSheet(
                 selectedRv = sel,
+                rooms = rooms,
+                loading = roomsLoading,
+                error = roomsError,
+                onRetry = { directoryToken += 1 },
                 onPick = { chooseRoom(it) },
                 onDismiss = { showHousePicker = false },
             )
@@ -512,7 +558,7 @@ fun PowerScreen(
 private enum class PowerPhase { IDLE, LOADING, READY, ERROR }
 
 @Composable
-private fun IdleGuide(onPick: () -> Unit, modifier: Modifier = Modifier) {
+private fun IdleGuide(onPick: () -> Unit, modifier: Modifier = Modifier, hint: String? = null) {
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -539,6 +585,15 @@ private fun IdleGuide(onPick: () -> Unit, modifier: Modifier = Modifier) {
                     textAlign = TextAlign.Center,
                 )
             }
+        }
+        if (!hint.isNullOrBlank()) {
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
         CtToolPrimaryButton(text = "选择宿舍", onClick = onPick)
     }
@@ -1217,99 +1272,106 @@ private fun BillCell(label: String, value: String, modifier: Modifier = Modifier
 @Composable
 private fun HousePickerSheet(
     selectedRv: String,
+    rooms: List<RoomInfo>,
+    loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var building by remember { mutableStateOf(PowerRooms.buildingOf(selectedRv).ifBlank { PowerRooms.BUILDINGS.first() }) }
+    val buildings = remember(rooms) { PowerRooms.buildingsOf(rooms) }
+    var building by remember { mutableStateOf(PowerRooms.buildingOf(selectedRv)) }
     var query by remember { mutableStateOf("") }
+    LaunchedEffect(buildings) {
+        if (buildings.isNotEmpty() && building !in buildings) {
+            building = PowerRooms.buildingOf(selectedRv).takeIf { it in buildings } ?: buildings.first()
+        }
+    }
     CtBottomSheet(onDismissRequest = onDismiss) {
         CtBottomSheetHeader(title = "关注宿舍")
         Column(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // P-03：房间多时可直接搜索房间号/楼栋，结果跨楼栋展示。
-            CtToolField(
-                label = "搜索房间号 / 楼栋",
-                value = query,
-                onValueChange = { query = it.take(20) },
-                placeholder = "例如 321 / 23号楼",
-                trailing = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Rounded.Clear, contentDescription = "清除搜索")
-                        }
-                    }
-                },
-            )
-            if (query.isBlank()) {
-                CtChipGroup(
-                    options = PowerRooms.BUILDINGS.map { CtChipOption(key = it, label = it) },
-                    selectedKeys = setOf(building),
-                    onToggle = { building = it },
-                    multiSelect = false,
-                )
-                val rooms = PowerRooms.roomsOfBuilding(building)
-                rooms.chunked(4).forEach { chunk ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        chunk.forEach { room ->
-                            RoomButton(
-                                room = room,
-                                selected = room.rv == selectedRv,
-                                onClick = { onPick(room.rv) },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        repeat(4 - chunk.size) { Spacer(modifier = Modifier.weight(1f)) }
-                    }
-                }
+            if (rooms.isEmpty()) {
+                DirectoryUnavailable(error = error, loading = loading, onRetry = onRetry)
             } else {
-                val matches = remember(query) {
-                    val q = query.trim()
-                    PowerRooms.BUILDINGS.flatMap { b ->
-                        PowerRooms.roomsOfBuilding(b).map { room -> b to room }
-                    }.filter { (b, room) ->
-                        room.room.contains(q, ignoreCase = true) || b.contains(q, ignoreCase = true)
-                    }.take(30)
-                }
-                if (matches.isEmpty()) {
-                    Text(
-                        text = "未找到房间",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // P-03：房间多时可直接搜索房间号/楼栋，结果跨楼栋展示。
+                CtToolField(
+                    label = "搜索房间号 / 楼栋",
+                    value = query,
+                    onValueChange = { query = it.take(20) },
+                    placeholder = "例如 321 / 23号楼",
+                    trailing = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Rounded.Clear, contentDescription = "清除搜索")
+                            }
+                        }
+                    },
+                )
+                if (query.isBlank()) {
+                    CtChipGroup(
+                        options = buildings.map { CtChipOption(key = it, label = it) },
+                        selectedKeys = setOf(building),
+                        onToggle = { building = it },
+                        multiSelect = false,
                     )
+                    val buildingRooms = PowerRooms.roomsOfBuilding(rooms, building)
+                    buildingRooms.chunked(4).forEach { chunk ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            chunk.forEach { room ->
+                                RoomButton(
+                                    room = room,
+                                    selected = room.rv == selectedRv,
+                                    onClick = { onPick(room.rv) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            repeat(4 - chunk.size) { Spacer(modifier = Modifier.weight(1f)) }
+                        }
+                    }
                 } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 260.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.elementGap),
-                    ) {
-                        matches.forEach { (b, room) ->
-                            val selected = room.rv == selectedRv
-                            Surface(
-                                onClick = { onPick(room.rv) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(CtRadius.cardCompact),
-                                color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                                else MaterialTheme.colorScheme.onSurface,
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = CtTokens.Spacing.elementGapLarge, vertical = CtTokens.Spacing.elementGap),
-                                    verticalAlignment = Alignment.CenterVertically,
+                    val matches = remember(query, rooms) { PowerRooms.search(rooms, query).take(30) }
+                    if (matches.isEmpty()) {
+                        Text(
+                            text = "未找到房间",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 260.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.elementGap),
+                        ) {
+                            matches.forEach { room ->
+                                val selected = room.rv == selectedRv
+                                Surface(
+                                    onClick = { onPick(room.rv) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 48.dp),
+                                    shape = RoundedCornerShape(CtRadius.cardCompact),
+                                    color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurface,
                                 ) {
-                                    Text(
-                                        text = "$b · ${room.room}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    if (selected) {
-                                        Text("已关注", style = MaterialTheme.typography.labelSmall)
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = CtTokens.Spacing.elementGapLarge, vertical = CtTokens.Spacing.elementGap),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = "${room.building} · ${room.room}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        if (selected) {
+                                            Text("已关注", style = MaterialTheme.typography.labelSmall)
+                                        }
                                     }
                                 }
                             }
@@ -1324,6 +1386,45 @@ private fun HousePickerSheet(
             secondaryText = "取消",
             onSecondary = onDismiss,
         )
+    }
+}
+
+/**
+ * 目录不可用态（加载中 / 失败 / 空目录）。
+ *
+ * 目录只用于「换宿舍」：已关注宿舍的展示与电量不受影响，所以这里只给一行说明 + 重试。
+ */
+@Composable
+private fun DirectoryUnavailable(
+    error: String?,
+    loading: Boolean,
+    onRetry: () -> Unit,
+) {
+    if (loading) {
+        CtLoading(text = "加载宿舍列表…")
+        return
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = if (error.isNullOrBlank()) "宿舍目录为空" else "宿舍目录加载失败",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (!error.isNullOrBlank()) {
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+        TextButton(onClick = onRetry) { Text("重试") }
     }
 }
 

@@ -382,7 +382,8 @@ else:   Fisher-Yates 洗牌 pool 后取前 count 个（不重复）
 
 ### 7.5 宿舍电费（当前值 + 趋势 + 估算）`[已核实 WEB:4273-4700, 4470-4600; MP/utils/power.js]`
 
-**数据**：`PW_ROOMS` **17 间**宿舍目录（硬编码常量，顺序即 UI 顺序；`rv` = roomverify 形如 `4-23A---305`，`label/building/room`）`[已核实 WEB:4286-4304; MP/power.js:86-105]`。
+**数据**：宿舍目录**客户端不硬编码**——`GET power?select=id,label,building,room`（E21，RLS 需有效班级 token）读云端 `public.power` 行，按楼栋自然序 + 房间号数字序排序（13号楼 → 16号楼 → 23号楼A座 → 23号楼B座），与网页 `PW_ROOMS` / 小程序 `utils/power.js ROOMS` 的展示顺序一致 `[已核实 WEB:4286-4304; MP/power.js:86-105]`。
+`rv` = roomverify 形如 `4-23B---423`；`label/building/room` 由 roomverify 派生（`1-13---324` → `13号楼324`、`4-23B---423` → `23号楼B座423`），因此**已关注宿舍不依赖目录也能展示**，目录加载失败只影响「换宿舍」。2026-11-21 前客户端硬编码目录，一次脱敏替换成虚构房号后真实宿舍全部无法显示，现已改为云端目录。
 `power` 行：`{id(=rv),label,building,room,quantity,unit,low,updated_at}`；`power_history` 采样：`{roomverify,quantity,ts}` 按 `ts.asc`，区间 `24h|7d|30d`。
 
 **状态**：`low` 阈值用户可调（档位 `[10,20,30,40,50,60,80,100]`，默认 30，随 `userdata.power.low` 同步）；`q<low` 低电 / `low≤q<low*2` 偏低 / 其余充足 `[已核实 WEB:4283, 4366-4374; MP/power.js:19-24]`。

@@ -43,7 +43,9 @@ import com.furina.classtools.data.network.ApiClient
 import com.furina.classtools.data.network.OkHttpTransport
 import com.furina.classtools.data.notices.DefaultNoticesRepository
 import com.furina.classtools.data.notices.NoticesRepository
+import com.furina.classtools.data.power.DefaultPowerDirectoryRepository
 import com.furina.classtools.data.power.DefaultPowerRepository
+import com.furina.classtools.data.power.PowerDirectoryRepository
 import com.furina.classtools.data.power.PowerRepository
 import com.furina.classtools.data.ppt.AndroidNetworkQualityProvider
 import com.furina.classtools.data.ppt.AndroidPptFileDownloader
@@ -292,6 +294,14 @@ class AppContainer(context: Context) {
     }
 
     val powerRepository: PowerRepository = DefaultPowerRepository(api = apiClient)
+
+    /**
+     * 宿舍目录仓库（E21）：读云端 `power` 表，不在客户端硬编码真实房号。
+     *
+     * 2026-11-21 修复：此前目录是硬编码常量，一次脱敏把房号换成虚构值后真实宿舍全部无法显示。
+     */
+    val powerDirectoryRepository: PowerDirectoryRepository =
+        DefaultPowerDirectoryRepository(api = apiClient)
 
     /** 投票仓库（契约 web/vote/CONTRACT.md；模型不含 sid）。 */
     /** 懒加载：启动首帧不需要投票仓库。 */

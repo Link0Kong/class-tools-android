@@ -743,6 +743,7 @@ fun MainNavHost(
                 "power" -> PowerScreen(
                     onBack = { popTool(toolId) },
                     repository = container.powerRepository,
+                    directoryRepository = container.powerDirectoryRepository,
                     userDataRepository = container.userDataRepository,
                     session = session,
                     initialPickerOpen = pickInTool,
@@ -752,6 +753,7 @@ fun MainNavHost(
                     onBack = { popTool(toolId) },
                     session = session,
                     userDataRepository = container.userDataRepository,
+                    directoryRepository = container.powerDirectoryRepository,
                 )
 
                 "roster" -> RosterScreen(

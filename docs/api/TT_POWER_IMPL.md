@@ -16,9 +16,10 @@
 | `timetable/TimetableCalendar.kt` | 纯函数：`parseTermStart` / `parseWeeks` / `weekOf` / `isActive` / `sessionsOn` / `nextSession` / `plan` / `weekRange` / `weekTitle` / `roomShort`（java.time，可注入 `ZoneId`） |
 | `timetable/TimetableCache.kt` | `FileTimetableCache`：`tt_snapshot.json`（`savedAt` + snapshot）；坏文件返回 null 不崩 |
 | `timetable/TimetableRepository.kt` | `TimetableRepository` 接口 + `DefaultTimetableRepository`：`site_assets?id=eq.tt` → 本机缓存；`body` 兼容 jsonb 对象/JSON 字符串；校验 `c` 数组；6h TTL；失败回退缓存 |
-| `power/PowerModels.kt` | 17 间宿舍目录 `PowerRooms`、`PowerRow` / `PowerPoint` / `RangeStats` / `PowerEstimate` / `SlowStats` / `TrendLine` / `PowerTile` / `BillInfo` / `PowerRange` 等；加载结果 sealed |
+| `power/PowerModels.kt` | `PowerRooms`（roomverify 解析/规范名派生/目录排序/搜索/合并，**不硬编码真实房号**）、`PowerRow` / `PowerPoint` / `RangeStats` / `PowerEstimate` / `SlowStats` / `TrendLine` / `PowerTile` / `BillInfo` / `PowerRange` 等；加载结果 sealed |
 | `power/PowerStats.kt` | 纯算法（逐函数对齐 web/mp）：`deductOf` / `deriveRange` / `rateFrom` / `estimate` / `slowUpdate` / `slowStats` / `estimateSlow` / `isSlowRoom` / `noUpdateText` / `trendLine` / `nearestPoint` / `cursorLabel` / `xTicks` / `stepSegments` / `changeDots` / `tilesOf` / `billOf` / `normLow` / `stateOf` 等 |
 | `power/PowerRepository.kt` | `PowerRepository` 接口 + `DefaultPowerRepository`：E22（2min TTL）/ E23（5min 每档缓存、空结果不缓存、失败回退旧缓存）；`numberOrNull` 兼容 numeric/字符串 |
+| `power/PowerDirectoryRepository.kt` | `PowerDirectoryRepository` 接口 + `DefaultPowerDirectoryRepository`：E21 目录（5min 缓存、失败回退旧缓存、空目录不写缓存）；`PowerDirectoryResult` |
 
 ### UI `app/src/main/kotlin/com/furina/classtools/ui/screens/`
 
@@ -98,7 +99,7 @@
 
 | 项 | web / mp | Android |
 |---|---|---|
-| 房间目录 | 17 间、顺序固定 | `PowerRooms.ROOMS` 逐项一致（含 rv/label/building/room） |
+| 房间目录 | 17 间、顺序固定（硬编码） | **不硬编码**：`GET power?select=id,label,building,room`（E21）→ `PowerRooms.parseDirectory` 按楼栋自然序 + 房间号数字序；展示名由 roomverify 派生，目录加载失败只影响「换宿舍」 |
 | 低电阈值 | 默认 30，档位 `[10,20,30,40,50,60,80,100]`，`normLow` 就近 | `PowerStats.normLow` 同 |
 | 状态 | q<low 低电 / low≤q<2low 偏低 / 其余充足 | `stateOf` 同 |
 | 电量环 | `estimate.days/30`（min 0.02，无有效 0.04） | `ringArc` 同 |

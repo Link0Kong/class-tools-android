@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.water
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.AnimatedContent
@@ -69,7 +71,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.data.power.PowerDirectoryRepository
+import com.furina.classtools.data.power.PowerDirectoryResult
 import com.furina.classtools.data.power.PowerRooms
+import com.furina.classtools.data.power.RoomInfo
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.data.water.UserDataWaterRepository
@@ -129,6 +134,7 @@ import kotlinx.serialization.json.put
  * ```
  *
  * @param initialRooms 预览注入：water section 内容
+ * @param initialDirectory 预览注入：宿舍目录（真实运行时由 [directoryRepository] 从云端读取）
  * @param initialSelectedRv 预览注入：关注宿舍 roomverify
  * @param initialMonth 预览注入：当前月份
  * @param skipLoad 预览/测试：跳过首次 pull
@@ -140,8 +146,10 @@ fun WaterScreen(
     session: Session?,
     userDataRepository: UserDataRepository?,
     modifier: Modifier = Modifier,
+    directoryRepository: PowerDirectoryRepository? = null,
     clock: () -> Long = System::currentTimeMillis,
     initialRooms: Map<String, WaterRoomState> = emptyMap(),
+    initialDirectory: List<RoomInfo> = emptyList(),
     initialSelectedRv: String = "",
     initialMonth: String = "",
     skipLoad: Boolean = false,
@@ -201,6 +209,27 @@ fun WaterScreen(
     var showRoomPicker by remember { mutableStateOf(false) }
     var showClearRoomConfirm by remember { mutableStateOf(false) }
     var pickerYear by remember(month) { mutableStateOf(WaterMonth.yearOf(month)) }
+
+    // 宿舍目录（E21）：不硬编码房号；失败时仍可切到「本机有抄表记录的宿舍」。
+    var directory by remember { mutableStateOf(PowerRooms.sortRooms(initialDirectory)) }
+    var directoryLoading by remember { mutableStateOf(directoryRepository != null && directory.isEmpty()) }
+    var directoryError by remember { mutableStateOf<String?>(null) }
+    var directoryToken by remember { mutableStateOf(0) }
+    LaunchedEffect(directoryRepository, directoryToken) {
+        val repo = directoryRepository ?: return@LaunchedEffect
+        directoryLoading = directory.isEmpty()
+        directoryError = null
+        when (val result = runCatching { repo.load(force = directoryToken > 0) }.getOrNull()) {
+            is PowerDirectoryResult.Success -> directory = result.rooms
+            is PowerDirectoryResult.Failure -> directoryError = result.message
+            null -> directoryError = "宿舍目录加载失败"
+        }
+        directoryLoading = false
+    }
+    // 目录 ∪ 本机已有抄表记录的宿舍（目录失败/新宿舍未同步时仍能切换和查看）。
+    val pickerRooms = remember(directory, waterState.rooms) {
+        PowerRooms.merge(directory, waterState.rooms.keys)
+    }
 
     fun notify(message: String) {
         scope.launch { snackbar.showSnackbar(message) }
@@ -486,7 +515,7 @@ fun WaterScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -514,6 +543,10 @@ fun WaterScreen(
     if (showRoomPicker) {
         RoomPickerDialog(
             selectedRv = selectedRv,
+            rooms = pickerRooms,
+            loading = directoryLoading,
+            error = directoryError,
+            onRetry = { directoryToken += 1 },
             onPick = { rv ->
                 writePowerSel(rv)
                 showRoomPicker = false
@@ -1065,6 +1098,10 @@ private fun MonthPickerDialog(
 @Composable
 private fun RoomPickerDialog(
     selectedRv: String,
+    rooms: List<RoomInfo>,
+    loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1074,6 +1111,7 @@ private fun RoomPickerDialog(
         text = {
             var query by remember { mutableStateOf("") }
             val keyword = query.trim()
+            val matches = remember(rooms, keyword) { PowerRooms.search(rooms, keyword) }
             var matched = false
             Column(
                 modifier = Modifier
@@ -1081,26 +1119,35 @@ private fun RoomPickerDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                if (rooms.isEmpty()) {
+                    if (loading) {
+                        CtLoading(text = "加载宿舍列表…")
+                    } else {
+                        Text(
+                            text = if (error.isNullOrBlank()) "宿舍目录为空" else "宿舍目录加载失败：$error",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = onRetry) { Text("重试") }
+                    }
+                    return@Column
+                }
                 CtToolField(
                     label = "搜索房间号 / 楼栋",
                     value = query,
                     onValueChange = { query = it },
                     placeholder = "输入房间号或楼栋",
                 )
-                PowerRooms.BUILDINGS.forEach { building ->
+                PowerRooms.buildingsOf(matches).forEach { building ->
+                    val buildingRooms = PowerRooms.roomsOfBuilding(matches, building)
+                    if (buildingRooms.isEmpty()) return@forEach
                     Text(
                         text = building,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    val rooms = PowerRooms.roomsOfBuilding(building).filter { roomInfo ->
-                        keyword.isBlank() ||
-                            roomInfo.room.contains(keyword, ignoreCase = true) ||
-                            building.contains(keyword, ignoreCase = true)
-                    }
-                    if (rooms.isEmpty()) return@forEach
                     matched = true
-                    rooms.chunked(3).forEach { rowRooms ->
+                    buildingRooms.chunked(3).forEach { rowRooms ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             rowRooms.forEach { roomInfo ->
                                 val selected = roomInfo.rv == selectedRv
@@ -1193,3 +1240,4 @@ private fun Modifier.horizontalSwipe(
         )
     }
 }
+

@@ -8,6 +8,7 @@ import com.furina.classtools.data.power.PowerRange
 import com.furina.classtools.data.power.PowerRepository
 import com.furina.classtools.data.power.PowerRow
 import com.furina.classtools.data.power.PowerRowResult
+import com.furina.classtools.data.power.RoomInfo
 import com.furina.classtools.data.timetable.Course
 import com.furina.classtools.data.timetable.TimetableRepository
 import com.furina.classtools.data.timetable.TtLoadResult
@@ -376,6 +377,14 @@ private fun PowerPickerPreview() {
             repository = PreviewPowerRepository,
             skipLoad = true,
             initialPickerOpen = true,
+            initialRooms = listOf(
+                RoomInfo("1-13---301", "13号楼301", "13号楼", "301"),
+                RoomInfo("1-13---302", "13号楼302", "13号楼", "302"),
+                RoomInfo("1-16---303", "16号楼303", "16号楼", "303"),
+                RoomInfo("4-23A---305", "23号楼A座305", "23号楼A座", "305"),
+                RoomInfo("4-23A---306", "23号楼A座306", "23号楼A座", "306"),
+                RoomInfo("4-23B---314", "23号楼B座314", "23号楼B座", "314"),
+            ),
         )
     }
 }

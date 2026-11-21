@@ -1,16 +1,22 @@
 package com.furina.classtools.data.power
 
+import com.furina.classtools.data.network.asStringOrNull
+import com.furina.classtools.data.network.parseJsonOrNull
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+
 /**
- * 宿舍电费领域模型（契约：docs/BACKEND_CONTRACT.md §7.5、docs/api/ENDPOINTS.md E22/E23）。
+ * 宿舍电费领域模型（契约：docs/BACKEND_CONTRACT.md §7.5、docs/api/ENDPOINTS.md E21–E23）。
  *
  * 口径必须与网页/小程序一致（web/AGENTS.md §4b-8/11/16/17）：
- * - 房间目录 17 间（顺序即 UI 顺序）；
+ * - 房间目录**不硬编码**：由云端 `power` 表读取（[PowerDirectoryRepository]），顺序按楼栋自然序 + 房间号数字序；
  * - 低电阈值默认 30，档位 [10,20,30,40,50,60,80,100]；
  * - 24h/7d/30d 区间；13/16 号楼「网关日更」慢频统计（SLOW_BUILDINGS）；
  * - 趋势禁止横向滚动、点击/拖动命中最近真实采样点、气泡固定右上角。
  */
 
-/** 宿舍目录项；`rv` = roomverify（如 `4-23A---305`）。 */
+/** 宿舍目录项；`rv` = roomverify（如 `4-23B---423`），`label` = 规范展示名 `23号楼B座423`。 */
 data class RoomInfo(
     val rv: String,
     val label: String,
@@ -19,51 +25,146 @@ data class RoomInfo(
 )
 
 /**
- * 17 间宿舍目录（与网页 `PW_ROOMS` / 小程序 `utils/power.js ROOMS` **逐项一致**；增删宿舍必须两端同改）。
+ * roomverify 解析 + 目录排序（**不硬编码任何真实房号**，仓库可脱敏/公开）。
+ *
+ * - roomverify 是稳定主键：`{areaid}-{楼栋}---{房间}`，如 `1-13---324`、`4-23B---423`
+ *   （areaid：13/16 号楼=1，23 号楼=4；与网页 `web/power/src/util.py::parse_roomverify` 同口径）；
+ * - 规范展示名从 roomverify 派生：`{楼号}号楼{座}{房间号}`，因此已关注宿舍**不依赖目录**也能显示；
+ * - 目录由云端 `power` 表提供（`select=id,label,building,room`），按楼栋自然序 + 房间号数字序排序，
+ *   与网页 `PW_ROOMS` / 小程序 `utils/power.js ROOMS` 的展示顺序一致（13号楼 → 16号楼 → 23号楼A座 → 23号楼B座）。
  */
 object PowerRooms {
-    val ROOMS: List<RoomInfo> = listOf(
-        RoomInfo("1-13---301", "13号楼301", "13号楼", "301"),
-        RoomInfo("1-13---302", "13号楼302", "13号楼", "302"),
-        RoomInfo("1-16---303", "16号楼303", "16号楼", "303"),
-        RoomInfo("1-16---304", "16号楼304", "16号楼", "304"),
-        RoomInfo("4-23A---305", "23号楼A座305", "23号楼A座", "305"),
-        RoomInfo("4-23A---306", "23号楼A座306", "23号楼A座", "306"),
-        RoomInfo("4-23A---307", "23号楼A座307", "23号楼A座", "307"),
-        RoomInfo("4-23A---308", "23号楼A座308", "23号楼A座", "308"),
-        RoomInfo("4-23A---309", "23号楼A座309", "23号楼A座", "309"),
-        RoomInfo("4-23A---310", "23号楼A座310", "23号楼A座", "310"),
-        RoomInfo("4-23A---311", "23号楼A座311", "23号楼A座", "311"),
-        RoomInfo("4-23A---312", "23号楼A座312", "23号楼A座", "312"),
-        RoomInfo("4-23A---313", "23号楼A座313", "23号楼A座", "313"),
-        RoomInfo("4-23B---314", "23号楼B座314", "23号楼B座", "314"),
-        RoomInfo("4-23B---315", "23号楼B座315", "23号楼B座", "315"),
-        RoomInfo("4-23B---316", "23号楼B座316", "23号楼B座", "316"),
-        RoomInfo("4-23B---317", "23号楼B座317", "23号楼B座", "317"),
-    )
+    /** `areaid-楼栋---房间`（楼栋段不含 `-`；`-` 与 `---` 之间的分隔符允许 1+ 个 `-`）。 */
+    private val RV_RE = Regex("""^(\d+)-([^-]+)-+([^-]+)$""")
 
-    /** 楼栋顺序（选择弹层展示用）。 */
-    val BUILDINGS: List<String> = listOf("13号楼", "16号楼", "23号楼A座", "23号楼B座")
+    /** 楼栋段：纯数字（`13` → 13号楼）或数字+字母（`23A` → 23号楼A座）。 */
+    private val BUILDING_RE = Regex("""^(\d+)([A-Za-z])?$""")
 
-    private val byRv: Map<String, RoomInfo> = ROOMS.associateBy { it.rv }
-
-    fun catOf(rv: String?): RoomInfo? = byRv[rv?.trim().orEmpty()]
-
-    /** 非法/未知 roomverify → ""（页面按未选择处理，避免展示脏数据）。 */
-    fun normalizeSel(value: String?): String {
-        val rv = value?.trim().orEmpty()
-        return if (byRv.containsKey(rv)) rv else ""
+    /** 解析 roomverify → [RoomInfo]；解析不出返回 null（不猜测，页面按未选择处理）。 */
+    fun catOf(rv: String?): RoomInfo? {
+        val raw = rv?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        val match = RV_RE.matchEntire(raw) ?: return null
+        val token = match.groupValues[2]
+        val room = match.groupValues[3].trim()
+        if (room.isEmpty()) return null
+        val buildingMatch = BUILDING_RE.matchEntire(token) ?: return null
+        val number = buildingMatch.groupValues[1]
+        val seat = buildingMatch.groupValues[2]
+        val building = if (seat.isEmpty()) "${number}号楼" else "${number}号楼${seat.uppercase()}座"
+        return RoomInfo(rv = raw, label = building + room, building = building, room = room)
     }
+
+    /** 非 roomverify 形态 → ""（页面按未选择处理，避免展示脏数据）。 */
+    fun normalizeSel(value: String?): String = catOf(value)?.rv.orEmpty()
 
     fun labelOf(rv: String?): String = catOf(rv)?.label.orEmpty()
 
     fun buildingOf(rv: String?): String = catOf(rv)?.building.orEmpty()
 
-    fun roomsOfBuilding(building: String): List<RoomInfo> =
-        ROOMS.filter { it.building == building.trim() }
+    fun roomOf(rv: String?): String = catOf(rv)?.room.orEmpty()
 
-    fun rvOf(building: String, room: String): String =
-        roomsOfBuilding(building).firstOrNull { it.room == room.trim() }?.rv.orEmpty()
+    /**
+     * 云端目录行 → [RoomInfo]：优先从 `id`（=roomverify）派生规范名；
+     * 解析不出时才退回云端 `label/building/room`（避免旧/异构数据整条丢失）。
+     */
+    fun fromDirectoryRow(
+        id: String?,
+        label: String? = null,
+        building: String? = null,
+        room: String? = null,
+    ): RoomInfo? {
+        val rv = id?.trim().orEmpty()
+        if (rv.isEmpty()) return null
+        catOf(rv)?.let { return it }
+        val buildingText = building?.trim().orEmpty()
+        val roomText = room?.trim().orEmpty()
+        if (buildingText.isEmpty() && roomText.isEmpty()) return null
+        val labelText = label?.trim().orEmpty().ifBlank { buildingText + roomText }
+        return RoomInfo(rv = rv, label = labelText, building = buildingText, room = roomText)
+    }
+
+    /** 解析 E21 目录响应：只保留可定义宿舍的行，按 [sortRooms] 排序；非法 JSON → 空列表。 */
+    fun parseDirectory(json: Json, raw: String): List<RoomInfo> {
+        val array = parseJsonOrNull(json, raw) as? JsonArray ?: return emptyList()
+        val out = ArrayList<RoomInfo>(array.size)
+        for (element in array) {
+            val obj = element as? JsonObject ?: continue
+            out.add(
+                fromDirectoryRow(
+                    id = obj["id"].asStringOrNull(),
+                    label = obj["label"].asStringOrNull(),
+                    building = obj["building"].asStringOrNull(),
+                    room = obj["room"].asStringOrNull(),
+                ) ?: continue,
+            )
+        }
+        return sortRooms(out)
+    }
+
+    /** 目录排序：楼栋自然序（13号楼 < 16号楼 < 23号楼A座 < 23号楼B座）→ 房间号数字序。 */
+    fun sortRooms(rooms: List<RoomInfo>): List<RoomInfo> = rooms
+        .asSequence()
+        .filter { it.rv.isNotBlank() }
+        .distinctBy { it.rv }
+        .sortedWith(
+            compareBy(
+                { naturalKey(it.building).first },
+                { naturalKey(it.building).second },
+                { naturalKey(it.room).first },
+                { naturalKey(it.room).second },
+            ),
+        )
+        .toList()
+
+    /** 楼栋列表（按自然序；目录为空 → 空列表）。 */
+    fun buildingsOf(rooms: List<RoomInfo>): List<String> =
+        sortRooms(rooms).map { it.building }.filter { it.isNotBlank() }.distinct()
+
+    /** 某楼栋下的房间（输入无需预排序）。 */
+    fun roomsOfBuilding(rooms: List<RoomInfo>, building: String): List<RoomInfo> {
+        val target = building.trim()
+        if (target.isEmpty()) return emptyList()
+        return sortRooms(rooms).filter { it.building == target }
+    }
+
+    /** 房间号搜索（房间号 / 楼栋 / 展示名，忽略大小写）。 */
+    fun search(rooms: List<RoomInfo>, keyword: String): List<RoomInfo> {
+        val q = keyword.trim()
+        if (q.isEmpty()) return sortRooms(rooms)
+        return sortRooms(rooms).filter {
+            it.room.contains(q, ignoreCase = true) ||
+                it.building.contains(q, ignoreCase = true) ||
+                it.label.contains(q, ignoreCase = true)
+        }
+    }
+
+    /** 当前关注宿舍是否在当前目录内（用于识别历史遗留的虚构/过期房号）。 */
+    fun contains(rooms: List<RoomInfo>, rv: String?): Boolean {
+        val target = rv?.trim().orEmpty()
+        if (target.isEmpty()) return false
+        return rooms.any { it.rv == target }
+    }
+
+    /**
+     * 目录 ∪ 其它来源的房间（如本机水量记录里出现过的 roomverify）。
+     *
+     * 用途：目录加载失败/新宿舍尚未同步时，仍能切换到「本机已有记录的宿舍」；
+     * 非法 key 自动忽略，结果按 [sortRooms] 排序。
+     */
+    fun merge(rooms: List<RoomInfo>, extraRoomverifies: Iterable<String>): List<RoomInfo> {
+        val known = rooms.mapTo(HashSet()) { it.rv }
+        val extra = extraRoomverifies.mapNotNull { catOf(it) }.filter { it.rv !in known }
+        return sortRooms(rooms + extra)
+    }
+
+    /** 自然排序键：数字前缀按数值、其余按字符串（`13号楼` < `16号楼` < `23号楼A座`）。 */
+    private fun naturalKey(text: String): Pair<Int, String> {
+        val value = text.trim()
+        val match = Regex("""^(\d+)(.*)$""").matchEntire(value)
+        val number = match?.groupValues?.get(1)?.toIntOrNull()
+        return if (number != null) number to match.groupValues[2] else Int.MAX_VALUE to value
+    }
 }
 
 /** 云端 `power` 当前值行（quantity 非法 → q=null，界面显示「—」）。 */

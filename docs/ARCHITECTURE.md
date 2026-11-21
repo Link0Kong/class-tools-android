@@ -41,7 +41,7 @@ data/
   homework/       作业仓库（GET homework，TTL 10min）
   notices/        通知仓库（两级签名拉取、CLASS_NOTICE_V1 解析、override/hidden）
   timetable/      课表仓库（site_assets id=tt，6h TTL，周次/下一节纯函数）
-  power/          电费仓库（power / power_history，2min/5min 缓存，慢频统计）
+  power/          电费仓库（power / power_history，2min/5min 缓存，慢频统计）+ 宿舍目录仓库（E21，5min 缓存；不硬编码房号）
   fitrecs/        体测历史云端读写（最多 2 条、arch 软删、pending 补发）
   privacy/        数据与隐私（导出 JSON 脱敏/清除云端与本机）
   settings/       AppSettingsStore（壁纸取色等本机外观偏好）

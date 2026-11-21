@@ -1,5 +1,45 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-21 · 1.0.0-beta27 / vc110：宿舍目录改为云端读取（修复「部分宿舍无法显示」）
+
+> 用户 2026-11-21 反馈：「修复安卓端无法显示部分宿舍的问题」。
+> 本版与并行会话的 beta26（M3 组件替换）基于同一 master（`1a1ca91`），版本号顺延为 beta27/vc110，避免覆盖 beta26 的渠道清单。
+
+### 一、根因
+
+- 电费/水量页的宿舍目录原本是**客户端硬编码常量**。2026-11-21 的「公开仓库脱敏」提交（`3bc0b99`，混在 docs 提交里）
+  把 17 间真实宿舍整段替换成虚构房号（13号楼301/302、16号楼303/304、23A 305–313、23B 314–317）。
+- 云端 `public.power` 仍然是从完美校园同步的真实 17 间（13号楼308/324、16号楼305/306、23A 321/323–330、23B 422–425）。
+  `PowerRooms.normalizeSel()` 只认硬编码目录 → 真实 roomverify 一律被判非法：
+  电费页已关注宿舍显示「未选择」、水量页显示「还没有关注宿舍」，选择器里也找不到真实宿舍。
+
+### 二、修复
+
+- **目录改为云端读取**（E21：`GET power?select=id,label,building,room&order=id.asc&limit=200`）：
+  新增 `data/power/PowerDirectoryRepository.kt`（`DefaultPowerDirectoryRepository`：5 min 内存缓存、失败回退旧缓存、
+  空目录不写缓存）。**客户端不再内置任何真实房号**，班级增删宿舍只改云端，无需发版，也符合「公开仓库不含宿舍号」约束。
+- **展示名由 roomverify 派生**（`PowerRooms`）：`1-13---324` → `13号楼324`、`4-23B---423` → `23号楼B座423`。
+  因此已关注宿舍**不依赖目录**也能显示，目录加载失败只影响「换宿舍」。
+- **选择器三态**：电费 BottomSheet / 水量对话框增加「加载中 / 加载失败（可重试）/ 空目录」；
+  水量选择器 = 目录 ∪ 本机已有抄表记录的宿舍（目录失败时仍能切换已记录宿舍）。
+- **历史脏数据**：云端 `power.sel` 若是旧版本写入的虚构房号，目录加载后回到「未选择」并提示
+  「原关注宿舍已失效，请重新选择」，**不回写云端空值**（避免误清其他设备的真实选择）。
+- **排序**：楼栋自然序（13号楼 → 16号楼 → 23号楼A座 → 23号楼B座）+ 房间号数字序，与网页/小程序展示顺序一致。
+- 接线：`AppContainer.powerDirectoryRepository` → `MainNavHost` → 电费 / 水量页。
+
+### 三、测试与文档
+
+- 新增 `PowerRoomsTest`（11 个：roomverify 解析 / 非法值 / 规范名派生 / 目录解析去重排序 / 搜索 / contains / merge）
+  与 `PowerDirectoryRepositoryTest`（7 个：请求路径 / 排序 / 5 min 缓存 / force / 失败回退 / 空目录不缓存 / clearCache）。
+- `:app:testDebugUnitTest` **1864 用例 / 0 失败 / 2 skipped**（148 suites；其中电费目录相关 `PowerRoomsTest` 12、`PowerDirectoryRepositoryTest` 7）。
+- 文档：`docs/BACKEND_CONTRACT.md §7.5`、`docs/api/ENDPOINTS.md`（新增 E21）、`docs/api/TT_POWER_IMPL.md`
+  同步为「目录云端读取 + roomverify 派生」。
+
+### 四、发布
+
+- 待填。
+
+
 ## 2026-11-21 · 1.0.0-beta22 / vc105：通知模块化（对齐鸿蒙）+ 统一分享弹层（对齐小程序）
 
 > 用户要求：「参考鸿蒙端增加安卓端的可进行系统通知的工具以及内容，参考微信小程序端对安卓端的分享功能进行增加和优化」。

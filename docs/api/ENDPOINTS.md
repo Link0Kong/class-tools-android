@@ -156,6 +156,22 @@ GET {REST}visits?select=slot,sid,name&slot=gte.<YYYY-MM-DD-00>&order=slot.desc&l
 GET {REST}feedback?select=*&order=ts.desc
 ```
 
+### E21 宿舍目录（电费/水量选择器）
+
+```http
+GET {REST}power?select=id,label,building,room&order=id.asc&limit=200
+```
+
+```json
+[{"id":"4-23B---423","label":"23号楼B座423","building":"23号楼B座","room":"423"},
+ {"id":"1-13---324","label":"13号楼324","building":"13号楼","room":"324"}]
+```
+
+- `id` 即 roomverify；客户端**不硬编码房号**，目录由本接口读取后按楼栋自然序 + 房间号数字序排序。
+- `label/building/room` 以 roomverify 派生为准（`1-13---324` → `13号楼324`、`4-23B---423` → `23号楼B座423`），云端字段仅作解析失败时的回退。
+- 5 min 内存缓存；失败回退旧缓存；空目录不写缓存（保留上次成功目录）。
+- 目录只用于「换宿舍」：已关注宿舍的展示名由 roomverify 派生，目录失败不影响看电量。
+
 ### E22 电费当前值
 
 ```http
