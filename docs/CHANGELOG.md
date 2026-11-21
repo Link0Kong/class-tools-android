@@ -20,6 +20,11 @@
   - OPPO 错误码文案修正：16 = 签名无效（APK 签名与开放平台登记不一致），不是 AppSecret 问题。
 - **验证**：修复包（beta26 基础上）真机已从「无 regId」推进到「签名校验 16」，证明权限链路生效；
   本版在 beta28（vc111）基础上顺延为 **beta29（vc112）**，避免被更新渠道覆盖。
+- **真机复核（远程诊断）**：手机在 beta26 修复包上自动上报 `client_diag`：`oppo=FAILED:16 vivo=UNKNOWN:0`
+  （`check=push_status`，2026-11-21 22:05/22:06 两条），与界面一致 → 权限链路已生效，只剩控制台签名。
+- **发布**：beta29（vc112）已上线 ECS+OSS；APK **6,075,014 B / SHA-256
+  `024d43a549aa9a99dcc040bb411bffe2cf9fce3a9101a15221a245de940d6dc6`**，`latest.json` 回读 vc112 一致，
+  ECS/OSS 的 `latest.json` 与 APK 均 HTTP 200。全量单测 **1869 用例 / 0 失败 / 2 skipped**。
 - 文档：`docs/OPPO_PUSH.md` 补充 §11 修复记录与 §11.1 错误码 16 处置。
 
 ## 2026-11-21 · 1.0.0-beta27 / vc110：宿舍目录改为云端读取（修复「部分宿舍无法显示」）
