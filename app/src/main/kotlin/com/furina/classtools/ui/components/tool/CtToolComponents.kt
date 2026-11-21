@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +34,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.theme.CtShapeTokens
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
 import com.furina.classtools.ui.theme.HarmonyTokens
 import com.furina.classtools.ui.theme.harmonyTint
@@ -378,3 +382,31 @@ fun CtToolChip(
     }
 }
 
+
+/**
+ * 工具页统一错误态：卡片 + 图标 + 用户可读说明 + 全宽主操作「重试」。
+ *
+ * 2026-11-21 统一：此前各工具页有的裸空态、有的满宽按钮、有的文字链接，
+ * 且会把数据库/SQL 原文直接展示给用户。以后错误态一律用这个组件。
+ */
+@Composable
+fun CtToolErrorState(
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+    title: String = "加载失败",
+    retryText: String = "重试",
+) {
+    CtToolCard(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
+    ) {
+        EmptyState(
+            icon = Icons.Rounded.ErrorOutline,
+            title = title,
+            message = message,
+        )
+        Spacer(Modifier.height(CtSpace.sm))
+        CtToolPrimaryButton(text = retryText, onClick = onRetry, modifier = Modifier.fillMaxWidth())
+    }
+}

@@ -3,6 +3,7 @@
 package com.furina.classtools.ui.screens.roster
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,6 +40,7 @@ import com.furina.classtools.features.roster.RosterLogic
 import com.furina.classtools.features.roster.RosterMember
 import com.furina.classtools.features.roster.RosterState
 import com.furina.classtools.ui.components.EmptyState
+import com.furina.classtools.ui.components.tool.CtToolErrorState
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.theme.CtRadius
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -206,16 +208,14 @@ internal fun RosterErrorContent(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    Box(
+        modifier = modifier.padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        EmptyState(icon = Icons.Rounded.ErrorOutline, title = "名单加载失败", message = message)
-        CtToolPrimaryButton(
-            text = "重试",
-            onClick = onRetry,
-            modifier = Modifier.widthIn(max = 220.dp),
+        CtToolErrorState(
+            title = "名单加载失败",
+            message = message,
+            onRetry = onRetry,
         )
     }
 }
@@ -250,3 +250,4 @@ internal fun RosterRefreshErrorBanner(
         }
     }
 }
+

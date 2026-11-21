@@ -55,6 +55,9 @@ import com.furina.classtools.ui.theme.HarmonyTokens
 import com.furina.classtools.ui.theme.rememberHarmonyColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 
+/** 工具页顶栏首屏的基础材质强度（滚动后继续加深到 1）。 */
+private const val CT_TOP_BAR_MIN_MATERIAL = 0.65f
+
 /**
  * 工具页统一顶栏（**沉浸光感 ULTRA_THIN**，2026-11-19 重构）。
  *
@@ -90,7 +93,8 @@ fun CtTopBar(
     val reduceMotion = rememberReduceMotion()
     val density = LocalDensity.current
     val target = if (light.enabled) {
-        CtTopBarLight.overlayProgress(scrollPx, density.density)
+        // 首屏也保留一档基础材质：跨页面顶栏观感一致（滚动后继续加深到 1）。
+        maxOf(CtTopBarLight.overlayProgress(scrollPx, density.density), CT_TOP_BAR_MIN_MATERIAL)
     } else {
         1f
     }
@@ -162,7 +166,7 @@ fun CtTopBar(
             Spacer(modifier = Modifier.width(CtSpace.xs))
             Text(
                 text = title,
-                style = CtText.heading.copy(fontWeight = FontWeight.Bold),
+                style = CtText.heading,
                 color = colors.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -364,3 +368,5 @@ private fun harmonyTintLocal(): Color {
         HarmonyTokens.TintTeal
     }
 }
+
+

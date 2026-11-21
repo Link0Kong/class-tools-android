@@ -77,6 +77,7 @@ import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolField
+import com.furina.classtools.ui.components.tool.CtToolErrorState
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.theme.CtMotion
@@ -239,28 +240,14 @@ internal fun VoteErrorContent(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    Box(
+        modifier = modifier.padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = Icons.Rounded.ErrorOutline,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(36.dp),
-        )
-        Text(
-            text = error.message,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        CtToolPrimaryButton(
-            text = "重试",
-            onClick = onRetry,
-            modifier = Modifier.widthIn(max = 240.dp),
+        CtToolErrorState(
+            title = "投票加载失败",
+            message = error.message,
+            onRetry = onRetry,
         )
     }
 }

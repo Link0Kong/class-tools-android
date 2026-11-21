@@ -96,6 +96,7 @@ import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
+import com.furina.classtools.ui.components.tool.CtToolErrorState
 import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.theme.CtPalette
@@ -411,20 +412,14 @@ fun PptListContent(
                 title = "演示",
                 onBack = onBack,
                 actions = {
-                    Button(
-                        onClick = onUpload,
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        shape = CtShapeTokens.pill,
-                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 0.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    ) {
+                    // 空态卡片里已经有 filled「上传 PPT」；顶栏这里只保留一个次要的图标入口，
+                    // 避免同屏出现两个同权重主操作（MD3 B2）。
+                    IconButton(onClick = onUpload) {
                         Icon(
                             imageVector = Icons.Rounded.CloudUpload,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
+                            contentDescription = "上传 PPT",
+                            modifier = Modifier.size(24.dp),
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text("上传 PPT", style = MaterialTheme.typography.labelLarge)
                     }
                 },
             )
@@ -892,20 +887,15 @@ private fun PptListEmpty(onUpload: () -> Unit) {
 
 @Composable
 private fun PptListError(message: String, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    Box(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        CtToolCard(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)) {
-            EmptyState(
-                icon = Icons.Rounded.ErrorOutline,
-                title = "加载失败",
-                message = message,
-            )
-            Spacer(Modifier.height(CtSpace.sm))
-            CtToolPrimaryButton(text = "重试", onClick = onRetry)
-        }
+        CtToolErrorState(
+            title = "加载失败",
+            message = message,
+            onRetry = onRetry,
+        )
     }
 }
 
@@ -967,3 +957,4 @@ private const val MIME_PPTX = "application/vnd.openxmlformats-officedocument.pre
 
 /** 供 MainNavHost 判断失败错误文案（上传中断 → 需重新选文件）。 */
 internal val PPT_UPLOAD_INTERRUPTED = DefaultPptRepository.FAIL_UPLOAD_MESSAGE
+

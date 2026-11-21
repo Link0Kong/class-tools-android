@@ -330,6 +330,7 @@ private fun GroupContent(
                         PrimaryActions(
                             step = state.step,
                             result = state.result,
+                            canRun = effectiveMembers.isNotEmpty(),
                             onRun = onRunGrouping,
                             onRegroup = onRegroup,
                             onBackToConfig = onBackToConfig,
@@ -378,6 +379,7 @@ private fun GroupContent(
                         PrimaryActions(
                             step = state.step,
                             result = state.result,
+                            canRun = effectiveMembers.isNotEmpty(),
                             onRun = onRunGrouping,
                             onRegroup = onRegroup,
                             onBackToConfig = onBackToConfig,
@@ -595,6 +597,7 @@ private fun NumberStepper(
 private fun PrimaryActions(
     step: GroupStep,
     result: GroupResult?,
+    canRun: Boolean,
     onRun: () -> Unit,
     onRegroup: () -> Unit,
     onBackToConfig: () -> Unit,
@@ -605,6 +608,7 @@ private fun PrimaryActions(
         GroupStep.CONFIG -> CtToolPrimaryButton(
             text = "开始分组",
             onClick = onRun,
+            enabled = canRun,
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -823,3 +827,4 @@ private fun validateConfig(config: GroupConfig, members: List<GroupMember>): Str
         is GroupValidation.Valid -> null
         is GroupValidation.Invalid -> validation.error.message
     }
+

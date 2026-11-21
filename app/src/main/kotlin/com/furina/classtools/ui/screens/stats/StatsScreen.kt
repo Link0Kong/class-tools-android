@@ -67,6 +67,7 @@ import com.furina.classtools.data.visits.VisitsSnapshot
 import com.furina.classtools.ui.components.CtIconAction
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.EmptyState
+import com.furina.classtools.ui.components.tool.CtToolErrorState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.expressive.CtChipOption
@@ -99,6 +100,18 @@ private val TREND_PLOT_HEIGHT = 88.dp
  * @param forcedErrorMessage 预览注入：失败态
  * @param initialRange 预览注入：初始范围（正式入口默认今天）
  */
+/** 把数据库/网络原文收敛成用户可读文案（不再把 column/SQL 报错直接展示）。 */
+private fun statsFriendlyError(raw: String?): String {
+    val text = raw.orEmpty()
+    return when {
+        text.isBlank() -> "数据服务暂时不可用，请稍后重试"
+        text.contains("does not exist", ignoreCase = true) ||
+            text.contains("column ", ignoreCase = true) ||
+            text.contains("SQL", ignoreCase = true) -> "数据服务暂时不可用，请稍后重试"
+        else -> text
+    }
+}
+
 @Composable
 fun StatsScreen(
     onBack: () -> Unit,
@@ -200,21 +213,17 @@ fun StatsScreen(
                         text = "加载访问统计…",
                     )
 
-                    phase == StatsPhase.FAILED -> Column(
+                    phase == StatsPhase.FAILED -> Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        EmptyState(
-                            icon = Icons.Rounded.Insights,
+                        CtToolErrorState(
                             title = "读取统计失败",
-                            message = errorMessage ?: "请稍后重试",
+                            message = statsFriendlyError(errorMessage),
+                            onRetry = { reloadToken += 1 },
                         )
-                        TextButton(onClick = { reloadToken += 1 }) {
-                            Text("重试")
-                        }
                     }
 
                     else -> StatsContent(
@@ -969,3 +978,4 @@ private fun RatioBar(
         )
     }
 }
+

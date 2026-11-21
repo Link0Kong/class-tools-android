@@ -89,6 +89,7 @@ import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
+import com.furina.classtools.ui.components.tool.CtToolErrorState
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.theme.CtRadius
@@ -335,6 +336,7 @@ fun HomeworkScreen(
                                     onToggle = { item -> toggleDone(item) },
                                     onOpen = { item -> detail = item },
                                     onRemind = onRemindHomework?.let { cb -> { item -> cb(item.row) } },
+                                    onRefresh = { refresh() },
                                     onScrollPx = { px -> ctTopBarScrollPx = px },
                                 )
                             }
@@ -416,8 +418,6 @@ private fun HomeworkFilterTabs(
 ) {
     val scope = rememberCoroutineScope()
     val filters = HomeworkFilter.entries
-    val total = filters.size
-    val progress = pagerState.currentPage + pagerState.currentPageOffsetFraction
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -442,20 +442,6 @@ private fun HomeworkFilterTabs(
                 )
             }
         }
-        if (total > 1) {
-            Spacer(Modifier.height(3.dp))
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(3.dp)) {
-                val slot = maxWidth * (1f / total)
-                Box(
-                    modifier = Modifier
-                        .offset(x = slot * progress)
-                        .width(slot)
-                        .height(3.dp)
-                        .clip(CtShapeTokens.pill)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)),
-                )
-            }
-        }
     }
 }
 
@@ -471,6 +457,7 @@ private fun HomeworkFilterPage(
     onToggle: (HomeworkItem) -> Unit,
     onOpen: (HomeworkItem) -> Unit,
     onRemind: ((HomeworkItem) -> Unit)? = null,
+    onRefresh: () -> Unit = {},
     onScrollPx: (Float) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
@@ -498,11 +485,24 @@ private fun HomeworkFilterPage(
     ) {
         if (items.isEmpty()) {
             item(key = "empty") {
-                EmptyState(
-                    icon = Icons.AutoMirrored.Rounded.Assignment,
-                    title = if (allEmpty) "暂无作业" else "没有符合条件的作业",
-                    message = if (allEmpty) "老师发布后会出现在这里" else "试试其他筛选",
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    EmptyState(
+                        icon = Icons.AutoMirrored.Rounded.Assignment,
+                        title = if (allEmpty) "暂无作业" else "没有符合条件的作业",
+                        message = if (allEmpty) "老师发布后会出现在这里" else "试试其他筛选",
+                    )
+                    if (allEmpty) {
+                        Spacer(Modifier.height(CtSpace.sm))
+                        CtToolPrimaryButton(
+                            text = "刷新",
+                            onClick = onRefresh,
+                            modifier = Modifier.fillMaxWidth(0.6f),
+                        )
+                    }
+                }
             }
         } else {
             grouped.forEach { (label, groupItems) ->
@@ -653,17 +653,15 @@ private fun DuePill(text: String, tone: HomeworkDueTone) {
 
 @Composable
 private fun HomeworkErrorContent(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    Box(
+        modifier = modifier.padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        EmptyState(
-            icon = Icons.Rounded.ErrorOutline,
+        CtToolErrorState(
             title = "作业加载失败",
             message = message,
+            onRetry = onRetry,
         )
-        CtToolPrimaryButton(text = "重试", onClick = onRetry, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -776,3 +774,4 @@ private fun AttachmentRow(attachment: HomeworkAttachmentMeta) {
 
 /** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
 private enum class Phase { LOADING, READY, FAILED }
+

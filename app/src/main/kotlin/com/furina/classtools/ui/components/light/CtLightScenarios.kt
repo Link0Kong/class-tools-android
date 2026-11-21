@@ -55,6 +55,9 @@ import com.furina.classtools.ui.theme.CtTopBarLight
 import com.furina.classtools.ui.theme.rememberCtColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 
+/** 工具页顶栏首屏的基础材质强度（滚动后继续加深到 1）。 */
+private const val CT_TOP_BAR_MIN_MATERIAL = 0.65f
+
 // =============================================================================
 // 沉浸光感 · 场景容器（页面只使用这些容器，不手写材质参数）
 //
@@ -104,7 +107,12 @@ fun CtLightTopBar(
     scrollPx: Float = 0f,
 ) {
     val density = LocalDensity.current
-    val target = CtTopBarLight.overlayProgress(scrollPx, density.density)
+    // 2026-11-21 统一工具页顶栏：首屏也保留一档基础材质（0.65），滚动后再加深到 1。
+    // 之前首屏 0 → 有的页面标题直接浮在极光上、有的页面是实色条，跨页观感不一致。
+    val target = maxOf(
+        CtTopBarLight.overlayProgress(scrollPx, density.density),
+        CT_TOP_BAR_MIN_MATERIAL,
+    )
     val reduceMotion = rememberReduceMotion()
     val progress by animateFloatAsState(
         targetValue = target,
@@ -141,7 +149,7 @@ fun CtLightTopBar(
             Spacer(modifier = Modifier.width(CtSpace.xs))
             Text(
                 text = title,
-                style = CtText.heading.copy(fontWeight = FontWeight.Bold),
+                style = CtText.heading,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -326,3 +334,4 @@ private fun GlowSpot(color: Color, alpha: Float, modifier: Modifier = Modifier) 
         ),
     )
 }
+

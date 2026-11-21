@@ -855,7 +855,10 @@ fun NoticesScreen(
                                     ) {
                                         if (content.isEmpty) {
                                             // 放进 LazyColumn 以保留下拉刷新（空态也能刷新 / 加载更多）
-                                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                            LazyColumn(
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentPadding = PaddingValues(top = 16.dp),
+                                            ) {
                                                 if (pageBanner != null) {
                                                     item(key = "offline-banner") { pageBanner() }
                                                 }
@@ -1077,7 +1080,7 @@ private fun NoticeMinimalHeader(
         ) {
         Surface(
             onClick = onBack,
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(48.dp),
             shape = CircleShape,
             color = scheme.surfaceContainerHigh.copy(alpha = 0.72f),
             contentColor = scheme.onSurface,
@@ -1086,7 +1089,7 @@ private fun NoticeMinimalHeader(
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "返回",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }
@@ -1094,7 +1097,6 @@ private fun NoticeMinimalHeader(
         Text(
             text = "班级通知",
             style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
             color = scheme.onBackground,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -1110,7 +1112,6 @@ private fun NoticeMinimalHeader(
                 Text(
                     text = totalCount.toString(),
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                 )
             }
@@ -1139,7 +1140,7 @@ private fun NoticeHeaderIconButton(
     active: Boolean,
     onClick: () -> Unit,
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
         Icon(
             imageVector = icon,
             contentDescription = description,
@@ -1362,8 +1363,11 @@ private fun NoticeStatCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val labelColor = if (active) scheme.onPrimaryContainer.copy(alpha = 0.72f) else scheme.onSurfaceVariant
+    val isZeroValue = value == "0" || value == "—"
     val valueColor = when {
         active -> scheme.onPrimaryContainer
+        // 0 不用红/强调色：只有真实存在积压时才用语义色（避免「0 项异常」也一片红）。
+        isZeroValue -> scheme.onSurface
         filter == NoticeCardFilter.URGENT -> scheme.error
         filter == NoticeCardFilter.LONGTERM -> scheme.secondary
         filter == NoticeCardFilter.LATEST -> scheme.tertiary
@@ -2691,3 +2695,5 @@ private fun NoticeSkeletonCard(index: Int) {
 
 /** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
 private enum class Phase { LOADING, READY, FAILED }
+
+

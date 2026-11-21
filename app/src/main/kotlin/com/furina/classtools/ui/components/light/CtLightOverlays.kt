@@ -35,8 +35,8 @@ fun ctLightSheetContainerColor(): Color {
     if (!light.enabled) return c.containerLow
     val spec = light.spec(CtLightScene.SHEET)
     val base = if (c.dark) CtPalette.DarkContainer else CtPalette.Container
+    // 弹层必须不透明：0.94 的透明底会让下页文字透上来（实机截图确认「幽灵文字」）。
     return blendToward(base, c.primary, spec.tintAlpha * 0.5f)
-        .copy(alpha = spec.textSafeSurfaceAlpha.coerceAtLeast(0.94f))
 }
 
 /** 对话框容器色（与弹层同档，略更实一些以便承载表单）。 */
@@ -47,8 +47,8 @@ fun ctLightDialogContainerColor(): Color {
     if (!light.enabled) return c.containerHigh
     val spec = light.spec(CtLightScene.DIALOG)
     val base = if (c.dark) CtPalette.DarkContainerHigh else CtPalette.ContainerHigh
+    // 对话框同样不透明，避免表单底下透出页面内容。
     return blendToward(base, c.primary, spec.tintAlpha * 0.5f)
-        .copy(alpha = spec.textSafeSurfaceAlpha.coerceAtLeast(0.96f))
 }
 
 /** 对话框/弹层统一形状（28dp 圆角）。 */
@@ -139,3 +139,4 @@ fun CtLightAlertDialog(
         },
     )
 }
+

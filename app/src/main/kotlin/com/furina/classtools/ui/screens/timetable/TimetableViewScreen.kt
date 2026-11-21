@@ -56,6 +56,7 @@ import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -366,18 +367,18 @@ fun TimetableViewScreen(
     )
 
     val rangeText = TimetableWeekLogic.weekRangeLabel(termStart, displayWeek)
-    val sourceLabel = buildString {
-        displayWeek?.let { append("第 $it 周") }
-        when {
-            source == TtSource.PERSONAL -> append(" · 个人课表")
-            fromCache -> append(" · 本机缓存")
-            else -> append(" · 公共课表")
-        }
-        if (rangeText.isNotBlank()) {
-            append(" · ")
-            append(rangeText)
-        }
-    }
+    // 用 parts.joinToString 而不是「先拼 · 再拼内容」：没有周次时不再出现行首的「· 公共课表」。
+    val sourceLabel = buildList {
+        displayWeek?.let { add("第 $it 周") }
+        add(
+            when {
+                source == TtSource.PERSONAL -> "个人课表"
+                fromCache -> "本机缓存"
+                else -> "公共课表"
+            },
+        )
+        if (rangeText.isNotBlank()) add(rangeText)
+    }.joinToString(" · ")
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -2159,7 +2160,7 @@ private fun TimetableErrorState(message: String, kind: TtFailureKind?, onRetry: 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-            FilledTonalButton(onClick = onRetry, shape = CtShapeTokens.pill) { Text("重试") }
+            Button(onClick = onRetry, shape = CtShapeTokens.pill) { Text("重试") }
         }
     }
 }

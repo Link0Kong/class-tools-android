@@ -397,10 +397,6 @@ private fun RosterCategoryTabs(
 ) {
     val scope = rememberCoroutineScope()
     val categories = MemberCategory.entries
-    val total = categories.size
-    // pager 的「连续页位置」：跟手拖动/spring 吸附期间指示条一起走。
-    val progress = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
-        .coerceIn(0f, (total - 1).toFloat())
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -421,24 +417,6 @@ private fun RosterCategoryTabs(
                         }
                     },
                     modifier = Modifier.weight(1f),
-                )
-            }
-        }
-        if (total > 1) {
-            Spacer(Modifier.height(3.dp))
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp),
-            ) {
-                val slot = maxWidth * (1f / total)
-                Box(
-                    modifier = Modifier
-                        .offset(x = slot * progress)
-                        .width(slot)
-                        .height(3.dp)
-                        .clip(CtShapeTokens.pill)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)),
                 )
             }
         }
