@@ -1,5 +1,27 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-21 · 1.0.0-beta29 / vc112：OPPO 推送 MCS 接收权限 + 推送状态自查
+
+> 用户反馈：「手机为 ColorOS（OnePlus PYB110 / Android 17），收不到通知」；真机安装修复包后
+> 「通知设置 → 系统推送」显示 **OPPO 推送：注册失败（错误码 16）**。
+
+- **根因 1（已修）**：`AndroidManifest.xml` 只声明了 OPPO 回调 Service，漏掉官方接入要求的两个 MCS 接收权限
+  `com.coloros.mcs.permission.RECIEVE_MCS_MESSAGE` / `com.heytap.mcs.permission.RECIEVE_MCS_MESSAGE`。
+  ColorOS/一加/realme 的系统推送服务通过它们投递注册回调与通知；缺失时 `register` 拿不到 RegistrationID
+  （云端 `push_tokens` 长期 0 条 `provider=oppo`）。已在 Manifest 补齐（`aapt2 dump permissions` 可见）。
+- **根因 2（控制台，需用户在 OPPO 开放平台改）**：补权限后真机进入签名校验并返回 **16 = Invalid Signature**。
+  OPPO「应用签名」需要填**证书 MD5**：本仓库 release 证书为 `fd87bb879e78fc7c8c39dc9bdf8b2ef5`
+  （此前文档误按「SHA-1 前 32 位」核对，口径错误）。控制台填对后重开 App 即可注册成功。
+- **新增自查能力**（`data/push/PushStatusDiag.kt`）：
+  - 「我的 → 通知设置」新增「系统推送（应用关闭后）」卡片，展示 OPPO / vivo 的注册状态与错误码
+    （未配置 / 本机不支持 / 注册中 / 已注册（…末 4 位）/ 注册失败（错误码 N））；
+  - 登录后自动向 `client_diag` 上报一条 `check=push_status`（只含状态与错误码，不含 token/学号），
+    可远程排查，不必截图或连 adb；
+  - OPPO 错误码文案修正：16 = 签名无效（APK 签名与开放平台登记不一致），不是 AppSecret 问题。
+- **验证**：修复包（beta26 基础上）真机已从「无 regId」推进到「签名校验 16」，证明权限链路生效；
+  本版在 beta28（vc111）基础上顺延为 **beta29（vc112）**，避免被更新渠道覆盖。
+- 文档：`docs/OPPO_PUSH.md` 补充 §11 修复记录与 §11.1 错误码 16 处置。
+
 ## 2026-11-21 · 1.0.0-beta27 / vc110：宿舍目录改为云端读取（修复「部分宿舍无法显示」）
 
 > 用户 2026-11-21 反馈：「修复安卓端无法显示部分宿舍的问题」。

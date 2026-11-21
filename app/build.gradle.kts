@@ -162,9 +162,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 111
-    // 测试版本 27：宿舍目录改为云端读取（修复「部分宿舍无法显示」）。
-        versionName = "1.0.0-beta28"
+        versionCode = 112
+    // 测试版本 28：OPPO 推送补 MCS 接收权限 + 推送状态自查（ColorOS 真机错误码可见）。
+        versionName = "1.0.0-beta29"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。

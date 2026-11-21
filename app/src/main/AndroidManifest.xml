@@ -13,6 +13,11 @@
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <!-- 重启后重新调度本地提醒（WorkManager 自身已声明，此处显式保留可读性） -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- OPPO / Heytap 推送（MCS 通道）：官方快速接入要求声明这两个接收权限，
+         否则系统推送服务无法把注册回调/通知消息投递给应用（ColorOS/一加/realme）。
+         2026-11-21 修复：此前缺失 → OPPO 推送注册拿不到 regId（云端 0 台设备）。 -->
+    <uses-permission android:name="com.coloros.mcs.permission.RECIEVE_MCS_MESSAGE" />
+    <uses-permission android:name="com.heytap.mcs.permission.RECIEVE_MCS_MESSAGE" />
 
     <!--
       App 内更新（检测更新 → 下载 APK → 系统安装器确认安装）：

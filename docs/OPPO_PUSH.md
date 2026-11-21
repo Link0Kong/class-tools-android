@@ -217,3 +217,47 @@ $env:ANDROID_HOME='C:\AndroidToolchain\sdk'
 - 非 ColorOS 设备（含多数模拟器）`isSupportPush=false` → 不注册；系统级保活/自启策略仍可能影响到达（国内 ROM 通用限制）。
 - 通知点击定位依赖该通知在通知列表已加载页内（最多额外加载 1 页）；极旧通知可能只进入通知页不展开详情（页面有提示语义，不崩溃）。
 - 当前未实现「推送开关」（用户要求的是接入 SDK；如需开关可后续加本机偏好并跳过 register）。
+
+## 11. 2026-11-21 修复：缺少 MCS 接收权限 + 推送状态可见化
+
+> 用户反馈「手机为 ColorOS（OnePlus PYB110 / Android 17），但收不到通知」；云端 `push_tokens` 仍为 0 台 OPPO。
+
+**根因（已确认的缺陷）**：Manifest 只声明了 OPPO 回调 Service，**没有声明官方接入要求的两个接收权限**：
+
+```xml
+<!-- app/src/main/AndroidManifest.xml -->
+<uses-permission android:name="com.coloros.mcs.permission.RECIEVE_MCS_MESSAGE" />
+<uses-permission android:name="com.heytap.mcs.permission.RECIEVE_MCS_MESSAGE" />
+```
+
+OPPO/一加/realme 的系统推送服务（MCS）通过这两个权限向应用投递注册回调与通知消息；缺失时
+`HeytapPushManager.register` 拿不到 RegistrationID（云端自然没有 `provider=oppo` 行），
+即使服务端 AppKey/MasterSecret 鉴权成功也无法到达。已补上（release APK 合并后可在
+`aapt2 dump permissions` 看到两条）。
+
+**同时新增的自查能力**（`data/push/PushStatusDiag.kt`）：
+- 「我的 → 通知设置」新增「系统推送（应用关闭后）」卡片，直接显示 OPPO / vivo 的**上次注册状态与错误码**
+  （未配置 / 本机不支持 / 注册中 / 已注册（…末 4 位）/ 注册失败（错误码 N））；
+- App 启动并登录后自动向 `client_diag` 上报一条 `check=push_status` 诊断（只含状态与错误码，不含 token/学号），
+  便于服务端远程排查，不必让用户截图或连 adb。
+
+**验证顺序**：安装带修复的 APK → 打开 App 登录 → 看「通知设置」里的 OPPO 推送状态 → 若显示
+`注册失败（错误码 N）`，按 N 对照 OPPO 开放平台（应用签名/包名/推送服务开通状态）处理。
+
+### 11.1 真机反馈：注册失败（错误码 16）= 应用签名不一致
+
+2026-11-21 晚，装有上述修复包的 ColorOS 真机（OnePlus PYB110 / Android 17）在
+「我的 → 通知设置 → 系统推送」显示 **OPPO 推送：注册失败（错误码 16）**。
+
+- 官方状态码表（`ICallBackResultService.onRegister` 等同表）：**16 = Invalid Signature / 签名校验不通过**
+  （[OPPO 状态码定义](https://open.oppomobile.com/documentation/page/info?id=11224)）。
+- 说明 SDK 已走到「签名校验」这一步（MCS 权限、设备支持、AppKey/AppSecret 均已通过），
+  但 APK 签名与 OPPO 开放平台登记的「应用签名」不一致。
+- 本仓库 release 证书指纹（与更新渠道 beta25 及本次修复包一致）：
+  - **MD5：`fd87bb879e78fc7c8c39dc9bdf8b2ef5`**（OPPO 后台「应用签名」要填这个 32 位 MD5）
+  - SHA-1：`aa6d41754e38b9ad9aaaf65a98f189e1b368946b`
+  - SHA-256：`974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a`
+- 修复：OPPO 开放平台 → 应用信息 → **应用签名**（正式/调试两个都填，或至少「正式签名」）填上面的 MD5 →
+  保存后约 5 分钟生效 → 手机结束 App 进程重开 → 状态应变为「已注册」。
+- 注意：此前文档记录的「调试签名与 release 证书 SHA-1 前 32 位一致」是错误口径——
+  OPPO 要的是**证书 MD5（32 位）**，不是 SHA-1 前缀。

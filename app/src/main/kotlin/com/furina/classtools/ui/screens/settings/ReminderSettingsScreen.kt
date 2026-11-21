@@ -46,6 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.permission.PermissionType
+import com.furina.classtools.data.push.PushProviderStatus
+import com.furina.classtools.data.push.PushStatusDiag
+import com.furina.classtools.data.push.PushStatusSnapshot
 import com.furina.classtools.data.reminder.ReminderActions
 import com.furina.classtools.data.reminder.ReminderDiagnostics
 import com.furina.classtools.data.reminder.ReminderRuntime
@@ -143,6 +146,13 @@ fun ReminderSettingsScreen(
                     onCheckedChange = { value -> update { it.copy(enabled = value) } },
                     onOpenPermissions = onOpenPermissions,
                 )
+
+                // 系统推送状态（应用关闭后能否收到）：OPPO / vivo 厂商通道的真实注册状态 + 错误码。
+                // 之前「收不到推送」时无法自查，这里把状态直接展示出来；只读本机状态、不上传 token。
+                NotifySection("系统推送（应用关闭后）")
+                NotifyGroup {
+                    PushStatusRow(snapshot = PushStatusDiag.snapshot(context))
+                }
 
                 NotifySection("作业提醒")
                 NotifyGroup {
@@ -609,5 +619,56 @@ private fun LeadChips(
                 label = { Text(labelOf(minutes)) },
             )
         }
+    }
+}
+
+/**
+ * 系统推送状态行（OPPO / vivo 厂商通道）：
+ * - 显示上次注册状态与错误码（如「注册失败（错误码 33）」），用于排查应用关闭后收不到推送；
+ * - 只读本机 SharedPreferences，不含 token/学号；点「刷新状态」重新读取；
+ * - 非 ColorOS / vivo 设备显示「本机不支持」，这类机型应用被杀后收不到系统推送，只能靠本机提醒。
+ */
+@Composable
+private fun PushStatusRow(snapshot: PushStatusSnapshot) {
+    val pushContext = androidx.compose.ui.platform.LocalContext.current
+    var current by remember(snapshot) { mutableStateOf(snapshot) }
+    Column(modifier = Modifier.padding(16.dp)) {
+        Text(
+            "应用关闭后的通知依赖厂商系统推送通道。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        PushStatusLine("OPPO 推送", current.oppo)
+        Spacer(Modifier.height(4.dp))
+        PushStatusLine("vivo 推送", current.vivo)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "仅 ColorOS / vivo 设备支持应用关闭后接收；其他机型只有本机提醒（被系统清理后可能收不到）。" +
+                "重开 App 会自动重新注册。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(
+            onClick = { current = PushStatusDiag.snapshot(pushContext) },
+            modifier = Modifier.heightIn(min = 48.dp),
+        ) { Text("刷新状态") }
+    }
+}
+
+@Composable
+private fun PushStatusLine(name: String, status: PushProviderStatus) {
+    val bad = status.state == "FAILED" || status.state == "UNSUPPORTED"
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            name,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.width(96.dp),
+        )
+        Text(
+            status.label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (bad) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
