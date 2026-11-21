@@ -197,9 +197,15 @@ fun CtToolSegmented(
                     onClick = { onSelect(index) },
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 44.dp),
+                        .heightIn(min = 48.dp),
                     shape = CtShapeTokens.pill,
-                    color = if (selected) colors.card else Color.Transparent,
+                    // 深色下轨道与选中块都用 colors.card 时会完全看不出选中（beta24 实机发现）：
+                    // 深色选中块升一档 containerHigh，浅色保持白底。
+                    color = if (selected) {
+                        if (colors.dark) MaterialTheme.colorScheme.surfaceContainerHigh else colors.card
+                    } else {
+                        Color.Transparent
+                    },
                     contentColor = if (selected) colors.textPrimary else colors.textSecondary,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -352,7 +358,7 @@ fun CtToolChip(
     val colors = rememberHarmonyColors()
     Surface(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 40.dp),
+        modifier = modifier.heightIn(min = 48.dp),
         shape = CircleShape,
         color = if (selected) {
             harmonyTint(MaterialTheme.colorScheme.primary)
@@ -410,3 +416,4 @@ fun CtToolErrorState(
         CtToolPrimaryButton(text = retryText, onClick = onRetry, modifier = Modifier.fillMaxWidth())
     }
 }
+
