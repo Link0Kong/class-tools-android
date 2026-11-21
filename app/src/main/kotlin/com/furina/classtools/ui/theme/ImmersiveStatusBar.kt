@@ -1,6 +1,7 @@
 package com.furina.classtools.ui.theme
 
 import android.content.Context
+import android.os.Build
 import android.view.Window
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -140,8 +141,15 @@ fun CtImmersiveStatusBar(
     } else {
         null
     }
-    val blurSigmaDp = remember(selection, light.capability, imageBitmap) {
-        if (imageBitmap == null) 0f else ctBackgroundBlurSigma(selection, light.capability)
+    // 背景模糊只看设备能力，不再受「沉浸光感」开关影响（否则固定 Off 后模糊永久失效）。
+    val backgroundBlurCapability = remember(view) {
+        ctBackgroundBlurCapabilityOf(
+            sdkInt = Build.VERSION.SDK_INT,
+            hardwareAccelerated = runCatching { view.isHardwareAccelerated }.getOrDefault(true),
+        )
+    }
+    val blurSigmaDp = remember(selection, backgroundBlurCapability, imageBitmap) {
+        if (imageBitmap == null) 0f else ctBackgroundBlurSigma(selection, backgroundBlurCapability)
     }
     val veilAlpha = remember(dark) { if (dark) 0.66f else 0.46f }
 
@@ -233,3 +241,4 @@ private fun statusBarHeightPx(context: Context): Int {
  * 既避免页面内容/顶栏返回按钮贴屏幕顶边，也不至于明显压缩首屏。
  */
 private val CtTopBreathing = 10.dp
+

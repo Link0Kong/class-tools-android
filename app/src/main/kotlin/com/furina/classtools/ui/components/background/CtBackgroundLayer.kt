@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.background.CtBackgroundColors
 import com.furina.classtools.data.background.CtBackgroundPreset
@@ -25,6 +26,7 @@ import com.furina.classtools.data.background.ctBackgroundColorsOf
 import com.furina.classtools.ui.components.light.CtLightBackdrop
 import com.furina.classtools.ui.theme.CtLightFields
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
+import com.furina.classtools.ui.theme.ctBackgroundBlurCapabilityOf
 import com.furina.classtools.ui.theme.LocalCtLight
 import com.furina.classtools.ui.theme.rememberCtColors
 
@@ -53,8 +55,15 @@ fun CtBackgroundLayer(
         // 图片不可用（文件被删/非法）→ 自动回退预设，不出现「白屏背景」。
         ctBackgroundColorsOf(selection, dark, imageAvailable = image != null)
     }
-    val blurSigma = remember(selection, image, light.capability) {
-        if (image == null) 0f else ctBackgroundBlurSigma(selection, light.capability)
+    val view = LocalView.current
+    val backgroundBlurCapability = remember(view) {
+        ctBackgroundBlurCapabilityOf(
+            sdkInt = android.os.Build.VERSION.SDK_INT,
+            hardwareAccelerated = runCatching { view.isHardwareAccelerated }.getOrDefault(true),
+        )
+    }
+    val blurSigma = remember(selection, image, backgroundBlurCapability) {
+        if (image == null) 0f else ctBackgroundBlurSigma(selection, backgroundBlurCapability)
     }
 
     // 2026-11-20 沉浸光感 v2：预设背景改为「光场」（base + 4 团品牌柔光斑 + 流光 + 暗角）。
@@ -156,3 +165,4 @@ internal fun fallbackVeilAlpha(dark: Boolean): Float = if (dark) 0.85f else 0.90
 
 /** 便捷：`Bitmap` → Compose `ImageBitmap`（已在 IO 解码，转换很轻）。 */
 fun android.graphics.Bitmap.asComposeImageBitmap(): ImageBitmap = this.asImageBitmap()
+

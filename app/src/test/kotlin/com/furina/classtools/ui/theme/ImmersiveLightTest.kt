@@ -102,6 +102,14 @@ class ImmersiveLightTest {
     }
 
     @Test
+    fun `背景模糊能力不受沉浸光感开关影响`() {
+        assertEquals(CtLightCapability.FULL, ctBackgroundBlurCapabilityOf(35, true))
+        assertEquals(CtLightCapability.DEGRADED, ctBackgroundBlurCapabilityOf(30, true))
+        assertEquals(CtLightCapability.DEGRADED, ctBackgroundBlurCapabilityOf(31, false))
+        assertEquals(CtLightCapability.OFF, ctBackgroundBlurCapabilityOf(25, true))
+    }
+
+    @Test
     fun `模糊层预算常驻 2 层 含弹层最多 3 层`() {
         assertEquals(2, CtLightBudget.allowedLayers(CtLightCapability.FULL, overlays = 0))
         assertEquals(3, CtLightBudget.allowedLayers(CtLightCapability.FULL, overlays = 1))

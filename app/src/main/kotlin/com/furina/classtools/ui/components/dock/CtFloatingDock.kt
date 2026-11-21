@@ -151,33 +151,24 @@ fun CtFloatingDock(
     // 2026-11-20 沉浸光感 v2：浮岛改用统一材质引擎（THIN 档 + 真模糊 + 点光源高光 + 折射亮边），
     // 不再按明暗自建两套手绘材质 —— 深浅色差异全部由 CtGlassTable 表达（深色更实、亮边代替投影）。
     val dockShape = RoundedCornerShape(CtRadius.hero)
-    // 2026-11-21 M3：底栏从「半透明玻璃浮岛」改为 surfaceContainer 实心悬浮条。
-    // 边框只保留 1dp outlineVariant，避免深色下与页面糊在一起，也不再有内容透字。
-    val glass = Modifier
-        .shadow(3.dp, dockShape, clip = false)
-        .clip(dockShape)
-        .background(MaterialTheme.colorScheme.surfaceContainer)
-        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f), dockShape)
+    // M3 NavigationBar：整宽、80dp、surfaceContainer，无圆角/无阴影。
+    // 仍保留跟手指示器动画，但外观按标准导航栏而不是悬浮玻璃条。
     val pillShadowElevation = 0.dp
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            // M3 floating toolbar：距窗口边缘 ≥16dp（横向）；纵向在导航栏 inset 之上再留 8dp。
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .windowInsetsPadding(WindowInsets.navigationBars),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 480.dp)
-                .then(glass),
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainer,
         ) {
             androidx.compose.foundation.layout.BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // 200% 字体下允许底栏随文案长高（不再固定 64dp 裁掉标签）。
+                    // 200% 字体下允许底栏随文案长高。
                     .heightIn(min = CtDockLogic.DOCK_HEIGHT_DP.dp),
             ) {
                 val itemWidth = maxWidth / destinations.size

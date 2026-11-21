@@ -397,6 +397,21 @@ fun ctLightCapabilityOf(
 }
 
 /**
+ * 背景图片模糊能力：只由「设备是否支持 GPU 模糊」决定，**不受沉浸光感开关影响**。
+ *
+ * 2026-11-21：移除沉浸光感选择后主题固定 Off，若继续复用 [ctLightCapabilityOf]，
+ * 背景模糊会被误判为不可用（用户反馈「模糊选择不起作用」）。
+ */
+fun ctBackgroundBlurCapabilityOf(
+    sdkInt: Int,
+    hardwareAccelerated: Boolean = true,
+): CtLightCapability = when {
+    sdkInt < 26 -> CtLightCapability.OFF
+    sdkInt >= CT_LIGHT_BLUR_MIN_SDK && hardwareAccelerated -> CtLightCapability.FULL
+    else -> CtLightCapability.DEGRADED
+}
+
+/**
  * 模糊层预算（性能红线）：单屏同一时刻最多允许多少个「大面积模糊层」。
  *
  * 官方约束「避免大面积使用材质，多层叠加会显著增加 GPU 负载与功耗」；
@@ -599,3 +614,4 @@ class CtLightContext(
 val LocalCtLight = staticCompositionLocalOf {
     CtLightContext(CtLightSetting.Default, CtLightCapability.FULL)
 }
+
