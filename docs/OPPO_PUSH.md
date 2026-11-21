@@ -283,3 +283,18 @@ OPPO 开放平台的「应用签名 / OPPOSign」是**应用签名摘要经 OPPO
 
 **操作**：OPPO 开放平台 → 应用信息 → 「OPPOSign / 应用签名」填 `BEDF093E86536CB7DB36CCCDBFCB0EA0`
 → 保存（约 5 分钟生效）→ 手机结束 App 进程重开 → 状态应变为「已注册」。
+
+### 11.3 每个版本自动计算（beta31 起）
+
+发布流水线已内置，**每个 release 都会算**，不再依赖手工打开 GUI：
+
+```text
+assembleRelease → computeOppoSign → publishUpdateChannel
+```
+
+- 脚本：`scripts/oppo_sign.py`，调用官方 `OPPOSign.jar` 的
+  `ApkSignatureUtils.getOPPOSign(cert.getEncoded())`（无窗口）；
+- 结果：`app/build/outputs/opposign.txt` / `opposign.json`，并打印 `OPPOSIGN <32位大写>`；
+- Jar 路径：默认本机官方工具路径，可用 `-Pct.oppoSignJar=...` 覆盖；
+- 版本号递增后若换了签名证书，OPPOSign 会变化，必须同步更新 OPPO 开放平台；
+- 仅本地编译可用 `-Pct.skipOppoSign=true` 跳过（正式发版不允许跳过）。

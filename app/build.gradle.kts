@@ -162,9 +162,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 113
+        versionCode = 114
     // 测试版本 28：OPPO 推送补 MCS 接收权限 + 推送状态自查（ColorOS 真机错误码可见）。
-        versionName = "1.0.0-beta30"
+        versionName = "1.0.0-beta31"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -392,6 +392,38 @@ tasks.matching { it.name == "assembleRelease" }.configureEach {
     finalizedBy(publishUpdateChannel)
 }
 
+// ----------------------------------------------------------------------------
+// OPPOSign（OPPO 开放平台「应用签名」）：每个 release 都必须用官方 OPPOSign.jar 计算。
+// OPPOSign.exe 是 JavaFX GUI；scripts/oppo_sign.py 调用 jar 的
+// ApkSignatureUtils.getOPPOSign(cert.getEncoded())，无窗口、可进发布流水线。
+// Jar 路径可用 -Pct.oppoSignJar=... 覆盖；OPPOSIGN 值写入 app/build/outputs/opposign.txt。
+// ----------------------------------------------------------------------------
+val oppoSignJar = providers.gradleProperty("ct.oppoSignJar")
+    .orElse("C:\\\\Users\\\\Ko_Li\\\\Downloads\\\\cc227743e4c29d116c22d545fe486c29\\\\OPPOSign\\\\bin\\\\OPPOSign.jar")
+    .get()
+val oppoSignScript = rootProject.projectDir.resolve("scripts/oppo_sign.py")
+val computeOppoSign = tasks.register<Exec>("computeOppoSign") {
+    group = "release"
+    description = "用 OPPO 官方 OPPOSign.jar 计算 release APK 的 OPPOSign"
+    val apk = layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
+    val pythonExe = providers.gradleProperty("ct.python").orElse("python").get()
+    val skip = providers.gradleProperty("ct.skipOppoSign").orNull?.toBoolean() ?: false
+    enabled = !skip
+    onlyIf { apk.isFile }
+    commandLine(
+        pythonExe,
+        oppoSignScript.absolutePath,
+        "--apk", apk.absolutePath,
+        "--jar", oppoSignJar,
+    )
+}
+tasks.matching { it.name == "publishUpdateChannel" }.configureEach {
+    mustRunAfter(computeOppoSign)
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    finalizedBy(computeOppoSign)
+}
+
 
 baselineProfile {
     saveInSrc = true
@@ -448,6 +480,9 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+
+
 
 
 
