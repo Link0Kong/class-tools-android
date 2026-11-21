@@ -439,7 +439,7 @@ fun HomeScreen(
                             .statusBarsPadding()
                             .padding(horizontal = com.furina.classtools.ui.theme.HarmonyTokens.PagePadding)
                             // 顶部/底部渐隐：内容滑到标题栏/浮岛附近时逐像素淡出（官方参考的顶部悬浮行为）。
-                            .ctRootPageEdgeFade()
+                            .ctRootPageEdgeFade(scrollState.value.toFloat())
                             .verticalScroll(scrollState)
                             .padding(top = com.furina.classtools.ui.theme.HarmonyTokens.BreathTop, bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
@@ -1124,3 +1124,4 @@ private fun HomeMutedLine(text: String) {
         overflow = TextOverflow.Ellipsis,
     )
 }
+

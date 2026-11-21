@@ -21,8 +21,13 @@ fun ComponentActivity.enableClassToolsEdgeToEdge() {
         navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
     )
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // 状态栏显示时，系统默认会给状态栏加一层对比度蒙层（通栏方角），
+        // 叠在悬浮顶栏后面会露出「四角方形边框」（2026-11-21 实机复现）。
+        window.isStatusBarContrastEnforced = false
         window.isNavigationBarContrastEnforced = false
     }
     @Suppress("DEPRECATION")
     window.navigationBarColor = Color.TRANSPARENT
+    @Suppress("DEPRECATION")
+    window.statusBarColor = Color.TRANSPARENT
 }

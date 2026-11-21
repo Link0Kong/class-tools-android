@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.vote
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
 import com.furina.classtools.ui.theme.CtShape
@@ -453,7 +455,7 @@ fun VoteDetailScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -839,3 +841,4 @@ private fun VoteDetailActionBar(
         }
     }
 }
+

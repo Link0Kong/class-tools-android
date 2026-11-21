@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
@@ -43,6 +45,7 @@ import com.furina.classtools.ui.components.light.CtLightInk
 import com.furina.classtools.ui.theme.CtLightLevel
 import com.furina.classtools.ui.theme.CtLightScene
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtSize
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
@@ -87,117 +90,63 @@ fun CtTopBar(
     compact: Boolean = true,
     scrollPx: Float = CT_TOP_BAR_FULL_SCROLL_PX,
 ) {
-    val colors = rememberHarmonyColors()
-    val light = LocalCtLight.current
-    val darkSurface = LocalCtDarkTheme.current
-    val reduceMotion = rememberReduceMotion()
-    val density = LocalDensity.current
-    val target = if (light.enabled) {
-        // 首屏也保留一档基础材质：跨页面顶栏观感一致（滚动后继续加深到 1）。
-        maxOf(CtTopBarLight.overlayProgress(scrollPx, density.density), CT_TOP_BAR_MIN_MATERIAL)
-    } else {
-        1f
-    }
-    val progress by animateFloatAsState(
-        targetValue = target,
-        animationSpec = if (reduceMotion) snap() else tween(200),
-        label = "ctTopBarLightOverlay",
-    )
-    val overlay = progress.coerceIn(0f, 1f)
     // 注意：状态栏安全区由页面统一用 statusBarsPadding() 处理（避免顶栏与页面双重 inset）；
-    // 顶栏只负责自身的悬浮材质与渐变融合带。
+    // 2026-11-21：顶栏改为 M3 surfaceContainer 实心悬浮条，四角完整圆角、正文不透。
+    // 旧实现是通栏方形材质 + 底部渐变，状态栏显示时会在悬浮条四角露出方角，并让内容透字。
     Column(modifier = modifier.fillMaxWidth()) {
-        Row(
+        Surface(
             modifier = Modifier
+                .padding(horizontal = CtSpace.sm, vertical = CtSpace.xs)
                 .fillMaxWidth()
-                .then(
-                    if (overlay <= 0.001f) {
-                        Modifier
-                    } else {
-                        if (darkSurface) {
-                            // 深色：顶栏用更大的模糊 + 更高的底色不透明度，并补一层 1px 高光边，
-                            // 避免 beta11 深色下「顶栏与页面同色 → 看不出浮层」（用户反馈灰糊）。
-                            Modifier
-                                .graphicsLayer { alpha = overlay }
-                                .ctLightMaterial(
-                                    CtLightScene.TOP_BAR,
-                                    bodySafe = false,
-                                    levelOverride = CtLightLevel.THICK,
-                                )
-                                .drawWithCache {
-                                    onDrawBehind {
-                                        drawRect(
-                                            color = CtLightInk.highlight.copy(alpha = 0.14f * overlay),
-                                            topLeft = Offset(0f, 0f),
-                                            size = androidx.compose.ui.geometry.Size(size.width, 1f),
-                                        )
-                                    }
-                                }
-                        } else {
-                            Modifier
-                                .graphicsLayer { alpha = overlay }
-                                .ctLightMaterial(CtLightScene.TOP_BAR, bodySafe = false)
-                        }
-                    },
-                )
-                .height(CtSize.topBarHeight)
-                .padding(start = CtSpace.xs, end = CtSpace.sm),
-            verticalAlignment = Alignment.CenterVertically,
+                .height(CtSize.topBarHeight),
+            shape = RoundedCornerShape(CtRadius.hero),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shadowElevation = 3.dp,
         ) {
-            if (onBack != null) {
-                Surface(
-                    onClick = onBack,
-                    modifier = Modifier.size(CtSize.backHit),
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    contentColor = colors.textPrimary,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "返回",
-                            modifier = Modifier.size(CtSize.icon),
-                        )
-                    }
-                }
-            } else {
-                Spacer(modifier = Modifier.width(CtSize.backHit))
-            }
-            Spacer(modifier = Modifier.width(CtSpace.xs))
-            Text(
-                text = title,
-                style = CtText.heading,
-                color = colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { heading() },
-            )
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(CtSpace.xxs),
-            ) {
-                actions()
-            }
-        }
-        // 渐变融合带（浮层下方，材质向下淡出到页面内容）：官方「渐变模糊延展顶部」。
-        if (light.enabled && overlay > 0.001f) {
-            val spec = light.spec(CtLightScene.TOP_BAR)
-            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .graphicsLayer { alpha = overlay }
-                    .height(spec.gradientFade)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.92f * spec.surfaceAlpha),
-                                Color.Transparent,
-                            ),
-                        ),
-                    ),
-            )
+                    .fillMaxSize()
+                    .padding(start = CtSpace.md, end = CtSpace.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (onBack != null) {
+                    Surface(
+                        onClick = onBack,
+                        modifier = Modifier.size(CtSize.backHit),
+                        shape = CircleShape,
+                        color = Color.Transparent,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "返回",
+                                modifier = Modifier.size(CtSize.icon),
+                            )
+                        }
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(CtSize.backHit))
+                }
+                Spacer(modifier = Modifier.width(CtSpace.xs))
+                Text(
+                    text = title,
+                    style = CtText.heading,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { heading() },
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(CtSpace.xxs),
+                ) {
+                    actions()
+                }
+            }
         }
     }
 }
@@ -368,5 +317,6 @@ private fun harmonyTintLocal(): Color {
         HarmonyTokens.TintTeal
     }
 }
+
 
 

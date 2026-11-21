@@ -44,7 +44,7 @@ fun CtBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     showDragHandle: Boolean = true,
-    containerColor: Color = com.furina.classtools.ui.components.light.ctLightSheetContainerColor(),
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     CtBottomSheetWithState(
@@ -72,7 +72,7 @@ fun CtBottomSheetWithState(
     sheetState: SheetState,
     modifier: Modifier = Modifier,
     showDragHandle: Boolean = true,
-    containerColor: Color = com.furina.classtools.ui.components.light.ctLightSheetContainerColor(),
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     ModalBottomSheet(
@@ -179,3 +179,4 @@ fun CtBottomSheetFooter(
         }
     }
 }
+

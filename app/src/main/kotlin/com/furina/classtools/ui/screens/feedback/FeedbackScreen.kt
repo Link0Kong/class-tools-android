@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.feedback
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
 import com.furina.classtools.ui.theme.CtShape
@@ -275,7 +277,7 @@ fun FeedbackScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -598,3 +600,4 @@ private enum class FeedbackPhase { LOADING, READY, FAILED }
 
 @Suppress("unused")
 private val defaultRepositoryHint = DefaultFeedbackRepository::class.simpleName
+

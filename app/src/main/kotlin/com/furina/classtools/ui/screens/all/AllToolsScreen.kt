@@ -337,7 +337,7 @@ fun AllToolsScreen(
                         .statusBarsPadding()
                         .padding(horizontal = pagePadding)
                         .hazeSource(hazeState)
-                        .ctRootPageEdgeFade()
+                        .ctRootPageEdgeFade(scrollState.value.toFloat())
                         .verticalScroll(scrollState),
                 ) {
                     HarmonyAllToolsHeader(

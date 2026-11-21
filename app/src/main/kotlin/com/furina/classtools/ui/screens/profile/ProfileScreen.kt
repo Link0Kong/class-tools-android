@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.profile
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import androidx.compose.ui.platform.LocalDensity
 import com.furina.classtools.ui.components.CtRootHeader
 import com.furina.classtools.ui.components.CtStickyHeaderBar
@@ -318,7 +320,7 @@ fun ProfileScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .hazeSource(meHazeState)
-                        .ctRootPageEdgeFade()
+                        .ctRootPageEdgeFade(meScrollState.value.toFloat())
                         .verticalScroll(meScrollState)
                         .padding(bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp),
@@ -394,7 +396,7 @@ fun ProfileScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
             hostState = snackbar,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -1192,3 +1194,5 @@ private fun rememberHideStatusBar(
     val value by store.hideStatusBar.collectAsStateWithLifecycle(initialValue = fallback)
     return value
 }
+
+

@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.homework
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.background
@@ -380,7 +382,7 @@ fun HomeworkScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -774,4 +776,5 @@ private fun AttachmentRow(attachment: HomeworkAttachmentMeta) {
 
 /** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
 private enum class Phase { LOADING, READY, FAILED }
+
 

@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.roster
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.background
@@ -373,7 +375,7 @@ fun RosterScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -595,3 +597,4 @@ private fun MemberRow(
         }
     }
 }
+

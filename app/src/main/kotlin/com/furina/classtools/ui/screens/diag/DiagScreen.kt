@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.diag
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.core.animateFloatAsState
@@ -511,7 +513,7 @@ fun DiagScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -1624,3 +1626,4 @@ private fun DiagV21ExpandedLightPreview() {
 private fun DiagV21FoldedDarkPreview() {
     DiagV21PreviewFrame(dark = true, expandedIds = emptySet())
 }
+

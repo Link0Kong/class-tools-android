@@ -230,9 +230,44 @@ fun CtGlassSurface(
     boost: Float = LocalCtBackgroundCardBoost.current,
     body: Boolean = true,
     frosted: Boolean = true,
+    /** 2026-11-21 M3：默认改为实色 surfaceContainer，不再用半透明玻璃（内容透字/对比度问题）。 */
+    opaque: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val c = rememberCtColors()
+    if (opaque) {
+        // M3 filled card：surfaceContainerHigh 实色，浅色/深色都由主题角色给出。
+        val container = MaterialTheme.colorScheme.surfaceContainerHigh
+        val border = if (c.dark) {
+            androidx.compose.foundation.BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+            )
+        } else {
+            null
+        }
+        if (onClick != null) {
+            Surface(
+                onClick = onClick,
+                modifier = modifier.fillMaxWidth(),
+                shape = shape,
+                color = container,
+                contentColor = c.textPrimary,
+                border = border,
+                shadowElevation = 0.dp,
+            ) { content() }
+        } else {
+            Surface(
+                modifier = modifier.fillMaxWidth(),
+                shape = shape,
+                color = container,
+                contentColor = c.textPrimary,
+                border = border,
+                shadowElevation = 0.dp,
+            ) { content() }
+        }
+        return
+    }
     val press = rememberCtGlassPress()
     // 内容材质档位：承载正文 → REGULAR（常规厚度，正文区域更实）；装饰性外壳 → THIN。
     val level = remember(body) {

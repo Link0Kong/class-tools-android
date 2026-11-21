@@ -3,6 +3,7 @@ package com.furina.classtools.ui.components.dock
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -149,22 +151,13 @@ fun CtFloatingDock(
     // 2026-11-20 沉浸光感 v2：浮岛改用统一材质引擎（THIN 档 + 真模糊 + 点光源高光 + 折射亮边），
     // 不再按明暗自建两套手绘材质 —— 深浅色差异全部由 CtGlassTable 表达（深色更实、亮边代替投影）。
     val dockShape = RoundedCornerShape(CtRadius.hero)
+    // 2026-11-21 M3：底栏从「半透明玻璃浮岛」改为 surfaceContainer 实心悬浮条。
+    // 边框只保留 1dp outlineVariant，避免深色下与页面糊在一起，也不再有内容透字。
     val glass = Modifier
-        // 先垫一层**不透明**页面底色（按浮岛圆角裁剪；导航浮层允许不实透）：玻璃再透也只是本页色调，
-        // 不会把下方卡片的文字「印」到浮岛上（用户反馈的「幽灵文字」）。
+        .shadow(3.dp, dockShape, clip = false)
         .clip(dockShape)
-        .background(MaterialTheme.colorScheme.background)
-        .ctGlass(
-            level = CtLightLevel.ULTRA_THICK,
-            shape = dockShape,
-            bodySafe = true,
-            haze = hazeState,
-            glow = 0.35f,
-            fillBoost = 0.30f,
-        )
-        .then(if (hazeState == null && glassModifier != null) glassModifier else Modifier)
-    val borderColor = MaterialTheme.colorScheme.outlineVariant
-    val dockShadowElevation = 0.dp
+        .background(MaterialTheme.colorScheme.surfaceContainer)
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f), dockShape)
     val pillShadowElevation = 0.dp
 
     Box(
@@ -185,16 +178,7 @@ fun CtFloatingDock(
                 modifier = Modifier
                     .fillMaxWidth()
                     // 200% 字体下允许底栏随文案长高（不再固定 64dp 裁掉标签）。
-                    .heightIn(min = CtDockLogic.DOCK_HEIGHT_DP.dp)
-                    .pointerInput(Unit) {
-                        awaitPointerEventScope {
-                            while (true) {
-                                val event = awaitPointerEvent(PointerEventPass.Initial)
-                                val change = event.changes.firstOrNull()
-                                specularX = if (change != null && change.pressed) change.position.x else -1f
-                            }
-                        }
-                    },
+                    .heightIn(min = CtDockLogic.DOCK_HEIGHT_DP.dp),
             ) {
                 val itemWidth = maxWidth / destinations.size
                 // M3 指示器固定 64 × 32dp（不随 item 宽度拉伸）；item 仍占满 1/N。
@@ -205,45 +189,6 @@ fun CtFloatingDock(
                     CtDockLogic.indicatorCenterX(0, itemWidthPx) +
                         indicatorPosition * itemWidthPx -
                         pillWidthPx / 2f
-
-                // 顶部镜面高光（液态玻璃折射感；置于内容之下）
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(26.dp)
-                        .align(androidx.compose.ui.Alignment.TopCenter)
-                        .background(
-                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.surfaceBright.copy(alpha = if (translucent) 0.55f else 0.2f),
-                                    Color.Transparent,
-                                ),
-                            ),
-                        ),
-                )
-
-                // 光场：高光跟随触摸（ColorOS 光场设计；不消费事件，不影响点击）
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(CtDockLogic.DOCK_HEIGHT_DP.dp)
-                        .drawBehind {
-                            val x = if (specularX >= 0f) specularX else size.width * 0.5f
-                            val alpha = if (specularX >= 0f) 0.22f else 0f
-                            if (alpha > 0f) {
-                                drawRect(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(
-                                            specularColor.copy(alpha = alpha),
-                                            Color.Transparent,
-                                        ),
-                                        center = Offset(x, size.height * 0.18f),
-                                        radius = size.width * 0.42f,
-                                    ),
-                                )
-                            }
-                        },
-                )
 
                 // 选中指示器（M3：64 × 32dp，secondaryContainer；与图标带 32dp 对齐，不压文案）
                 Surface(
@@ -381,3 +326,5 @@ private fun DockItem(
         }
     }
 }
+
+

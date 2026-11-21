@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -75,9 +76,18 @@ fun Modifier.ctFadeEdges(
  * 便捷：根页面（工作台 / 工具 / 我的）的滚动内容统一使用这套渐隐带。
  *
  * 顶部 96dp 覆盖「状态栏留白 + 悬浮玻璃条」，底部 128dp 覆盖「浮岛 + 导航栏」。
+ *
+ * **2026-11-21 修复**：顶部渐隐必须随滚动量展开。此前固定 96dp，
+ * 首屏标题（约 57dp 起）正好落在渐隐带里，滑到最顶也一直半透明。
+ * 现在 [scrollPx]=0 时顶部渐隐为 0，滚过 96dp 后才达到完整强度。
  */
 @Composable
-fun Modifier.ctRootPageEdgeFade(): Modifier = ctFadeEdges(top = 96.dp, bottom = 128.dp)
+fun Modifier.ctRootPageEdgeFade(scrollPx: Float = 0f): Modifier {
+    val density = LocalDensity.current
+    val fullTopPx = with(density) { 96.dp.toPx() }
+    val progress = if (fullTopPx <= 0f) 0f else (scrollPx / fullTopPx).coerceIn(0f, 1f)
+    return ctFadeEdges(top = 96.dp * progress, bottom = 128.dp)
+}
 
 /** 滚动量 → 大标题折叠进度（0 = 全展开，1 = 完全收起）。纯函数，可单测。 */
 fun ctHeaderCollapseProgress(scrollPx: Float, distancePx: Float = 320f): Float {

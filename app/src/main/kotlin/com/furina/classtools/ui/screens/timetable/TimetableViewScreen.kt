@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.timetable
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.core.CubicBezierEasing
@@ -534,7 +536,7 @@ fun TimetableViewScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -2304,3 +2306,4 @@ private fun Modifier.timetableSwipe(
             }
         }
     }
+

@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.data
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
 import com.furina.classtools.ui.theme.CtShape
@@ -327,7 +329,7 @@ fun DataPrivacyScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -695,3 +697,4 @@ private fun shareExport(context: Context, export: PrivacyExport): String? = runC
 
 /** 页面内部阶段（四态中的加载/错误/空态由它承载）。 */
 private enum class PrivacyPhase { LOADING, READY, EMPTY, ERROR }
+

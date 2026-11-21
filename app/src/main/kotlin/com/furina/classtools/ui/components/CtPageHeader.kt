@@ -16,9 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,6 +46,7 @@ import com.furina.classtools.ui.components.glass.rememberCtGlassPress
 import com.furina.classtools.ui.theme.CtLightLevel
 import com.furina.classtools.ui.theme.CtLightScene
 import com.furina.classtools.ui.theme.CtMotion
+import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtTypeScale
@@ -194,15 +198,14 @@ fun CtStickyHeaderBar(
     contentIsDark: Boolean = false,
 ) {
     if (progress <= 0.001f) return
-    val c = rememberCtColors()
     val reduceMotion = rememberReduceMotion()
     val p by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
         animationSpec = if (reduceMotion) snap() else tween(160),
         label = "ctStickyHeader",
     )
-    val foreground = if (contentIsDark) Color.White else c.textPrimary
-    val shape = CtShape.pill
+    val foreground = MaterialTheme.colorScheme.onSurface
+    val barShape = RoundedCornerShape(CtRadius.hero)
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -210,48 +213,39 @@ fun CtStickyHeaderBar(
             .graphicsLayer { alpha = p }
             .padding(horizontal = CtSpace.pagePhone, vertical = CtSpace.xs),
     ) {
-        // 顶部融合带：材质向页面淡出（官方「渐变模糊延展顶部」），
-        // 同时提升悬浮条下缘文字的对比度（否则卡片文字从玻璃下透出会糊成一片）。
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .drawBehind {
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            0f to c.background.copy(alpha = 0.72f),
-                            0.55f to c.background.copy(alpha = 0.28f),
-                            1f to Color.Transparent,
-                        ),
-                    )
-                },
-        )
-        Row(
+        // 2026-11-21：不再用 matchParentSize 的方形渐变 + 半透明玻璃。
+        // 那条矩形底衬会在悬浮条四角露出方角，并让下方卡片文字透过玻璃形成重影。
+        // 改为 M3 surfaceContainer 的实心悬浮条：四角干净、正文不透。
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .ctGlass(
-                    level = CtLightLevel.THIN,
-                    shape = shape,
-                    bodySafe = true,
-                    haze = hazeState,
-                )
-                .padding(start = CtSpace.lg, end = CtSpace.xs),
-            verticalAlignment = Alignment.CenterVertically,
+                .height(56.dp),
+            shape = barShape,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            contentColor = foreground,
+            shadowElevation = 3.dp,
         ) {
-            Text(
-                text = title,
-                // M3 small app bar 标题 = Title Large（22sp / 400）。
-                style = MaterialTheme.typography.titleLarge,
-                color = foreground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
             Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = CtSpace.lg, end = CtSpace.xs),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(CtSpace.xxs),
             ) {
-                actions()
+                Text(
+                    text = title,
+                    // M3 small app bar 标题 = Title Large（22sp / 400）。
+                    style = MaterialTheme.typography.titleLarge,
+                    color = foreground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(CtSpace.xxs),
+                ) {
+                    actions()
+                }
             }
         }
     }
@@ -365,3 +359,4 @@ fun CtTopFadeScrim(height: Int = 56, modifier: Modifier = Modifier) {
             ),
     )
 }
+

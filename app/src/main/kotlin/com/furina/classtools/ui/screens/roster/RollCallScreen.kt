@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.roster
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
 import com.furina.classtools.ui.theme.CtShape
@@ -381,7 +383,7 @@ fun RollCallScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -575,3 +577,4 @@ private enum class RollFilter(val label: String) {
     IN("到"),
     AB("假"),
 }
+

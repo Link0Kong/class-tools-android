@@ -2,6 +2,7 @@
 
 | 文件 | 内容 | 面向 |
 |---|---|---|
+| [`M3_REPLACEMENT_2026-11-21.md`](M3_REPLACEMENT_2026-11-21.md) | M3 组件替换：顶栏/卡片/底栏/对话框/弹层/Snackbar 的角色与实机核验 | 设计/评审 |
 | [`MD3_PAGE_AUDIT_2026-11-21.md`](MD3_PAGE_AUDIT_2026-11-21.md) | 18 个工具入口与可达子页的逐页截图核验：结果表、统一修复项、仍存在的产品级问题 | 设计/评审 |
 | [`MD3_ALIGNMENT_2026-11-21.md`](MD3_ALIGNMENT_2026-11-21.md) | 按 MD3 官方知识库的对齐报告：字阶 / 形状 / 间距 / 底栏的前后对照、保留的品牌决策、未完成待办 | 设计/评审 |
 | [`ANDROID17_DESIGN.md`](ANDROID17_DESIGN.md) | 设计原则、色彩体系（明/暗全量 token + 动态取色三层策略 + 对比度审计）、Roboto Flex/中文回退与 30 个类型样式、形状 scale 与变形规则、spring 动效数值与场景映射、25+ 组件规范、Android 17 适配（target 37 大屏/方向、edge-to-edge、预测返回、窗口尺寸类、模糊性能）、无障碍、QA 清单、来源与核实状态 | 设计/开发/评审 |
@@ -41,4 +42,5 @@
 | Android 17 / API 37 / target 37 大屏忽略方向与尺寸限制 | ✅ 与官方博客一致（2026-02-13；自 Android 16 起无新增变更，只禁止退出） | developer.android.google.cn blog |
 
 （其余「已核实」事实与来源逐条列在 `ANDROID17_DESIGN.md §10`。）
+
 

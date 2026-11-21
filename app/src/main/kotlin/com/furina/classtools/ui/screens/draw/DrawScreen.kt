@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.draw
 
+import com.furina.classtools.ui.components.CtSnackbarHost
+
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
 import com.furina.classtools.ui.theme.CtShape
@@ -320,7 +322,7 @@ fun DrawScreen(
                 shape = CtShape.input,
                 bodySafe = true,
             ),
-        ) { SnackbarHost(
+        ) { CtSnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -490,3 +492,4 @@ private enum class Phase { LOADING, READY, FAILED }
 private val WIDE_BREAKPOINT = 600.dp
 private const val PERSIST_DEBOUNCE_MS = 600L
 private const val MIN_DRAWING_FEEDBACK_MS = 150L
+

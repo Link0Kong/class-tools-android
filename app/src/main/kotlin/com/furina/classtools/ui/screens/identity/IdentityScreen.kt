@@ -428,18 +428,20 @@ fun IdentityScreen(
                 Spacer(modifier = Modifier.height(10.dp))
                 TextButton(
                     onClick = {
-                        uiState = IdentityUiState.Idle
-                        onVerified(
-                            Session(
-                                sid = studentId.ifBlank { "2024000001" },
-                                name = name.ifBlank { "开发预览" },
-                                token = "",
-                                debug = true,
-                            ),
-                        )
+                        uiState = IdentityUiState.Verifying
+                        scope.launch {
+                            uiState = when (val result = authRepository.verify("3260799999", "测试账号")) {
+                                is VerifyResult.Success -> {
+                                    onVerified(result.session)
+                                    IdentityUiState.Idle
+                                }
+
+                                is VerifyResult.Failure -> IdentityUiState.Error(result.message)
+                            }
+                        }
                     },
                 ) {
-                    Text("开发预览：跳过核验（仅 Debug 构建）")
+                    Text("测试账号登录（3260799999 / 测试账号）")
                 }
             }
 

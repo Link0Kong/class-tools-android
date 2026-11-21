@@ -89,7 +89,7 @@ fun CtLightAlertDialog(
     title: (@Composable () -> Unit)? = null,
     text: (@Composable () -> Unit)? = null,
     shape: Shape = CtLightDialogShape,
-    containerColor: Color = ctLightDialogContainerColor(),
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     iconContentColor: Color = MaterialTheme.colorScheme.secondary,
     titleContentColor: Color = MaterialTheme.colorScheme.onSurface,
     textContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -127,7 +127,7 @@ fun CtLightAlertDialog(
 ) {
     CtLightAlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text(text = title, style = MaterialTheme.typography.titleLarge) },
+        title = { Text(text = title, style = MaterialTheme.typography.headlineSmall) },
         text = text?.let { { Text(text = it, style = MaterialTheme.typography.bodyMedium) } },
         confirmButton = {
             TextButton(onClick = onConfirm) { Text(confirmText) }
@@ -139,4 +139,6 @@ fun CtLightAlertDialog(
         },
     )
 }
+
+
 
