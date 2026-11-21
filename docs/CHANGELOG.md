@@ -1,5 +1,23 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-22 · 1.0.0-beta32 / vc115：OPPO 推送 AppSecret 大小写修复（错误码 16）
+
+> 用户提供 OPPO 开放平台凭证后核对发现：**客户端内置 AppSecret 与开放平台原文大小写不一致**。
+
+- **根因**：`app/oppo.properties` 的 `oppo.appSecret` 为 `BCF077F313184549a21b09c3b3f36052`（前 8 位大写），
+  而开放平台 AppSecret 为 `bcf077f313184549a21b09c3b3f36052`（全小写）。OPPO SDK 在 `register(appKey, appSecret)`
+  后用**原样字符串**参与签名计算，服务端按注册时的 secret 校验 → `INVALID_SIGNATURE_SIGN`（错误码 16）。
+  账号服务（ECS `/account`）与 `briefdesk/secrets/oppo-push.json` 的 app_secret 已同步为小写。
+- **发布**：beta32（vc115）已上线 ECS+OSS；APK **6,091,398 B / SHA-256
+  `d934dce41be005e64c4cc776bfbc5b5e7027359bf384b3f0b8c432d2fd538751`**，`latest.json` 回读 vc115 一致；
+  全量单测 **1870 用例 / 0 失败 / 2 skipped**。
+- **账号绑定（同步排查）**：ECS 账号服务健康、`/opt/class-tools/account/oppo-account.json` 的
+  app_id/app_key/app_secret 与开放平台一致；日志只有 `GET /oppo/bindings` 轮询，**没有 `/oppo/exchange` 请求**，
+  说明绑定在手机端 OPPO 账号 SDK 授权阶段就失败了（未到服务端）。直接调用 OPPO 账号
+  `/oauth2/token/token-code`（appKey/appSecret + dummy code）仍返回 `2020003 invalid_client`
+  （大小写两种都是），需在开放平台「产品 → 账号服务」申请接入/激活并申请 openid 等能力；同时账号 SDK
+  也校验应用签名，签名登记修好后需一并复测。
+
 ## 2026-11-21 · 1.0.0-beta29 / vc112：OPPO 推送 MCS 接收权限 + 推送状态自查
 
 > 用户反馈：「手机为 ColorOS（OnePlus PYB110 / Android 17），收不到通知」；真机安装修复包后
@@ -945,7 +963,6 @@ otices?select=* 全表 13.9MB 超 10s 超时；改为最新 20 条分页首屏 +
 - 隐私合规：同意门禁 + 用户协议/隐私政策 + 数据与隐私页（导出我的数据/清除云端/清除本机）。
 - 修复：底部导航吞点击、抽签/分组返回状态丢失、课表空态文案三态、通知附件按需加载。
 - 交付：签名 Release APK（2.26 MB）+ 安装说明（桌面）。
-
 
 
 
