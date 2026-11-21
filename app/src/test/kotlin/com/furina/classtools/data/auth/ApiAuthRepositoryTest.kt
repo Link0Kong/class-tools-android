@@ -65,7 +65,7 @@ class ApiAuthRepositoryTest {
             ApiResponse(200, """{"ok":false,"reason":"姓名或学号不在班级名单中"}""")
         }
 
-        val result = repository(transport).verify("3260707003", "王五")
+        val result = repository(transport).verify("2024000004", "王五")
 
         val failure = result as VerifyResult.Failure
         assertEquals(VerifyErrorCode.INVALID_CREDENTIALS, failure.code)
@@ -78,7 +78,7 @@ class ApiAuthRepositoryTest {
             ApiResponse(401, """{"code":"PGRST301","message":"no token"}""")
         }
 
-        val failure = repository(transport).verify("3260707004", "赵六") as VerifyResult.Failure
+        val failure = repository(transport).verify("2024000005", "赵六") as VerifyResult.Failure
 
         assertEquals(VerifyErrorCode.INVALID_CREDENTIALS, failure.code)
     }
@@ -87,7 +87,7 @@ class ApiAuthRepositoryTest {
     fun `HTTP 5xx 映射为服务端错误`() = runTest {
         val transport = FakeTransport { ApiResponse(503, "") }
 
-        val failure = repository(transport).verify("3260707005", "钱七") as VerifyResult.Failure
+        val failure = repository(transport).verify("2024000006", "钱七") as VerifyResult.Failure
 
         assertEquals(VerifyErrorCode.SERVER_ERROR, failure.code)
     }
@@ -96,7 +96,7 @@ class ApiAuthRepositoryTest {
     fun `网络异常映射为 network`() = runTest {
         val transport = FakeTransport { throw IOException("offline") }
 
-        val failure = repository(transport).verify("3260707006", "孙八") as VerifyResult.Failure
+        val failure = repository(transport).verify("2024000007", "孙八") as VerifyResult.Failure
 
         assertEquals(VerifyErrorCode.NETWORK, failure.code)
     }
@@ -154,12 +154,12 @@ class ApiAuthRepositoryTest {
         val repo = ApiAuthRepository(api = testApiClient(FakeTransport { ApiResponse(200, "{}") }), now = { now })
         val result = repo.parseVerifyResponse(
             raw = """{"token":"t","ok":true}""",
-            fallbackSid = "3260707009",
+            fallbackSid = "2024000008",
             fallbackName = "周九",
             nowMs = now,
         )
         val session = (result as VerifyResult.Success).session
-        assertEquals("3260707009", session.sid)
+        assertEquals("2024000008", session.sid)
         assertEquals("周九", session.name)
         assertEquals(Session::class.java, session::class.java)
     }

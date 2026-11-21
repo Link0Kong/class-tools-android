@@ -18,7 +18,7 @@ class ClassMembersRepositoryTest {
           {"seat":2,"sid":"2024000003","name":"李四","role":"","badge":"","is_admin":false},
           {"seat":1,"sid":"2024000002","name":"张三","role":"副团支书","badge":"班委","is_admin":false},
           {"seat":3,"sid":"","name":"  ","role":"","badge":"","is_admin":false},
-          {"seat":4,"sid":"3260707004","name":"陈同学","role":"","badge":"","is_admin":true,"extra":"ignored"}
+          {"seat":4,"sid":"2024000005","name":"陈同学","role":"","badge":"","is_admin":true,"extra":"ignored"}
         ]
     """.trimIndent()
 
