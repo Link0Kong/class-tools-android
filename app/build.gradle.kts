@@ -162,9 +162,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 103
-    // 测试版本 20：诊断页间距按鸿蒙「间隔参数」补齐（摘要卡/卡片间/标题-正文/上报按钮）。
-        versionName = "1.0.0-beta20"
+        versionCode = 104
+    // 测试版本 21：电费「上次充值」跨区间查找并显示充值量。
+        versionName = "1.0.0-beta21"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -195,7 +195,7 @@ android {
         buildConfigField("String", "VIVO_PUSH_API_KEY", buildConfigString(vivoApiKey))
 
         // 测试版本标识（当前为「测试版本 8」）：App 内版本行使用。
-        buildConfigField("int", "TEST_VERSION", "20")
+        buildConfigField("int", "TEST_VERSION", "21")
         buildConfigField("String", "TEST_VERSION_LABEL", buildConfigString("测试版本"))
     }
 

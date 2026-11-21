@@ -135,6 +135,29 @@ class PowerStatsTest {
     }
 
     @Test
+    fun lastRecharge_usesFullHistoryNotSelectedRange() {
+        val points = listOf(
+            pp(100.0, now - 10 * 24 * hour),
+            pp(95.0, now - 9 * 24 * hour),
+            pp(120.0, now - 8 * 24 * hour),   // 充值 +25
+            pp(118.0, now - 7 * 24 * hour),
+            pp(130.0, now - 2 * 24 * hour),   // 最近充值 +12
+            pp(129.0, now - hour),
+        )
+        val rec = PowerStats.lastRecharge(points)
+        assertNotNull(rec)
+        assertEquals(now - 2 * 24 * hour, rec!!.t)
+        assertEquals(130.0, rec.reset, 0.001)
+        assertEquals(12.0, rec.delta, 0.001)
+
+        // 只看 24h 子窗口：没有上升 → 旧口径（区间 lastUp）拿不到；30d 全量能拿到（本次修复目标）。
+        assertNull(PowerStats.lastRecharge(points.filter { it.t >= now - 24 * hour }))
+        // 下降/持平不算充值
+        assertNull(PowerStats.lastRecharge(listOf(pp(130.0, now), pp(129.0, now + hour))))
+        assertNull(PowerStats.lastRecharge(listOf(pp(130.0, now), pp(130.0, now + hour))))
+    }
+
+    @Test
     fun rateFrom_skipsRechargeSegments() {
         val points = listOf(
             pp(100.0, 0),
@@ -241,6 +264,8 @@ class PowerStatsTest {
         val expected = (10.0 + 7.0) / (10.0 * 24 + 8.0 * 24) * 24
         assertEquals(expected, stats.rate!!, 0.001)
         assertNotNull(stats.lastRecharge)
+        assertEquals(62.0, stats.lastRecharge!!.reset, 0.001)
+        assertEquals(2.0, stats.lastRecharge!!.delta, 0.001)
     }
 
     @Test
@@ -413,6 +438,8 @@ class PowerStatsTest {
             listOf(pp(60.0, 0), pp(55.0, 12 * hour)),
             row,
         )
+        // 30d 跨区间最近充值：+20 度（充值后余额 80），不应显示 80.00 余额
+        val crossRange = RechargePoint(t = now - 2 * 24 * hour, reset = 80.0, delta = 20.0)
         val tiles = PowerStats.tilesOf(
             row = row,
             estimate = estimate,
@@ -420,14 +447,45 @@ class PowerStatsTest {
             range = PowerRange.H24,
             low = 30,
             slowUpdate = SlowUpdate(slow = false),
+            lastRecharge = crossRange,
+            zone = zone,
         )
         assertEquals(4, tiles.size)
         assertEquals("估算可用", tiles[0].label)
         assertEquals("20.0", tiles[0].value)
         assertEquals("低电阈值", tiles[2].label)
         assertTrue(tiles[2].clickable)
+        assertEquals("上次充值", tiles[3].label)
+        assertEquals("+20.00", tiles[3].value)
+        assertEquals("度", tiles[3].unit)
+        assertEquals("11-05 10:00", tiles[3].sub)
 
-        val slowEstimate = PowerEstimate(valid = true, rate = 1.0, days = 50.0, slow = true, ref = true)
+        // 未传跨区间结果时回退区间 lastUp，仍显示充值量（+10）
+        val rangeWithRecharge = PowerStats.deriveRange(
+            listOf(pp(50.0, now - 12 * hour), pp(60.0, now - 6 * hour), pp(59.0, now)),
+            row(59.0),
+        )
+        val fallback = PowerStats.tilesOf(
+            row = row(59.0),
+            estimate = estimate,
+            rangeStats = rangeWithRecharge,
+            range = PowerRange.H24,
+            low = 30,
+            slowUpdate = SlowUpdate(slow = false),
+            lastRecharge = null,
+            zone = zone,
+        )
+        assertEquals("+10.00", fallback[3].value)
+
+        // 慢频房回退 estimate.lastRecharge（30d slowStats 变化点）
+        val slowEstimate = PowerEstimate(
+            valid = true,
+            rate = 1.0,
+            days = 50.0,
+            slow = true,
+            ref = true,
+            lastRecharge = RechargePoint(t = now - 9 * 24 * hour, reset = 62.0, delta = 2.0),
+        )
         val slowTiles = PowerStats.tilesOf(
             row = null,
             estimate = slowEstimate,
@@ -435,9 +493,12 @@ class PowerStatsTest {
             range = PowerRange.D30,
             low = 30,
             slowUpdate = SlowUpdate(slow = true),
+            zone = zone,
         )
         assertTrue(slowTiles[0].ref) // 只有 est.valid && est.ref 才显示参考
         assertEquals("—", slowTiles[1].value)
+        assertEquals("+2.00", slowTiles[3].value)
+        assertEquals("10-29 10:00", slowTiles[3].sub)
     }
 
     @Test

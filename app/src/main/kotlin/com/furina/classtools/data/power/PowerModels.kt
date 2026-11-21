@@ -86,7 +86,7 @@ data class PowerPoint(
     val t: Long,
 )
 
-/** 充值/上升事件。 */
+/** 充值/上升事件：[reset]=充值后余额，[delta]=本次充值量（度）。 */
 data class RechargePoint(
     val t: Long,
     val reset: Double,

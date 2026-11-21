@@ -20,7 +20,8 @@ import kotlin.math.roundToLong
  * - 区间统计：跳过充值跳变；异常扣减（水费扣除/大跌）不计入用电；
  * - 估算：24h/7d 各自有效 → rate=0.65*r24+0.35*r7（仅一档用该档）；rate 下限 0.05 只作用于有效结果；
  * - 慢频房（13/16 号楼，24h 变化 <6 次）：30d 真实变化点分段统计 slowStats；
- * - 慢更新：24h 相邻 |Δq|>0.005 的变化次数 ≤2 → 「数据更新较慢 / 数据未更新」。
+ * - 慢更新：24h 相邻 |Δq|>0.005 的变化次数 ≤2 → 「数据更新较慢 / 数据未更新」；
+ * - 上次充值：取 30d 全量历史（=云端保留上限）最后一次电量上升的 `delta`（充值量），不随所选区间变化。
  */
 object PowerStats {
 
@@ -342,7 +343,11 @@ object PowerStats {
                 lastAt = list[i].t
             }
             if (list[i - 1].q - list[i].q < -0.05) {
-                lastRecharge = RechargePoint(t = list[i].t, reset = list[i].q)
+                lastRecharge = RechargePoint(
+                    t = list[i].t,
+                    reset = list[i].q,
+                    delta = round2(list[i].q - list[i - 1].q),
+                )
             }
         }
         val slow = changes <= 2
@@ -363,6 +368,27 @@ object PowerStats {
     /** 清洗采样：只留合法 {q,t} 并按时间升序（不插值、不改采样）。 */
     fun cleanPts(points: List<PowerPoint>): List<PowerPoint> =
         points.filter { it.q.isFinite() && it.t > 0 }.sortedBy { it.t }
+
+    /**
+     * 最近一次充值/上调：按时间升序扫描，取最后一次相邻上升（`Δq > [minDelta]`）。
+     *
+     * 与 [deriveRange] 的 `lastUp` 不同，本函数**不限制所选区间**：调用方传入 30d 全量历史
+     * （云端历史保留 30 天，见 `briefdesk/scripts/sync_power_cloud.py` 的 `HISTORY_KEEP_DAYS`），
+     * 因此用户切到 24h/7d 时「上次充值」仍能显示最近一次充值。
+     *
+     * @return [RechargePoint.delta] = 本次充值量（度），[RechargePoint.reset] = 充值后余额。
+     */
+    fun lastRecharge(points: List<PowerPoint>, minDelta: Double = 0.05): RechargePoint? {
+        val list = cleanPts(points)
+        var out: RechargePoint? = null
+        for (i in 1 until list.size) {
+            val diff = list[i].q - list[i - 1].q
+            if (diff.isFinite() && diff > minDelta) {
+                out = RechargePoint(t = list[i].t, reset = list[i].q, delta = round2(diff))
+            }
+        }
+        return out
+    }
 
     /** 窗口内相邻 |Δq| > CH 的次数。 */
     fun changesIn(points: List<PowerPoint>): Int {
@@ -397,7 +423,11 @@ object PowerStats {
             val dq = ev[i - 1].q - ev[i].q
             val dtH = (ev[i].t - ev[i - 1].t) / 3_600_000.0
             if (ev[i - 1].q - ev[i].q < -0.05) {
-                lastRecharge = RechargePoint(t = ev[i].t, reset = ev[i].q)
+                lastRecharge = RechargePoint(
+                    t = ev[i].t,
+                    reset = ev[i].q,
+                    delta = round2(ev[i].q - ev[i - 1].q),
+                )
                 continue
             }
             if (dq > 0.05 && dtH >= MIN_SEG_H) candidates.add(dq to dtH)
@@ -684,7 +714,13 @@ object PowerStats {
 
     // ---- 指标 tile / 计费 ----------------------------------------------------------
 
-    /** 4 个指标 tile（估算可用 / 区间用电 / 低电阈值 / 上次充值），慢频房规则同 web。 */
+    /**
+     * 4 个指标 tile（估算可用 / 区间用电 / 低电阈值 / 上次充值）。
+     *
+     * 「上次充值」优先使用调用方传入的**跨区间**结果 [lastRecharge]（30d 全量历史里的最后上升），
+     * 值显示 `+delta`（充值量，度），而不是充值后余额；切 24h/7d/30d 不变。
+     * 未传入（预览、30d 加载失败）时回退旧口径：慢频房 [PowerEstimate.lastRecharge]、实时房 [RangeStats.lastUp]。
+     */
     fun tilesOf(
         row: PowerRow?,
         estimate: PowerEstimate?,
@@ -692,6 +728,7 @@ object PowerStats {
         range: PowerRange,
         low: Int?,
         slowUpdate: SlowUpdate?,
+        lastRecharge: RechargePoint? = null,
         zone: ZoneId = ZoneId.systemDefault(),
     ): List<PowerTile> {
         val has = row != null
@@ -706,9 +743,11 @@ object PowerStats {
         val hasDrop = has && rangeStats?.drop != null && rangeStats.drop > 0
         val use = if (hasDrop) String.format(RR, "%.1f", rangeStats!!.drop) else "—"
         val useSub = if (isSlow && !hasDrop && rangeStats != null) "该区间无更新" else ""
-        val rec = if (isSlow) estimate?.lastRecharge else rangeStats?.lastUp
+        val rec = lastRecharge ?: if (isSlow) estimate.lastRecharge else rangeStats?.lastUp
+        val recAmount = rec?.delta?.takeIf { it.isFinite() && it > 0.0 }
+        val recAt = if (recAmount != null) rec.t else null
         val ref = if (isSlow) {
-            estimate != null && estimate.valid && estimate.ref
+            estimate.valid && estimate.ref
         } else {
             slowUpdate?.slow == true && days != "—"
         }
@@ -739,9 +778,9 @@ object PowerStats {
             PowerTile(
                 key = "recharge",
                 label = "上次充值",
-                value = if (rec != null) fmtQ(rec.reset) else "—",
-                unit = if (rec != null) "度" else "",
-                sub = if (rec != null) updText(rec.t, zone) else "暂无记录",
+                value = if (recAmount != null) "+${fmtQ(recAmount)}" else "—",
+                unit = if (recAmount != null) "度" else "",
+                sub = if (recAt != null) updText(recAt, zone) else "暂无记录",
             ),
         )
     }

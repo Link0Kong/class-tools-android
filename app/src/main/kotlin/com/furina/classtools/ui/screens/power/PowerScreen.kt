@@ -135,6 +135,8 @@ private const val TILE_KEY_USE = "use"
  * - 充值后趋势可读：区间内 `Δq>0.5` 的充值跳变 → 绘图值扣除累计充值（连续下降）、充值竖虚线、
  *   标题「· 已折算充值」、图例「充值 +N 度（已折算）」；y 轴按折算范围，**真实剩余**仍在图例/游标；
  * - 慢频房（13/16 号楼）：固定「日更」标记；30d 真实变化点 slowStats；估算「参考」；
+ * - 上次充值：跨区间口径——始终取 30d（云端保留的全部历史）最近一次电量上升，值显示**充值量** `+Δq` 度
+ *   （不是充值后余额），切 24h/7d/30d 不丢失；
  * - 慢更新：24h 变化 ≤2 次 → 「数据更新较慢 · 上次变化 …」/「数据未更新」；
  * - 隐私：仅展示楼栋+房间号；不显示姓名/学号；不导出、不分享。
  *
@@ -264,17 +266,15 @@ fun PowerScreen(
             onFailure = { if (histories[PowerRange.D7].isNullOrEmpty()) historyError = it },
         )
 
-        // 5) 30d（慢频房必需；或用户当前选中 30d）
-        if (slowRoom || range == PowerRange.D30) {
-            runCatchingHistory(
-                repository = repository,
-                sel = sel,
-                rangeKey = PowerRange.D30,
-                force = force,
-                onSuccess = { histories = histories + (PowerRange.D30 to it) },
-                onFailure = { if (histories[PowerRange.D30].isNullOrEmpty()) historyError = it },
-            )
-        }
+        // 5) 30d（始终加载：慢频房估算 + 「上次充值」跨区间查找都依赖 30d；云端历史只保留 30 天）
+        runCatchingHistory(
+            repository = repository,
+            sel = sel,
+            rangeKey = PowerRange.D30,
+            force = force,
+            onSuccess = { histories = histories + (PowerRange.D30 to it) },
+            onFailure = { if (histories[PowerRange.D30].isNullOrEmpty()) historyError = it },
+        )
 
         phase = PowerPhase.READY
         loadedRange = range
@@ -342,12 +342,25 @@ fun PowerScreen(
     }
     val slowUpdate = remember(history24) { PowerStats.slowUpdate(history24) }
     val rangeStats = remember(selectedHistory, rowValue) { PowerStats.deriveRange(selectedHistory, rowValue) }
+    // 「上次充值」跨区间口径：实时房取 30d 全量历史里的最后一次上升（不随所选区间变化）；
+    // 慢频房用 slowStats 的变化点结果（estimate.lastRecharge），避免日更采样噪声被当成充值。
+    val crossRangeRecharge = remember(history30, slowRoom) {
+        if (slowRoom) null else PowerStats.lastRecharge(history30)
+    }
     val trend = remember(selectedHistory, range) { PowerStats.trendLine(selectedHistory, PowerStats.trendLimit(range)) }
     val changeDots = remember(trend, slowRoom) {
         if (slowRoom) PowerStats.changeDots(trend.points) else emptyList()
     }
-    val tiles = remember(rowValue, estimate, rangeStats, range, low, slowUpdate) {
-        PowerStats.tilesOf(rowValue, estimate, rangeStats, range, low, slowUpdate)
+    val tiles = remember(rowValue, estimate, rangeStats, range, low, slowUpdate, crossRangeRecharge) {
+        PowerStats.tilesOf(
+            row = rowValue,
+            estimate = estimate,
+            rangeStats = rangeStats,
+            range = range,
+            low = low,
+            slowUpdate = slowUpdate,
+            lastRecharge = crossRangeRecharge,
+        )
     }
     val bill = remember(rangeStats) { PowerStats.billOf(rangeStats) }
     val ringArc = remember(rowValue, estimate) { PowerStats.ringArc(rowValue, estimate) }
