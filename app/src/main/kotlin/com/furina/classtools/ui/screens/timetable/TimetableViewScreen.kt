@@ -689,12 +689,13 @@ private fun CompactBodyV5(
     onExport: (() -> Unit)?,
     swipeModifier: Modifier,
 ) {
+    // 2026-11-21：紧凑模式不再整页 verticalScroll —— 周切换 + 周网格固定在一屏内，
+    // 网格按剩余高度压缩行高，进入页面即可看到完整一周（含周末 7 列）。
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = spec.horizontalPadding),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         WeekControlBar(
             displayWeek = grid.displayWeek,
@@ -711,9 +712,9 @@ private fun CompactBodyV5(
             onOpenSettings = onOpenSettings,
             onExport = onExport,
         )
-        NextSessionBar(plan = plan, dark = grid.dark, nowMillis = nowMillis)
         Box(
             modifier = swipeModifier
+                .weight(1f)
                 .fillMaxWidth()
                 .graphicsLayer {
                     translationX = swipeOffset
@@ -721,7 +722,7 @@ private fun CompactBodyV5(
                 },
         ) {
             when (viewMode) {
-                TimetableViewMode.WEEK -> WeekGridV5(grid = grid)
+                TimetableViewMode.WEEK -> WeekGridV5(grid = grid, fillHeight = true)
                 TimetableViewMode.DAY -> DayViewV5(
                     grid = grid,
                     plan = plan,
@@ -730,14 +731,6 @@ private fun CompactBodyV5(
                 )
             }
         }
-        AllCoursesCardV5(
-            snapshot = grid.snapshot,
-            termStart = grid.termStart,
-            week = grid.displayWeek,
-            dark = grid.dark,
-            collapsible = true,
-        )
-        Spacer(modifier = Modifier.height(CtSpace.lg))
     }
 }
 
@@ -1050,36 +1043,31 @@ private fun NextSessionBar(plan: TtPlan?, dark: Boolean, nowMillis: Long) {
 // =============================================================================
 
 @Composable
-private fun WeekGridV5(grid: TimetableGridContext) {
-    val weekendEmpty = remember(grid.snapshot, grid.termStart, grid.displayWeek) {
-        TtCalendar.coursesOnDay(grid.snapshot.c, grid.termStart, grid.displayWeek, 5).isEmpty() &&
-            TtCalendar.coursesOnDay(grid.snapshot.c, grid.termStart, grid.displayWeek, 6).isEmpty()
-    }
-    val days = remember(weekendEmpty) { (0 until TimetableLayout.visibleDayCount(weekendEmpty)).toList() }
+private fun WeekGridV5(grid: TimetableGridContext, fillHeight: Boolean = false) {
+    // 周视图始终展示 7 天；周末无课时不再隐藏，保证「进入即看到完整一周」。
+    val days = remember { (0 until 7).toList() }
     val showNow = grid.now != null && days.contains(grid.todayIndex)
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(CtRadius.card),
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
         Column {
-            if (weekendEmpty) {
-                Text(
-                    text = "周末无课，已隐藏周末列",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp),
-                )
-            }
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val fontScale = LocalDensity.current.fontScale
                 val metrics = remember(maxWidth, fontScale) {
                     TimetableLayout.metricsFor(maxWidth.value.toInt(), twoPane = grid.wide, fontScale = fontScale)
                 }
                 val labelWidth = metrics.labelWidthDp.dp
-                val rowHeight = metrics.rowHeightDp.dp
                 val headerHeight = metrics.headerHeightDp.dp
+                // 填入剩余高度：把行高压到一屏 12 节都能看见（下限 30dp，避免文字完全不可读）。
+                val rowHeight = if (fillHeight) {
+                    ((maxHeight - headerHeight - 2.dp) / TtPeriods.COUNT.toFloat())
+                        .coerceIn(30.dp, metrics.rowHeightDp.dp)
+                } else {
+                    metrics.rowHeightDp.dp
+                }
                 val available = maxWidth - labelWidth - 4.dp
                 val columnWidth = TimetableLayout.columnWidthDp(available.value, days.size).dp
                 val gridHeight = rowHeight * TtPeriods.COUNT

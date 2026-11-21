@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.AppContainer
 import com.furina.classtools.data.background.BackgroundStore
 import com.furina.classtools.data.background.LocalBackgroundStore
+import com.furina.classtools.data.remoteconfig.RemoteConfigRepository
 import com.furina.classtools.data.settings.LocalAppSettingsStore
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.CtImmersiveStatusBar
@@ -34,20 +35,24 @@ fun ClassToolsThemeHost(
     LaunchedEffect(backgroundStore) {
         runCatching { backgroundStore.restoreBitmap() }
     }
+    // 设置热更：启动时拉一次白名单配置；失败静默，不影响主题首帧。
+    LaunchedEffect(Unit) {
+        RemoteConfigRepository().fetch()?.let { config ->
+            runCatching { container.appSettings.applyRemoteConfig(config) }
+        }
+    }
     // 外观偏好存本机（不进 userdata）：壁纸取色 / 外观模式 / 隐藏状态栏均实时生效。
     val dynamicColor by container.appSettings.dynamicColor
         .collectAsStateWithLifecycle(initialValue = false)
     // 首帧用 SharedPreferences 镜像同步初始化，避免冷启动先按系统/默认渲染一帧再跳变。
     val initialAppearanceMode = remember { container.appSettings.startupAppearanceMode() }
     val initialHideStatusBar = remember { container.appSettings.startupHideStatusBar() }
-    val initialImmersiveLight = remember { container.appSettings.startupImmersiveLight() }
     val appearanceMode by container.appSettings.appearanceMode
         .collectAsStateWithLifecycle(initialValue = initialAppearanceMode)
     val hideStatusBar by container.appSettings.hideStatusBar
         .collectAsStateWithLifecycle(initialValue = initialHideStatusBar)
-    // 沉浸光感（强 / 均衡 / 弱 / 关闭）：写入后全应用即时生效（含所有深层页面与弹层）。
-    val immersiveLight by container.appSettings.immersiveLight
-        .collectAsStateWithLifecycle(initialValue = initialImmersiveLight)
+    // 2026-11-21：按 M3 标准移除「沉浸光感」选择，统一实色 surface（不再读本机档位）。
+    val immersiveLight = com.furina.classtools.ui.theme.CtLightSetting.Off
     // 外观模式：跟随系统 / 强制浅色 / 强制深色（我的 → 外观 三选一）。
     val darkTheme = appearanceMode.resolveDark(isSystemInDarkTheme())
 
@@ -68,3 +73,5 @@ fun ClassToolsThemeHost(
         }
     }
 }
+
+

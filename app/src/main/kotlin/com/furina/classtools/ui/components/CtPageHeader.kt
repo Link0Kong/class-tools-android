@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -205,30 +206,23 @@ fun CtStickyHeaderBar(
         label = "ctStickyHeader",
     )
     val foreground = MaterialTheme.colorScheme.onSurface
-    val barShape = RoundedCornerShape(CtRadius.hero)
     Box(
         modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .graphicsLayer { alpha = p }
-            .padding(horizontal = CtSpace.pagePhone, vertical = CtSpace.xs),
+            .graphicsLayer { alpha = p },
     ) {
-        // 2026-11-21：不再用 matchParentSize 的方形渐变 + 半透明玻璃。
-        // 那条矩形底衬会在悬浮条四角露出方角，并让下方卡片文字透过玻璃形成重影。
-        // 改为 M3 surfaceContainer 的实心悬浮条：四角干净、正文不透。
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
-            shape = barShape,
-            color = MaterialTheme.colorScheme.surfaceContainer,
+                .height(64.dp),
+            color = MaterialTheme.colorScheme.surface,
             contentColor = foreground,
-            shadowElevation = 3.dp,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = CtSpace.lg, end = CtSpace.xs),
+                    .padding(start = 16.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -266,7 +260,7 @@ fun CtGlassIconButton(
     modifier: Modifier = Modifier,
     tint: Color? = null,
     badge: Boolean = false,
-    size: Int = 44,
+    size: Int = 48,
 ) {
     val c = rememberCtColors()
     val press = rememberCtGlassPress()
@@ -286,13 +280,9 @@ fun CtGlassIconButton(
         Box(
             modifier = Modifier
                 .size(size.dp)
-                .ctGlassPointerLight(press)
-                .ctGlass(
-                    level = CtLightLevel.ULTRA_THIN,
-                    shape = CircleShape,
-                    bodySafe = false,
-                    pressState = press,
-                )
+                // M3：实色 container 圆形图标按钮，不再用玻璃材质。
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), CircleShape)
                 .clip(CircleShape)
                 .clickable(onClick = onClick, role = Role.Button)
                 .semantics { this.contentDescription = contentDescription },
@@ -302,7 +292,7 @@ fun CtGlassIconButton(
                 imageVector = icon,
                 contentDescription = null,
                 tint = tint ?: c.textPrimary,
-                modifier = Modifier.size(21.dp),
+                modifier = Modifier.size(24.dp),
             )
         }
         if (badge) {
@@ -359,4 +349,5 @@ fun CtTopFadeScrim(height: Int = 56, modifier: Modifier = Modifier) {
             ),
     )
 }
+
 

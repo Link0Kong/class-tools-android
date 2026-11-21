@@ -90,24 +90,19 @@ fun CtTopBar(
     compact: Boolean = true,
     scrollPx: Float = CT_TOP_BAR_FULL_SCROLL_PX,
 ) {
-    // 注意：状态栏安全区由页面统一用 statusBarsPadding() 处理（避免顶栏与页面双重 inset）；
-    // 2026-11-21：顶栏改为 M3 surfaceContainer 实心悬浮条，四角完整圆角、正文不透。
-    // 旧实现是通栏方形材质 + 底部渐变，状态栏显示时会在悬浮条四角露出方角，并让内容透字。
+    // M3 small app bar：整宽、64dp、surface 容器（不再悬浮药丸/方形渐变）。
     Column(modifier = modifier.fillMaxWidth()) {
         Surface(
             modifier = Modifier
-                .padding(horizontal = CtSpace.sm, vertical = CtSpace.xs)
                 .fillMaxWidth()
-                .height(CtSize.topBarHeight),
-            shape = RoundedCornerShape(CtRadius.hero),
-            color = MaterialTheme.colorScheme.surfaceContainer,
+                .height(64.dp),
+            color = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            shadowElevation = 3.dp,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = CtSpace.md, end = CtSpace.sm),
+                    .padding(start = 16.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (onBack != null) {
@@ -317,6 +312,7 @@ private fun harmonyTintLocal(): Color {
         HarmonyTokens.TintTeal
     }
 }
+
 
 
 

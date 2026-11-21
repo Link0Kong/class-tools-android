@@ -69,8 +69,7 @@ fun UpdateDialog(
             Column {
                 Text(
                     text = UpdateDialogText.title(),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.headlineSmall,
                 )
                 Text(
                     text = UpdateDialogText.subtitle(ui.currentVersionName, info),
@@ -366,3 +365,4 @@ private fun UpdateDialogForceReadyPreview() {
         )
     }
 }
+

@@ -390,20 +390,14 @@ fun ProfileScreen(
         if (resolvedUpdateManager != null && updateCheckStatus == null && !updateHostState.value) {
             UpdateDialogHost(resolvedUpdateManager)
         }
-        androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
+        CtSnackbarHost(
             hostState = snackbar,
+            // 底栏浮岛高 64dp + 上下留白：Snackbar 必须在其上方，否则「已是最新版本」会被 dock 盖住。
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 12.dp),
+                .padding(bottom = 96.dp),
         )
-            }
     }
 
     if (showPrivacy) PrivacyPolicyDialog(onDismiss = { showPrivacy = false })
@@ -784,11 +778,6 @@ private fun AppearanceSection(
     SectionTitle("外观")
     GroupCard {
         AppearanceModeRows(mode = appearanceMode, onModeChange = onAppearanceModeChange)
-        RowDivider()
-        ImmersiveLightRows(
-            setting = immersiveLight,
-            onSettingChange = onImmersiveLightChange,
-        )
         RowDivider()
         SwitchRow(
             title = "隐藏状态栏",
@@ -1194,5 +1183,6 @@ private fun rememberHideStatusBar(
     val value by store.hideStatusBar.collectAsStateWithLifecycle(initialValue = fallback)
     return value
 }
+
 
 

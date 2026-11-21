@@ -6,12 +6,14 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.furina.classtools.ui.theme.AppearanceMode
 import com.furina.classtools.ui.theme.AppearanceSettings
 import com.furina.classtools.ui.theme.CtLightSetting
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**
@@ -74,6 +76,16 @@ class AppSettingsStore(private val context: Context) {
     fun startupImmersiveLight(): CtLightSetting =
         CtLightSetting.fromStorage(startupPrefs.getString(STARTUP_KEY_IMMERSIVE_LIGHT, null))
 
+    /** 应用远程配置（只覆盖白名单项；version 递增才生效一次）。 */
+    suspend fun applyRemoteConfig(config: com.furina.classtools.data.remoteconfig.RemoteConfig) {
+        val currentVersion = store.data.first()[KEY_REMOTE_CONFIG_VERSION] ?: 0
+        if (config.version <= currentVersion) return
+        config.appearance?.let { setAppearanceMode(AppearanceMode.fromStorage(it)) }
+        config.hideStatusBar?.let { setHideStatusBar(it) }
+        config.dynamicColor?.let { setDynamicColor(it) }
+        store.edit { prefs -> prefs[KEY_REMOTE_CONFIG_VERSION] = config.version }
+    }
+
     suspend fun setDynamicColor(enabled: Boolean) {
         store.edit { prefs -> prefs[KEY_DYNAMIC_COLOR] = enabled }
     }
@@ -99,6 +111,7 @@ class AppSettingsStore(private val context: Context) {
         val KEY_APPEARANCE_MODE = stringPreferencesKey(AppearanceSettings.KEY_APPEARANCE_MODE)
         val KEY_HIDE_STATUS_BAR = booleanPreferencesKey(AppearanceSettings.KEY_HIDE_STATUS_BAR)
         val KEY_IMMERSIVE_LIGHT = stringPreferencesKey(AppearanceSettings.KEY_IMMERSIVE_LIGHT)
+        val KEY_REMOTE_CONFIG_VERSION = intPreferencesKey("remote_config_version")
 
         /** 冷启动镜像（仅外观模式 + 隐藏状态栏 + 沉浸光感；DataStore 仍是真源）。 */
         const val STARTUP_PREFS = "ct_appearance_startup"
@@ -116,3 +129,4 @@ class AppSettingsStore(private val context: Context) {
  * 预览 / 孤立组件为 null → 「我的」页回退到入参（预览可控），生产环境直接读写本机设置。
  */
 val LocalAppSettingsStore = staticCompositionLocalOf<AppSettingsStore?> { null }
+

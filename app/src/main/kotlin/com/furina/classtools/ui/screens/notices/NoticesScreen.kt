@@ -741,7 +741,8 @@ fun NoticesScreen(
                         .fillMaxWidth(),
                     contentAlignment = Alignment.TopCenter,
                 ) {
-                    val offline = data?.fromCache == true || (errorMessage != null && data != null)
+                    // TTL 内的正常缓存不是「离线」：只有真的刷新失败且还有旧数据时才提示本机缓存。
+        val offline = errorMessage != null && data != null
                     val offlineMessage = errorMessage?.let { "刷新失败，显示本机缓存" }
                         ?: ("本机缓存 · 更新于 ${formatTs(data?.fetchedAt ?: 0L)}")
                     Column(
@@ -1070,14 +1071,14 @@ private fun NoticeMinimalHeader(
         modifier = Modifier
             .fillMaxWidth()
             .zIndex(1f),
-        color = scheme.background,
+        color = scheme.surface,
         tonalElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = 8.dp),
+                .height(64.dp)
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
         Surface(
@@ -2697,6 +2698,8 @@ private fun NoticeSkeletonCard(index: Int) {
 
 /** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
 private enum class Phase { LOADING, READY, FAILED }
+
+
 
 
 
