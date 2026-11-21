@@ -97,7 +97,7 @@ fun ExpressiveBackground(
 }
 
 /**
- * 分组小标题（对齐鸿蒙 SectionHeader）：左侧标题 19sp Medium + 右侧可选文字操作（13sp 品牌雾青）。
+ * 分组小标题：Title Large（22sp / 400，MD3 分区标题）+ 右侧可选文字操作（Label Large）。
  */
 @Composable
 fun SectionHeader(
@@ -187,3 +187,4 @@ fun CtLoading(
         )
     }
 }
+

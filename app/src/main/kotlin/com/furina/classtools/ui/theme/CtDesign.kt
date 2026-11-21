@@ -3,7 +3,7 @@ package com.furina.classtools.ui.theme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 // =============================================================================
 // 唯一设计令牌源（Single Source of Truth）— CtDesign
@@ -186,58 +186,63 @@ object CtSemantic {
 // -----------------------------------------------------------------------------
 
 /**
- * 字号阶梯（sp）—— **2026-11-19 按鸿蒙「文本排版」规范重排**：
+ * 语义字号令牌 —— **2026-11-21 按 MD3 官方字阶重排**。
  *
- * 口径（官方 Typography 规范的核心条款）：
- * - 字号层级 **28 / 24 / 20 / 16 / 14 / 12**（标题 20–28、正文 14–16、说明 12）；
- * - 行高 **1.4–1.6 倍**（大字号紧一点、小字号松一点：28→1.43、14→1.57、12→1.5）；
- * - 字重只用 Regular(400) / Medium(500) / Bold(700) 三档（标题 Bold、强调 Medium、正文 Regular）。
+ * 数值不再手写：直接取 [CtTypography]（Compose material3 官方 15 档 + 中文行高 ×1.07），
+ * 因此与 `MaterialTheme.typography`、M3 组件默认值永远同源。
  *
- * 与 beta11 的差异：body 15→**14**、label 13→**14**（并入正文档）、title16 行高 24→**24**（1.5）、
- * display 行高 36→**40**（1.43）、headline 27→**28**（1.4）、caption 17→**18**（1.5）。
- * 所有行高都是「字号 × 1.4–1.6」并取 2 的倍数，便于与 8vp 网格对齐。
+ * 语义映射（官方 Typography「按用途选样式」）：
+ * - [displayTitleSize] 页面主标题 → Headline Medium（28sp）
+ * - [titleSize] hero 问候 / 身份 → Headline Small（24sp）
+ * - [headlineSize] 分区大标题 / 弹层标题 → Title Large（22sp）
+ * - [title16Size] 卡片 / 列表主文字 → Title Medium（16sp / 500）
+ * - [bodySize] 正文 → Body Medium（14sp）
+ * - [labelSize] 按钮 / Chip / Tab → Label Large（14sp / 500）
+ * - [captionSize] 辅助说明 → Body Small（12sp）
+ * - [microSize] 角标 / 极小标注 → Label Small（11sp / 500）
+ *
+ * 常规层级只用 400 / 500；页面标题不再用 Bold（700），强调改用同档 Emphasized。
  */
 object CtType {
-    /** 页面主标题（工作台/全部/我的 页首）。28sp / 40 / Bold（1.43） */
-    val displayTitleSize = 28.sp
-    const val displayTitleLine = 40
-    /** hero 问候/身份姓名。24sp / 36 / Bold（1.5） */
-    val titleSize = 24.sp
-    const val titleLine = 36
-    /** 工具页顶栏标题、分组大标题、弹层大标题。20sp / 28 / Bold（1.4） */
-    val headlineSize = 20.sp
-    const val headlineLine = 28
-    /** 区块标题、列表主文字。16sp / 24 / Medium（1.5） */
-    val title16Size = 16.sp
-    const val title16Line = 24
-    /** 正文。14sp / 22 / Normal（1.57） */
-    val bodySize = 14.sp
-    const val bodyLine = 22
-    /** 标签/按钮/次级操作。14sp / 20 / Medium（1.43）—— 与正文同字号，仅字重区分 */
-    val labelSize = 14.sp
-    const val labelLine = 20
-    /** 说明/徽标/页脚。12sp / 18 / Normal（1.5） */
-    val captionSize = 12.sp
-    const val captionLine = 18
-    /** 角标（底部 dock 文案等极小字号；仅用于非正文装饰性标签）。11sp / 16 */
-    val microSize = 11.sp
-    const val microLine = 16
+    /** Headline Medium（28sp / 39sp 中文行高 / 400）。 */
+    val displayTitleSize = CtTypography.headlineMedium.fontSize
+    val displayTitleLine = CtTypography.headlineMedium.lineHeight.value.roundToInt()
+    /** Headline Small（24sp / 34sp / 400）。 */
+    val titleSize = CtTypography.headlineSmall.fontSize
+    val titleLine = CtTypography.headlineSmall.lineHeight.value.roundToInt()
+    /** Title Large（22sp / 30sp / 400）。 */
+    val headlineSize = CtTypography.titleLarge.fontSize
+    val headlineLine = CtTypography.titleLarge.lineHeight.value.roundToInt()
+    /** Title Medium（16sp / 26sp / 500）。 */
+    val title16Size = CtTypography.titleMedium.fontSize
+    val title16Line = CtTypography.titleMedium.lineHeight.value.roundToInt()
+    /** Body Medium（14sp / 21sp / 400）。 */
+    val bodySize = CtTypography.bodyMedium.fontSize
+    val bodyLine = CtTypography.bodyMedium.lineHeight.value.roundToInt()
+    /** Label Large（14sp / 21sp / 500）。 */
+    val labelSize = CtTypography.labelLarge.fontSize
+    val labelLine = CtTypography.labelLarge.lineHeight.value.roundToInt()
+    /** Body Small（12sp / 17sp / 400）。 */
+    val captionSize = CtTypography.bodySmall.fontSize
+    val captionLine = CtTypography.bodySmall.lineHeight.value.roundToInt()
+    /** Label Small（11sp / 17sp / 500）。 */
+    val microSize = CtTypography.labelSmall.fontSize
+    val microLine = CtTypography.labelSmall.lineHeight.value.roundToInt()
 
     /**
-     * 字重轴（官方：Regular / Medium / Bold 三档；600 保留给旧调用方，视觉等同 Medium）。
-     * 标题 Bold 700 / 强调 Medium 500 / 正文 Regular 400。
+     * 字重轴（M3：常规 400 / 强调 500；600 只给 Emphasized 的 500 档，700 不再用于常规层级）。
      */
     const val weightBold = 700
     const val weightSemiBold = 500
     const val weightMedium = 500
     const val weightNormal = 400
 
-    /** 行高倍数（单测锁定 1.4–1.6）。 */
-    const val lineRatioDisplay = 1.43f
-    const val lineRatioTitle = 1.50f
-    const val lineRatioHeadline = 1.40f
-    const val lineRatioBody = 1.57f
-    const val lineRatioCaption = 1.50f
+    /** 行高倍数（由官方行高 × 中文 1.07 推导，只读展示/单测引用）。 */
+    val lineRatioDisplay = displayTitleLine / displayTitleSize.value
+    val lineRatioTitle = titleLine / titleSize.value
+    val lineRatioHeadline = headlineLine / headlineSize.value
+    val lineRatioBody = bodyLine / bodySize.value
+    val lineRatioCaption = captionLine / captionSize.value
 }
 
 // -----------------------------------------------------------------------------
@@ -245,24 +250,41 @@ object CtType {
 // -----------------------------------------------------------------------------
 
 /**
- * 圆角（dp）。卡片 20 / 输入 14 / hero 28 / 弹层 28 / 胶囊。
+ * 圆角（dp）—— **MD3 十档形状刻度**（01-Foundations/shape-system.md）：
+ * None 0 / XS 4 / S 8 / M 12 / L 16 / L+ 20 / XL 28 / XL+ 32 / XXL 48 / Full。
  *
- * 与鸿蒙的差异：鸿蒙卡片 18、hero 24；安卓按 M3 Expressive **加大一档**（20 / 28），
- * 在大屏与高密度屏幕上更接近 Expressive 的「大圆角」观感，同时保留 18/24 作为紧凑档。
+ * 只允许出现十档里的值，不写 10 / 14 / 24 这类中间值（官方「常见错误」点名 10dp/11dp/13dp）。
+ * 2026-11-21 由 24 / 14 / 10 收回官方档位：卡片 12（medium，官方 Card 默认）、
+ * 紧凑卡 8（small）、输入 12、图标块 12、Chip 8、hero / 弹层 28（extra large）。
+ * 按下态由 12 收紧到 8（M3 Expressive 形状变形：交互态更方）。
  */
 object CtRadius {
-    /** 卡片圆角（2026-11-20 由 20 加到 24：Expressive 大圆角，与玻璃材质的柔边更协调）。 */
-    val card = 24.dp
-    val cardCompact = 20.dp
-    val hero = 32.dp
-    val input = 14.dp
+    /** 卡片 12dp（M3 Card 默认 medium 档）。 */
+    val card = 12.dp
+    /** 紧凑卡片 / 小磁贴 8dp（small）。 */
+    val cardCompact = 8.dp
+    /** hero / 大容器 28dp（extra large）。 */
+    val hero = 28.dp
+    /** 输入 / 列表块 12dp。 */
+    val input = 12.dp
+    /** 底部弹层顶部圆角 28dp（extra large）。 */
     val sheetTop = 28.dp
+    /** 对话框 28dp（extra large）。 */
     val dialog = 28.dp
+    /** 图标块 12dp（medium）。 */
     val tile = 12.dp
-    val chip = 10.dp
+    /** Chip / 小徽标 8dp（small）。 */
+    val chip = 8.dp
+    /** 胶囊（Full）。 */
     val pill = 999.dp
-    /** 卡片按下时形状收紧（M3 Expressive 形状变形）。 */
-    val cardPressed = 14.dp
+    /** 卡片按下时形状收紧：12 → 8（仍是十档之一）。 */
+    val cardPressed = 8.dp
+    /** 按钮按下态 8dp（Expressive；静止 12/16/28 由组件自选）。 */
+    val buttonPressed = 8.dp
+    /** 扩展档：Large increased 20（大卡片 / 浮层容器）。 */
+    val largeIncreased = 20.dp
+    /** 扩展档：Extra large increased 32（FAB / 大圆角容器）。 */
+    val extraLargeIncreased = 32.dp
 }
 
 // -----------------------------------------------------------------------------
@@ -270,19 +292,18 @@ object CtRadius {
 // -----------------------------------------------------------------------------
 
 /**
- * 间距（dp）—— **按鸿蒙「间隔参数」规范重排：8vp 网格**。
+ * 间距（dp）—— **MD3 8dp 基线 + 官方页面边距**（01-Foundations/spacing.md、layout.md）。
  *
- * 官方口径（以 8 为基本单位）：
- * - 屏幕边缘 **20vp**（手机）/ 24（折叠）/ 32（平板）；
- * - 卡片内边距 **16vp**；区块间距 **24vp**；控件间距 **8 / 12 / 16vp**；
- * - 所有间距都是 8 的倍数（5 段以内的小间距允许 4 = 半格）。
+ * 官方口径：
+ * - spacing system 以 **8dp 为基线**（space100 = 8dp），4dp 是 space50 半档；
+ * - 页面左右 margin **只有两档：compact 16dp，medium 及以上 24dp**；
+ * - 卡片内边距 16dp、卡片间距 ≤ 8–12dp、区块间距 24dp。
  *
- * 与 beta11 的差异：`pagePhone` 16 → **20**（屏幕边缘 20vp）、`rowPaddingV` 10 → **8**、
- * `cardGap` 12 → **16**、`sectionGap` 16 → **24**（区块间距）、`xxs` 2 → **4**（半格）。
- * 单测 `CtSpacingTokensTest` 锁定：所有 spacing 令牌是 4 的倍数、页面边距 = 20/24/32。
+ * 2026-11-21 由鸿蒙口径（20 / 24 / 32）改回 MD3：手机 16、折叠 24、平板 24；
+ * 2 列大卡之间取 12dp（space150；官方卡片页上限 8dp，大卡片需要一点呼吸，属产品决策）。
  */
 object CtSpace {
-    /** 半格（4vp；8vp 网格里唯一允许的非 8 倍数）。 */
+    /** 半档（4dp，space50）。 */
     val xxs = 4.dp
     val xs = 8.dp
     val sm = 12.dp
@@ -293,19 +314,19 @@ object CtSpace {
     val xxxl = 40.dp
     val huge = 48.dp
 
-    /** 页面左右边距（**屏幕边缘**）：手机 20 / 折叠 24 / 平板 32。 */
-    val pagePhone = 20.dp
+    /** 页面左右 margin：compact 16 / medium 24 / expanded 24（官方 layout.md）。 */
+    val pagePhone = 16.dp
     val pageFold = 24.dp
-    val pageTablet = 32.dp
+    val pageTablet = 24.dp
 
-    /** 卡片内边距 / 列表项内边距 / 工具磁贴内边距（卡片内边距固定 16vp）。 */
+    /** 卡片内边距 / 列表项内边距 / 工具磁贴内边距（卡片内边距固定 16dp）。 */
     val cardPadding = 16.dp
     val rowPaddingH = 16.dp
     val rowPaddingV = 8.dp
     val tilePadding = 12.dp
 
-    /** 卡片间距 16 / 区块间距 24（官方 24vp）/ 大分区间距 32。 */
-    val cardGap = 16.dp
+    /** 卡片间距 12 / 区块间距 24 / 大分区间距 32。 */
+    val cardGap = 12.dp
     val sectionGap = 24.dp
     val groupGap = 32.dp
 
@@ -349,8 +370,11 @@ object CtSize {
     val iconLarge = 24.dp
     val emptyIcon = 48.dp
     val dividerThickness = 0.5.dp
-    val dockHeight = 60.dp
-    val dockPillHeight = 44.dp
+    /** 悬浮工具栏高度 64dp（M3 Expressive floating toolbar 官方值）。 */
+    val dockHeight = 64.dp
+    /** 选中指示器 64 × 32dp（M3 navigation bar / toolbar 指示器）。 */
+    val dockIndicatorWidth = 64.dp
+    val dockPillHeight = 32.dp
 
     /** 内容最大宽度：手机/折叠 880，宽屏 1080，工具页 960。 */
     val contentMaxWidthPhone = 880.dp
@@ -409,8 +433,8 @@ object CtMotionTokens {
     const val staggerStepMs = 40L
     /** 列表项入场位移（dp）。 */
     const val itemEnterRise = 8f
-    /** 容器变换起始圆角（dp）：卡片 20 → 页面 0。 */
-    const val containerMorphStartDp = 24f
+    /** 容器变换起始圆角（dp）：卡片圆角 → 页面 0（随 [CtRadius.card] 自动同步）。 */
+    val containerMorphStartDp = CtRadius.card.value
     /** 骨架脉冲周期（毫秒，往返）。 */
     const val skeletonPulseMs = 900
     /** 骨架最低不透明度。 */
@@ -421,14 +445,19 @@ object CtMotionTokens {
 // 7. 阴影 CtElevation
 // -----------------------------------------------------------------------------
 
-/** 阴影（dp）：卡片 1、浮层 3、弹层 6、拖拽幽灵 12。 */
+/**
+ * 阴影（dp）—— MD3：**静止卡片无阴影**（靠 surface 色阶 / 描边分层）。
+ *
+ * 官方 Cards：Filled / Outlined 0dp，Elevated 1dp；浮层用 surface container 色阶，
+ * 不用大阴影（01-Foundations/elevation.md）。因此卡片 0、hero 1、浮层/弹层 3、拖拽 6。
+ */
 object CtElevation {
     val none = 0.dp
-    val card = 1.dp
-    val hero = 3.dp
-    val floating = 6.dp
-    val sheet = 6.dp
-    val dragged = 12.dp
+    val card = 0.dp
+    val hero = 1.dp
+    val floating = 3.dp
+    val sheet = 3.dp
+    val dragged = 6.dp
 }
 
 // -----------------------------------------------------------------------------

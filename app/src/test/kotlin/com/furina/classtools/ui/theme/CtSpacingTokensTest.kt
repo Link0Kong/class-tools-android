@@ -1,25 +1,33 @@
 package com.furina.classtools.ui.theme
 
+import androidx.compose.ui.text.font.FontWeight
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 鸿蒙「文本排版 / 间隔参数」令牌单测（2026-11-19 排版重构）。
+ * MD3 字阶 / 间距令牌单测（2026-11-21 按官方知识库回归）。
  *
- * 锁定官方口径：
- * - **8vp 网格**：所有间距令牌是 4 的倍数（半格），语义间距（控件/卡片/区块）是 8 的倍数；
- * - **屏幕边缘 20vp**（手机）/ 24（折叠）/ 32（平板）；
- * - 字号层级 **28 / 24 / 20 / 16 / 14 / 12**（正文 14–16、说明 12、标题 20–28）；
- * - 行高 **1.4–1.6 倍**；
- * - 字重只用 Regular(400) / Medium(500) / Bold(700)。
+ * 锁定口径（来源：lwhhz/Android-MD3-Knowledge，核验 2026-11-16）：
+ * - **MD3 spacing 18 档 token**：0/2/4/6/8/10/12/14/16/20/24/32/36/40/48/56/64/72；
+ * - **页面 margin 16（compact）/ 24（medium 及以上）**；
+ * - **字号取官方 role**：Headline Medium 28、Headline Small 24、Title Large 22、Title Medium 16、
+ *   Body Medium 14、Label Large 14、Body Small 12、Label Small 11；
+ * - **中文行高 ×1.07**：28→39、24→34、22→30、16→26、14→21、12→17、11→17；
+ * - 常规层级只用 400 / 500，页面标题不再是 700。
  */
 class CtSpacingTokensTest {
 
     private fun dpOf(v: androidx.compose.ui.unit.Dp): Float = v.value
 
+    /** MD3 官方 18 个 system spacing token（dp）。 */
+    private val md3SpacingTokens = setOf(
+        0f, 2f, 4f, 6f, 8f, 10f, 12f, 14f, 16f, 20f, 24f, 32f, 36f, 40f, 48f, 56f, 64f, 72f,
+    )
+
     @Test
-    fun `spacing tokens sit on the 4vp half grid`() {
+    fun `spacing tokens 全部落在 MD3 官方 18 档内`() {
         val tokens = listOf(
             "xxs" to CtSpace.xxs,
             "xs" to CtSpace.xs,
@@ -30,6 +38,9 @@ class CtSpacingTokensTest {
             "xxl" to CtSpace.xxl,
             "xxxl" to CtSpace.xxxl,
             "huge" to CtSpace.huge,
+            "pagePhone" to CtSpace.pagePhone,
+            "pageFold" to CtSpace.pageFold,
+            "pageTablet" to CtSpace.pageTablet,
             "cardPadding" to CtSpace.cardPadding,
             "rowPaddingH" to CtSpace.rowPaddingH,
             "rowPaddingV" to CtSpace.rowPaddingV,
@@ -43,37 +54,21 @@ class CtSpacingTokensTest {
         )
         tokens.forEach { (name, value) ->
             val v = dpOf(value)
-            assertEquals("$name=$v 必须是 4 的倍数", 0f, v % 4f, 0.0001f)
+            assertTrue("$name=$v 不在 MD3 spacing token 内（不允许 14/18/22 之类临时值）", v in md3SpacingTokens)
         }
     }
 
     @Test
-    fun `semantic gaps are multiples of 8`() {
-        listOf(
-            "cardGap" to CtSpace.cardGap,
-            "sectionGap" to CtSpace.sectionGap,
-            "groupGap" to CtSpace.groupGap,
-            "controlGap" to CtSpace.controlGap,
-            "controlGapLarge" to CtSpace.controlGapLarge,
-            "cardPadding" to CtSpace.cardPadding,
-            "rowPaddingH" to CtSpace.rowPaddingH,
-            "rowPaddingV" to CtSpace.rowPaddingV,
-        ).forEach { (name, value) ->
-            val v = dpOf(value)
-            assertEquals("$name=$v 必须是 8 的倍数", 0f, v % 8f, 0.0001f)
-        }
-    }
-
-    @Test
-    fun `page margins follow huawei screen edge spec`() {
-        assertEquals(20f, dpOf(CtSpace.pagePhone), 0.0001f)
+    fun `page margins follow MD3 layout spec`() {
+        assertEquals(16f, dpOf(CtSpace.pagePhone), 0.0001f)
         assertEquals(24f, dpOf(CtSpace.pageFold), 0.0001f)
-        assertEquals(32f, dpOf(CtSpace.pageTablet), 0.0001f)
+        assertEquals(24f, dpOf(CtSpace.pageTablet), 0.0001f)
     }
 
     @Test
-    fun `card padding is 16 and section gap is 24`() {
+    fun `card padding is 16 card gap 12 and section gap 24`() {
         assertEquals(16f, dpOf(CtSpace.cardPadding), 0.0001f)
+        assertEquals(12f, dpOf(CtSpace.cardGap), 0.0001f)
         assertEquals(24f, dpOf(CtSpace.sectionGap), 0.0001f)
     }
 
@@ -82,15 +77,9 @@ class CtSpacingTokensTest {
         assertEquals(8f, dpOf(CtSpace.gridUnit), 0.0001f)
     }
 
-    /**
-     * 工具页控件间距（2026-11-20 用户反馈「按钮/选项间隔过近」）。
-     *
-     * 鸿蒙「间隔参数」对控件间距给到 8 / 12 / 16 三档；相邻可点控件的下限就是 8vp，
-     * 工具页里的按钮/选项一律取 [CtSpace.controlGap]，不允许再出现 4/6vp 的控件间空白。
-     */
     @Test
     fun `control gap floor is 8vp and tiers are ascending`() {
-        assertEquals("控件间距下限必须是 8vp", 8f, dpOf(CtSpace.controlGap), 0.0001f)
+        assertEquals(8f, dpOf(CtSpace.controlGap), 0.0001f)
         assertEquals(12f, dpOf(CtSpace.controlGapMedium), 0.0001f)
         assertEquals(16f, dpOf(CtSpace.controlGapLarge), 0.0001f)
         assertTrue(
@@ -98,7 +87,6 @@ class CtSpacingTokensTest {
             dpOf(CtSpace.controlGap) < dpOf(CtSpace.controlGapMedium) &&
                 dpOf(CtSpace.controlGapMedium) < dpOf(CtSpace.controlGapLarge),
         )
-        // 控件间距不得比「卡片间距」还宽松，否则分组层级会塌陷。
         assertTrue(
             "controlGap=${CtSpace.controlGap} 不应大于 cardGap=${CtSpace.cardGap}",
             dpOf(CtSpace.controlGap) <= dpOf(CtSpace.cardGap),
@@ -106,14 +94,15 @@ class CtSpacingTokensTest {
     }
 
     @Test
-    fun `type scale uses the 28 24 20 16 14 12 ladder`() {
+    fun `type scale uses MD3 roles 28 24 22 16 14 14 12`() {
         assertEquals(28f, CtType.displayTitleSize.value, 0.0001f)
         assertEquals(24f, CtType.titleSize.value, 0.0001f)
-        assertEquals(20f, CtType.headlineSize.value, 0.0001f)
+        assertEquals(22f, CtType.headlineSize.value, 0.0001f)
         assertEquals(16f, CtType.title16Size.value, 0.0001f)
         assertEquals(14f, CtType.bodySize.value, 0.0001f)
         assertEquals(14f, CtType.labelSize.value, 0.0001f)
         assertEquals(12f, CtType.captionSize.value, 0.0001f)
+        assertEquals(11f, CtType.microSize.value, 0.0001f)
     }
 
     @Test
@@ -124,45 +113,51 @@ class CtSpacingTokensTest {
     }
 
     @Test
-    fun `headline range is 20 to 28`() {
+    fun `headline range is 22 to 28`() {
         listOf(CtType.headlineSize, CtType.titleSize, CtType.displayTitleSize).forEach {
-            assertTrue("${it.value} in 20..28", it.value in 20f..28f)
+            assertTrue("${it.value} in 22..28", it.value in 22f..28f)
         }
     }
 
     @Test
-    fun `line height ratios are between 1_4 and 1_6`() {
-        val pairs = listOf(
-            "display" to (CtType.displayTitleSize.value to CtType.displayTitleLine),
-            "title" to (CtType.titleSize.value to CtType.titleLine),
-            "headline" to (CtType.headlineSize.value to CtType.headlineLine),
-            "title16" to (CtType.title16Size.value to CtType.title16Line),
-            "body" to (CtType.bodySize.value to CtType.bodyLine),
-            "label" to (CtType.labelSize.value to CtType.labelLine),
-            "caption" to (CtType.captionSize.value to CtType.captionLine),
-        )
-        pairs.forEach { (name, pair) ->
-            val ratio = pair.second / pair.first
-            assertTrue("$name ratio=$ratio 必须在 1.4–1.6", ratio in 1.4f..1.6f)
-        }
+    fun `chinese line heights are official times 1_07`() {
+        assertEquals(39f, CtType.displayTitleLine.toFloat(), 0.0001f)
+        assertEquals(34f, CtType.titleLine.toFloat(), 0.0001f)
+        assertEquals(30f, CtType.headlineLine.toFloat(), 0.0001f)
+        assertEquals(26f, CtType.title16Line.toFloat(), 0.0001f)
+        assertEquals(21f, CtType.bodyLine.toFloat(), 0.0001f)
+        assertEquals(21f, CtType.labelLine.toFloat(), 0.0001f)
+        assertEquals(17f, CtType.captionLine.toFloat(), 0.0001f)
+        assertEquals(17f, CtType.microLine.toFloat(), 0.0001f)
     }
 
     @Test
     fun `declared line ratios match the token table`() {
-        assertEquals(1.43f, CtType.lineRatioDisplay, 0.001f)
-        assertEquals(1.50f, CtType.lineRatioTitle, 0.001f)
-        assertEquals(1.40f, CtType.lineRatioHeadline, 0.001f)
-        assertEquals(1.57f, CtType.lineRatioBody, 0.001f)
-        assertEquals(1.50f, CtType.lineRatioCaption, 0.001f)
+        assertEquals(CtType.displayTitleLine / 28f, CtType.lineRatioDisplay, 0.0001f)
+        assertEquals(CtType.titleLine / 24f, CtType.lineRatioTitle, 0.0001f)
+        assertEquals(CtType.headlineLine / 22f, CtType.lineRatioHeadline, 0.0001f)
+        assertEquals(CtType.bodyLine / 14f, CtType.lineRatioBody, 0.0001f)
+        assertEquals(CtType.captionLine / 12f, CtType.lineRatioCaption, 0.0001f)
     }
 
     @Test
-    fun `font weights are regular medium bold only`() {
+    fun `font weights are regular medium and bold constants`() {
         assertEquals(400, CtType.weightNormal)
         assertEquals(500, CtType.weightMedium)
         assertEquals(700, CtType.weightBold)
-        // 旧 600 档统一并入 500（官方只用三档字重）
         assertEquals(500, CtType.weightSemiBold)
+    }
+
+    @Test
+    fun `regular hierarchy avoids bold 700`() {
+        listOf("display" to CtTypeScale.display, "title" to CtTypeScale.title, "headline" to CtTypeScale.headline)
+            .forEach { (name, style) ->
+                assertNotEquals("$name 不应使用 700", FontWeight.Bold, style.fontWeight)
+            }
+        assertEquals(FontWeight.Normal, CtTypeScale.display.fontWeight)
+        assertEquals(FontWeight.Normal, CtTypeScale.title.fontWeight)
+        assertEquals(FontWeight.Normal, CtTypeScale.headline.fontWeight)
+        assertEquals(FontWeight.Normal, CtTypeScale.body.fontWeight)
     }
 
     @Test
@@ -184,5 +179,17 @@ class CtSpacingTokensTest {
         assertEquals(CtType.bodySize, CtTypeScale.body.fontSize)
         assertEquals(CtType.labelSize, CtTypeScale.label.fontSize)
         assertEquals(CtType.captionSize, CtTypeScale.caption.fontSize)
+    }
+
+    @Test
+    fun `semantic styles point at the matching M3 typography roles`() {
+        assertEquals(CtTypography.headlineMedium, CtTypeScale.display)
+        assertEquals(CtTypography.headlineSmall, CtTypeScale.title)
+        assertEquals(CtTypography.titleLarge, CtTypeScale.headline)
+        assertEquals(CtTypography.titleMedium, CtTypeScale.title16)
+        assertEquals(CtTypography.bodyMedium, CtTypeScale.body)
+        assertEquals(CtTypography.labelLarge, CtTypeScale.label)
+        assertEquals(CtTypography.bodySmall, CtTypeScale.caption)
+        assertEquals(CtTypography.labelSmall, CtTypeScale.micro)
     }
 }

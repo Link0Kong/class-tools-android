@@ -121,7 +121,7 @@ private fun DesignTokensPreview() {
                     Column {
                         Text("班级工具站", style = MaterialTheme.typography.titleLarge)
                         Text(
-                            "Android 17 · Material 3 Expressive",
+                            "Material 3 · Expressive",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -213,3 +213,4 @@ private fun ShapeSample(shape: androidx.compose.ui.graphics.Shape, label: String
         Text(label, style = MaterialTheme.typography.labelSmall)
     }
 }
+

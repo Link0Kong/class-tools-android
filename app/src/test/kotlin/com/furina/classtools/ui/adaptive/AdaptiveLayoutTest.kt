@@ -29,10 +29,10 @@ class AdaptiveLayoutTest {
 
     @Test
     fun horizontalPadding_byWidthClass() {
-        // 2026-11-19 鸿蒙间隔规范：屏幕边缘 20vp（手机）/ 24（折叠）/ 32（平板）
-        assertEquals(20, CtAdaptive.horizontalPaddingDp(412))
+        // 2026-11-21 MD3 layout：compact 16dp / medium 24dp / expanded 24dp
+        assertEquals(16, CtAdaptive.horizontalPaddingDp(412))
         assertEquals(24, CtAdaptive.horizontalPaddingDp(700))
-        assertEquals(32, CtAdaptive.horizontalPaddingDp(1000))
+        assertEquals(24, CtAdaptive.horizontalPaddingDp(1000))
     }
 
     @Test
@@ -53,10 +53,10 @@ class AdaptiveLayoutTest {
     @Test
     fun effectiveContentWidth_neverExceedsLimit() {
         // 手机：窗口 - 2*16
-        // 有效内容宽 = min(屏幕, 内容上限) - 2 × 屏幕边缘(20)
-        assertEquals(372, CtAdaptive.effectiveContentWidthDp(412))
-        // 平板：min(1000-64, 1200) = 936
-        assertEquals(936, CtAdaptive.effectiveContentWidthDp(1000))
+        // 有效内容宽 = min(屏幕, 内容上限) - 2 × 屏幕边缘(16/24)
+        assertEquals(380, CtAdaptive.effectiveContentWidthDp(412))
+        // 平板：min(1000-48, 1200) = 952
+        assertEquals(952, CtAdaptive.effectiveContentWidthDp(1000))
         // 超宽屏：被 1200 限宽
         assertEquals(1200, CtAdaptive.effectiveContentWidthDp(2000))
     }
@@ -72,7 +72,7 @@ class AdaptiveLayoutTest {
         assertEquals(CtWidthClass.EXPANDED, tablet.widthClass)
         assertTrue(tablet.twoPane)
         assertEquals(4, tablet.gridColumns)
-        assertEquals(32f, tablet.horizontalPadding.value, 0.01f)
+        assertEquals(24f, tablet.horizontalPadding.value, 0.01f)
     }
 
     @Test
@@ -83,3 +83,4 @@ class AdaptiveLayoutTest {
         assertFalse(CtAdaptive.supportsWorkbenchTwoPane(CtAdaptive.specFor(700)))
     }
 }
+

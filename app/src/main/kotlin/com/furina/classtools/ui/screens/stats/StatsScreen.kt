@@ -52,7 +52,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.furina.classtools.data.visits.VisitAccount
 import com.furina.classtools.data.visits.VisitClientStat
 import com.furina.classtools.data.visits.VisitClientStyle
@@ -491,7 +490,7 @@ private fun TrendBar(
         Text(
             // 今天 24 根柱只给非零值标数字；7 天每根都标。
             text = if (point.count > 0 || !compact) point.count.toString() else "",
-            style = if (compact) CtTypeScale.micro.copy(fontSize = 9.sp, lineHeight = 11.sp) else CtTypeScale.micro,
+            style = CtTypeScale.micro,
             color = if (point.highlighted) colors.primary else colors.textTertiary,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -508,7 +507,7 @@ private fun TrendBar(
         Spacer(Modifier.height(2.dp))
         Text(
             text = point.label,
-            style = if (compact) CtTypeScale.micro.copy(fontSize = 9.sp, lineHeight = 11.sp) else CtTypeScale.micro,
+            style = CtTypeScale.micro,
             color = if (point.highlighted) colors.primary else colors.textTertiary,
             textAlign = TextAlign.Center,
             maxLines = 1,

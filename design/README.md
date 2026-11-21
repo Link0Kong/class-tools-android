@@ -2,6 +2,7 @@
 
 | 文件 | 内容 | 面向 |
 |---|---|---|
+| [`MD3_ALIGNMENT_2026-11-21.md`](MD3_ALIGNMENT_2026-11-21.md) | 按 MD3 官方知识库的对齐报告：字阶 / 形状 / 间距 / 底栏的前后对照、保留的品牌决策、未完成待办 | 设计/评审 |
 | [`ANDROID17_DESIGN.md`](ANDROID17_DESIGN.md) | 设计原则、色彩体系（明/暗全量 token + 动态取色三层策略 + 对比度审计）、Roboto Flex/中文回退与 30 个类型样式、形状 scale 与变形规则、spring 动效数值与场景映射、25+ 组件规范、Android 17 适配（target 37 大屏/方向、edge-to-edge、预测返回、窗口尺寸类、模糊性能）、无障碍、QA 清单、来源与核实状态 | 设计/开发/评审 |
 | [`tokens.json`](tokens.json) | 机器可读 token：`color.light/dark`（字段名 = Compose `ColorScheme` 参数）、`color.brand/glass`、`color.tonalPalettes`（HCT 全色阶）、`typography`（15 baseline + 15 emphasized，字段名 = `Typography` 参数）、`shape`、`spacing`、`motion`（spring/时长/缓动/场景）、elevation、windowSizeClasses、accessibility | 开发（可直接生成主题） |
 | [`COMPONENTS.md`](COMPONENTS.md) | 组件 → Compose API / material3 版本对应表（45 行）、1.4.0 stable 与 1.5.0-alpha29 双轨依赖方案、实验 API 清单与降级方案、BOM 约束、版本坑与升级规则 | 开发/技术选型 |

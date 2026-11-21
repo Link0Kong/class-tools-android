@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,10 +35,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.furina.classtools.ui.components.glass.ctGlass
 import com.furina.classtools.ui.components.glass.ctGlassPointerLight
 import com.furina.classtools.ui.components.glass.rememberCtGlassPress
@@ -141,21 +140,16 @@ fun CtRootHeader(
                 if (eyebrow != null) {
                     Text(
                         text = eyebrow,
-                        style = CtTypeScale.caption,
+                        style = MaterialTheme.typography.labelMedium,
                         color = c.textTertiary,
-                        letterSpacing = 1.2.sp,
                         maxLines = 1,
                     )
                     Spacer(modifier = Modifier.height(CtSpace.xxs))
                 }
+                // M3 large app bar 标题 = Display Small（36sp / 400）。之前是 34sp Bold 的就地覆盖。
                 Text(
                     text = title,
-                    style = CtTypeScale.title16.copy(
-                        fontSize = 34.sp,
-                        lineHeight = 44.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.4).sp,
-                    ),
+                    style = MaterialTheme.typography.displaySmall,
                     color = c.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -234,7 +228,7 @@ fun CtStickyHeaderBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .height(56.dp)
                 .ctGlass(
                     level = CtLightLevel.THIN,
                     shape = shape,
@@ -246,7 +240,8 @@ fun CtStickyHeaderBar(
         ) {
             Text(
                 text = title,
-                style = CtTypeScale.title16.copy(fontWeight = FontWeight.Bold),
+                // M3 small app bar 标题 = Title Large（22sp / 400）。
+                style = MaterialTheme.typography.titleLarge,
                 color = foreground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -344,7 +339,7 @@ fun CtGlassSectionLabel(
     ) {
         Text(
             text = text,
-            style = CtTypeScale.title16.copy(fontWeight = FontWeight.Bold),
+            style = CtTypeScale.title16,
             color = c.textPrimary,
             modifier = Modifier.weight(1f),
         )

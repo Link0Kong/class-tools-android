@@ -2,9 +2,7 @@ package com.furina.classtools.ui.components.dock
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -37,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -50,15 +48,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.components.light.CtLightInk
-import com.furina.classtools.ui.theme.CtLightScene
-import com.furina.classtools.ui.theme.CtPalette
-import com.furina.classtools.ui.theme.LocalCtLight
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.components.glass.ctGlass
 import com.furina.classtools.ui.theme.CtLightLevel
@@ -66,8 +57,6 @@ import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
-import com.furina.classtools.ui.theme.CtType
-import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlin.math.abs
 
 import kotlin.math.roundToInt
@@ -126,7 +115,6 @@ fun CtFloatingDock(
     val safeIndex = selectedIndex.coerceIn(0, destinations.lastIndex)
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
-    val dark = LocalCtDarkTheme.current
     val specularColor = MaterialTheme.colorScheme.surfaceBright
     var specularX by remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
 
@@ -183,7 +171,8 @@ fun CtFloatingDock(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            // M3 floating toolbar：距窗口边缘 ≥16dp（横向）；纵向在导航栏 inset 之上再留 8dp。
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Box(
@@ -195,7 +184,8 @@ fun CtFloatingDock(
             androidx.compose.foundation.layout.BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(CtDockLogic.DOCK_HEIGHT_DP.dp)
+                    // 200% 字体下允许底栏随文案长高（不再固定 64dp 裁掉标签）。
+                    .heightIn(min = CtDockLogic.DOCK_HEIGHT_DP.dp)
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
                             while (true) {
@@ -207,7 +197,8 @@ fun CtFloatingDock(
                     },
             ) {
                 val itemWidth = maxWidth / destinations.size
-                val pillWidth = itemWidth - 10.dp
+                // M3 指示器固定 64 × 32dp（不随 item 宽度拉伸）；item 仍占满 1/N。
+                val pillWidth = minOf(itemWidth - 16.dp, CtDockLogic.INDICATOR_WIDTH_DP.dp)
                 val pillWidthPx = with(density) { pillWidth.toPx() }
                 val itemWidthPx = with(density) { itemWidth.toPx() }
                 val pillOffsetPx =
@@ -254,40 +245,30 @@ fun CtFloatingDock(
                         },
                 )
 
-                // 弹性药丸底（选中项背后）
+                // 选中指示器（M3：64 × 32dp，secondaryContainer；与图标带 32dp 对齐，不压文案）
                 Surface(
                     modifier = Modifier
                         .offset {
                             IntOffset(
                                 pillOffsetPx.roundToInt(),
-                                ((CtDockLogic.DOCK_HEIGHT_DP.dp - 44.dp).toPx() / 2f).roundToInt(),
+                                CtDockLogic.INDICATOR_TOP_DP.dp.roundToPx(),
                             )
                         }
                         .width(pillWidth)
-                        .height(44.dp)
+                        .height(CtDockLogic.INDICATOR_HEIGHT_DP.dp)
                         .graphicsLayer {
                             scaleX = pillScaleX
                             scaleY = pillScaleY
                         },
                     shape = CtShapeTokens.pill,
-                    color = if (dark) {
-                        // 深色：低饱和雾青药丸（primary 0.22）+ 1px 亮边，避免「灰药丸糊在灰底上」
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-                    } else {
-                        com.furina.classtools.ui.theme.HarmonyTokens.TintTeal
-                    },
-                    border = if (dark) {
-                        BorderStroke(1.dp, CtLightInk.highlight.copy(alpha = 0.14f))
-                    } else {
-                        BorderStroke(0.dp, Color.Transparent)
-                    },
+                    color = MaterialTheme.colorScheme.secondaryContainer,
                     shadowElevation = pillShadowElevation,
                 ) {}
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(CtDockLogic.DOCK_HEIGHT_DP.dp)
+                        .heightIn(min = CtDockLogic.DOCK_HEIGHT_DP.dp)
                         .selectableGroup(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -332,12 +313,22 @@ private fun DockItem(
     )
     val contentColor by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary
+            // M3 navigation bar：选中图标 onSecondaryContainer（压在 secondaryContainer 指示器上）。
+            MaterialTheme.colorScheme.onSecondaryContainer
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
         animationSpec = CtMotion.effectsSpec(),
         label = "dockItemColor",
+    )
+    val labelColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = CtMotion.effectsSpec(),
+        label = "dockLabelColor",
     )
     val announcement = CtDockLogic.tabAnnouncement(
         label = destination.label,
@@ -348,7 +339,7 @@ private fun DockItem(
 
     Column(
         modifier = modifier
-            .height(CtDockLogic.DOCK_HEIGHT_DP.dp)
+            .heightIn(min = CtDockLogic.DOCK_HEIGHT_DP.dp)
             .selectable(
                 selected = selected,
                 onClick = onClick,
@@ -362,24 +353,31 @@ private fun DockItem(
                 scaleY = scale
             },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
     ) {
-        Icon(
-            imageVector = destination.icon,
-            contentDescription = null, // 语义由父节点 announcement 提供（避免 TalkBack 重复播报）
-            tint = contentColor,
-            modifier = Modifier.size(20.dp),
-        )
+        // 32dp 图标带：选中指示器（64×32）正好包住图标，不压到下方案案。
+        Box(
+            modifier = Modifier
+                .padding(top = CtDockLogic.INDICATOR_TOP_DP.dp)
+                .height(CtDockLogic.INDICATOR_HEIGHT_DP.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = destination.icon,
+                contentDescription = null, // 语义由父节点 announcement 提供（避免 TalkBack 重复播报）
+                tint = contentColor,
+                modifier = Modifier.size(24.dp),
+            )
+        }
         if (showLabel) {
-            Spacer(modifier = Modifier.height(CtSpace.xxs))
             Text(
                 text = destination.label,
-                // 鸿蒙 AppShell.tabItem：图标 20 + 文案 10 + 间距 2（安卓仅把文案色保留为可读的 primary）。
-                fontSize = CtType.microSize,
-                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                color = contentColor,
+                // M3 navigation bar label = Label Medium（12sp / 500）；不再用 11sp 裸字号。
+                style = MaterialTheme.typography.labelMedium,
+                color = labelColor,
                 maxLines = 1,
             )
+            Spacer(modifier = Modifier.height(CtSpace.xxs))
         }
     }
 }

@@ -37,10 +37,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.data.tool.AppTool
@@ -56,7 +54,6 @@ import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtSize
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
-import com.furina.classtools.ui.theme.CtType
 import com.furina.classtools.ui.theme.CtTypeScale
 import com.furina.classtools.ui.theme.HarmonyTokens
 import com.furina.classtools.ui.theme.ctPressFeedback
@@ -194,7 +191,7 @@ internal fun HomeHeroCard(
             }
             Text(
                 text = "$greeting，${session.name.trim().ifBlank { "同学" }}",
-                style = CtText.title.copy(fontSize = CtType.titleSize, lineHeight = CtType.titleLine.sp, fontWeight = FontWeight.Bold),
+                style = CtTypeScale.title,
                 color = colors.heroTitle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

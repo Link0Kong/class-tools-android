@@ -48,7 +48,7 @@ class ProfileLayoutTest {
             listOf(ProfileCard.DATA_PRIVACY, ProfileCard.APPEARANCE, ProfileCard.ABOUT, ProfileCard.SIGN_OUT),
             layout.right,
         )
-        assertEquals(32, layout.horizontalPaddingDp)
+        assertEquals(24, layout.horizontalPaddingDp)
         assertEquals(1200, layout.contentMaxWidthDp)
         assertEquals(0.55f, layout.mainPaneWeight, 0.001f)
     }
@@ -76,3 +76,4 @@ class ProfileLayoutTest {
         assertTrue(tablet.cardGapDp <= compact.cardGapDp)
     }
 }
+

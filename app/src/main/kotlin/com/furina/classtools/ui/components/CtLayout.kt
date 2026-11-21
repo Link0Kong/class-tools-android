@@ -94,8 +94,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.disabled
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import com.furina.classtools.ui.components.glass.ctGlass
 import com.furina.classtools.ui.components.glass.ctGlassPointerLight
 import com.furina.classtools.ui.components.glass.rememberCtGlassPress
@@ -519,7 +517,7 @@ fun CtButton(
         }
         Text(
             text = text,
-            style = CtTypeScale.label.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
+            style = CtTypeScale.label,
             color = contentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -967,7 +965,7 @@ fun CtCaptionText(
     )
 }
 
-/** 页码/统计数字（24 Bold 等宽）。 */
+/** 页码/统计数字（Headline Small 24 / 400 等宽）。 */
 @Composable
 fun CtMetricText(
     text: String,
@@ -984,7 +982,7 @@ fun CtMetricText(
     )
 }
 
-/** 页面标题（28 Bold；工作台/全部/我的 页首统一）。 */
+/** 页面标题（Headline Medium 28 / 400；工作台/全部/我的 页首统一）。 */
 @Composable
 fun CtPageTitle(
     text: String,

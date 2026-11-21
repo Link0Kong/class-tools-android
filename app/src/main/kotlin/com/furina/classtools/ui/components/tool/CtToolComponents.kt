@@ -108,7 +108,7 @@ fun CtToolCard(
     }
 }
 
-/** 分组小标题（对齐鸿蒙 SectionHeader：19 Medium + 可选右侧文字操作）。 */
+/** 分组小标题：Title Large（22sp / 400，MD3 分区标题）+ 可选右侧文字操作。 */
 @Composable
 fun CtToolSectionHeader(
     title: String,
@@ -377,3 +377,4 @@ fun CtToolChip(
         }
     }
 }
+

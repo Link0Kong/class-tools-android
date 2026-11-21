@@ -156,41 +156,55 @@ class CtDesignTokensTest {
     // ---- 3. 形状 / 间距 / 字号 ----
 
     @Test
-    fun `圆角与任务规范一致（card 24 输入 14 hero 32 弹层 28 胶囊 · 2026-11-20 v2 加大一档）`() {
-        assertEquals(24.dp, CtRadius.card)
-        assertEquals(14.dp, CtRadius.input)
-        assertEquals(32.dp, CtRadius.hero)
+    fun `圆角全部落在 MD3 十档（card 12 输入 12 hero 28 弹层 28 · 2026-11-21）`() {
+        assertEquals(12.dp, CtRadius.card)
+        assertEquals(12.dp, CtRadius.input)
+        assertEquals(28.dp, CtRadius.hero)
         assertEquals(28.dp, CtRadius.sheetTop)
         assertEquals(28.dp, CtRadius.dialog)
         assertEquals(999.dp, CtRadius.pill)
-        // 紧凑档保留旧值（鸿蒙 18）
-        assertEquals(20.dp, CtRadius.cardCompact)
+        assertEquals(8.dp, CtRadius.cardCompact)
+        assertEquals(8.dp, CtRadius.chip)
+        assertEquals(8.dp, CtRadius.cardPressed)
+        // M3 十档：0 / 4 / 8 / 12 / 16 / 20 / 28 / 32 / 48 / Full
+        val steps = setOf(0, 4, 8, 12, 16, 20, 28, 32, 48)
+        listOf(
+            CtRadius.card,
+            CtRadius.cardCompact,
+            CtRadius.hero,
+            CtRadius.input,
+            CtRadius.sheetTop,
+            CtRadius.dialog,
+            CtRadius.tile,
+            CtRadius.chip,
+            CtRadius.cardPressed,
+            CtRadius.largeIncreased,
+            CtRadius.extraLargeIncreased,
+        ).forEach { radius ->
+            assertTrue("${radius.value}dp 不在 MD3 十档内", radius.value.toInt() in steps)
+        }
     }
 
     @Test
-    fun `间距刻度 4 8 12 16 20 24 与页面边距三档`() {
-        // 2026-11-19 8vp 网格：xs=8 / sm=12 / md=16 / xxl=32（xxs=4 为半格）
-        assertEquals(8.dp, CtSpace.xs)
-        assertEquals(12.dp, CtSpace.sm)
-        assertEquals(16.dp, CtSpace.md)
-        assertEquals(20.dp, CtSpace.lg)
-        assertEquals(24.dp, CtSpace.xl)
-        assertEquals(32.dp, CtSpace.xxl)
-        // 2026-11-19 鸿蒙间隔规范：屏幕边缘 20vp（原 16）
-        assertEquals(20.dp, CtSpace.pagePhone)
+    fun `间距 token 与 MD3 页面边距（compact 16 medium 24）`() {
+        // 2026-11-21 MD3 layout：页面 margin 只有 16 / 24 两档
+        assertEquals(16.dp, CtSpace.pagePhone)
         assertEquals(24.dp, CtSpace.pageFold)
-        assertEquals(32.dp, CtSpace.pageTablet)
-        // 页面边距三档 = 鸿蒙 Breakpoints（跨端一致）
+        assertEquals(24.dp, CtSpace.pageTablet)
+        assertEquals(12.dp, CtSpace.cardGap)
+        assertEquals(16.dp, CtSpace.cardPadding)
+        assertEquals(24.dp, CtSpace.sectionGap)
+        // 页面边距三档 = HarmonyTokens 别名（跨端不再要求一致，别名仍指向同一值）
         assertEquals(HarmonyTokens.PagePadding, CtSpace.pagePhone)
         assertEquals(HarmonyTokens.PagePaddingFold, CtSpace.pageFold)
         assertEquals(HarmonyTokens.PagePaddingTablet, CtSpace.pageTablet)
     }
 
     @Test
-    fun `字体层级 28 24 20 16 15 13 12 与行高成比例`() {
+    fun `字体层级为 M3 映射 28 24 22 16 14 14 12 与中文行高`() {
         assertEquals(28.sp, CtType.displayTitleSize)
         assertEquals(24.sp, CtType.titleSize)
-        assertEquals(20.sp, CtType.headlineSize)
+        assertEquals(22.sp, CtType.headlineSize)
         assertEquals(16.sp, CtType.title16Size)
         assertEquals(14.sp, CtType.bodySize)
         assertEquals(14.sp, CtType.labelSize)
@@ -198,13 +212,13 @@ class CtDesignTokensTest {
 
         assertEquals(28.sp, CtTypeScale.display.fontSize)
         assertEquals(24.sp, CtTypeScale.title.fontSize)
-        assertEquals(20.sp, CtTypeScale.headline.fontSize)
+        assertEquals(22.sp, CtTypeScale.headline.fontSize)
         assertEquals(16.sp, CtTypeScale.title16.fontSize)
         assertEquals(14.sp, CtTypeScale.body.fontSize)
         assertEquals(14.sp, CtTypeScale.label.fontSize)
         assertEquals(12.sp, CtTypeScale.caption.fontSize)
 
-        // 行高比例 1.4–1.6（鸿蒙排版规范：大字号紧、小字号松）
+        // 中文行高 = 官方行高 × 1.07，比例落在 1.29–1.65
         listOf(
             CtTypeScale.display,
             CtTypeScale.title,
@@ -215,7 +229,7 @@ class CtDesignTokensTest {
             CtTypeScale.caption,
         ).forEach { style ->
             val ratio = style.lineHeight.value / style.fontSize.value
-            assertTrue("lineRatio=$ratio", ratio in 1.28f..1.6f)
+            assertTrue("lineRatio=$ratio", ratio in 1.28f..1.65f)
         }
         // 旧入口 CtText 指向同一套字号（页面零改动迁移）
         assertEquals(CtTypeScale.title, CtText.title)

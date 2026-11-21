@@ -8,27 +8,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 设计令牌锁定（原 `HarmonyTokensTest`，2026-11-19 随「统一视觉语言」重构更新）。
+ * 设计令牌锁定（2026-11-21 按 MD3 官方知识库回归）。
  *
  * 令牌源：`ui/theme/CtDesign.kt`（[CtPalette]/[CtRadius]/[CtSpace]/[CtType]/[CtSize]）。
  * 旧入口 `HarmonyTokens` / `CtText` / `harmonyColors()` 保留为同一令牌的别名，
  * 本测试同时锁定「旧名可用」与「新口径正确」：
  *
- * - 跨端一致（与鸿蒙 `Tokens.ets` 同值）：品牌三色、页面边距 16/24/32、GAP 12、
- *   顶栏 56、磁贴 96/40/24/12、内容宽 880/1080/960、骨架色。
- * - 安卓按 M3 Expressive **上移一档**：卡片圆角 18→**20**、hero 24→**28**、页面主标题 26→**28**；
- *   动效时长按任务统一为 120/200/300/400。
+ * - MD3 layout：页面边距 compact 16 / medium+ 24；卡片间距 12；卡内边距 16。
+ * - MD3 形状十档：卡片 12 / 紧凑卡 8 / hero 28 / 输入 12 / 图标块 12 / 弹层 28。
+ * - MD3 字阶：页面标题 Headline Medium 28、hero Headline Small 24、分区 Title Large 22。
  */
 class HarmonyTokensTest {
 
     @Test
-    fun `间距与页面边距与鸿蒙 Tokens 同值`() {
-        // 2026-11-19 鸿蒙间隔规范：PAGE_PADDING 由 16 → 20（屏幕边缘 20vp）
-        assertEquals(20.dp, HarmonyTokens.PagePadding)
+    fun `间距与页面边距为 MD3 官方口径`() {
+        // MD3 layout：compact 16dp，medium 及以上 24dp（不再用鸿蒙 20/24/32）
+        assertEquals(16.dp, HarmonyTokens.PagePadding)
         assertEquals(24.dp, HarmonyTokens.PagePaddingFold)
-        assertEquals(32.dp, HarmonyTokens.PagePaddingTablet)
-        // 2026-11-19 8vp 网格：GAP 由 12 → 16（卡片间距 16vp）
-        assertEquals(16.dp, HarmonyTokens.Gap)
+        assertEquals(24.dp, HarmonyTokens.PagePaddingTablet)
+        // 卡片间距 12（space150；MD3 卡片页建议 ≤8，2 列大卡取 12 属产品决策）
+        assertEquals(12.dp, HarmonyTokens.Gap)
         assertEquals(16.dp, HarmonyTokens.CardPadding)
         assertEquals(12.dp, HarmonyTokens.TilePadding)   // ToolTile padding SPACE_12
         assertEquals(8.dp, HarmonyTokens.BreathTop)      // BREATH_TOP
@@ -37,14 +36,14 @@ class HarmonyTokensTest {
     }
 
     @Test
-    fun `圆角按 M3 Expressive 上移一档（卡片 24 hero 32 输入 14 弹层 28 · v2）`() {
-        assertEquals(24.dp, HarmonyTokens.RadiusCard)   // 鸿蒙 18 → 安卓 20（Expressive）
-        assertEquals(32.dp, HarmonyTokens.RadiusHero)   // 鸿蒙 24 → 安卓 28
-        assertEquals(14.dp, HarmonyTokens.RadiusInput)  // 鸿蒙 14（不变）
-        assertEquals(28.dp, HarmonyTokens.RadiusSheet)  // 弹层 28
-        assertEquals(12.dp, HarmonyTokens.RadiusTile)   // 磁贴图标块 12（不变）
-        // 紧凑档保留鸿蒙原值，供小磁贴/编辑格使用
-        assertEquals(20.dp, CtRadius.cardCompact)
+    fun `圆角回到 MD3 十档（卡片 12 hero 28 输入 12 弹层 28）`() {
+        assertEquals(12.dp, HarmonyTokens.RadiusCard)   // M3 Card 默认 medium
+        assertEquals(28.dp, HarmonyTokens.RadiusHero)   // extra large
+        assertEquals(12.dp, HarmonyTokens.RadiusInput)  // medium
+        assertEquals(28.dp, HarmonyTokens.RadiusSheet)  // extra large
+        assertEquals(12.dp, HarmonyTokens.RadiusTile)   // 磁贴图标块 12（medium）
+        // 紧凑档 8（small）
+        assertEquals(8.dp, CtRadius.cardCompact)
     }
 
     @Test
@@ -71,10 +70,10 @@ class HarmonyTokensTest {
     }
 
     @Test
-    fun `字号层级为新阶梯 28 24 20 16 14 14 12`() {
+    fun `字号层级为 MD3 映射 28 24 22 16 14 14 12`() {
         assertEquals(28, CtType.displayTitleSize.value.toInt())
         assertEquals(24, CtType.titleSize.value.toInt())
-        assertEquals(20, CtType.headlineSize.value.toInt())
+        assertEquals(22, CtType.headlineSize.value.toInt())
         assertEquals(16, CtType.title16Size.value.toInt())
         assertEquals(14, CtType.bodySize.value.toInt())
         assertEquals(14, CtType.labelSize.value.toInt())
@@ -113,7 +112,7 @@ class HarmonyTokensTest {
         assertEquals(Color(0xFFEFF3F4), HarmonyTokens.SkeletonBase)
         assertEquals(Color(0xFFF5F7F8), HarmonyTokens.SkeletonSoft)
         assertEquals(Color(0x0F4E9082), HarmonyTokens.HeroShadowColor)
-        assertEquals(3.dp, HarmonyTokens.HeroShadowElevation)
+        assertEquals(1.dp, HarmonyTokens.HeroShadowElevation)
         assertNotEquals(HarmonyTokens.DarkSkeletonStrong, HarmonyTokens.SkeletonStrong)
         assertEquals(HarmonyTokens.CardShadowColor, CtPalette.CardShadow)
     }

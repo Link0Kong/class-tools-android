@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 // =============================================================================
 // 统一视觉语言 · 组合入口（2026-11-19 M3 Expressive × HarmonyOS 重构）
@@ -34,82 +33,61 @@ import androidx.compose.ui.unit.sp
 // -----------------------------------------------------------------------------
 
 /**
- * 字体层级（TextStyle）—— 2026-11-19 按鸿蒙排版规范重排（字号 28/24/20/16/14/12，行高 1.4–1.6）。
+ * 字体层级（TextStyle）—— **2026-11-21 起直接引用 [CtTypography] 的官方 M3 档位**。
  *
- * 行高 = 字号 × [CtType] 的 lineRatio，并取 2 的倍数对齐 8vp 网格。
+ * 不再手写字号/行高/字重：每个语义名都指向官方字阶里的具体 role，
+ * 页面改字号时改 role，不写 `copy(fontSize = …)`。
+ *
+ * | 语义名 | M3 role | 用途 |
+ * |---|---|---|
+ * | display | Headline Medium | 页面主标题（大标题 App Bar） |
+ * | title | Headline Small | hero 问候 / 身份 |
+ * | headline | Title Large | 分区标题 / 弹层标题 |
+ * | title16 | Title Medium | 卡片 / 列表主文字 |
+ * | body | Body Medium | 正文 |
+ * | label | Label Large | 按钮 / Chip / Tab |
+ * | caption | Body Small | 辅助说明 |
+ * | micro | Label Small | 角标 / 极小标注 |
  */
 object CtTypeScale {
-    /** 页面主标题：28 / 40 / Bold（1.43）。 */
-    val display: TextStyle = TextStyle(
-        fontSize = CtType.displayTitleSize,
-        lineHeight = CtType.displayTitleLine.sp,
-        fontWeight = FontWeight.Bold,
-    )
+    /** 页面主标题：Headline Medium（28 / 39 / 400）。 */
+    val display: TextStyle = CtTypography.headlineMedium
 
-    /** hero 问候 / 身份姓名：24 / 36 / Bold（1.5）。 */
-    val title: TextStyle = TextStyle(
-        fontSize = CtType.titleSize,
-        lineHeight = CtType.titleLine.sp,
-        fontWeight = FontWeight.Bold,
-    )
+    /** hero 问候 / 身份姓名：Headline Small（24 / 34 / 400）。 */
+    val title: TextStyle = CtTypography.headlineSmall
 
-    /** 工具页顶栏 / 分组大标题 / 弹层大标题：20 / 28 / Bold（1.4）。 */
-    val headline: TextStyle = TextStyle(
-        fontSize = CtType.headlineSize,
-        lineHeight = CtType.headlineLine.sp,
-        fontWeight = FontWeight.Bold,
-    )
+    /** 分区标题 / 弹层大标题：Title Large（22 / 30 / 400）。 */
+    val headline: TextStyle = CtTypography.titleLarge
 
-    /** 区块标题 / 列表主文字：16 / 24 / Medium（1.5）。 */
-    val title16: TextStyle = TextStyle(
-        fontSize = CtType.title16Size,
-        lineHeight = CtType.title16Line.sp,
-        fontWeight = FontWeight.Medium,
-    )
+    /** 卡片 / 列表主文字：Title Medium（16 / 26 / 500）。 */
+    val title16: TextStyle = CtTypography.titleMedium
 
-    /** 正文：14 / 22 / Normal（1.57）。 */
-    val body: TextStyle = TextStyle(
-        fontSize = CtType.bodySize,
-        lineHeight = CtType.bodyLine.sp,
-    )
+    /** 正文：Body Medium（14 / 21 / 400）。 */
+    val body: TextStyle = CtTypography.bodyMedium
 
-    /** 强调正文：14 / 22 / Medium。 */
-    val bodyMedium: TextStyle = body.copy(fontWeight = FontWeight.Medium)
+    /** 强调正文：Body Medium 500。 */
+    val bodyMedium: TextStyle = CtTypography.bodyMedium.copy(fontWeight = FontWeight.Medium)
 
-    /** 标签/按钮：14 / 20 / Medium（1.43，与正文同字号）。 */
-    val label: TextStyle = TextStyle(
-        fontSize = CtType.labelSize,
-        lineHeight = CtType.labelLine.sp,
-        fontWeight = FontWeight.Medium,
-    )
+    /** 按钮 / Chip / Tab：Label Large（14 / 21 / 500）。 */
+    val label: TextStyle = CtTypography.labelLarge
 
-    /** 次级标签（不加粗）：14 / 20。 */
-    val labelPlain: TextStyle = TextStyle(
-        fontSize = CtType.labelSize,
-        lineHeight = CtType.labelLine.sp,
-    )
+    /** 次级标签（不加粗）：Label Large 400。 */
+    val labelPlain: TextStyle = CtTypography.labelLarge.copy(fontWeight = FontWeight.Normal)
 
-    /** 说明：12 / 18（1.5）。 */
-    val caption: TextStyle = TextStyle(
-        fontSize = CtType.captionSize,
-        lineHeight = CtType.captionLine.sp,
-    )
+    /** 辅助说明：Body Small（12 / 17 / 400）。 */
+    val caption: TextStyle = CtTypography.bodySmall
 
-    /** 说明（Medium，用于区块标题小字）。 */
-    val captionMedium: TextStyle = caption.copy(fontWeight = FontWeight.Medium)
+    /** 辅助说明（Medium，用于区块标题小字）：Body Small 500。 */
+    val captionMedium: TextStyle = CtTypography.bodySmall.copy(fontWeight = FontWeight.Medium)
 
-    /** 角标：11 / 16 / Medium。 */
-    val micro: TextStyle = TextStyle(
-        fontSize = CtType.microSize,
-        lineHeight = CtType.microLine.sp,
-        fontWeight = FontWeight.Medium,
-    )
+    /** 角标：Label Small（11 / 17 / 500）。 */
+    val micro: TextStyle = CtTypography.labelSmall
 
-    /** 区块标题（14 Medium 次级色）：组件 `CtSectionTitle` 使用。 */
-    val sectionTitle: TextStyle = label
+    /** 区块标题：Title Small（14 / 21 / 500）。 */
+    val sectionTitle: TextStyle = CtTypography.titleSmall
 
-    /** 数字展示（电费/统计等）：24 / 36 / Bold，等宽数字。 */
-    val metric: TextStyle = title.copy(fontFeatureSettings = "tnum")
+    /** 数字展示（电费/统计等）：Headline Small + 等宽数字（tnum）。 */
+    val metric: TextStyle = CtTypography.headlineSmall.copy(fontFeatureSettings = "tnum")
 }
 
 /**
@@ -136,13 +114,13 @@ object CtText {
 
 /** 形状令牌（Shape 实例；需要数值动画时用 [CtRadius].* .dp）。 */
 object CtShape {
-    /** 卡片 20dp（surfaceContainerLow + outlineVariant 描边 + 1dp 极浅阴影）。 */
+    /** 标准卡片 12dp（M3 Card medium 档；静止无阴影，靠 surface 色阶分层）。 */
     val card = androidx.compose.foundation.shape.RoundedCornerShape(CtRadius.card)
-    /** 紧凑卡片 18dp（小磁贴/编辑格）。 */
+    /** 紧凑卡片 8dp（小磁贴/编辑格）。 */
     val cardCompact = androidx.compose.foundation.shape.RoundedCornerShape(CtRadius.cardCompact)
-    /** hero 28dp。 */
+    /** hero 28dp（extra large）。 */
     val hero = androidx.compose.foundation.shape.RoundedCornerShape(CtRadius.hero)
-    /** 输入 14dp（tonal 底无边框）。 */
+    /** 输入 12dp（tonal 底无边框）。 */
     val input = androidx.compose.foundation.shape.RoundedCornerShape(CtRadius.input)
     /** 顶部弹层 28dp。 */
     val sheet = androidx.compose.foundation.shape.RoundedCornerShape(

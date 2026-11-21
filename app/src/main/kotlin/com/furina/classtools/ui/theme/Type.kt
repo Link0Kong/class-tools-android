@@ -8,73 +8,91 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 // =============================================================================
 // Material 3 Typography（15 baseline + 15 emphasized）
 //
-// 数值来自 [CtDesign.kt] 的 [CtType]（唯一令牌源），保证「M3 组件」与「自绘组件」
-// 使用同一套字号：
-//   displayLarge 36 / displayMedium 32 / displaySmall 28（= displayTitle）
-//   headlineLarge 28 / headlineMedium 24 / headlineSmall 20（= 工具页顶栏）
-//   titleLarge 20 / titleMedium 16 / titleSmall 14
-//   bodyLarge 15 / bodyMedium 14 / bodySmall 12
-//   labelLarge 13 / labelMedium 12 / labelSmall 11
+// 2026-11-21 按 MD3 官方知识库（lwhhz/Android-MD3-Knowledge）重做：
+//   01-Foundations/typography.md · 03-Android-Compose/typography.md
 //
-// 行高按中文可读性（1.3–1.5）取整；字体族用系统默认（Roboto Flex 拉丁 + Noto Sans CJK 中文），
-// 不打包字体（体积 / 多设备品牌一致性由系统字体承担；weight 轴用于 Expressive 的情绪层级）。
+// 三条硬规则（对应 ui-review-checklist 的「主题 / 设计一致性」阻断项）：
+//   1. **不手写 15 档数值**：基线直接取 Compose material3 的 `Typography()` 默认值
+//      （= 官方 M3 type scale），只对行高做语言适配；
+//   2. **常规层级只用 400 / 500**：Display / Headline / Title Large / Body 为 400，
+//      Title Medium / Title Small / 全部 Label 为 500。700 仅用于 Emphasized 的极端强调，
+//      中文里 700 容易糊成一团，页面标题不再用 Bold；
+//   3. **中文行高 ×1.07**：官方语言高度分类里中文属 Medium（约 +7%），
+//      行高 = 官方行高 × 1.07 后取整；改字号时行高自动跟着走，不再各页面手调。
+//
+// 页面统一用 [CtTypeScale] 的语义名（display / title / headline / body / label / caption），
+// 不写 `fontSize = 34.sp` 这类脱离字阶的覆盖。
 // =============================================================================
 
-private val CtFontFamily = FontFamily.Default
+/** 中文语言高度系数（MD3 语言高度 Medium 档 ≈ ×1.07）。 */
+private const val ZH_LINE_HEIGHT_SCALE = 1.07f
 
-private fun style(
-    weight: FontWeight,
-    size: Int,
-    line: Int,
-    tracking: Double = 0.0,
-): TextStyle = TextStyle(
-    fontFamily = CtFontFamily,
-    fontWeight = weight,
-    fontSize = size.sp,
-    lineHeight = line.sp,
-    letterSpacing = tracking.sp,
-)
+/** 按中文语言高度加高行高；非 sp 行高（如 Unspecified）原样返回。 */
+private fun TextStyle.withChineseLineHeight(): TextStyle {
+    if (lineHeight == TextUnit.Unspecified) return this
+    return copy(lineHeight = (lineHeight.value * ZH_LINE_HEIGHT_SCALE).roundToInt().sp)
+}
 
-val CtTypography = Typography(
-    displayLarge = style(FontWeight.Medium, 36, 46, -0.2),
-    displayMedium = style(FontWeight.Medium, 32, 42, -0.1),
-    displaySmall = style(FontWeight.Bold, 28, 36),
-    headlineLarge = style(FontWeight.Bold, 28, 36),
-    headlineMedium = style(FontWeight.Bold, 24, 32),
-    headlineSmall = style(FontWeight.Bold, 20, 27),
-    titleLarge = style(FontWeight.Medium, 20, 28),
-    titleMedium = style(FontWeight.Medium, CtType.title16Size.value.toInt(), CtType.title16Line, 0.1),
-    titleSmall = style(FontWeight.Medium, 14, 21, 0.1),
-    bodyLarge = style(FontWeight.Normal, CtType.bodySize.value.toInt(), CtType.bodyLine, 0.2),
-    bodyMedium = style(FontWeight.Normal, 14, 21, 0.2),
-    bodySmall = style(FontWeight.Normal, CtType.captionSize.value.toInt(), CtType.captionLine, 0.3),
-    labelLarge = style(FontWeight.Medium, CtType.labelSize.value.toInt(), CtType.labelLine, 0.1),
-    labelMedium = style(FontWeight.Medium, CtType.captionSize.value.toInt(), CtType.captionLine, 0.4),
-    labelSmall = style(FontWeight.Medium, CtType.microSize.value.toInt(), CtType.microLine, 0.4),
-)
+/**
+ * 应用字阶：M3 baseline 15 档 + 中文行高。
+ *
+ * 字体族保留系统默认（Roboto Flex 拉丁 + 设备中文字体），不打包字体：
+ * 中文字体由各厂商提供，换 family 时行高与字距必须一起换（官方提醒）。
+ */
+val CtTypography: Typography = Typography().run {
+    Typography(
+        displayLarge = displayLarge.withChineseLineHeight(),
+        displayMedium = displayMedium.withChineseLineHeight(),
+        displaySmall = displaySmall.withChineseLineHeight(),
+        headlineLarge = headlineLarge.withChineseLineHeight(),
+        headlineMedium = headlineMedium.withChineseLineHeight(),
+        headlineSmall = headlineSmall.withChineseLineHeight(),
+        titleLarge = titleLarge.withChineseLineHeight(),
+        titleMedium = titleMedium.withChineseLineHeight(),
+        titleSmall = titleSmall.withChineseLineHeight(),
+        bodyLarge = bodyLarge.withChineseLineHeight(),
+        bodyMedium = bodyMedium.withChineseLineHeight(),
+        bodySmall = bodySmall.withChineseLineHeight(),
+        labelLarge = labelLarge.withChineseLineHeight(),
+        labelMedium = labelMedium.withChineseLineHeight(),
+        labelSmall = labelSmall.withChineseLineHeight(),
+    )
+}
 
-/** Emphasized 变体（表达性时刻：hero/统计数字；每屏最多 2 处）。 */
+/** 系统默认字体族（与 [CtTypography] 一致；供少数自绘组件显式引用）。 */
+val CtFontFamily: FontFamily = CtTypography.bodyMedium.fontFamily ?: FontFamily.Default
+
+/**
+ * Emphasized 变体（M3 的同一套字阶、更重的一档；不是更大的字）。
+ *
+ * 官方适用位置：Badges / Buttons（仅主操作）/ Extended FAB / 选中列表项 / 选中菜单项。
+ * 本 App 只把 hero 数字、主操作、选中态换用 emphasized；普通标题一律 baseline。
+ *
+ * 字重规则：baseline 400 → emphasized 500；baseline 500 → emphasized 600。
+ */
 data class CtEmphasizedTypography(
-    val displayLargeEmphasized: TextStyle = style(FontWeight.SemiBold, 36, 46),
-    val displayMediumEmphasized: TextStyle = style(FontWeight.SemiBold, 32, 42),
-    val displaySmallEmphasized: TextStyle = style(FontWeight.Bold, 28, 36),
-    val headlineLargeEmphasized: TextStyle = style(FontWeight.Bold, 28, 36),
-    val headlineMediumEmphasized: TextStyle = style(FontWeight.Bold, 24, 32),
-    val headlineSmallEmphasized: TextStyle = style(FontWeight.Bold, 20, 27),
-    val titleLargeEmphasized: TextStyle = style(FontWeight.SemiBold, 20, 28),
-    val titleMediumEmphasized: TextStyle = style(FontWeight.SemiBold, 16, 24),
-    val titleSmallEmphasized: TextStyle = style(FontWeight.SemiBold, 14, 21),
-    val bodyLargeEmphasized: TextStyle = style(FontWeight.Medium, 15, 22),
-    val bodyMediumEmphasized: TextStyle = style(FontWeight.Medium, 14, 21),
-    val bodySmallEmphasized: TextStyle = style(FontWeight.Medium, 12, 17),
-    val labelLargeEmphasized: TextStyle = style(FontWeight.SemiBold, 13, 18),
-    val labelMediumEmphasized: TextStyle = style(FontWeight.SemiBold, 12, 17),
-    val labelSmallEmphasized: TextStyle = style(FontWeight.SemiBold, 11, 15),
+    val displayLargeEmphasized: TextStyle = CtTypography.displayLarge.copy(fontWeight = FontWeight.Medium),
+    val displayMediumEmphasized: TextStyle = CtTypography.displayMedium.copy(fontWeight = FontWeight.Medium),
+    val displaySmallEmphasized: TextStyle = CtTypography.displaySmall.copy(fontWeight = FontWeight.Medium),
+    val headlineLargeEmphasized: TextStyle = CtTypography.headlineLarge.copy(fontWeight = FontWeight.Medium),
+    val headlineMediumEmphasized: TextStyle = CtTypography.headlineMedium.copy(fontWeight = FontWeight.Medium),
+    val headlineSmallEmphasized: TextStyle = CtTypography.headlineSmall.copy(fontWeight = FontWeight.Medium),
+    val titleLargeEmphasized: TextStyle = CtTypography.titleLarge.copy(fontWeight = FontWeight.Medium),
+    val titleMediumEmphasized: TextStyle = CtTypography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+    val titleSmallEmphasized: TextStyle = CtTypography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+    val bodyLargeEmphasized: TextStyle = CtTypography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+    val bodyMediumEmphasized: TextStyle = CtTypography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+    val bodySmallEmphasized: TextStyle = CtTypography.bodySmall.copy(fontWeight = FontWeight.Medium),
+    val labelLargeEmphasized: TextStyle = CtTypography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+    val labelMediumEmphasized: TextStyle = CtTypography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+    val labelSmallEmphasized: TextStyle = CtTypography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
 )
 
 val CtEmphasizedType = CtEmphasizedTypography()

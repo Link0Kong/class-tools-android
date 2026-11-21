@@ -32,9 +32,15 @@ object CtDockLogic {
     const val PARALLAX_FRACTION: Float = 0.08f
     const val MIN_ALPHA: Float = 0.72f
     const val MIN_SCALE: Float = 0.98f
-    const val ITEM_MIN_HEIGHT_DP: Int = 56
-    const val DOCK_HEIGHT_DP: Int = 60
-    const val ITEM_MIN_TOUCH_DP: Int = 56
+    const val ITEM_MIN_HEIGHT_DP: Int = 64
+    /** M3 Expressive floating toolbar 官方高度 64dp。 */
+    const val DOCK_HEIGHT_DP: Int = 64
+    const val ITEM_MIN_TOUCH_DP: Int = 64
+    /** 选中指示器 64 × 32dp（M3 navigation bar / toolbar）。 */
+    const val INDICATOR_WIDTH_DP: Int = 64
+    const val INDICATOR_HEIGHT_DP: Int = 32
+    /** 指示器距底栏顶部 8dp（下方为 32dp 图标带 + 17dp 文案）。 */
+    const val INDICATOR_TOP_DP: Int = 8
 
     /**
      * 底栏连续选中位置（可为小数）：`page + offsetFraction`，夹在 [0, count-1]。

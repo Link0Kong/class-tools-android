@@ -90,7 +90,7 @@ class PptDeckListLogicTest {
     @Test
     fun ownerLabelFallback() {
         assertEquals("陈同学", PptDeckListLogic.ownerLabel(deck("x", "ready")))
-        assertEquals("同学 24", PptDeckListLogic.ownerLabel(deck("x", "ready", ownerSid = "2024000001", ownerName = "")))
+        assertEquals("同学 24", PptDeckListLogic.ownerLabel(deck("x", "ready", ownerSid = "2024000024", ownerName = "")))
         assertEquals("未知同学", PptDeckListLogic.ownerLabel(deck("x", "ready", ownerSid = "", ownerName = "")))
     }
 
@@ -101,3 +101,4 @@ class PptDeckListLogicTest {
         assertEquals("—", PptDeckListLogic.pageText(deck("x", "uploading", slideCount = 0)))
     }
 }
+

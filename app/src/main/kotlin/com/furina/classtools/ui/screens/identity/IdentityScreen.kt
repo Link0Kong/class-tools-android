@@ -445,7 +445,7 @@ fun IdentityScreen(
 
             Spacer(modifier = Modifier.height(CtSpace.xl))
             Text(
-                text = "v${BuildConfig.VERSION_NAME} · Android 17 设计语言",
+                text = "v${BuildConfig.VERSION_NAME} · Material Design 3",
                 style = com.furina.classtools.ui.theme.CtText.caption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -524,3 +524,4 @@ private fun QuickLoginButton(
         }
     }
 }
+
