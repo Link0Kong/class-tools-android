@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.ppt
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -949,7 +951,7 @@ private fun PptTitleDialog(
 // ---------------------------------------------------------------- 小工具
 
 private fun toast(context: Context, message: String) {
-    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    CtToastBus.show(message)
 }
 
 private const val MIME_PPT = "application/vnd.ms-powerpoint"
@@ -957,4 +959,5 @@ private const val MIME_PPTX = "application/vnd.openxmlformats-officedocument.pre
 
 /** 供 MainNavHost 判断失败错误文案（上传中断 → 需重新选文件）。 */
 internal val PPT_UPLOAD_INTERRUPTED = DefaultPptRepository.FAIL_UPLOAD_MESSAGE
+
 

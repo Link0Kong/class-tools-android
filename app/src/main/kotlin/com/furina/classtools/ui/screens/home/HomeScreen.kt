@@ -1,11 +1,12 @@
 package com.furina.classtools.ui.screens.home
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import com.furina.classtools.ui.components.CtButton
 import com.furina.classtools.ui.components.CtButtonStyle
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -391,7 +392,7 @@ fun HomeScreen(
         draft = if (id in draft) {
             draft - id
         } else if (draft.size >= HomeToolsEditor.MAX_QUICK_TOOLS) {
-            Toast.makeText(context, "最多选 ${HomeToolsEditor.MAX_QUICK_TOOLS} 个常用工具", Toast.LENGTH_SHORT).show()
+            CtToastBus.show("最多选 ${HomeToolsEditor.MAX_QUICK_TOOLS} 个常用工具")
             draft
         } else {
             draft + id
@@ -1124,4 +1125,6 @@ private fun HomeMutedLine(text: String) {
         overflow = TextOverflow.Ellipsis,
     )
 }
+
+
 

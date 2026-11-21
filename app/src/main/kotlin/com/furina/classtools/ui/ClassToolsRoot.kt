@@ -1,6 +1,5 @@
 package com.furina.classtools.ui
 
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -8,10 +7,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +33,8 @@ import com.furina.classtools.data.account.OppoSessionLoginResult
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.ui.components.BrandMark
+import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.components.update.UpdateHost
 import com.furina.classtools.ui.navigation.MainNavHost
 import com.furina.classtools.ui.screens.identity.IdentityScreen
@@ -120,6 +123,12 @@ fun ClassToolsRoot(
         }
     }
 
+    val signedIn = sessionState is SessionState.SignedIn
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(snackbarHostState) {
+        CtToastBus.messages.collect { message -> snackbarHostState.showSnackbar(message) }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         when (val state = sessionState) {
             SessionState.Loading -> BootSplash()
@@ -192,12 +201,21 @@ fun ClassToolsRoot(
                             container.authRepository.logout()
                             container.signOut()
                             // M-02：退出登录给一个明确结果提示。
-                            Toast.makeText(context, "已退出登录", Toast.LENGTH_SHORT).show()
+                            CtToastBus.show("已退出登录")
                         }
                     },
                 )
             }
         }
+
+        // 全局 M3 Snackbar：所有 CtToastBus 消息都在底栏上方显示。
+        CtSnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = if (signedIn) 96.dp else 24.dp),
+        )
 
         // App 内更新：宿主放根级 —— 冷启动即自动检查并直接弹窗（登录后首页可见），
         // 不依赖用户去「我的 → 检查更新」；身份门禁/加载页也能看到（未登录也检查）。
@@ -234,3 +252,5 @@ private fun BootSplash() {
         }
     }
 }
+
+

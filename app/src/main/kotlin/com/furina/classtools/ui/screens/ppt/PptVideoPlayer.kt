@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.ppt
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
@@ -909,5 +911,6 @@ private fun Context.findActivity(): Activity? {
 }
 
 private fun toast(context: Context, message: String) {
-    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    CtToastBus.show(message)
 }
+

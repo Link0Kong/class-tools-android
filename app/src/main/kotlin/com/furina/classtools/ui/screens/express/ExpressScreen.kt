@@ -1,11 +1,12 @@
 package com.furina.classtools.ui.screens.express
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -169,6 +170,8 @@ internal fun openExpress(context: Context, target: ExpressTarget): Boolean {
             }
         }
     }
-    Toast.makeText(context, "未找到可用应用，已尝试网页打开", Toast.LENGTH_SHORT).show()
+    CtToastBus.show("未找到可用应用，已尝试网页打开")
     return false
 }
+
+

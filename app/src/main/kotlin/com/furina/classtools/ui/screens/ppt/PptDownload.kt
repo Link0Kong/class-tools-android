@@ -1,11 +1,12 @@
 package com.furina.classtools.ui.screens.ppt
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Environment
-import android.widget.Toast
 
 /**
  * 系统下载（契约 §11.3.4）：DownloadManager 保存到系统「下载」目录；
@@ -16,7 +17,7 @@ import android.widget.Toast
  */
 internal fun downloadToSystemDownloads(context: Context, url: String, fileName: String, mimeType: String? = null) {
     if (url.isBlank()) {
-        Toast.makeText(context, "该演示没有可下载的文件", Toast.LENGTH_SHORT).show()
+        CtToastBus.show("该演示没有可下载的文件")
         return
     }
     val safeName = fileName.replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "演示文件" }
@@ -28,15 +29,13 @@ internal fun downloadToSystemDownloads(context: Context, url: String, fileName: 
         if (!mimeType.isNullOrBlank()) request.setMimeType(mimeType)
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         manager.enqueue(request)
-        Toast.makeText(context, "开始下载：$safeName", Toast.LENGTH_SHORT).show()
+        CtToastBus.show("开始下载：$safeName")
     } catch (_: Throwable) {
         val opened = runCatching {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         }.isSuccess
-        Toast.makeText(
-            context,
-            if (opened) "已用浏览器打开" else "下载失败，请稍后重试",
-            Toast.LENGTH_SHORT,
-        ).show()
+        CtToastBus.show(if (opened) "已用浏览器打开" else "下载失败，请稍后重试")
     }
 }
+
+

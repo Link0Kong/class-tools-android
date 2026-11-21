@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.navigation
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import android.Manifest
@@ -250,7 +252,7 @@ fun MainNavHost(
 
     // 轻量 Toast 反馈（导出/同步结果）。
     fun toast(target: android.content.Context, message: String) {
-        android.widget.Toast.makeText(target, message, android.widget.Toast.LENGTH_SHORT).show()
+        CtToastBus.show(message)
     }
 
     /** 打开工具；「设置」工具卡已移除，设置入口统一在「我的」页。 */
@@ -1182,7 +1184,7 @@ private fun RootTabs(
     /** 绑定：拉起 OPPO 授权 → `POST /oppo/bind`（带当前班级 token）；结果 Toast（简洁，不写长文）。 */
     fun bindOppoAccount() {
         val host = activity ?: run {
-            android.widget.Toast.makeText(context, "当前环境不支持 OPPO 账号授权", android.widget.Toast.LENGTH_SHORT).show()
+            CtToastBus.show("当前环境不支持 OPPO 账号授权")
             return
         }
         if (oppoAccountBusy) return
@@ -1197,7 +1199,7 @@ private fun RootTabs(
                 is OppoBindResult.BoundElsewhere -> "该 OPPO 账号已绑定其他学号"
                 is OppoBindResult.Failure -> result.message
             }
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            CtToastBus.show(message)
         }
     }
 
@@ -1213,7 +1215,7 @@ private fun RootTabs(
                 is OppoUnbindResult.Success -> "已解绑"
                 is OppoUnbindResult.Failure -> result.message
             }
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            CtToastBus.show(message)
         }
     }
 
@@ -1252,25 +1254,25 @@ private fun RootTabs(
                 is OppoBindResult.BoundElsewhere -> "该荣耀账号已绑定其他学号"
                 is OppoBindResult.Failure -> bindResult.message
             }
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            CtToastBus.show(message)
         }
     }
 
     fun bindHonorAccount() {
         val host = activity ?: run {
-            android.widget.Toast.makeText(context, "当前环境不支持荣耀账号授权", android.widget.Toast.LENGTH_SHORT).show()
+            CtToastBus.show("当前环境不支持荣耀账号授权")
             return
         }
         if (honorAccountBusy) return
         val intent = honorAccountManager.signInIntent(host)
         if (intent == null) {
-            android.widget.Toast.makeText(context, "无法拉起荣耀账号授权", android.widget.Toast.LENGTH_SHORT).show()
+            CtToastBus.show("无法拉起荣耀账号授权")
             return
         }
         honorAccountBusy = true
         runCatching { honorBindLauncher.launch(intent) }.onFailure {
             honorAccountBusy = false
-            android.widget.Toast.makeText(context, "无法拉起荣耀账号授权", android.widget.Toast.LENGTH_SHORT).show()
+            CtToastBus.show("无法拉起荣耀账号授权")
         }
     }
 
@@ -1285,7 +1287,7 @@ private fun RootTabs(
                 is OppoUnbindResult.Success -> "已解绑"
                 is OppoUnbindResult.Failure -> result.message
             }
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            CtToastBus.show(message)
         }
     }
 
@@ -1328,9 +1330,8 @@ private fun RootTabs(
                     )
                 }
 
-                else -> CtAdaptiveContent(spec = spec) {
-                    ProfileScreen(
-                        session = session,
+                else -> ProfileScreen(
+                    session = session,
                         onSignOut = onSignOut,
                         syncEnabled = syncEnabled,
                         onSyncEnabledChange = onSyncEnabledChange,
@@ -1359,7 +1360,6 @@ private fun RootTabs(
                         dynamicColorEnabled = dynamicColorEnabled,
                         onDynamicColorChange = onDynamicColorChange,
                     )
-                }
             }
         }
 
@@ -1497,3 +1497,4 @@ private class ContainerVoteMemberSource(
             ?.members?.let(MemberCategoryBuilder::all).orEmpty()
     }
 }
+

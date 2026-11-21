@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.jw
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
@@ -11,7 +13,6 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -602,7 +603,7 @@ fun JwEntryScreen(
         if (JwLoginLogic.validatePassword(rawPassword) != null) return
         if (saveToDevice && sid.isNotBlank()) {
             val saved = runCatching { store.save(sid, rawPassword) }.getOrDefault(false)
-            if (!saved) Toast.makeText(context, JwLoginLogic.MSG_SAVE_FAILED, Toast.LENGTH_SHORT).show()
+            if (!saved) CtToastBus.show(JwLoginLogic.MSG_SAVE_FAILED)
         }
         state.password.value = rawPassword
         state.injectAttempts = 0
@@ -721,7 +722,7 @@ fun JwEntryScreen(
             if (state.route.value == JwWebVpn.Route.WEBVPN) JwWebVpn.LOGIN_URL else JwLoginLogic.ENTRY_URL,
         )
         state.promptVisible.value = true
-        Toast.makeText(context, JwLoginLogic.MSG_CLEARED, Toast.LENGTH_SHORT).show()
+        CtToastBus.show(JwLoginLogic.MSG_CLEARED)
     }
 
     // WebView 随页面销毁（返回工具页 / 旋转重建）释放，避免内存泄漏。
@@ -1136,3 +1137,5 @@ private suspend fun WebView.evaluateJavascriptAwait(script: String): String? =
             if (continuation.isActive) continuation.resume(null)
         }
     }
+
+

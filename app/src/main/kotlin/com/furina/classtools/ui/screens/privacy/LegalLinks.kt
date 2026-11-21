@@ -1,11 +1,12 @@
 package com.furina.classtools.ui.screens.privacy
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import com.furina.classtools.BuildConfig
 
 /**
@@ -107,7 +108,9 @@ object LegalLinkOpener {
         } else {
             "未能打开浏览器：" + LegalLinks.displayPath(url)
         }
-        runCatching { Toast.makeText(context, message, Toast.LENGTH_LONG).show() }
+        runCatching { CtToastBus.show(message) }
         return false
     }
 }
+
+

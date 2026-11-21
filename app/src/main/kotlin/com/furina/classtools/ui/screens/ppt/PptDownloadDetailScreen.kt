@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.ppt
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -869,5 +871,6 @@ private fun metaLine(detail: PptDeckDetail): String {
 }
 
 private fun toast(context: Context, message: String) {
-    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    CtToastBus.show(message)
 }
+

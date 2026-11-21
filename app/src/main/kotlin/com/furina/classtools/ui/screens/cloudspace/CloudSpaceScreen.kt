@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.cloudspace
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -976,7 +978,7 @@ private fun fileKindIcon(kind: CloudSpaceLogic.FileKind): ImageVector = when (ki
 }
 
 private fun toast(context: Context, message: String) {
-    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    CtToastBus.show(message)
 }
 
 // =============================================================================
@@ -1071,3 +1073,4 @@ private fun CloudSpacePreviewLight() {
 private fun CloudSpacePreviewDark() {
     CloudSpacePreviewContent(darkTheme = true, failed = true)
 }
+

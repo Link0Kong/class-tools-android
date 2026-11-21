@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.all
 
+import com.furina.classtools.ui.components.CtToastBus
+
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Tune
@@ -11,7 +13,6 @@ import com.furina.classtools.ui.components.ctStickyHeaderProgress
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -308,7 +309,7 @@ fun AllToolsScreen(
         val current = quickDraft
         val next = if (current.contains(tool.id)) current - tool.id else current + tool.id
         if (next.size > HomeToolsEditorMax) {
-            Toast.makeText(context, "首页最多 4 个", Toast.LENGTH_SHORT).show()
+            CtToastBus.show("首页最多 4 个")
             return
         }
         quickDraft = next
@@ -635,3 +636,5 @@ private fun HarmonyAllToolsHeader(
         },
     )
 }
+
+
