@@ -875,7 +875,10 @@ private fun PptListEmpty(onUpload: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        CtToolCard(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)) {
+        CtToolCard(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
+        ) {
             EmptyState(
                 icon = Icons.Rounded.Slideshow,
                 title = PptStatusTexts.EMPTY_TITLE,
@@ -959,5 +962,6 @@ private const val MIME_PPTX = "application/vnd.openxmlformats-officedocument.pre
 
 /** 供 MainNavHost 判断失败错误文案（上传中断 → 需重新选文件）。 */
 internal val PPT_UPLOAD_INTERRUPTED = DefaultPptRepository.FAIL_UPLOAD_MESSAGE
+
 
 
