@@ -62,6 +62,19 @@ class AppSettingsStore(private val context: Context) {
         CtLightSetting.fromStorage(prefs[KEY_IMMERSIVE_LIGHT])
     }
 
+    /** 远程公告（热更）；null = 无公告。 */
+    val remoteAnnouncement: Flow<String?> = store.data.map { prefs -> prefs[KEY_REMOTE_ANNOUNCEMENT] }
+
+    /** 远程公告对应的配置版本。 */
+    val remoteAnnouncementVersion: Flow<Int> = store.data.map { prefs ->
+        prefs[KEY_REMOTE_ANNOUNCEMENT_VERSION] ?: 0
+    }
+
+    /** 用户已关闭的公告版本；version 更大才再次展示。 */
+    val dismissedAnnouncementVersion: Flow<Int> = store.data.map { prefs ->
+        prefs[KEY_DISMISSED_ANNOUNCEMENT_VERSION] ?: 0
+    }
+
     /** 首帧同步读取外观模式（未写入过 = 跟随系统）。 */
     fun startupAppearanceMode(): AppearanceMode =
         AppearanceMode.fromStorage(startupPrefs.getString(STARTUP_KEY_APPEARANCE_MODE, null))
@@ -83,7 +96,18 @@ class AppSettingsStore(private val context: Context) {
         config.appearance?.let { setAppearanceMode(AppearanceMode.fromStorage(it)) }
         config.hideStatusBar?.let { setHideStatusBar(it) }
         config.dynamicColor?.let { setDynamicColor(it) }
+        if (!config.announcement.isNullOrBlank()) {
+            store.edit { prefs ->
+                prefs[KEY_REMOTE_ANNOUNCEMENT] = config.announcement
+                prefs[KEY_REMOTE_ANNOUNCEMENT_VERSION] = config.version
+            }
+        }
         store.edit { prefs -> prefs[KEY_REMOTE_CONFIG_VERSION] = config.version }
+    }
+
+    /** 关闭某个版本的远程公告。 */
+    suspend fun dismissRemoteAnnouncement(version: Int) {
+        store.edit { prefs -> prefs[KEY_DISMISSED_ANNOUNCEMENT_VERSION] = version }
     }
 
     suspend fun setDynamicColor(enabled: Boolean) {
@@ -112,6 +136,9 @@ class AppSettingsStore(private val context: Context) {
         val KEY_HIDE_STATUS_BAR = booleanPreferencesKey(AppearanceSettings.KEY_HIDE_STATUS_BAR)
         val KEY_IMMERSIVE_LIGHT = stringPreferencesKey(AppearanceSettings.KEY_IMMERSIVE_LIGHT)
         val KEY_REMOTE_CONFIG_VERSION = intPreferencesKey("remote_config_version")
+        val KEY_REMOTE_ANNOUNCEMENT = stringPreferencesKey("remote_announcement")
+        val KEY_REMOTE_ANNOUNCEMENT_VERSION = intPreferencesKey("remote_announcement_version")
+        val KEY_DISMISSED_ANNOUNCEMENT_VERSION = intPreferencesKey("dismissed_announcement_version")
 
         /** 冷启动镜像（仅外观模式 + 隐藏状态栏 + 沉浸光感；DataStore 仍是真源）。 */
         const val STARTUP_PREFS = "ct_appearance_startup"
@@ -129,4 +156,5 @@ class AppSettingsStore(private val context: Context) {
  * 预览 / 孤立组件为 null → 「我的」页回退到入参（预览可控），生产环境直接读写本机设置。
  */
 val LocalAppSettingsStore = staticCompositionLocalOf<AppSettingsStore?> { null }
+
 

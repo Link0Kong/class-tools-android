@@ -50,6 +50,7 @@ import com.furina.classtools.data.background.CtBackgroundImage
 import com.furina.classtools.data.background.CtBackgroundPalette
 import com.furina.classtools.data.background.CtBackgroundPreset
 import com.furina.classtools.data.background.CtBackgroundSelection
+import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
 import com.furina.classtools.ui.theme.CtRadius
@@ -110,6 +111,7 @@ internal fun BackgroundSection(
             val ok = store.importImage(uri)
             importing = false
             message = if (ok) "已应用自定义背景" else (store.lastError.value ?: "导入失败")
+            message?.let { CtToastBus.show(it) }
             if (ok) showSheet = false
         }
     }
@@ -182,6 +184,7 @@ internal fun BackgroundSection(
                 scope.launch {
                     store?.deleteImage()
                     message = "已恢复默认背景"
+        CtToastBus.show("已恢复默认背景")
                     showSheet = false
                 }
             },
@@ -435,4 +438,5 @@ private fun PresetChip(
         )
     }
 }
+
 

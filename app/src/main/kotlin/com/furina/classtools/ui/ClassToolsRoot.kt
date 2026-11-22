@@ -34,6 +34,7 @@ import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.ui.components.BrandMark
 import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.components.update.UpdateHost
 import com.furina.classtools.ui.navigation.MainNavHost
@@ -123,6 +124,9 @@ fun ClassToolsRoot(
         }
     }
 
+    val announcement by container.appSettings.remoteAnnouncement.collectAsStateWithLifecycle(null)
+    val announcementVersion by container.appSettings.remoteAnnouncementVersion.collectAsStateWithLifecycle(0)
+    val dismissedAnnouncementVersion by container.appSettings.dismissedAnnouncementVersion.collectAsStateWithLifecycle(0)
     val signedIn = sessionState is SessionState.SignedIn
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(snackbarHostState) {
@@ -220,6 +224,22 @@ fun ClassToolsRoot(
         // App 内更新：宿主放根级 —— 冷启动即自动检查并直接弹窗（登录后首页可见），
         // 不依赖用户去「我的 → 检查更新」；身份门禁/加载页也能看到（未登录也检查）。
         UpdateHost()
+
+        // 远程公告（配置热更）：同一版本只弹一次，用户关闭后不再打扰。
+        val announcementText = announcement
+        if (!announcementText.isNullOrBlank() && announcementVersion > dismissedAnnouncementVersion) {
+            CtLightAlertDialog(
+                title = "公告",
+                text = announcementText,
+                confirmText = "知道了",
+                onConfirm = {
+                    scope.launch { container.appSettings.dismissRemoteAnnouncement(announcementVersion) }
+                },
+                onDismissRequest = {
+                    scope.launch { container.appSettings.dismissRemoteAnnouncement(announcementVersion) }
+                },
+            )
+        }
     }
 }
 
@@ -252,5 +272,6 @@ private fun BootSplash() {
         }
     }
 }
+
 
 
