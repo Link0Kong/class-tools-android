@@ -162,9 +162,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 125
+        versionCode = 126
     // 测试版本 29：OPPO 推送 AppSecret 改为控制台原文小写（签名 16 修复）。
-        versionName = "1.0.0-beta42"
+        versionName = "1.0.0-beta43"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -480,6 +480,7 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
 
 
 

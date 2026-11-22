@@ -4,7 +4,6 @@ import com.furina.classtools.ui.components.CtSnackbarHost
 
 import androidx.compose.ui.platform.LocalDensity
 import com.furina.classtools.ui.components.CtRootHeader
-import com.furina.classtools.ui.components.LocalCtContainerTransform
 import com.furina.classtools.ui.components.CtStickyHeaderBar
 import com.furina.classtools.ui.components.ctStickyHeaderProgress
 import dev.chrisbanes.haze.hazeSource
@@ -1042,22 +1041,11 @@ private fun ActionRow(
     subtitleHighlight: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val transform = LocalCtContainerTransform.current
-    val reduceMotion = com.furina.classtools.ui.theme.rememberReduceMotion()
-    val surface = MaterialTheme.colorScheme.surface
-    var rowBounds by remember { mutableStateOf(Rect.Zero) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .onGloballyPositioned { rowBounds = it.boundsInRoot() }
-            .heightIn(min = 52.dp)
-            .clickable {
-                if (transform != null && !reduceMotion) {
-                    transform.open(rowBounds, surface) { onClick() }
-                } else {
-                    onClick()
-                }
-            }
+            .heightIn(min = 56.dp)
+            .clickable(onClick = onClick)
             .padding(horizontal = HarmonyTokens.PagePadding, vertical = HarmonyTokens.ElementGap),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1198,6 +1186,9 @@ private fun rememberHideStatusBar(
     val value by store.hideStatusBar.collectAsStateWithLifecycle(initialValue = fallback)
     return value
 }
+
+
+
 
 
 

@@ -56,12 +56,19 @@
 - 通知页 200%：隐藏总数胶囊、标题降为 titleMedium，避免「班级…」截断；统计卡/筛选仍完整。
 - 工具页副标题与身份/抽签按钮的大字号修复归入 beta41。
 
+## beta43 追加
+
+- `surfaceContainerLow` 改不透明（此前 0xE0FFFFFF 会让 Sheet/Dialog 透底，形成白色闪层）。
+- 移除「我的」ActionRow 的自定义白色容器遮罩；页面跳转回归 NavHost 自身转场，不再闪白。
+- `CtStickyHeaderBar` 用 surface 覆盖状态栏 + 64dp 标题栏，滚动后顶部完整通栏。
+
 ## 仍需继续
 
 - 平板「我的」仍是单列 720dp，未做 M3 双栏；
 - 名册/作业/通知的分类条仍是 FilterChip 形态，是否改 PrimaryTabRow 待定；
 - PPT 空态卡片宽度偏窄；地图页底部浮层控件未 M3 化；
 - 部分工具页仍有自定义图表/地图控件，不属于 Material 组件。
+
 
 
 

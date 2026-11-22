@@ -1,5 +1,9 @@
 package com.furina.classtools.ui.components
 
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+
+import androidx.compose.foundation.layout.WindowInsets
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -15,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
@@ -206,39 +211,41 @@ fun CtStickyHeaderBar(
         label = "ctStickyHeader",
     )
     val foreground = MaterialTheme.colorScheme.onSurface
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .statusBarsPadding()
             .graphicsLayer { alpha = p },
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp),
+            modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
             contentColor = foreground,
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = 16.dp, end = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = title,
-                    // M3 small app bar 标题 = Title Large（22sp / 400）。
-                    style = MaterialTheme.typography.titleLarge,
-                    color = foreground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+            Column {
+                // 覆盖状态栏区域：滚动后顶栏必须是一条完整通栏（含状态栏），不能露出下方内容。
+                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .padding(start = 16.dp, end = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(CtSpace.xxs),
                 ) {
-                    actions()
+                    Text(
+                        text = title,
+                        // M3 small app bar 标题 = Title Large（22sp / 400）。
+                        style = MaterialTheme.typography.titleLarge,
+                        color = foreground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(CtSpace.xxs),
+                    ) {
+                        actions()
+                    }
                 }
             }
         }
@@ -349,6 +356,8 @@ fun CtTopFadeScrim(height: Int = 56, modifier: Modifier = Modifier) {
             ),
     )
 }
+
+
 
 
 

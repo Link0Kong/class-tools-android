@@ -60,7 +60,8 @@ object CtPalette {
      * 大量工具页卡片）因此自动获得透光感 —— 光场颜色从卡片下透出来，不再是一块死白板。
      * 不透明度 0.60：实测在最强光斑上正文对比度仍 > 9:1（AA 双倍余量）。
      */
-    val ContainerLow = Color(0xE0FFFFFF)
+    // M3 surfaceContainerLow 必须不透明；此前 0xE0FFFFFF 会让 Sheet/Dialog 透出底层，形成白色闪层。
+    val ContainerLow = Color(0xFFFFFFFF)
     val Container = Color(0xFFF4F6F6)
     val ContainerHigh = Color(0xFFEDF0F1)
     val ContainerHighest = Color(0xFFE6EAEC)
@@ -722,3 +723,4 @@ val LocalCtColors = androidx.compose.runtime.staticCompositionLocalOf<CtColor> {
 /** 取当前主题语义色（Composable）。 */
 @androidx.compose.runtime.Composable
 fun rememberCtColors(): CtColor = LocalCtColors.current
+
