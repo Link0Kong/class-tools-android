@@ -16,11 +16,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,9 +70,7 @@ import androidx.compose.ui.zIndex
 import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
-import com.furina.classtools.data.tool.ToolCategory
 import com.furina.classtools.ui.components.ExpressiveBackground
-import com.furina.classtools.ui.components.SectionHeader
 import com.furina.classtools.ui.components.reorderableSemantics
 import com.furina.classtools.ui.theme.CtAnimatedEntrance
 import com.furina.classtools.ui.theme.CtSpace
@@ -100,16 +94,14 @@ import com.furina.classtools.ui.components.ctHeaderCollapseProgress
  * 视觉/结构：
  * - 标题 26 Bold「全部工具」+ 右侧「编辑首页 / 完成」（13 雾青文字操作）；
  * - 副标题 12：`N 个工具 · X 列`（编辑态换成「点工具加入或移出首页快捷（最多 4 个）」）；
- * - **按分类分组**：学习 / 班级事务 / 系统（只有存在工具的分类才显示），SectionHeader 19 Medium；
+ * - **不分类平铺**：顺序 = userdata.toolOrder（与网页/小程序多端同步的自定义顺序）；
  * - ToolTile 网格：<600dp 2 列 / 600–899dp 3 列 / ≥900dp 4 列；卡片白 18 圆角、浅阴影、
  *   40dp tint 单字/图标块、15 名称、12 副标最多 2 行、minHeight 96、padding 12、按压 0.97；
  * - 内容最大宽 880（<900dp）/ 960（≥900），页面左右 20dp，顶部呼吸 8dp。
  *
  * 交互：
- * - 普通态：点卡片打开工具；
- * - **编辑态**（点右上「编辑首页」）：点卡片加入/移出首页快捷（≤4，✓ 角标，第 5 个 toast）；
- * - 编辑态同时保留**长按拖动排序**（原有 task-58/v8 能力）：拖动松手写 `prefs.toolOrder`；
- *   普通态按分类展示，分类内顺序 = 用户拖动后的顺序。
+ * - 普通态：点卡片打开工具；**长按卡片直接拖动排序**（不进入配置态），松手写 `userdata.toolOrder`；
+ * - 编辑态（点右上「编辑首页」）：点卡片加入/移出首页快捷（≤4，✓ 角标，第 5 个 toast）；
  *
  * 原有的顺序恢复/持久化、转场锚点、读屏语义、拖动几何全部保留。
  */
@@ -215,7 +207,6 @@ fun AllToolsScreen(
         Offset(previewDragOffset.x.dp.toPx(), previewDragOffset.y.dp.toPx())
     }
     val effectiveGhostPointer = if (draggingId != null) dragPointer else previewGhostPointer
-    val dragMode = editing || previewDraggingToolId != null
 
     fun persistOrder(newOrder: List<String>) {
         onToolOrderChange?.invoke(newOrder)
@@ -378,9 +369,8 @@ fun AllToolsScreen(
                         },
                     )
 
-                    if (dragMode) {
-                        // 编辑态：平铺网格 + 长按拖动排序 + 点选首页快捷（✓ 角标）。
-                        Layout(
+                    // 不分类平铺：顺序即用户/多端同步的自定义顺序；长按直接拖动排序。
+                    Layout(
                             content = {
                                 toolsInOrder.forEachIndexed { displayIndex, tool ->
                                     key(tool.id) {
@@ -427,7 +417,7 @@ fun AllToolsScreen(
                                                     if (draggingId == null &&
                                                         now - lastDragEndAt > AllToolsDragGeometry.TAP_SUPPRESSION_MS
                                                     ) {
-                                                        toggleQuick(tool)
+                                                        if (editing) toggleQuick(tool) else onOpenTool(tool)
                                                     }
                                                 },
                                                 modifier = Modifier.fillMaxSize(),
@@ -478,38 +468,6 @@ fun AllToolsScreen(
                                 }
                             }
                         }
-                    } else {
-                        // 普通态：按鸿蒙分类分组展示（学习 / 班级事务 / 系统）。
-                        val grouped = HarmonyAllToolCategories.mapNotNull { category ->
-                            val list = toolsInOrder.filter { it.category == category }
-                            if (list.isEmpty()) null else category to list
-                        }
-                        grouped.forEachIndexed { groupIndex, (category, tools) ->
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                SectionHeader(
-                                    title = category.label,
-                                    modifier = Modifier.padding(top = if (groupIndex == 0) 4.dp else 12.dp),
-                                )
-                                CategoryGrid(
-                                    tools = tools,
-                                    columns = columns,
-                                    spacing = spacingDp,
-                                    itemHeight = itemHeightDp,
-                                    reduceMotion = reduceMotion,
-                                    editing = editing,
-                                    quickIds = quickDraft,
-                                    onOpenTool = onOpenTool,
-                                    onToggleQuick = { toggleQuick(it) },
-                                    onLongPress = {
-                                        if (!editing) {
-                                            editing = true
-                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        }
-                                    },
-                                )
-                            }
-                        }
-                    }
 
                     Spacer(modifier = Modifier.height(120.dp))
                 }
@@ -570,85 +528,6 @@ fun AllToolsScreen(
 /** 首页快捷上限（与 userdata.homeTools 契约一致）。 */
 private const val HomeToolsEditorMax: Int = 4
 
-/** 鸿蒙端「全部工具」分类顺序：学习 → 班级事务 → 系统（无工具的分类不显示）。 */
-private val HarmonyAllToolCategories = listOf(
-    ToolCategory.STUDY,
-    ToolCategory.CLASS,
-    ToolCategory.SYSTEM,
-)
-
-/** 普通态分类网格（2/3/4 列，无拖动，点击打开工具）。 */
-@Composable
-private fun CategoryGrid(
-    tools: List<AppTool>,
-    columns: Int,
-    spacing: androidx.compose.ui.unit.Dp,
-    itemHeight: androidx.compose.ui.unit.Dp,
-    reduceMotion: Boolean,
-    editing: Boolean,
-    quickIds: List<String>,
-    onOpenTool: (AppTool) -> Unit,
-    onToggleQuick: (AppTool) -> Unit,
-    onLongPress: () -> Unit = {},
-) {
-    val spacingPx = with(LocalDensity.current) { spacing.toPx() }
-    val itemHeightPx = with(LocalDensity.current) { itemHeight.toPx() }
-    Layout(
-        content = {
-            tools.forEach { tool ->
-                key(tool.id) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(tool.id) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    if (awaitLongPressOrCancellation(down.id) != null) onLongPress()
-                                }
-                            },
-                    ) {
-                        AllToolCard(
-                            tool = tool,
-                            onClick = {
-                                if (editing) onToggleQuick(tool) else onOpenTool(tool)
-                            },
-                            modifier = Modifier.fillMaxSize(),
-                            reduceMotion = reduceMotion,
-                            editing = editing,
-                            selected = quickIds.contains(tool.id),
-                        )
-                    }
-                }
-            }
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 4.dp),
-    ) { measurables, constraints ->
-        val width = constraints.maxWidth
-        val cols = columns.coerceAtLeast(1)
-        val itemWidth = ((width - spacingPx * (cols - 1)) / cols).coerceAtLeast(1f)
-        val placeables = measurables.map { measurable ->
-            measurable.measure(
-                Constraints.fixed(
-                    width = itemWidth.roundToInt().coerceAtLeast(1),
-                    height = itemHeightPx.roundToInt(),
-                ),
-            )
-        }
-        val rows = (placeables.size + cols - 1) / cols
-        val height = max(0, rows * itemHeightPx.roundToInt() + max(0, rows - 1) * spacingPx.roundToInt())
-        layout(width, height) {
-            placeables.forEachIndexed { index, placeable ->
-                placeable.place(
-                    x = ((index % cols) * (itemWidth + spacingPx)).roundToInt(),
-                    y = ((index / cols) * (itemHeightPx + spacingPx)).roundToInt(),
-                )
-            }
-        }
-    }
-}
-
 /** 页头（2026-11-20 重做）：大标题「全部工具」+ 玻璃动作（编辑/完成）+ 副标题统计。 */
 @Composable
 private fun HarmonyAllToolsHeader(
@@ -666,7 +545,7 @@ private fun HarmonyAllToolsHeader(
         subtitle = when {
             dragging -> "松手保存顺序"
             editing -> "点工具加入或移出首页快捷（最多 4 个）"
-            else -> "$toolCount 个工具 · $columns 列 · 长按进入编辑后可拖动排序"
+            else -> "$toolCount 个工具 · $columns 列 · 长按拖动排序"
         },
         actions = {
             CtGlassIconButton(
@@ -678,6 +557,7 @@ private fun HarmonyAllToolsHeader(
         },
     )
 }
+
 
 
 

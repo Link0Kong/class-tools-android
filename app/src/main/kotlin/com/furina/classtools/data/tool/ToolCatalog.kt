@@ -254,6 +254,55 @@ object ToolCatalog {
 
     fun byId(id: String): AppTool? = tools.firstOrNull { it.id == id }
 
+    // ---------------------------------------------------------------------
+    // userdata v6 跨端工具 id（2026-11-22）
+    //
+    // homeTools / prefs.toolOrder 是五端共用的同一份数组，但历史 id 词表不同：
+    //   · 安卓/鸿蒙：体测 = fit，名单 = roster（分组另有 group 工具）；
+    //   · 网页：    体测 = ft，名单 = committee；
+    //   · 小程序：  体测 = ft，名单 = bz。
+    // 安卓把网页/小程序写入的 ft / committee 当未知 id 丢掉 → 换端后体测、名单从首页消失、排序也丢，
+    // 随后还会把过滤后的数组回推云端。这里只在「同步边界」做双向映射：读云端 → 本机 id，
+    // 写云端 → canonical id（ft / committee），本机 UI / 路由 / 单测仍用本机 id。
+    // ---------------------------------------------------------------------
+
+    /** 本机工具 id → 同步 canonical id（与网页 TOOLS / 小程序 toSyncKeys 一致）。 */
+    fun syncIdOf(localId: String): String = when (localId) {
+        "fit" -> "ft"
+        "roster" -> "committee"
+        else -> localId
+    }
+
+    /** 同步 id → 本机工具 id；兼容历史 fit/roster 与小程序 bz。未知 id 原样返回（由调用方按目录过滤）。 */
+    fun localIdOf(syncId: String): String = when (syncId) {
+        "ft", "fit" -> "fit"
+        "roster", "committee", "bz" -> "roster"
+        else -> syncId
+    }
+
+    /** 同步 id 对应的本机工具（未知/已下线返回 null）。 */
+    fun bySyncId(syncId: String): AppTool? = byId(localIdOf(syncId))
+
+    /** 本机 id 数组 → 同步 id 数组（保序去重）。 */
+    fun toSyncIds(localIds: List<String>): List<String> {
+        val out = LinkedHashSet<String>()
+        localIds.forEach { id ->
+            val trimmed = id.trim()
+            if (trimmed.isNotEmpty()) out.add(syncIdOf(trimmed))
+        }
+        return out.toList()
+    }
+
+    /** 同步 id 数组 → 本机 id 数组（保序去重，未知 id 保留；调用方再用 [byId] 过滤）。 */
+    fun fromSyncIds(syncIds: List<String>): List<String> {
+        val out = LinkedHashSet<String>()
+        syncIds.forEach { id ->
+            val trimmed = id.trim()
+            if (trimmed.isNotEmpty()) out.add(localIdOf(trimmed))
+        }
+        return out.toList()
+    }
+
     /** 当前身份可见的工具（统计仅管理员）。 */
     fun visibleTools(isAdmin: Boolean): List<AppTool> =
         tools.filter { isAdmin || !it.adminOnly }

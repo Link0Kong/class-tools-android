@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.screens.all
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -153,6 +154,34 @@ class ToolOrderLogicTest {
         val sections = ToolOrderPrefs.apply(JsonObject(emptyMap()), listOf("hw", "draw"))
         assertEquals(
             listOf("hw", "draw", "group", "fit", "nt", "tt", "power", "water", "roster", "settings"),
+            ToolOrderPrefs.readNormalized(sections, natural),
+        )
+    }
+
+    @Test
+    fun prefsApply_mapsLocalIdsToCanonicalSyncIds() {
+        // 2026-11-22：写入云端用跨端 canonical id（安卓 fit/roster → ft/committee），
+        // 否则网页/小程序把体测、名单当未知项丢掉，顺序看起来「没同步」。
+        val next = ToolOrderPrefs.apply(
+            JsonObject(emptyMap()),
+            listOf("draw", "fit", "roster", "group", "fit"),
+            now = 1234L,
+        )
+        val raw = ((next["prefs"] as JsonObject)["toolOrder"] as JsonArray)
+            .map { (it as JsonPrimitive).content }
+        assertEquals(listOf("draw", "ft", "committee", "group"), raw)
+        // 读回：canonical / 小程序 bz / 历史 fit 都归一成本机 id
+        assertEquals(listOf("draw", "fit", "roster", "group"), ToolOrderPrefs.read(next))
+    }
+
+    @Test
+    fun prefsRead_aliasesMapToLocalIds() {
+        val sections = ToolOrderPrefs.parseSections(
+            """{"prefs":{"toolOrder":["hw","ft","committee","bz","fit","roster","draw"]},"at":{"prefs":1}}""",
+        )
+        assertEquals(
+            "网页 ft/committee、小程序 bz、历史 fit/roster 都要映射成本机 id 后再归一",
+            listOf("hw", "fit", "roster", "draw", "group", "nt", "tt", "power", "water", "settings"),
             ToolOrderPrefs.readNormalized(sections, natural),
         )
     }

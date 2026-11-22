@@ -3,6 +3,7 @@ package com.furina.classtools.ui.screens.all
 import com.furina.classtools.data.network.asObjectOrNull
 import com.furina.classtools.data.network.parseJsonOrNull
 import com.furina.classtools.data.network.NetJson
+import com.furina.classtools.data.tool.ToolCatalog
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -145,6 +146,8 @@ object ToolOrderLogic {
  * - [read]：无 prefs/toolOrder 时返回空列表（调用方用自然顺序兜底，**不立即写回**）；
  * - [apply]：只改 `prefs.toolOrder` 与 `at.prefs`（其余 section/字段原样保留）；
  *   `at.prefs = max(旧值, now)`（等价 mp `toolOrderSetAt` 时间戳语义，供 LWW 合并）。
+ * - 2026-11-22：读写都经过 [ToolCatalog] 的跨端 id 映射（本机 fit/roster ↔ 云端 ft/committee、bz），
+ *   否则网页/小程序写入的 ft/committee 会被当未知项丢弃，换端后顺序看起来「没同步」。
  */
 object ToolOrderPrefs {
 
@@ -153,14 +156,16 @@ object ToolOrderPrefs {
     fun read(sections: JsonObject?): List<String> {
         val prefs = sections?.get("prefs").asObjectOrNull() ?: return emptyList()
         val array = prefs[PREF_KEY] as? JsonArray ?: return emptyList()
-        return array.mapNotNull { item -> (item as? JsonPrimitive)?.takeIf { it.isString }?.content }
+        return ToolCatalog.fromSyncIds(
+            array.mapNotNull { item -> (item as? JsonPrimitive)?.takeIf { it.isString }?.content },
+        )
     }
 
     /** 读取 `at.prefs` 时间戳（无则 0）。 */
     fun atOf(sections: JsonObject?): Long =
         ((sections?.get("at").asObjectOrNull())?.get("prefs") as? JsonPrimitive)?.longOrNull ?: 0L
 
-    /** 生成新 sections：prefs.toolOrder = [order]（去重），at.prefs = max(旧, now)。 */
+    /** 生成新 sections：prefs.toolOrder = [order]（去重；本机 id → 同步 canonical id），at.prefs = max(旧, now)。 */
     fun apply(
         sections: JsonObject,
         order: List<String>,
@@ -170,7 +175,7 @@ object ToolOrderPrefs {
         val oldAt = sections["at"].asObjectOrNull()
         val prefs = buildJsonObject {
             oldPrefs?.forEach { (key, value) -> if (key != PREF_KEY) put(key, value) }
-            put(PREF_KEY, JsonArray(order.distinct().map { JsonPrimitive(it) }))
+            put(PREF_KEY, JsonArray(ToolCatalog.toSyncIds(order).map { JsonPrimitive(it) }))
         }
         val at = buildJsonObject {
             oldAt?.forEach { (key, value) -> put(key, value) }

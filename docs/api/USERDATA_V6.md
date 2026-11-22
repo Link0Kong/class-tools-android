@@ -40,14 +40,14 @@
 
 | section | 默认值 | 字段说明 |
 |---|---|---|
-| `homeTools` | `[]` | 工具 key 数组，≤4，按「工具顺序」语义（首页工具栏的**用户选择集合**，不再自动补齐）。工具 key 取值见 WEB:3678-3688：`draw, tt, committee, hw, nt, ft, roll, stats(admin), diag(admin), water` + 工具页非 TOOLS 的 `all/fb/ug/power` 不可进 homeTools（由前端过滤）`[已核实 WEB:3745-3747]` |
+| `homeTools` | `[]` | 工具 key 数组，≤4，按「工具顺序」语义（首页工具栏的**用户选择集合**，不再自动补齐）。blob 里统一用跨端 canonical key（网页 TOOLS 口径）：`draw, tt, committee, hw, nt, ft, roll, stats(admin), diag(admin), water, vote, ppt, map, power`。**安卓本机 id ≠ blob id**：本机 `fit`（体测）/`roster`（名单）在读写 blob 时映射为 `ft`/`committee`（`ToolCatalog.syncIdOf / localIdOf`），小程序写入的 `bz` 读作 `roster`；`group`（安卓独立分组工具）保持原样，小程序按 `draw` 处理。2026-11-22 前安卓把 `ft`/`committee` 当未知项丢弃，换端后体测/名单会从首页消失并回推覆盖，现已修复 `[已核实 MP/utils/tools.js SYNC_KEY_IN/OUT]` |
 | `fit` | `{}` | 体测录入当前输入：`sex("m"/"f"), grade("12"/"34"), h(""), w, vc, r50, sit, jump, pull, durM, durS`（值多为字符串；`UD_FIT_KEYS` 固定 11 键）`[已核实 WEB:2747, 2830-2835]` |
 | `draw` | `{}` | 抽签参数：`start(1), end(70), count(10), dup(false), excl(""), sort("draw")`。`excl` 文本格式：逗号/中文逗号/空白分隔，支持区间 `5-7`、`5~7`、`5—7` `[已核实 WEB:6288-6297, 1768; MP/cloud.js:926-934]` |
 | `group` | `{}` | 分组参数 + 名单选择：`source`（`prev`=上一步抽签 / `names`=选择名单）、`mode`（`groups`=按组数 / `pergroup`=按每组人数）、`n`(4)、`shuffle`(false)、`sel`（座号数组）。**注意两端本机词汇不同，blob 里统一用网页词汇**：MP 存 `source:pick/paste` → blob `names`；`mode:per` → blob `pergroup` `[已核实 MP/cloud.js:936-942, 1060-1068; WEB:2867, 2900-2907]` |
 | `roster` | `{"rosterSel":[],"rollSel":[],"rollSt":{},"rollNames":""}` | 抽签参与名单/点名名单/点名到·假：`rosterSel/rollSel`=座号数组（去重升序 1–70），`rollSt`={索引:"in"/"ab"}（网页用中文"到"/"假"还是 in/ab 需按真实数据兼容——网页 `writeRollFromSel` 存的状态来自旧数据，可能是 `in/ab`，导出/渲染按 `in`/`ab` 处理；MP fixtures 见下）, `rollNames`=派生文本 `<seat> <name>` 换行 |
 | `hide` | `{"hwHide":{},"ntHide":{}}` | 个人视图隐藏：`{rowId: true}`（作业/手动通知） |
 | `tt` | `{"ttView":"","ttUseMine":false,"ttLocal":null,"termStart":""}` | 课表偏好：`ttView`=`week`/`day`；`ttUseMine`=是否用个人导入；`ttLocal`={c:[course],t:termStart} 或 null；`termStart`=`YYYY-MM-DD`。**MP 只写 `termStart`，其余原样保留** `[已核实 SYNC-C:102; MP/cloud.js:950-955]` |
-| `prefs` | `{"hwRemind":{},"ntSub":false,"ntSubAt":0}` | 通知提醒偏好（MP 拥有）：`hwRemind`={作业 id: true}；`ntSub`；`ntSubAt`。可选 `toolOrder`（工具页顺序数组，只有用户拖过排序才写）。**网页不写 prefs**（原样保留云端值）`[已核实 SYNC-C:103; MP/cloud.js:956-965]` |
+| `prefs` | `{"hwRemind":{},"ntSub":false,"ntSubAt":0}` | 通知提醒偏好（MP 拥有）：`hwRemind`={作业 id: true}；`ntSub`；`ntSubAt`。可选 `toolOrder`（工具页顺序数组，只有用户拖过排序才写；数组元素同样用 canonical key，安卓读写时映射 `fit→ft`、`roster→committee`）。**网页不写 prefs**（原样保留云端值）`[已核实 SYNC-C:103; MP/cloud.js:956-965]` |
 | `nick` | `""` | 网页发布作者昵称。**MP 不写** `[已核实 SYNC-C:104]` |
 | `power` | `{"sel":"","at":0,"low":30}` | 关注宿舍：`sel`=roomverify，`at`=选择时间（与 `at.power` 镜像），`low`=低电阈值，合法档位 `[10,20,30,40,50,60,80,100]`，默认 30；非法值归 30 `[已核实 WEB:2750-2751; MP/cloud.js:830-839]; WATER-C:54` |
 | `water` | `{"rooms":{}}` | 水量抄表：`rooms[roomverify] = {p:4|6, recs:[{m:"YYYY-MM", r:读数吨, ts:ms}]}`；recs 按月唯一、升序、≤120、r 2 位小数 `[已核实 WATER-C:31-58; MP/utils/water.js:11-14]` |

@@ -192,12 +192,14 @@ fun MainNavHost(
     // 本机外观偏好：壁纸取色开关（Profile → 外观）。
     val dynamicColor by container.appSettings.dynamicColor.collectAsStateWithLifecycle(initialValue = false)
     // 常用工具来自同步的 userdata v6 homeTools（原始值：空列表 = 小程序同款空态引导）。
+    // 2026-11-22：先把跨端同步 id 换回本机 id（ft→fit、committee/bz→roster），
+    // 否则网页/小程序写入的体测、名单会被 byId 过滤掉，换端后首页少两个工具。
     val sections by container.userDataRepository.currentSections.collectAsStateWithLifecycle()
     val sectionsQuickToolIds = remember(sections) {
         val array = sections["homeTools"] as? JsonArray
         array
             ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-            ?.filter { ToolCatalog.byId(it) != null }
+            ?.mapNotNull { ToolCatalog.bySyncId(it)?.id }
             .orEmpty()
     }
     // 本机乐观值：AllTools/Home 编辑后立即同步到「工作台」，不等待 updateCurrent 回写 Flow。

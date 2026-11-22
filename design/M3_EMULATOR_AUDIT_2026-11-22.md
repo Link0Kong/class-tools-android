@@ -89,12 +89,20 @@
 
 - 课表页接 M3 `PullToRefreshBox`，下拉强制 `repository.load(force=true)`，指示器与周切换/网格共存。
 
+## beta48 工具页去分类 + 直接拖动 + 跨端 id
+
+- 全部工具去掉「学习/班级事务/系统」分组，直接按 userdata.toolOrder 平铺。
+- 普通态长按卡片直接进入拖动排序，不再自动切换编辑态；点按仍打开工具。
+- 排序读写经 `ToolCatalog` 跨端 id 映射：本机 fit/roster ↔ 网页 ft/committee、小程序 bz，避免换端丢失体测/名单及顺序。
+- 首页快捷读取同样做 sync id → 本机 id 映射，工具页勾选立即同步工作台（beta46 乐观状态）。
+
 ## 仍需继续
 
 - 平板「我的」仍是单列 720dp，未做 M3 双栏；
 - 名册/作业/通知的分类条仍是 FilterChip 形态，是否改 PrimaryTabRow 待定；
 - PPT 空态卡片宽度偏窄；地图页底部浮层控件未 M3 化；
 - 部分工具页仍有自定义图表/地图控件，不属于 Material 组件。
+
 
 
 
