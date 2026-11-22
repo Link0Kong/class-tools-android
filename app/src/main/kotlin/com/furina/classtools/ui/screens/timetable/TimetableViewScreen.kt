@@ -63,6 +63,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -210,6 +211,7 @@ fun TimetableViewScreen(
     var errorKind by remember(initialErrorKind) { mutableStateOf(initialErrorKind) }
     var loadToken by remember { mutableIntStateOf(0) }
     var refreshToken by remember { mutableIntStateOf(0) }
+    var pullRefreshing by remember { mutableStateOf(false) }
     var showLoginDialog by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showWeekPicker by remember { mutableStateOf(false) }
@@ -234,6 +236,7 @@ fun TimetableViewScreen(
                 phase = TtPhase.ERROR
             }
         }
+        pullRefreshing = false
     }
 
     val plan = remember(snapshot, nowMillis) {
@@ -382,7 +385,15 @@ fun TimetableViewScreen(
         if (rangeText.isNotBlank()) add(rangeText)
     }.joinToString(" · ")
 
-    ExpressiveBackground(modifier = modifier.fillMaxSize()) {
+    PullToRefreshBox(
+        isRefreshing = pullRefreshing,
+        onRefresh = {
+            pullRefreshing = true
+            reload()
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
+    ExpressiveBackground(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
                 modifier = Modifier
@@ -640,6 +651,7 @@ fun TimetableViewScreen(
                 },
             )
         }
+    }
     }
 }
 
@@ -2307,6 +2319,7 @@ private fun Modifier.timetableSwipe(
             }
         }
     }
+
 
 
 

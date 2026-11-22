@@ -85,12 +85,17 @@
 - 首页快捷编辑改为根级乐观状态：工具页勾选后立即同步到「工作台」，不再等 `updateCurrent` 回写 Flow。
 - 加载态沿用现有骨架屏/进度圈；下拉指示器为 M3 默认动画。
 
+## beta47 课表下拉刷新
+
+- 课表页接 M3 `PullToRefreshBox`，下拉强制 `repository.load(force=true)`，指示器与周切换/网格共存。
+
 ## 仍需继续
 
 - 平板「我的」仍是单列 720dp，未做 M3 双栏；
 - 名册/作业/通知的分类条仍是 FilterChip 形态，是否改 PrimaryTabRow 待定；
 - PPT 空态卡片宽度偏窄；地图页底部浮层控件未 M3 化；
 - 部分工具页仍有自定义图表/地图控件，不属于 Material 组件。
+
 
 
 
