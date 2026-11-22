@@ -67,6 +67,8 @@ import androidx.compose.material.icons.rounded.Wallpaper
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -171,12 +173,13 @@ import com.furina.classtools.ui.components.ctHeaderCollapseProgress
  * @param initialShowSignOutConfirm 预览：直接打开退出确认
  * @param initialShowClearCacheConfirm 预览：直接打开清除缓存确认
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     session: Session,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
+    onRefresh: () -> Unit = {},
     syncEnabled: Boolean = true,
     onSyncEnabledChange: (Boolean) -> Unit = {},
     onClearLocalCache: () -> Unit = {},
@@ -307,8 +310,21 @@ fun ProfileScreen(
     val meScrollState = rememberScrollState()
     val meHazeState = rememberHazeState()
     val meDensity = LocalDensity.current
+    var meRefreshing by remember { mutableStateOf(false) }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = meRefreshing,
+            onRefresh = {
+                meRefreshing = true
+                onRefresh()
+                scope.launch {
+                    kotlinx.coroutines.delay(900)
+                    meRefreshing = false
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
                 modifier = Modifier
@@ -388,6 +404,7 @@ fun ProfileScreen(
                 progress = ctStickyHeaderProgress(meScrollState.value.toFloat(), meDensity.density),
                 hazeState = meHazeState,
             )
+        }
         }
         // 没有全局 UpdateHost（App 根）时，由「我的」页兜底展示更新弹窗，避免检查到新版却看不到。
         if (resolvedUpdateManager != null && updateCheckStatus == null && !updateHostState.value) {
@@ -1186,6 +1203,7 @@ private fun rememberHideStatusBar(
     val value by store.hideStatusBar.collectAsStateWithLifecycle(initialValue = fallback)
     return value
 }
+
 
 
 

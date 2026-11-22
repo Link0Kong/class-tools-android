@@ -193,13 +193,19 @@ fun MainNavHost(
     val dynamicColor by container.appSettings.dynamicColor.collectAsStateWithLifecycle(initialValue = false)
     // 常用工具来自同步的 userdata v6 homeTools（原始值：空列表 = 小程序同款空态引导）。
     val sections by container.userDataRepository.currentSections.collectAsStateWithLifecycle()
-    val quickToolIds = remember(sections) {
+    val sectionsQuickToolIds = remember(sections) {
         val array = sections["homeTools"] as? JsonArray
         array
             ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
             ?.filter { ToolCatalog.byId(it) != null }
             .orEmpty()
     }
+    // 本机乐观值：AllTools/Home 编辑后立即同步到「工作台」，不等待 updateCurrent 回写 Flow。
+    var optimisticQuickToolIds by remember { mutableStateOf<List<String>?>(null) }
+    LaunchedEffect(sectionsQuickToolIds) {
+        optimisticQuickToolIds = sectionsQuickToolIds
+    }
+    val quickToolIds = optimisticQuickToolIds ?: sectionsQuickToolIds
 
     // 云同步开关状态（我的页展示/切换）。
     var syncEnabled by remember { mutableStateOf(true) }
@@ -467,6 +473,7 @@ fun MainNavHost(
                 onSelectTab = ::selectTab,
                 onOpenTool = ::openTool,
                 onHomeToolsChange = { ids ->
+                    optimisticQuickToolIds = ids
                     scope.launch {
                         val saved = runCatching {
                             container.userDataRepository.updateCurrent(
@@ -1343,12 +1350,23 @@ private fun RootTabs(
                         userDataRepository = container.userDataRepository,
                         quickToolIds = quickToolIds,
                         onQuickToolsChange = onHomeToolsChange,
+                        onRefresh = {
+                            scope.launch {
+                                runCatching { container.userDataRepository.pull(force = true) }
+                            }
+                        },
                     )
                 }
 
                 else -> ProfileScreen(
                     session = session,
                         onSignOut = onSignOut,
+                        onRefresh = {
+                            scope.launch {
+                                runCatching { container.userDataRepository.pull(force = true) }
+                                runCatching { container.marksRepository.refresh(force = true) }
+                            }
+                        },
                         syncEnabled = syncEnabled,
                         onSyncEnabledChange = onSyncEnabledChange,
                         onClearLocalCache = onClearLocalCache,

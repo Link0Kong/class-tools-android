@@ -45,6 +45,8 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Notifications
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -171,6 +173,7 @@ import com.furina.classtools.ui.components.ctHeaderCollapseProgress
  * )
  * ```
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     session: Session,
@@ -445,7 +448,15 @@ fun HomeScreen(
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                PullToRefreshBox(
+                    isRefreshing = refreshing,
+                    onRefresh = {
+                        refreshing = true
+                        refreshToken += 1
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                     Column(
                         modifier = Modifier
                             .widthIn(max = contentMaxWidth)
@@ -562,6 +573,7 @@ fun HomeScreen(
                                 onOpenAll = onOpenAll,
                             )
                         }
+                    }
                     }
                 }
             }

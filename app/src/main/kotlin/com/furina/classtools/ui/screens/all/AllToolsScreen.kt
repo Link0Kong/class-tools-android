@@ -5,7 +5,9 @@ import com.furina.classtools.ui.components.CtToastBus
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import com.furina.classtools.ui.components.CtGlassIconButton
 import com.furina.classtools.ui.components.CtRootHeader
 import com.furina.classtools.ui.components.CtStickyHeaderBar
@@ -111,6 +113,7 @@ import com.furina.classtools.ui.components.ctHeaderCollapseProgress
  *
  * 原有的顺序恢复/持久化、转场锚点、读屏语义、拖动几何全部保留。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AllToolsScreen(
     onOpenTool: (AppTool) -> Unit,
@@ -127,6 +130,7 @@ fun AllToolsScreen(
     quickToolIds: List<String> = emptyList(),
     /** 编辑态点卡片后回调新的快捷列表（由调用方写 userdata.homeTools）。 */
     onQuickToolsChange: ((List<String>) -> Unit)? = null,
+    onRefresh: () -> Unit = {},
     /** 预览/测试：初始进入编辑态。 */
     initialEditing: Boolean = false,
 ) {
@@ -325,9 +329,22 @@ fun AllToolsScreen(
 
     // 2026-11-20 页面骨架 v2：常驻悬浮玻璃条（渐变模糊）需要页面级 Haze 源。
     val hazeState = rememberHazeState()
+    var refreshing by remember { mutableStateOf(false) }
 
     CompositionLocalProvider(LocalViewConfiguration provides dragViewConfiguration) {
         ExpressiveBackground(modifier = modifier.fillMaxSize()) {
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = {
+                    refreshing = true
+                    onRefresh()
+                    scope.launch {
+                        delay(800)
+                        refreshing = false
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -545,6 +562,7 @@ fun AllToolsScreen(
                     },
                 )
             }
+            }
         }
     }
 }
@@ -660,6 +678,7 @@ private fun HarmonyAllToolsHeader(
         },
     )
 }
+
 
 
 
