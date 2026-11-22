@@ -190,7 +190,6 @@ fun MainNavHost(
     // 抽签结果 → 分组页的携带数据（共享状态，不放进导航参数）。
     var drawGroupMembers by remember { mutableStateOf<List<GroupMember>>(emptyList()) }
     // 本机外观偏好：壁纸取色开关（Profile → 外观）。
-    val dynamicColor by container.appSettings.dynamicColor.collectAsStateWithLifecycle(initialValue = false)
     // 常用工具来自同步的 userdata v6 homeTools（原始值：空列表 = 小程序同款空态引导）。
     // 2026-11-22：先把跨端同步 id 换回本机 id（ft→fit、committee/bz→roster），
     // 否则网页/小程序写入的体测、名单会被 byId 过滤掉，换端后首页少两个工具。
@@ -468,10 +467,6 @@ fun MainNavHost(
                 onOpenReminderSettings = { navController.navigate(Routes.REMINDER_SETTINGS) },
                 onOpenFeedback = { navController.navigate(Routes.FEEDBACK) },
                 onOpenGuide = { navController.navigate(Routes.GUIDE) },
-                dynamicColorEnabled = dynamicColor,
-                onDynamicColorChange = { enabled ->
-                    scope.launch { runCatching { container.appSettings.setDynamicColor(enabled) } }
-                },
                 onSelectTab = ::selectTab,
                 onOpenTool = ::openTool,
                 onHomeToolsChange = { ids ->
@@ -1110,8 +1105,6 @@ private fun RootTabs(
     onOpenReminderSettings: () -> Unit,
     onOpenFeedback: () -> Unit,
     onOpenGuide: () -> Unit,
-    dynamicColorEnabled: Boolean,
-    onDynamicColorChange: (Boolean) -> Unit,
     onSelectTab: (Int) -> Unit,
     onOpenTool: (AppTool) -> Unit,
     onHomeToolsChange: (List<String>) -> Unit,
@@ -1391,8 +1384,6 @@ private fun RootTabs(
                         onOpenHonorAccount = { showHonorAccountSheet = true },
                         onOpenFeedback = onOpenFeedback,
                         onOpenGuide = onOpenGuide,
-                        dynamicColorEnabled = dynamicColorEnabled,
-                        onDynamicColorChange = onDynamicColorChange,
                     )
             }
         }

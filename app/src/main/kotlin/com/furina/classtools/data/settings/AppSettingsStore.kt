@@ -97,7 +97,7 @@ class AppSettingsStore(private val context: Context) {
         if (config.version <= currentVersion) return
         config.appearance?.let { setAppearanceMode(AppearanceMode.fromStorage(it)) }
         config.hideStatusBar?.let { setHideStatusBar(it) }
-        config.dynamicColor?.let { setDynamicColor(it) }
+        // 壁纸取色（Material You）已移除：忽略远程 dynamicColor。
         store.edit { prefs ->
             if (!config.announcement.isNullOrBlank()) {
                 prefs[KEY_REMOTE_ANNOUNCEMENT] = config.announcement

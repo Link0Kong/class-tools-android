@@ -41,9 +41,9 @@ fun ClassToolsThemeHost(
             runCatching { container.appSettings.applyRemoteConfig(config) }
         }
     }
-    // 外观偏好存本机（不进 userdata）：壁纸取色 / 外观模式 / 隐藏状态栏均实时生效。
-    val dynamicColor by container.appSettings.dynamicColor
-        .collectAsStateWithLifecycle(initialValue = false)
+    // 外观偏好存本机（不进 userdata）：外观模式 / 隐藏状态栏 / 玻璃材质均实时生效。
+    // 壁纸取色（Material You）功能已移除，固定关闭。
+    val dynamicColor = false
     // 首帧用 SharedPreferences 镜像同步初始化，避免冷启动先按系统/默认渲染一帧再跳变。
     val initialAppearanceMode = remember { container.appSettings.startupAppearanceMode() }
     val initialHideStatusBar = remember { container.appSettings.startupHideStatusBar() }

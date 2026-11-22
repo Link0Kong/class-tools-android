@@ -60,8 +60,6 @@ private fun ProfilePreview(
             reminderStatus = reminder,
             syncEnabled = syncEnabled,
             onSyncEnabledChange = {},
-            dynamicColorEnabled = dynamicColorEnabled,
-            onDynamicColorChange = {},
             showNotificationPermissionBanner = showBanner,
             onOpenDataPrivacy = {},
             onOpenPermissions = {},

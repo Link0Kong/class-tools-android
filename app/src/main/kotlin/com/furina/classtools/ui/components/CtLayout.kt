@@ -100,6 +100,7 @@ import com.furina.classtools.ui.components.glass.ctGlass
 import com.furina.classtools.ui.components.glass.ctGlassPointerLight
 import com.furina.classtools.ui.components.glass.rememberCtGlassPress
 import com.furina.classtools.ui.theme.CtLightLevel
+import com.furina.classtools.ui.theme.LocalCtLight
 import com.furina.classtools.ui.theme.CtPalette
 import com.furina.classtools.ui.theme.LightPrimary
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
@@ -457,17 +458,30 @@ fun CtButton(
         label = "ctButtonScale",
     )
     val pressState = rememberCtGlassPress()
+    val glassEnabled = LocalCtLight.current.enabled
 
-    val contentColor: Color = when (style) {
-        CtButtonStyle.Filled -> c.onPrimary
-        CtButtonStyle.Tonal -> c.primary
-        CtButtonStyle.Outlined, CtButtonStyle.Text -> c.primary
+    val contentColor: Color = when {
+        style == CtButtonStyle.Filled && glassEnabled -> c.primary
+        style == CtButtonStyle.Filled -> c.onPrimary
+        style == CtButtonStyle.Tonal -> c.primary
+        style == CtButtonStyle.Outlined || style == CtButtonStyle.Text -> c.primary
+        else -> c.primary
     }
     val disabledAlpha = if (enabled) 1f else 0.38f
 
     val surface: Modifier = when (style) {
-        CtButtonStyle.Filled -> Modifier
-            .ctFilledButtonSurface(shape = shape, pressed = pressed, enabled = enabled)
+        CtButtonStyle.Filled -> if (glassEnabled) {
+            Modifier
+                .ctGlass(
+                    level = CtLightLevel.MEDIUM,
+                    shape = shape,
+                    bodySafe = false,
+                    pressState = pressState,
+                )
+                .ctGlassPointerLight(pressState)
+        } else {
+            Modifier.ctFilledButtonSurface(shape = shape, pressed = pressed, enabled = enabled)
+        }
         CtButtonStyle.Tonal -> Modifier
             .ctGlass(
                 level = CtLightLevel.MEDIUM,
@@ -997,6 +1011,7 @@ fun CtPressLayer(alpha: Float, modifier: Modifier = Modifier) {
             .background(c.stateLayer),
     )
 }
+
 
 
 

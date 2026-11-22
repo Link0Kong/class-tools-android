@@ -110,12 +110,19 @@
 - 模糊滑杆拖动时调用 `BackgroundStore.previewCustomBlur`（只改内存）实时预览，松手才持久化。
 - Slider 使用 M3 `SliderDefaults.colors` + 连续滑杆 + `stateDescription`；去掉 39 个刻点。
 
+## beta51 玻璃开关收敛/移除取色
+
+- 外观只保留「玻璃化卡片与按钮」一个 Switch：开 = 均衡玻璃，关 = 实色 M3；移除四档强度选择。
+- 玻璃开启时主按钮 Filled 也改用 ctGlass（tonal/玻璃按钮同样通透），不再只有卡片透明。
+- 移除「壁纸取色 / Material You」开关，主题固定 dynamicColor=false；远程配置忽略 dynamicColor。
+
 ## 仍需继续
 
 - 平板「我的」仍是单列 720dp，未做 M3 双栏；
 - 名册/作业/通知的分类条仍是 FilterChip 形态，是否改 PrimaryTabRow 待定；
 - PPT 空态卡片宽度偏窄；地图页底部浮层控件未 M3 化；
 - 部分工具页仍有自定义图表/地图控件，不属于 Material 组件。
+
 
 
 

@@ -189,8 +189,6 @@ fun ProfileScreen(
     onOpenReminderSettings: () -> Unit = {},
     /** 分享给同学（生成 5:4 班级工具站分享卡，与小程序端「转发给朋友」同口径）。 */
     onShareApp: () -> Unit = {},
-    dynamicColorEnabled: Boolean = false,
-    onDynamicColorChange: (Boolean) -> Unit = {},
     appearanceMode: AppearanceMode = AppearanceMode.SYSTEM,
     onAppearanceModeChange: (AppearanceMode) -> Unit = {},
     hideStatusBar: Boolean = true,
@@ -375,8 +373,6 @@ fun ProfileScreen(
                     )
                     BackgroundSection(store = backgroundStore, selection = storedBackground)
                     AppearanceSection(
-                        dynamicColorEnabled = dynamicColorEnabled,
-                        onDynamicColorChange = onDynamicColorChange,
                         appearanceMode = effectiveAppearanceMode,
                         onAppearanceModeChange = ::changeAppearanceMode,
                         hideStatusBar = effectiveHideStatusBar,
@@ -786,8 +782,6 @@ private fun NotifySection(
 
 @Composable
 private fun AppearanceSection(
-    dynamicColorEnabled: Boolean,
-    onDynamicColorChange: (Boolean) -> Unit,
     appearanceMode: AppearanceMode,
     onAppearanceModeChange: (AppearanceMode) -> Unit,
     hideStatusBar: Boolean,
@@ -808,16 +802,23 @@ private fun AppearanceSection(
         )
         RowDivider()
         SwitchRow(
-            title = "壁纸取色",
-            subtitle = "Material You · 跟随系统壁纸",
-            leadingIcon = Icons.Rounded.Wallpaper,
-            checked = dynamicColorEnabled,
-            onCheckedChange = onDynamicColorChange,
-        )
-        RowDivider()
-        ImmersiveLightRows(
-            setting = immersiveLight,
-            onSettingChange = onImmersiveLightChange,
+            title = "玻璃化卡片与按钮",
+            subtitle = if (immersiveLight.enabled) {
+                "半透明磨砂玻璃 · 更通透"
+            } else {
+                "实色材质 · 更省电、更稳"
+            },
+            leadingIcon = Icons.Rounded.LightMode,
+            checked = immersiveLight.enabled,
+            onCheckedChange = { enabled ->
+                onImmersiveLightChange(
+                    if (enabled) {
+                        CtLightSetting(CtLightIntensity.BALANCED, true)
+                    } else {
+                        CtLightSetting.Off
+                    },
+                )
+            },
         )
     }
 }
