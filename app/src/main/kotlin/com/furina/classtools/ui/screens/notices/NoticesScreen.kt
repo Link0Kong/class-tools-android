@@ -1065,6 +1065,7 @@ private fun NoticeMinimalHeader(
     onOpenFilters: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val compactHeader = androidx.compose.ui.platform.LocalDensity.current.fontScale <= 1.3f
     // 固定头使用实色背景并抬高 zIndex：即使列表/筛选内容在极端布局下顶到边缘，
     // 也不会与头部按钮在视觉上叠在一起。
     Surface(
@@ -1105,7 +1106,7 @@ private fun NoticeMinimalHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
-        if (totalCount != null) {
+        if (totalCount != null && compactHeader) {
             Spacer(Modifier.width(8.dp))
             Surface(
                 shape = CircleShape,
@@ -2698,6 +2699,9 @@ private fun NoticeSkeletonCard(index: Int) {
 
 /** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
 private enum class Phase { LOADING, READY, FAILED }
+
+
+
 
 
 
