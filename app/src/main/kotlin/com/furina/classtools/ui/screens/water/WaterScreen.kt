@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -34,6 +35,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -47,6 +49,7 @@ import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -400,14 +403,17 @@ fun WaterScreen(
                                                     .padding(bottom = 24.dp),
                                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                             ) {
-                                                RoomCard(
+                                                RoomPickerRow(
                                                     selectedRv = selectedRv,
-                                                    persons = room.persons,
                                                     onPickRoom = { showRoomPicker = true },
+                                                    onClearRoom = { showClearRoomConfirm = true },
+                                                )
+                                                WaterHeroCard(stats = stats)
+                                                PersonsCard(
+                                                    persons = room.persons,
                                                     onPersons = { persons ->
                                                         persist(WaterMutator.withPersons(waterState, selectedRv, persons))
                                                     },
-                                                    onClearRoom = { showClearRoomConfirm = true },
                                                 )
                                                 MonthSelector(
                                                     month = month,
@@ -432,7 +438,6 @@ fun WaterScreen(
                                                     },
                                                     onSave = { submitReading() },
                                                 )
-                                                RuleCard(persons = room.persons)
                                                 Spacer(Modifier.height(CtSpace.sm))
                                             }
                                             Column(
@@ -442,13 +447,13 @@ fun WaterScreen(
                                                     .padding(bottom = 24.dp),
                                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                             ) {
-                                                AnimatedStatsCard(stats = stats, reduceMotion = reduceMotion)
                                                 HistoryCard(
                                                     records = room.records,
                                                     persons = room.persons,
                                                     room = room,
                                                     onDelete = { deletingMonth = it },
                                                 )
+                                                RuleCard(persons = room.persons)
                                             }
                                         }
                                     } else {
@@ -459,14 +464,17 @@ fun WaterScreen(
                                                 .padding(horizontal = 16.dp),
                                             verticalArrangement = Arrangement.spacedBy(10.dp),
                                         ) {
-                                            RoomCard(
+                                            RoomPickerRow(
                                                 selectedRv = selectedRv,
-                                                persons = room.persons,
                                                 onPickRoom = { showRoomPicker = true },
+                                                onClearRoom = { showClearRoomConfirm = true },
+                                            )
+                                            WaterHeroCard(stats = stats)
+                                            PersonsCard(
+                                                persons = room.persons,
                                                 onPersons = { persons ->
                                                     persist(WaterMutator.withPersons(waterState, selectedRv, persons))
                                                 },
-                                                onClearRoom = { showClearRoomConfirm = true },
                                             )
                                             MonthSelector(
                                                 month = month,
@@ -491,7 +499,6 @@ fun WaterScreen(
                                                 },
                                                 onSave = { submitReading() },
                                             )
-                                            AnimatedStatsCard(stats = stats, reduceMotion = reduceMotion)
                                             HistoryCard(
                                                 records = room.records,
                                                 persons = room.persons,
@@ -687,6 +694,263 @@ private fun RoomCard(
 }
 
 @Composable
+private fun RoomPickerRow(
+    selectedRv: String,
+    onPickRoom: () -> Unit,
+    onClearRoom: () -> Unit,
+) {
+    val label = PowerRooms.labelOf(selectedRv)
+    CtToolCard(contentPadding = PaddingValues(0.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onPickRoom)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Apartment, contentDescription = null, modifier = Modifier.size(22.dp))
+                }
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = if (label.isBlank()) "选择宿舍" else "关注宿舍",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = label.ifBlank { "尚未选择宿舍" },
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                )
+            }
+            Text(
+                text = if (label.isBlank()) "选择" else "更换",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Icon(
+                Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (label.isNotBlank()) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onClearRoom) { Text("清除本间数据") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonsCard(
+    persons: Int,
+    onPersons: (Int) -> Unit,
+) {
+    CtToolCard(contentPadding = PaddingValues(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("宿舍人数", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "人数决定每月水定额",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            CtPill(text = "${persons * WaterRules.WATER_FREE_PER_PERSON.toInt()} 吨/月")
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WaterRules.PERSONS_OPTIONS.forEach { option ->
+                val selected = option == persons
+                Surface(
+                    onClick = { onPersons(option) },
+                    modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    },
+                    contentColor = if (selected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    border = if (selected) null else BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+                    ),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "$option 人",
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "每人每月 2 吨 · $persons 人 = 每月定额 ${persons * 2} 吨",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun WaterHeroCard(stats: WaterMonthStats) {
+    val charge = stats.charge
+    val record = stats.record
+    val usage = charge.usage
+    val quota = charge.free.coerceAtLeast(1.0)
+    CtToolCard(contentPadding = PaddingValues(20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "本期用水",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    WaterMonth.label(stats.month),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            CtPill(
+                text = when {
+                    record == null -> "待录入"
+                    !charge.hasPrevious -> "首次记录"
+                    charge.within -> "定额内"
+                    else -> "超出定额"
+                },
+                containerColor = when {
+                    record == null -> MaterialTheme.colorScheme.surfaceContainerHigh
+                    !charge.hasPrevious -> MaterialTheme.colorScheme.surfaceContainerHigh
+                    charge.within -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.errorContainer
+                },
+                contentColor = when {
+                    record == null || !charge.hasPrevious -> MaterialTheme.colorScheme.onSurfaceVariant
+                    charge.within -> MaterialTheme.colorScheme.onPrimary
+                    else -> MaterialTheme.colorScheme.onErrorContainer
+                },
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        if (record == null) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(
+                    Icons.Rounded.Opacity,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Column {
+                    Text("还没有抄表记录", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "从本月开始录入水表读数，用量与水费会自动计算",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            text = usage?.let { WaterCalculator.fmtReading(it) }
+                                ?: WaterCalculator.fmtReading(record.reading),
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            " 吨",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = if (usage == null) {
+                            "首次读数 · 下次抄表开始计算用量"
+                        } else {
+                            "本期用量 · 读数 ${WaterCalculator.fmtReading(record.reading)} 吨"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "水费 ¥${charge.fee?.let { WaterCalculator.fmtMoney(it) } ?: "0.00"}",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        "折合扣电 ${charge.degree?.let { WaterCalculator.fmtDegree(it) } ?: "0.0"} 度",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (usage != null) {
+                Spacer(Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "月度定额 ${WaterCalculator.fmtReading(quota)} 吨",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        "${WaterCalculator.fmtReading(usage)} / ${WaterCalculator.fmtReading(quota)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { (usage / quota).toFloat().coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CtShapeTokens.pill),
+                    color = if (charge.within) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = if (charge.within) {
+                        "定额使用情况 · 剩余 ${WaterCalculator.fmtReading((quota - usage).coerceAtLeast(0.0))} 吨"
+                    } else {
+                        "已超出定额 ${WaterCalculator.fmtReading(charge.excess ?: 0.0)} 吨"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (charge.within) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                )
+            }
+        }
+    }
+}
+
+
+@Composable
 private fun MonthSelector(
     month: String,
     reduceMotion: Boolean,
@@ -818,8 +1082,7 @@ private fun WaterCardHeader(title: String, trailing: (@Composable () -> Unit)? =
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            maxLines = 2,
         )
         trailing?.invoke()
     }
@@ -1168,8 +1431,7 @@ private fun RoomPickerDialog(
                                         text = roomInfo.room,
                                         style = MaterialTheme.typography.bodySmall,
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
+                                        maxLines = 2,
                                     )
                                 }
                             }
@@ -1240,4 +1502,8 @@ private fun Modifier.horizontalSwipe(
         )
     }
 }
+
+
+
+
 

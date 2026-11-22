@@ -116,12 +116,19 @@
 - 玻璃开启时主按钮 Filled 也改用 ctGlass（tonal/玻璃按钮同样通透），不再只有卡片透明。
 - 移除「壁纸取色 / Material You」开关，主题固定 dynamicColor=false；远程配置忽略 dynamicColor。
 
+## beta55 水费 Hero / 选择控件
+
+- 水量页按小程序重排：关注宿舍单行入口 → 本期用水 Hero（用量/水费/折电/定额进度）→ 人数 → 月份/录入 → 历史 → 规则。
+- 选择 Chip / SegmentedButton 未选中改为 surfaceContainerHigh 实色 + 边框，避免透明底透背景影响文字。
+- 水量卡片标题、快捷 Chip、房间名改为 2 行，减少省略号截断。
+
 ## 仍需继续
 
 - 平板「我的」仍是单列 720dp，未做 M3 双栏；
 - 名册/作业/通知的分类条仍是 FilterChip 形态，是否改 PrimaryTabRow 待定；
 - PPT 空态卡片宽度偏窄；地图页底部浮层控件未 M3 化；
 - 部分工具页仍有自定义图表/地图控件，不属于 Material 组件。
+
 
 
 

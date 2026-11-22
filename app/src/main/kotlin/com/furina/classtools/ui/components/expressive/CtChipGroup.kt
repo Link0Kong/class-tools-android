@@ -80,6 +80,14 @@ fun CtChipGroup(
                         style = MaterialTheme.typography.labelLarge,
                     )
                 },
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    labelColor = MaterialTheme.colorScheme.onSurface,
+                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
+                    disabledLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                ),
                 leadingIcon = option.leadingIcon?.let { icon ->
                     {
                         Icon(
@@ -125,7 +133,15 @@ fun CtFilterChipRow(
                             style = MaterialTheme.typography.labelLarge,
                         )
                     },
-                    leadingIcon = option.leadingIcon?.let { icon ->
+                    colors = FilterChipDefaults.filterChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    labelColor = MaterialTheme.colorScheme.onSurface,
+                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
+                    disabledLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                ),
+                leadingIcon = option.leadingIcon?.let { icon ->
                         {
                             Icon(
                                 imageVector = icon,
@@ -139,4 +155,5 @@ fun CtFilterChipRow(
         }
     }
 }
+
 

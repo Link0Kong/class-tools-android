@@ -310,6 +310,12 @@ fun CtToolChip(
     androidx.compose.material3.FilterChip(
         selected = selected,
         onClick = onClick,
+        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            labelColor = MaterialTheme.colorScheme.onSurface,
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
         label = {
             Text(
                 text = text,
@@ -349,6 +355,8 @@ fun CtToolErrorState(
         CtToolPrimaryButton(text = retryText, onClick = onRetry, modifier = Modifier.fillMaxWidth())
     }
 }
+
+
 
 
 
