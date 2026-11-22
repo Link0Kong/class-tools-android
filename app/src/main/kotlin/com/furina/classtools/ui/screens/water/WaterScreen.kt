@@ -281,6 +281,10 @@ fun WaterScreen(
     val stats: WaterMonthStats = remember(room, month, waterState, selectedRv) {
         WaterCalculator.stats(room, month, clock())
     }
+    // 最近一次抄表（独立于当前选中月份）：用于「最近一次」提示与空月份兜底。
+    val latestStats: WaterMonthStats? = remember(room, waterState, selectedRv) {
+        room.latest?.let { WaterCalculator.stats(room, it.month, clock()) }
+    }
     val monthsWithRecords = remember(room) { room.records.map { it.month }.toSet() }
     val isWide = false
 
@@ -408,7 +412,7 @@ fun WaterScreen(
                                                     onPickRoom = { showRoomPicker = true },
                                                     onClearRoom = { showClearRoomConfirm = true },
                                                 )
-                                                WaterHeroCard(stats = stats)
+                                                WaterHeroCard(stats = stats, latestStats = latestStats)
                                                 PersonsCard(
                                                     persons = room.persons,
                                                     onPersons = { persons ->
@@ -469,7 +473,7 @@ fun WaterScreen(
                                                 onPickRoom = { showRoomPicker = true },
                                                 onClearRoom = { showClearRoomConfirm = true },
                                             )
-                                            WaterHeroCard(stats = stats)
+                                            WaterHeroCard(stats = stats, latestStats = latestStats)
                                             PersonsCard(
                                                 persons = room.persons,
                                                 onPersons = { persons ->
@@ -815,21 +819,25 @@ private fun PersonsCard(
 }
 
 @Composable
-private fun WaterHeroCard(stats: WaterMonthStats) {
-    val charge = stats.charge
-    val record = stats.record
+private fun WaterHeroCard(stats: WaterMonthStats, latestStats: WaterMonthStats?) {
+    // 当前月份还没有记录时，直接显示「最近一次」，避免页面误以为从没抄过表。
+    val shown = if (stats.record == null && latestStats?.record != null) latestStats else stats
+    val isRecentFallback = shown.month != stats.month
+    val charge = shown.charge
+    val record = shown.record
     val usage = charge.usage
     val quota = charge.free.coerceAtLeast(1.0)
     CtToolCard(contentPadding = PaddingValues(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "本期用水",
+                    if (isRecentFallback) "最近一次用水" else "本期用水",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    WaterMonth.label(stats.month),
+                    text = WaterMonth.label(shown.month) +
+                        if (isRecentFallback) " · 当前月无记录" else "",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -945,6 +953,18 @@ private fun WaterHeroCard(stats: WaterMonthStats) {
                     },
                 )
             }
+        }
+        latestStats?.takeIf { it.month != shown.month }?.let { recent ->
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "最近一次：${WaterMonth.label(recent.month)} · 读数 " +
+                    "${recent.record?.let { WaterCalculator.fmtReading(it.reading) } ?: "—"} 吨" +
+                    (recent.charge.usage?.let { " · 用量 ${WaterCalculator.fmtReading(it)} 吨" } ?: ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -1502,6 +1522,7 @@ private fun Modifier.horizontalSwipe(
         )
     }
 }
+
 
 
 
