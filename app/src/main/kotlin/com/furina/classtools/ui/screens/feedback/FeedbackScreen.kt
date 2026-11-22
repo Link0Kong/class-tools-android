@@ -34,7 +34,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -415,7 +415,7 @@ private fun FormCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
-            OutlinedTextField(
+            TextField(
                 value = text,
                 onValueChange = onTextChange,
                 modifier = Modifier
@@ -600,4 +600,5 @@ private enum class FeedbackPhase { LOADING, READY, FAILED }
 
 @Suppress("unused")
 private val defaultRepositoryHint = DefaultFeedbackRepository::class.simpleName
+
 

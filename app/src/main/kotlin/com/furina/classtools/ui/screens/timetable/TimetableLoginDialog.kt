@@ -18,7 +18,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -201,7 +201,7 @@ fun TimetableLoginForm(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        OutlinedTextField(
+        TextField(
             value = sid,
             onValueChange = onSidChange,
             modifier = Modifier.fillMaxWidth(),
@@ -210,7 +210,7 @@ fun TimetableLoginForm(
             label = { Text("学号") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
-        OutlinedTextField(
+        TextField(
             value = password,
             onValueChange = onPasswordChange,
             modifier = Modifier.fillMaxWidth(),
@@ -325,3 +325,4 @@ private fun TimetableLoginErrorPreview() {
         }
     }
 }
+

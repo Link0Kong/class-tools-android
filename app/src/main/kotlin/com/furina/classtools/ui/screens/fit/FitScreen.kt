@@ -34,7 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -330,7 +330,7 @@ fun FitScreen(
                     title = { Text("历史记录名称") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            OutlinedTextField(
+                            TextField(
                                 value = name,
                                 onValueChange = { name = it.take(24) },
                                 singleLine = true,
@@ -916,3 +916,4 @@ private fun FitCenteredError(message: String, onRetry: () -> Unit) {
         }
     }
 }
+

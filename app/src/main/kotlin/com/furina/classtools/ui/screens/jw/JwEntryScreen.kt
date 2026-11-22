@@ -35,7 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -1021,7 +1021,7 @@ private fun JwLoginPromptDialog(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
-                OutlinedTextField(
+                TextField(
                     value = password,
                     onValueChange = {
                         password = it.take(256)
@@ -1137,5 +1137,6 @@ private suspend fun WebView.evaluateJavascriptAwait(script: String): String? =
             if (continuation.isActive) continuation.resume(null)
         }
     }
+
 
 

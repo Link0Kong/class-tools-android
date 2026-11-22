@@ -79,8 +79,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -1453,7 +1453,7 @@ private fun NoticeSearchField(
         runCatching { focusRequester.requestFocus() }
     }
     val scheme = MaterialTheme.colorScheme
-    OutlinedTextField(
+    TextField(
         value = query,
         onValueChange = { onQueryChange(it.take(40)) },
         modifier = modifier
@@ -1468,11 +1468,11 @@ private fun NoticeSearchField(
             }
         },
         placeholder = { Text("搜索通知标题 / 摘要") },
-        colors = OutlinedTextFieldDefaults.colors(
+        colors = TextFieldDefaults.colors(
             focusedContainerColor = scheme.surfaceContainerHigh,
             unfocusedContainerColor = scheme.surfaceContainerHigh.copy(alpha = 0.72f),
-            focusedBorderColor = scheme.primary.copy(alpha = 0.55f),
-            unfocusedBorderColor = Color.Transparent,
+            focusedIndicatorColor = scheme.primary.copy(alpha = 0.55f),
+            unfocusedIndicatorColor = Color.Transparent,
         ),
     )
 }
@@ -2699,6 +2699,9 @@ private fun NoticeSkeletonCard(index: Int) {
 
 /** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
 private enum class Phase { LOADING, READY, FAILED }
+
+
+
 
 
 

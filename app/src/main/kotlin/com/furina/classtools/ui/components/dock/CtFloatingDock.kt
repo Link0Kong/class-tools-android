@@ -152,6 +152,33 @@ fun CtFloatingDock(
     // 不再按明暗自建两套手绘材质 —— 深浅色差异全部由 CtGlassTable 表达（深色更实、亮边代替投影）。
     val dockShape = RoundedCornerShape(CtRadius.hero)
     val glass = com.furina.classtools.ui.theme.LocalCtLight.current.enabled
+    // 玻璃浮动底栏：更薄（68dp）+ 左右 24dp / 底部 8dp；与实色 80dp 导航栏之间做收缩动画。
+    val dockHeight by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (glass) 68.dp else 80.dp,
+        animationSpec = androidx.compose.animation.core.tween(260),
+        label = "dockHeight",
+    )
+    val horizontalInset by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (glass) 24.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.tween(260),
+        label = "dockHorizontalInset",
+    )
+    val verticalInset by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (glass) 8.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.tween(260),
+        label = "dockVerticalInset",
+    )
+    val dockCorner by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (glass) 28.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.tween(260),
+        label = "dockCorner",
+    )
+    val contentInset by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (glass) 8.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.tween(260),
+        label = "dockContentInset",
+    )
+    val animatedShape = RoundedCornerShape(dockCorner)
     // M3 NavigationBar：整宽、80dp、surfaceContainer，无圆角/无阴影。
     // 仍保留跟手指示器动画，但外观按标准导航栏而不是悬浮玻璃条。
     val pillShadowElevation = 0.dp
@@ -160,13 +187,7 @@ fun CtFloatingDock(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .then(
-                if (glass) {
-                    Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
-                } else {
-                    Modifier
-                },
-            ),
+            .padding(horizontal = horizontalInset, vertical = verticalInset),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Surface(
@@ -176,7 +197,7 @@ fun CtFloatingDock(
                     if (glass) {
                         Modifier.ctGlass(
                             level = com.furina.classtools.ui.theme.CtLightLevel.THIN,
-                            shape = dockShape,
+                            shape = animatedShape,
                             bodySafe = false,
                             haze = hazeState,
                         )
@@ -185,14 +206,14 @@ fun CtFloatingDock(
                     },
                 ),
             color = if (glass) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
-            shape = if (glass) dockShape else androidx.compose.ui.graphics.RectangleShape,
+            shape = animatedShape,
         ) {
             androidx.compose.foundation.layout.BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(if (glass) Modifier.padding(horizontal = 8.dp) else Modifier)
+                    .padding(horizontal = contentInset)
                     // 200% 字体下允许底栏随文案长高。
-                    .heightIn(min = CtDockLogic.DOCK_HEIGHT_DP.dp),
+                    .heightIn(min = dockHeight),
             ) {
                 val itemWidth = maxWidth / destinations.size
                 // M3 指示器固定 64 × 32dp（不随 item 宽度拉伸）；item 仍占满 1/N。
@@ -227,7 +248,7 @@ fun CtFloatingDock(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = CtDockLogic.DOCK_HEIGHT_DP.dp)
+                        .heightIn(min = dockHeight)
                         .selectableGroup(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -340,5 +361,7 @@ private fun DockItem(
         }
     }
 }
+
+
 
 
