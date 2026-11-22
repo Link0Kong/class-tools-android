@@ -172,7 +172,7 @@ fun IdentityScreen(
 
             CtGlassCard(
                 modifier = Modifier.widthIn(max = 520.dp),
-                shape = CtShapeTokens.cardLarge,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
             ) {
                 Column(
                     modifier = Modifier
@@ -270,7 +270,7 @@ fun IdentityScreen(
                         }
                     }
 
-                    OutlinedTextField(
+                    androidx.compose.material3.TextField(
                         value = studentId,
                         onValueChange = { input ->
                             studentId = input.filter { it.isDigit() }.take(10)
@@ -280,14 +280,6 @@ fun IdentityScreen(
                         label = { Text("学号") },
                         placeholder = { Text("10 位学号") },
                         singleLine = true,
-                        shape = CtShapeTokens.input,
-                        textStyle = com.furina.classtools.ui.theme.CtText.body,
-                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.background,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                            unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                        ),
                         isError = studentId.isNotEmpty() && studentId.length != 10,
                         supportingText = {
                             if (studentId.isNotEmpty() && studentId.length != 10) {
@@ -300,7 +292,7 @@ fun IdentityScreen(
                         ),
                     )
 
-                    OutlinedTextField(
+                    androidx.compose.material3.TextField(
                         value = name,
                         onValueChange = { input ->
                             name = input.take(20)
@@ -310,14 +302,6 @@ fun IdentityScreen(
                         label = { Text("姓名") },
                         placeholder = { Text("请输入姓名") },
                         singleLine = true,
-                        shape = CtShapeTokens.input,
-                        textStyle = com.furina.classtools.ui.theme.CtText.body,
-                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.background,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                            unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                        ),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     )
 
@@ -369,7 +353,7 @@ fun IdentityScreen(
                         enabled = canSubmit,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(com.furina.classtools.ui.theme.HarmonyTokens.ButtonHeight),
+                            .height(40.dp),
                         shape = CtShapeTokens.pill,
                     ) {
                         if (verifying) {
@@ -381,7 +365,7 @@ fun IdentityScreen(
                         } else {
                             Text(
                                 text = "进入工具站",
-                                style = com.furina.classtools.ui.theme.CtText.bodyMedium,
+                                style = MaterialTheme.typography.labelLarge,
                             )
                         }
                     }
@@ -526,4 +510,6 @@ private fun QuickLoginButton(
         }
     }
 }
+
+
 

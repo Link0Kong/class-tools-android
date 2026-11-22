@@ -70,11 +70,6 @@ fun CtChipGroup(
     ) {
         options.forEach { option ->
             val selected = option.key in selectedKeys
-            val scale by animateFloatAsState(
-                targetValue = if (selected) 1f else 0.96f,
-                animationSpec = CtMotion.spatialFast,
-                label = "chipScale",
-            )
             FilterChip(
                 selected = selected,
                 onClick = { onToggle(option.key) },
@@ -93,11 +88,6 @@ fun CtChipGroup(
                             modifier = Modifier.size(FilterChipDefaults.IconSize),
                         )
                     }
-                },
-                shape = CtShapeTokens.chip,
-                modifier = Modifier.graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
                 },
             )
         }
@@ -124,11 +114,6 @@ fun CtFilterChipRow(
     ) {
         items(items = options, key = { it.key }) { option ->
             val selected = option.key == selectedKey
-            val scale by animateFloatAsState(
-                targetValue = if (selected) 1f else 0.96f,
-                animationSpec = CtMotion.spatialFast,
-                label = "filterChipScale",
-            )
             Box(modifier = Modifier.padding(vertical = 2.dp)) {
                 FilterChip(
                     selected = selected,
@@ -149,13 +134,9 @@ fun CtFilterChipRow(
                             )
                         }
                     },
-                    shape = CtShapeTokens.chip,
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    },
                 )
             }
         }
     }
 }
+

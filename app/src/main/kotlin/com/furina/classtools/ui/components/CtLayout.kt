@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.components
 
+import androidx.compose.foundation.layout.widthIn
+
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -665,69 +667,30 @@ fun CtTextField(
     isError: Boolean = false,
     leadingIcon: ImageVector? = null,
 ) {
-    val c = rememberCtColors()
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    val container by animateColorAsState(
-        targetValue = if (focused) c.containerHigh else c.container,
-        animationSpec = CtMotion.effectsSpec(),
-        label = "ctFieldContainer",
-    )
-    val borderWidth by animateDpAsState(
-        targetValue = if (focused || isError) 1.dp else 0.dp,
-        animationSpec = CtMotion.spatialFastDp,
-        label = "ctFieldBorder",
-    )
-    val borderColor = when {
-        isError -> c.error
-        focused -> c.primary
-        else -> c.divider
-    }
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = CtSize.buttonHeight)
-            .clip(CtShape.input)
-            .background(container)
-            .border(borderWidth, borderColor, CtShape.input)
-            .padding(horizontal = CtSpace.md, vertical = CtSpace.sm),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(CtSpace.sm),
-    ) {
-        if (leadingIcon != null) {
-            Icon(
-                imageVector = leadingIcon,
-                contentDescription = null,
-                tint = c.textTertiary,
-                modifier = Modifier.size(CtSize.icon),
-            )
-        }
-        Box(modifier = Modifier.weight(1f)) {
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = enabled,
-                singleLine = singleLine,
-                maxLines = maxLines,
-                textStyle = textStyle.copy(color = if (enabled) c.textPrimary else c.textTertiary),
-                cursorBrush = SolidColor(c.primary),
-                keyboardOptions = keyboardOptions,
-                visualTransformation = visualTransformation,
-                interactionSource = interaction,
-            )
-            if (value.isEmpty() && label.isNotEmpty()) {
-                Text(
-                    text = label,
-                    style = textStyle,
-                    color = c.textTertiary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+    // M3 filled text field：4dp 顶圆角 + surfaceContainerHighest + 底部 1dp 指示线。
+    androidx.compose.material3.TextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.widthIn(min = 0.dp).fillMaxWidth(),
+        enabled = enabled,
+        singleLine = singleLine,
+        maxLines = maxLines,
+        textStyle = textStyle,
+        label = label.takeIf { it.isNotEmpty() }?.let { text -> { Text(text) } },
+        leadingIcon = leadingIcon?.let { icon ->
+            {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
                 )
             }
-        }
-        trailing?.invoke()
-    }
+        },
+        trailingIcon = trailing,
+        isError = isError,
+        keyboardOptions = keyboardOptions,
+        visualTransformation = visualTransformation,
+    )
 }
 
 /**
@@ -1034,3 +997,6 @@ fun CtPressLayer(alpha: Float, modifier: Modifier = Modifier) {
             .background(c.stateLayer),
     )
 }
+
+
+

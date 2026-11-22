@@ -154,7 +154,7 @@ fun CtRootHeader(
                 // M3 large app bar 标题 = Display Small（36sp / 400）。之前是 34sp Bold 的就地覆盖。
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.displaySmall,
+                    style = MaterialTheme.typography.headlineMedium,
                     color = c.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -349,5 +349,6 @@ fun CtTopFadeScrim(height: Int = 56, modifier: Modifier = Modifier) {
             ),
     )
 }
+
 
 

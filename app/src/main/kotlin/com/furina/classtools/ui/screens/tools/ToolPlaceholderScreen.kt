@@ -73,15 +73,15 @@ fun ToolPlaceholderScreen(
                 Spacer(modifier = Modifier.height(CtSpace.xl))
 
                 Surface(
-                    shape = RoundedCornerShape(CtRadius.sheetTop),
-                    color = harmonyTint(uiAccentOf(tool).tintRef),
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
-                    Box(modifier = Modifier.size(88.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
-                            tint = uiAccentOf(tool).tintRef,
-                            modifier = Modifier.size(42.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp),
                         )
                     }
                 }
@@ -106,8 +106,8 @@ fun ToolPlaceholderScreen(
 
                 Surface(
                     modifier = Modifier.widthIn(max = 560.dp),
-                    shape = CtShapeTokens.hero,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
                     Column(
                         modifier = Modifier
@@ -152,3 +152,4 @@ fun ToolPlaceholderScreen(
         }
     }
 }
+

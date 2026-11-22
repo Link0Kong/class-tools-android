@@ -192,7 +192,9 @@ fun AllToolsScreen(
         }
     }
 
-    val itemHeightDp = HarmonyTokens.TileMinHeight
+    // 大字号：卡片高度随 fontScale 增长，避免 200% 下标题/副标题被固定高度裁切。
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    val itemHeightDp = (HarmonyTokens.TileMinHeight.value * fontScale.coerceIn(1f, 1.8f)).dp
     val spacingDp = HarmonyTokens.Gap
     val itemHeightPx = with(density) { itemHeightDp.toPx() }
     val spacingPx = with(density) { spacingDp.toPx() }
@@ -636,5 +638,6 @@ private fun HarmonyAllToolsHeader(
         },
     )
 }
+
 
 

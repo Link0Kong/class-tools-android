@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.home
 
+import androidx.compose.material3.MaterialTheme
+
 import com.furina.classtools.ui.components.background.CtGlassSurface
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -140,36 +142,16 @@ internal fun HomeHeroCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 4.dp, bottom = HarmonyTokens.Gap)
-            .shadow(
-                elevation = HarmonyTokens.HeroShadowElevation,
-                shape = HomeHeroShape,
-                clip = false,
-                ambientColor = HarmonyTokens.HeroShadowColor,
-                spotColor = HarmonyTokens.HeroShadowColor,
-            )
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
             },
-        shape = HomeHeroShape,
-        color = colors.heroPaper,
-        contentColor = colors.heroTitle,
-        border = BorderStroke(HarmonyTokens.HairlineWidth, colors.heroBorder),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         interactionSource = int,
     ) {
-        Column(modifier = Modifier.padding(HarmonyTokens.PagePadding)) {
-            // 顶部青/蓝/沙三色 3px 条
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(CtRadius.chip)),
-            ) {
-                Box(modifier = Modifier.weight(1f).fillMaxSize().background(HarmonyTokens.MistTeal))
-                Box(modifier = Modifier.weight(1f).fillMaxSize().background(HarmonyTokens.SlateBlue))
-                Box(modifier = Modifier.weight(1f).fillMaxSize().background(HarmonyTokens.WarmSand))
-            }
-            Spacer(modifier = Modifier.height(CtSpace.md))
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     shape = CircleShape,
@@ -191,8 +173,8 @@ internal fun HomeHeroCard(
             }
             Text(
                 text = "$greeting，${session.name.trim().ifBlank { "同学" }}",
-                style = CtTypeScale.title,
-                color = colors.heroTitle,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 12.dp),
@@ -501,3 +483,8 @@ internal fun HomeReveal(
         content()
     }
 }
+
+
+
+
+

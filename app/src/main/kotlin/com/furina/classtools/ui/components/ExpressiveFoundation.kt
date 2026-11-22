@@ -114,8 +114,8 @@ fun SectionHeader(
     ) {
         Text(
             text = title,
-            style = CtText.heading,
-            color = colors.textPrimary,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
         action?.invoke()
@@ -129,32 +129,31 @@ fun EmptyState(
     title: String,
     message: String,
     modifier: Modifier = Modifier,
-    iconSize: Dp = 40.dp,
+    iconSize: Dp = 48.dp,
 ) {
-    val colors = rememberHarmonyColors()
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 40.dp, horizontal = 24.dp),
+            .padding(vertical = 32.dp, horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = colors.textTertiary,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(iconSize),
         )
         Text(
             text = title,
-            style = CtText.bodyMedium,
-            color = colors.textPrimary,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
         Text(
             text = message,
-            style = CtText.caption,
-            color = colors.textTertiary,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
     }
@@ -187,4 +186,5 @@ fun CtLoading(
         )
     }
 }
+
 

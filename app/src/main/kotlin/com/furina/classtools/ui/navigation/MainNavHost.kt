@@ -1,5 +1,12 @@
 package com.furina.classtools.ui.navigation
 
+
+import androidx.compose.foundation.layout.fillMaxHeight
+
+import androidx.compose.foundation.layout.Row
+
+import androidx.compose.foundation.layout.BoxWithConstraints
+
 import com.furina.classtools.ui.components.CtToastBus
 
 import androidx.compose.animation.EnterTransition
@@ -1293,7 +1300,17 @@ private fun RootTabs(
     val showNotificationPermissionBanner = !notificationGranted && reminderSettings.enabled
     // 沉浸光感是否启用（dock 的玻璃实现二选一：CtLight 材质 or 旧 Haze）。
     val ctLightEnabled = com.furina.classtools.ui.theme.LocalCtLight.current.enabled
-    Box(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val wideLayout = maxWidth >= 600.dp
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (wideLayout) {
+                com.furina.classtools.ui.components.dock.CtNavigationRail(
+                    destinations = destinations,
+                    selectedIndex = pagerState.currentPage,
+                    onSelect = onSelectTab,
+                )
+            }
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
         CtTabPager(
             pagerState = pagerState,
             modifier = Modifier
@@ -1361,6 +1378,8 @@ private fun RootTabs(
                     )
             }
         }
+            }
+        }
 
         // 厂商账号绑定管理弹层（列表/绑定/解绑；入口在「我的 → 账号」）。
         if (showOppoAccountSheet) {
@@ -1394,17 +1413,17 @@ private fun RootTabs(
         // 系统导航栏本身是透明 + 无对比度蒙层（MainActivity 已设置），无需再垫底色。
 
         // M3 NavigationBar 自带容器分层，不再叠加底部渐变蒙层（会把内容压暗/产生灰带）。
-        CtFloatingDock(
-            destinations = destinations,
-            selectedIndex = pagerState.currentPage,
-            onSelect = onSelectTab,
-            pagerOffsetFraction = pagerState.currentPageOffsetFraction,
-            modifier = Modifier.align(Alignment.BottomCenter),
-            glassModifier = null,
-            // 浮岛不再做 Haze 真模糊：背后是页面底部空白 + 卡片边缘，模糊后会留下「幽灵文字」，
-            // 反而不如「更实的高档玻璃 + 点光源高光」干净（2026-11-20 模拟器实测）。
-            hazeState = null,
-        )
+        if (!wideLayout) {
+            CtFloatingDock(
+                destinations = destinations,
+                selectedIndex = pagerState.currentPage,
+                onSelect = onSelectTab,
+                pagerOffsetFraction = pagerState.currentPageOffsetFraction,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                glassModifier = null,
+                hazeState = null,
+            )
+        }
     }
 }
 
@@ -1490,6 +1509,9 @@ private class ContainerVoteMemberSource(
             ?.members?.let(MemberCategoryBuilder::all).orEmpty()
     }
 }
+
+
+
 
 
 

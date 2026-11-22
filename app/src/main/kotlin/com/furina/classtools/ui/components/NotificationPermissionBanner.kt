@@ -1,5 +1,9 @@
 package com.furina.classtools.ui.components
 
+import androidx.compose.material3.IconButton
+
+import androidx.compose.material3.TextButton
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,60 +75,48 @@ fun NotificationPermissionBanner(
     ) {
         Row(
             modifier = Modifier
-                .heightIn(min = 64.dp)
+                .fillMaxWidth()
                 .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Surface(
-                shape = RoundedCornerShape(HarmonyTokens.RadiusTile),
-                color = harmonyTint(accent),
-                contentColor = accent,
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
             ) {
                 Box(
-                    modifier = Modifier.size(HarmonyTokens.GlyphBox),
+                    modifier = Modifier.size(40.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.NotificationsActive,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "通知权限未开启",
-                    style = CtText.bodyMedium,
-                    color = colors.textPrimary,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = "开启后才能收到作业/上课提醒",
-                    style = CtText.caption,
-                    color = colors.textSecondary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(
-                text = "去开启",
-                style = CtText.labelMedium,
-                color = colors.heroAccent,
-                modifier = Modifier
-                    .clickable(role = Role.Button, onClick = onOpenPermissions)
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-            )
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clickable(role = Role.Button) { NotificationPermissionBannerState.dismiss() },
-                contentAlignment = Alignment.Center,
-            ) {
+            TextButton(onClick = onOpenPermissions) { Text("去开启") }
+            IconButton(onClick = { NotificationPermissionBannerState.dismiss() }) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = "关闭通知权限提示",
-                    tint = colors.textTertiary,
-                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
     }
 }
+

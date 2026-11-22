@@ -113,15 +113,15 @@ internal fun AllToolCard(
             ) {
                 // 40dp 淡色底图标块（鸿蒙 tint(accent, 0.12) / 24vp 字形）
                 Surface(
-                    shape = RoundedCornerShape(HarmonyTokens.RadiusTile),
-                    color = harmonyTint(uiAccentOf(tool).tintRef),
-                    contentColor = uiAccentOf(tool).textRef,
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 ) {
                     Box(modifier = Modifier.size(HarmonyTokens.GlyphBox), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
-                            tint = uiAccentOf(tool).tintRef,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             modifier = Modifier.size(HarmonyTokens.TileGlyph),
                         )
                     }
@@ -133,15 +133,15 @@ internal fun AllToolCard(
                 ) {
                     Text(
                         text = tool.name,
-                        style = CtText.bodyMedium,
-                        color = colors.textPrimary,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = tool.subtitle,
-                        style = CtText.caption,
-                        color = colors.textSecondary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -172,3 +172,4 @@ internal fun AllToolCard(
 
 @Composable
 private fun MaterialThemePrimary() = androidx.compose.material3.MaterialTheme.colorScheme.primary
+

@@ -481,7 +481,7 @@ private fun ProfileHeader(collapse: Float) {
 internal fun SectionTitle(text: String) {
     Text(
         text = text,
-        style = CtText.caption.copy(fontWeight = FontWeight.Medium),
+        style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 2.dp, top = 16.dp, bottom = 8.dp),
     )
@@ -1198,6 +1198,7 @@ private fun rememberHideStatusBar(
     val value by store.hideStatusBar.collectAsStateWithLifecycle(initialValue = fallback)
     return value
 }
+
 
 
 

@@ -62,21 +62,11 @@ fun CtSegmentedButtons(
     SingleChoiceSegmentedButtonRow(modifier = modifier) {
         options.forEachIndexed { index, option ->
             val selected = option.key == selectedKey
-            // 选中回弹：只做非常轻微的缩放，避免布局抖动。
-            val selectedScale by animateFloatAsState(
-                targetValue = if (selected) 1f else 0.985f,
-                animationSpec = CtMotion.spatialFast,
-                label = "segmentScale",
-            )
             SegmentedButton(
                 selected = selected,
                 onClick = { onSelect(option.key) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
                 enabled = enabled,
-                modifier = Modifier.graphicsLayer {
-                    scaleX = selectedScale
-                    scaleY = selectedScale
-                },
                 icon = when {
                     option.icon != null -> {
                         {
@@ -108,3 +98,4 @@ fun CtSegmentedButtons(
         }
     }
 }
+

@@ -2,6 +2,7 @@
 
 | 文件 | 内容 | 面向 |
 |---|---|---|
+| [`M3_EMULATOR_AUDIT_2026-11-22.md`](M3_EMULATOR_AUDIT_2026-11-22.md) | 模拟器逐页 M3 审计：共享控件/页面/200% 字号/平板 Rail | 设计/验收 |
 | [`PROFILE_SHARED_TRANSITION_2026-11-22.md`](PROFILE_SHARED_TRANSITION_2026-11-22.md) | 我的选项 → 详情页一镜到底：SharedViewKit 能力边界与 Compose 等价实现 | 设计/评审 |
 | [`M3_STANDARD_2026-11-21.md`](M3_STANDARD_2026-11-21.md) | beta28：M3 标准 app bar、课表一屏周视图、通知缓存修复、沉浸光感移除、远程配置热更 | 设计/评审 |
 | [`M3_REPLACEMENT_2026-11-21.md`](M3_REPLACEMENT_2026-11-21.md) | M3 组件替换：顶栏/卡片/底栏/对话框/弹层/Snackbar 的角色与实机核验 | 设计/评审 |
@@ -44,6 +45,7 @@
 | Android 17 / API 37 / target 37 大屏忽略方向与尺寸限制 | ✅ 与官方博客一致（2026-02-13；自 Android 16 起无新增变更，只禁止退出） | developer.android.google.cn blog |
 
 （其余「已核实」事实与来源逐条列在 `ANDROID17_DESIGN.md §10`。）
+
 
 
 

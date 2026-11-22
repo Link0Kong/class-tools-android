@@ -79,21 +79,20 @@ fun TimetableLinkFab(
     ExtendedFloatingActionButton(
         onClick = onClick,
         modifier = modifier,
-        shape = CtShapeTokens.pill,
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         icon = {
             Icon(
                 imageVector = Icons.Rounded.CalendarMonth,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(24.dp),
             )
         },
         text = {
             Text(
                 text = "课表接入",
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
             )
         },
     )
@@ -608,3 +607,4 @@ private fun LinkFileRow(
         }
     }
 }
+

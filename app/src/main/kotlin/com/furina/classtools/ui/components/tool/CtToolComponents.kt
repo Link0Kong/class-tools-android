@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.components.tool
 
+import androidx.compose.foundation.layout.widthIn
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -149,7 +151,7 @@ fun CtToolSectionHeader(
     }
 }
 
-/** 工具页主操作按钮：品牌雾青胶囊，统一高度 48dp、15sp Medium。 */
+/** 工具页主操作按钮：M3 filled button，视觉高 40dp + 48dp 触控目标。 */
 @Composable
 fun CtToolPrimaryButton(
     text: String,
@@ -161,7 +163,7 @@ fun CtToolPrimaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = HarmonyTokens.ButtonHeight),
+            .height(40.dp),
         enabled = enabled,
         shape = CtShapeTokens.pill,
         colors = ButtonDefaults.buttonColors(
@@ -169,11 +171,11 @@ fun CtToolPrimaryButton(
             contentColor = MaterialTheme.colorScheme.onPrimary,
         ),
     ) {
-        Text(text = text, style = CtText.bodyMedium)
+        Text(text = text, style = MaterialTheme.typography.labelLarge)
     }
 }
 
-/** 工具页分段选择：浅灰胶囊底 + 选中白色浮层（鸿蒙 segmented 轻量实现）。 */
+/** 工具页分段选择：直接使用 M3 SegmentedButton（40dp，secondaryContainer 选中态）。 */
 @Composable
 fun CtToolSegmented(
     options: List<String>,
@@ -181,46 +183,18 @@ fun CtToolSegmented(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = rememberHarmonyColors()
-    Surface(
+    com.furina.classtools.ui.components.expressive.CtSegmentedButtons(
+        options = options.mapIndexed { index, label ->
+            com.furina.classtools.ui.components.expressive.CtSegmentOption(
+                key = index.toString(),
+                label = label,
+            )
+        },
+        selectedKey = selectedIndex.toString(),
+        onSelect = { key -> key.toIntOrNull()?.let(onSelect) },
         modifier = modifier.fillMaxWidth(),
-        shape = CtShapeTokens.pill,
-        color = if (colors.dark) colors.card else colors.background,
-    ) {
-        Row(
-            modifier = Modifier.padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            options.forEachIndexed { index, label ->
-                val selected = index == selectedIndex
-                Surface(
-                    onClick = { onSelect(index) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp),
-                    shape = CtShapeTokens.pill,
-                    // 深色下轨道与选中块都用 colors.card 时会完全看不出选中（beta24 实机发现）：
-                    // 深色选中块升一档 containerHigh，浅色保持白底。
-                    color = if (selected) {
-                        if (colors.dark) MaterialTheme.colorScheme.surfaceContainerHigh else colors.card
-                    } else {
-                        Color.Transparent
-                    },
-                    contentColor = if (selected) colors.textPrimary else colors.textSecondary,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = label,
-                            style = CtText.label,
-                            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-        }
-    }
+        showCheckIcon = false,
+    )
 }
 
 /** 工具页信息行：左侧标签 13 + 右侧数值 15 Medium，最小高度 44dp。 */
@@ -306,48 +280,24 @@ fun CtToolField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    val colors = rememberHarmonyColors()
-    Column(modifier = modifier) {
-        Text(
-            text = label,
-            style = CtText.label,
-            color = colors.textSecondary,
-            modifier = Modifier.padding(start = 2.dp, bottom = 6.dp),
-        )
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp),
-            enabled = enabled,
-            singleLine = singleLine,
-            textStyle = CtText.body,
-            placeholder = placeholder?.let { p ->
-                {
-                    Text(
-                        text = p,
-                        style = CtText.body,
-                        color = colors.textTertiary,
-                    )
-                }
-            },
-            trailingIcon = trailing,
-            keyboardOptions = keyboardOptions,
-            shape = CtShapeTokens.input,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = colors.background,
-                unfocusedContainerColor = colors.background,
-                disabledContainerColor = colors.background.copy(alpha = 0.5f),
-                focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                unfocusedBorderColor = Color.Transparent,
-                disabledBorderColor = Color.Transparent,
-            ),
-        )
-    }
+    // M3 filled text field：4dp 顶圆角、surfaceContainerHighest、底部指示线；标签由 M3 浮动。
+    androidx.compose.material3.TextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.widthIn(min = 0.dp).fillMaxWidth(),
+        enabled = enabled,
+        singleLine = singleLine,
+        label = { Text(label) },
+        placeholder = placeholder?.let { p ->
+            { Text(text = p, style = MaterialTheme.typography.bodyLarge) }
+        },
+        trailingIcon = trailing,
+        keyboardOptions = keyboardOptions,
+        textStyle = MaterialTheme.typography.bodyLarge,
+    )
 }
 
-/** 统一筛选/选择胶囊（鸿蒙 pill：选中雾青 12% 底 + 雾青字；未选浅灰底）。 */
+/** 工具页筛选 Chip：标准 M3 FilterChip（32dp，8dp 圆角，选中 secondaryContainer）。 */
 @Composable
 fun CtToolChip(
     text: String,
@@ -355,39 +305,20 @@ fun CtToolChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = rememberHarmonyColors()
-    Surface(
+    androidx.compose.material3.FilterChip(
+        selected = selected,
         onClick = onClick,
-        modifier = modifier.heightIn(min = 48.dp),
-        shape = CircleShape,
-        color = if (selected) {
-            harmonyTint(MaterialTheme.colorScheme.primary)
-        } else if (colors.dark) {
-            colors.card
-        } else {
-            colors.background
-        },
-        contentColor = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            colors.textSecondary
-        },
-    ) {
-        Box(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-            contentAlignment = Alignment.Center,
-        ) {
+        label = {
             Text(
                 text = text,
-                style = CtText.label,
-                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
+        },
+        modifier = modifier,
+    )
 }
-
 
 /**
  * 工具页统一错误态：卡片 + 图标 + 用户可读说明 + 全宽主操作「重试」。
@@ -416,4 +347,10 @@ fun CtToolErrorState(
         CtToolPrimaryButton(text = retryText, onClick = onRetry, modifier = Modifier.fillMaxWidth())
     }
 }
+
+
+
+
+
+
 
