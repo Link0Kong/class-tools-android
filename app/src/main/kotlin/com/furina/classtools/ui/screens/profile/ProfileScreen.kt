@@ -4,6 +4,7 @@ import com.furina.classtools.ui.components.CtSnackbarHost
 
 import androidx.compose.ui.platform.LocalDensity
 import com.furina.classtools.ui.components.CtRootHeader
+import com.furina.classtools.ui.components.LocalCtContainerTransform
 import com.furina.classtools.ui.components.CtStickyHeaderBar
 import com.furina.classtools.ui.components.ctStickyHeaderProgress
 import dev.chrisbanes.haze.hazeSource
@@ -90,7 +91,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.Role
@@ -1038,11 +1042,22 @@ private fun ActionRow(
     subtitleHighlight: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val transform = LocalCtContainerTransform.current
+    val reduceMotion = com.furina.classtools.ui.theme.rememberReduceMotion()
+    val surface = MaterialTheme.colorScheme.surface
+    var rowBounds by remember { mutableStateOf(Rect.Zero) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .onGloballyPositioned { rowBounds = it.boundsInRoot() }
             .heightIn(min = 52.dp)
-            .clickable(onClick = onClick)
+            .clickable {
+                if (transform != null && !reduceMotion) {
+                    transform.open(rowBounds, surface) { onClick() }
+                } else {
+                    onClick()
+                }
+            }
             .padding(horizontal = HarmonyTokens.PagePadding, vertical = HarmonyTokens.ElementGap),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1183,6 +1198,9 @@ private fun rememberHideStatusBar(
     val value by store.hideStatusBar.collectAsStateWithLifecycle(initialValue = fallback)
     return value
 }
+
+
+
 
 
 

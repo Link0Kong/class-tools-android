@@ -33,6 +33,7 @@ import com.furina.classtools.data.account.OppoSessionLoginResult
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.ui.components.BrandMark
+import com.furina.classtools.ui.components.CtContainerTransformHost
 import com.furina.classtools.ui.components.CtSnackbarHost
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import com.furina.classtools.ui.components.CtToastBus
@@ -135,6 +136,7 @@ fun ClassToolsRoot(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        CtContainerTransformHost {
         when (val state = sessionState) {
             SessionState.Loading -> BootSplash()
 
@@ -212,6 +214,7 @@ fun ClassToolsRoot(
                 )
             }
         }
+        }
 
         // 全局 M3 Snackbar：所有 CtToastBus 消息都在底栏上方显示。
         CtSnackbarHost(
@@ -274,6 +277,7 @@ private fun BootSplash() {
         }
     }
 }
+
 
 
 
