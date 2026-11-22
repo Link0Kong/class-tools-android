@@ -1,5 +1,9 @@
 package com.furina.classtools.ui.theme
 
+import kotlinx.coroutines.isActive
+
+import androidx.compose.runtime.DisposableEffect
+
 import android.content.Context
 import android.os.Build
 import android.view.Window
@@ -99,6 +103,26 @@ fun CtImmersiveStatusBar(
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         window?.setStatusBarsHidden(enabled)
+    }
+    // 页面/Dialog/WebView 可能重新 show 状态栏（且不经过 Activity 生命周期）：
+    // 窗口重新获得焦点时补隐藏，并做低频兜底巡检。
+    DisposableEffect(window, enabled, view) {
+        if (window == null) return@DisposableEffect onDispose { }
+        val focusListener = android.view.ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+            if (hasFocus) window.setStatusBarsHidden(enabled)
+        }
+        view.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
+        onDispose { view.viewTreeObserver.removeOnWindowFocusChangeListener(focusListener) }
+    }
+    LaunchedEffect(window, enabled) {
+        if (window == null || !enabled) return@LaunchedEffect
+        while (isActive) {
+            delay(1_200)
+            val insets = WindowInsetsCompat.toWindowInsetsCompat(view.rootWindowInsets)
+            if (insets.isVisible(WindowInsetsCompat.Type.statusBars())) {
+                window.setStatusBarsHidden(true)
+            }
+        }
     }
 
     // 状态栏隐藏时的顶部安全区（见类注释）：status_bar_height 与刘海高度取大；24dp 兜底；
@@ -241,4 +265,5 @@ private fun statusBarHeightPx(context: Context): Int {
  * 既避免页面内容/顶栏返回按钮贴屏幕顶边，也不至于明显压缩首屏。
  */
 private val CtTopBreathing = 10.dp
+
 

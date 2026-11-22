@@ -14,7 +14,11 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -479,6 +483,12 @@ fun AllToolsScreen(
                                     quickIds = quickDraft,
                                     onOpenTool = onOpenTool,
                                     onToggleQuick = { toggleQuick(it) },
+                                    onLongPress = {
+                                        if (!editing) {
+                                            editing = true
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        }
+                                    },
                                 )
                             }
                         }
@@ -561,6 +571,7 @@ private fun CategoryGrid(
     quickIds: List<String>,
     onOpenTool: (AppTool) -> Unit,
     onToggleQuick: (AppTool) -> Unit,
+    onLongPress: () -> Unit = {},
 ) {
     val spacingPx = with(LocalDensity.current) { spacing.toPx() }
     val itemHeightPx = with(LocalDensity.current) { itemHeight.toPx() }
@@ -568,16 +579,27 @@ private fun CategoryGrid(
         content = {
             tools.forEach { tool ->
                 key(tool.id) {
-                    AllToolCard(
-                        tool = tool,
-                        onClick = {
-                            if (editing) onToggleQuick(tool) else onOpenTool(tool)
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        reduceMotion = reduceMotion,
-                        editing = editing,
-                        selected = quickIds.contains(tool.id),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(tool.id) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    if (awaitLongPressOrCancellation(down.id) != null) onLongPress()
+                                }
+                            },
+                    ) {
+                        AllToolCard(
+                            tool = tool,
+                            onClick = {
+                                if (editing) onToggleQuick(tool) else onOpenTool(tool)
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                            reduceMotion = reduceMotion,
+                            editing = editing,
+                            selected = quickIds.contains(tool.id),
+                        )
+                    }
                 }
             }
         },
@@ -626,7 +648,7 @@ private fun HarmonyAllToolsHeader(
         subtitle = when {
             dragging -> "松手保存顺序"
             editing -> "点工具加入或移出首页快捷（最多 4 个）"
-            else -> "$toolCount 个工具 · $columns 列 · 长按可拖动排序"
+            else -> "$toolCount 个工具 · $columns 列 · 长按进入编辑后可拖动排序"
         },
         actions = {
             CtGlassIconButton(
@@ -638,6 +660,8 @@ private fun HarmonyAllToolsHeader(
         },
     )
 }
+
+
 
 
 

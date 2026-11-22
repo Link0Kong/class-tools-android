@@ -111,17 +111,18 @@ internal fun AllToolCard(
                     .padding(HarmonyTokens.TilePadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // 40dp 淡色底图标块（鸿蒙 tint(accent, 0.12) / 24vp 字形）
+                // 40dp Monet 淡色底图标块（网页同款 tint）
+                val monet = com.furina.classtools.ui.theme.monetToneOf(tool)
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    color = monet.container,
+                    contentColor = monet.content,
                 ) {
                     Box(modifier = Modifier.size(HarmonyTokens.GlyphBox), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            tint = monet.content,
                             modifier = Modifier.size(HarmonyTokens.TileGlyph),
                         )
                     }
@@ -172,4 +173,5 @@ internal fun AllToolCard(
 
 @Composable
 private fun MaterialThemePrimary() = androidx.compose.material3.MaterialTheme.colorScheme.primary
+
 

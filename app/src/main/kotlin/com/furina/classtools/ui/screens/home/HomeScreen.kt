@@ -2,7 +2,13 @@ package com.furina.classtools.ui.screens.home
 
 import com.furina.classtools.ui.components.CtToastBus
 
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import com.furina.classtools.ui.components.CtButton
 import com.furina.classtools.ui.components.CtButtonStyle
@@ -383,8 +389,13 @@ fun HomeScreen(
             },
         )
     }
-    val quickTools = remember(quickToolIds, forceEmptyQuickTools) {
-        if (forceEmptyQuickTools) emptyList() else ToolCatalog.quickTools(quickToolIds)
+    // 本地乐观顺序：保存回调是异步的，先更新 UI，避免「点完成没反应」。
+    var quickOrder by rememberSaveable { mutableStateOf(quickToolIds) }
+    LaunchedEffect(quickToolIds) {
+        if (!editing) quickOrder = quickToolIds
+    }
+    val quickTools = remember(quickOrder, forceEmptyQuickTools) {
+        if (forceEmptyQuickTools) emptyList() else ToolCatalog.quickTools(quickOrder)
     }
     val editableTools = remember { ToolCatalog.tools.filter { !it.adminOnly && it.id != "settings" } }
 
@@ -400,7 +411,9 @@ fun HomeScreen(
     }
 
     fun finishEditing() {
-        onHomeToolsChange(draft.take(HomeToolsEditor.MAX_QUICK_TOOLS))
+        val saved = draft.take(HomeToolsEditor.MAX_QUICK_TOOLS)
+        quickOrder = saved
+        onHomeToolsChange(saved)
         editing = false
     }
 
@@ -537,10 +550,14 @@ fun HomeScreen(
                                 reduceMotion = reduceMotion,
                                 onToggle = ::toggleTool,
                                 onStartEdit = {
-                                    draft = quickToolIds
+                                    draft = quickOrder
                                     editing = true
                                 },
                                 onFinishEdit = ::finishEditing,
+                                onReorder = { ids ->
+                                    quickOrder = ids
+                                    onHomeToolsChange(ids)
+                                },
                                 onOpenTool = onOpenTool,
                                 onOpenAll = onOpenAll,
                             )
@@ -912,6 +929,7 @@ private fun HomeQuickToolsSection(
     onToggle: (String) -> Unit,
     onStartEdit: () -> Unit,
     onFinishEdit: () -> Unit,
+    onReorder: (List<String>) -> Unit = {},
     onOpenTool: (AppTool) -> Unit,
     onOpenAll: () -> Unit,
 ) {
@@ -937,7 +955,7 @@ private fun HomeQuickToolsSection(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .clickable { if (editing) onFinishEdit() else onStartEdit() }
-                    .padding(start = CtTokens.Spacing.elementGap, top = CtTokens.Spacing.elementGap, bottom = CtTokens.Spacing.elementGap),
+                    .padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
             )
             Text(
                 text = "全部 ›",
@@ -992,22 +1010,70 @@ private fun HomeQuickToolsSection(
             }
         } else {
             CtGlassCard(shape = HomeCardShape) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    quickTools.forEach { tool ->
-                        QuickToolTile(
-                            tool = tool,
-                            onClick = { onOpenTool(tool) },
-                            modifier = Modifier.weight(1f),
-                            reduceMotion = reduceMotion,
-                        )
-                    }
-                    repeat((HomeToolsEditor.MAX_QUICK_TOOLS - quickTools.size).coerceAtLeast(0)) {
-                        Spacer(modifier = Modifier.weight(1f))
+                // 首页快捷栏：不进入编辑态也可长按左右拖动排序（松手写回 userdata）。
+                var dragOrder by remember(quickTools) { mutableStateOf(quickTools.map { it.id }) }
+                var draggingId by remember { mutableStateOf<String?>(null) }
+                var dragCenterX by remember { mutableFloatStateOf(0f) }
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+                val orderedTools = dragOrder.mapNotNull { id -> quickTools.firstOrNull { it.id == id } }
+                    .ifEmpty { quickTools }
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val itemWidthPx = with(density) { (maxWidth / HomeToolsEditor.MAX_QUICK_TOOLS).toPx() }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        orderedTools.forEachIndexed { index, tool ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer { alpha = if (draggingId == tool.id) 0.35f else 1f }
+                                    .pointerInput(tool.id) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                if (orderedTools.size < 2) return@detectDragGesturesAfterLongPress
+                                                draggingId = tool.id
+                                                dragCenterX = (index + 0.5f) * itemWidthPx
+                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            },
+                                            onDrag = { change, amount ->
+                                                if (draggingId != tool.id) return@detectDragGesturesAfterLongPress
+                                                change.consume()
+                                                dragCenterX += amount.x
+                                                val target = (dragCenterX / itemWidthPx).toInt()
+                                                    .coerceIn(0, orderedTools.size - 1)
+                                                val from = dragOrder.indexOf(tool.id)
+                                                if (from >= 0 && target != from) {
+                                                    val next = dragOrder.toMutableList().apply {
+                                                        removeAt(from)
+                                                        add(target, tool.id)
+                                                    }
+                                                    dragOrder = next
+                                                    dragCenterX = (target + 0.5f) * itemWidthPx
+                                                }
+                                            },
+                                            onDragEnd = {
+                                                if (draggingId != null) onReorder(dragOrder)
+                                                draggingId = null
+                                            },
+                                            onDragCancel = { draggingId = null },
+                                        )
+                                    },
+                            ) {
+                                QuickToolTile(
+                                    tool = tool,
+                                    onClick = { if (draggingId == null) onOpenTool(tool) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    reduceMotion = reduceMotion,
+                                )
+                            }
+                        }
+                        repeat((HomeToolsEditor.MAX_QUICK_TOOLS - orderedTools.size).coerceAtLeast(0)) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -1125,6 +1191,8 @@ private fun HomeMutedLine(text: String) {
         overflow = TextOverflow.Ellipsis,
     )
 }
+
+
 
 
 

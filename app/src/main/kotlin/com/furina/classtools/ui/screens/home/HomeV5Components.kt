@@ -343,16 +343,17 @@ internal fun QuickToolTile(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(CtSpace.xs),
             ) {
+                val monet = com.furina.classtools.ui.theme.monetToneOf(tool)
                 Surface(
-                    shape = CtShape.input,
-                    color = harmonyTint(accent.tintRef),
-                    contentColor = accent.textRef,
+                    shape = RoundedCornerShape(12.dp),
+                    color = monet.container,
+                    contentColor = monet.content,
                 ) {
                     Box(modifier = Modifier.size(CtSpace.huge + CtSpace.xs), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
-                            tint = accent.tintRef,
+                            tint = monet.content,
                             modifier = Modifier.size(CtSize.icon),
                         )
                     }
@@ -416,16 +417,17 @@ internal fun EditableToolTile(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
+                val monet = com.furina.classtools.ui.theme.monetToneOf(tool)
                 Surface(
-                    shape = RoundedCornerShape(HarmonyTokens.RadiusTile),
-                    color = harmonyTint(uiAccentOf(tool).tintRef),
-                    contentColor = uiAccentOf(tool).textRef,
+                    shape = RoundedCornerShape(12.dp),
+                    color = monet.container,
+                    contentColor = monet.content,
                 ) {
                     Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
-                            tint = uiAccentOf(tool).tintRef,
+                            tint = monet.content,
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -483,6 +485,7 @@ internal fun HomeReveal(
         content()
     }
 }
+
 
 
 
