@@ -51,9 +51,9 @@ class CtBackgroundTest {
             preset = CtBackgroundPreset.DEEP_SPACE,
             useCustomImage = true,
             customImageFile = "bg_1700000000000.jpg",
-            customBlur = 3,
+            customBlur = 24,
         )
-        assertEquals("deep_space|custom:bg_1700000000000.jpg|blur:3", s.storageValue)
+        assertEquals("deep_space|custom:bg_1700000000000.jpg|blurv2:24", s.storageValue)
         assertEquals(s, CtBackgroundSelection.fromStorage(s.storageValue))
     }
 
@@ -280,14 +280,26 @@ class CtBackgroundTest {
     // ---------------------------------------------------------------------
 
     @Test
-    fun `blur sigma mapping is monotonic and zero at level 0`() {
+    fun `dark presets have visibly distinct bases`() {
+        val pairs = CtBackgroundPreset.entries.map {
+            CtBackgroundPalette.dark(it).base to CtBackgroundPalette.dark(it).second
+        }
+        assertTrue("深色预设底色过于接近: $pairs", pairs.distinct().size >= 7)
+        assertTrue(
+            CtBackgroundPalette.dark(CtBackgroundPreset.MIST_TEAL).base !=
+                CtBackgroundPalette.dark(CtBackgroundPreset.SLATE_BLUE).base,
+        )
+    }
+
+    @Test
+    fun `blur sigma mapping is continuous dp`() {
         assertEquals(0f, CtBackgroundImage.blurSigmaFor(0))
-        val sigmas = (1..3).map { CtBackgroundImage.blurSigmaFor(it) }
-        assertEquals(sigmas.sorted(), sigmas)
-        assertTrue(sigmas.all { it > 0f })
+        assertEquals(1f, CtBackgroundImage.blurSigmaFor(1))
+        assertEquals(24f, CtBackgroundImage.blurSigmaFor(24))
+        assertEquals(40f, CtBackgroundImage.blurSigmaFor(40))
         // 越界夹到边界
         assertEquals(0f, CtBackgroundImage.blurSigmaFor(-5))
-        assertEquals(CtBackgroundImage.blurSigmaFor(3), CtBackgroundImage.blurSigmaFor(9))
+        assertEquals(40f, CtBackgroundImage.blurSigmaFor(99))
     }
 
     @Test
@@ -306,13 +318,13 @@ class CtBackgroundTest {
     }
 
     @Test
-    fun `blur label covers all four levels`() {
+    fun `blur label shows continuous dp`() {
         assertEquals("不模糊", CtBackgroundImage.blurLabel(0))
-        assertEquals("轻", CtBackgroundImage.blurLabel(1))
-        assertEquals("标准", CtBackgroundImage.blurLabel(2))
-        assertEquals("强", CtBackgroundImage.blurLabel(3))
+        assertEquals("1 dp", CtBackgroundImage.blurLabel(1))
+        assertEquals("24 dp", CtBackgroundImage.blurLabel(24))
+        assertEquals("40 dp", CtBackgroundImage.blurLabel(40))
         // 越界夹到边界
-        assertEquals("强", CtBackgroundImage.blurLabel(9))
+        assertEquals("40 dp", CtBackgroundImage.blurLabel(99))
     }
 
     @Test
@@ -341,3 +353,5 @@ class CtBackgroundTest {
         fun presetColors(preset: CtBackgroundPreset, dark: Boolean) = CtBackgroundPalette.of(preset, dark)
     }
 }
+
+

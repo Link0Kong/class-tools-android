@@ -120,22 +120,23 @@ data class CtBackgroundSelection(
             append(preset.id)
             if (hasImage) {
                 append('|').append(CUSTOM_PREFIX).append(customImageFile)
-                append('|').append(BLUR_PREFIX).append(customBlur.coerceIn(MIN_CUSTOM_BLUR, MAX_CUSTOM_BLUR))
+                append('|').append(BLUR_V2_PREFIX).append(customBlur.coerceIn(MIN_CUSTOM_BLUR, MAX_CUSTOM_BLUR))
             }
         }
 
     companion object {
         val DEFAULT: CtBackgroundSelection = CtBackgroundSelection()
 
-        /** 自定义模糊档位范围（0 = 不模糊；3 = 最强）。 */
+        /** 自定义模糊范围（0 = 不模糊；40 = 最强；滑杆 1dp 细分）。 */
         const val MIN_CUSTOM_BLUR: Int = 0
-        const val MAX_CUSTOM_BLUR: Int = 3
+        const val MAX_CUSTOM_BLUR: Int = 40
 
-        /** 默认自定义模糊档（标准，σ≈24dp）。 */
+        /** 默认自定义模糊（0 = 不模糊，由用户滑杆调整）。 */
         const val DEFAULT_CUSTOM_BLUR: Int = 0
 
         const val CUSTOM_PREFIX: String = "custom:"
         const val BLUR_PREFIX: String = "blur:"
+        const val BLUR_V2_PREFIX: String = "blurv2:"
 
         /**
          * 解析持久化值（**容错**：格式不认识 → 退默认暖白，不抛异常、不丢用户其他设置）。
@@ -157,8 +158,15 @@ data class CtBackgroundSelection(
                 when {
                     t.startsWith(CUSTOM_PREFIX) ->
                         file = t.removePrefix(CUSTOM_PREFIX).takeIf { it.isNotBlank() }
+                    t.startsWith(BLUR_V2_PREFIX) ->
+                        blur = t.removePrefix(BLUR_V2_PREFIX).toIntOrNull()
+                            ?.coerceIn(MIN_CUSTOM_BLUR, MAX_CUSTOM_BLUR) ?: DEFAULT_CUSTOM_BLUR
                     t.startsWith(BLUR_PREFIX) ->
                         blur = t.removePrefix(BLUR_PREFIX).toIntOrNull()
+                            ?.let { rawBlur ->
+                                // 旧版 1/2/3 档 → 12/24/40dp。
+                                if (rawBlur in 1..3) rawBlur * 12 + (if (rawBlur == 3) 4 else 0) else rawBlur
+                            }
                             ?.coerceIn(MIN_CUSTOM_BLUR, MAX_CUSTOM_BLUR) ?: DEFAULT_CUSTOM_BLUR
                 }
             }
@@ -392,21 +400,70 @@ object CtBackgroundPalette {
             bloomAlpha = 0.7f,
         )
 
-        CtBackgroundPreset.MIST_TEAL,
-        CtBackgroundPreset.SLATE_BLUE,
-        CtBackgroundPreset.WARM_SAND,
-        CtBackgroundPreset.MORNING_MIST,
-        CtBackgroundPreset.SUNSET_ANGLE,
-        CtBackgroundPreset.TEAL_INDIGO,
-        -> CtBackgroundColors(
-            base = BgTokens.darkBg,
-            second = BgTokens.darkBg,
+        CtBackgroundPreset.MIST_TEAL -> CtBackgroundColors(
+            base = mix(BgTokens.darkBg, BgTokens.teal, 0.16f),
+            second = mix(BgTokens.darkBg, BgTokens.teal, 0.16f),
             gradient = false,
             headlineOnBackground = BgTokens.darkTextPrimary,
-            cardAlphaBoost = 0.10f,
+            cardAlphaBoost = 0.12f,
             scrimTop = 0.70f,
             scrimBottom = 0.86f,
-            bloomAlpha = 0.8f,
+            bloomAlpha = 0.64f,
+        )
+
+        CtBackgroundPreset.SLATE_BLUE -> CtBackgroundColors(
+            base = mix(BgTokens.darkBg, BgTokens.blue, 0.16f),
+            second = mix(BgTokens.darkBg, BgTokens.blue, 0.16f),
+            gradient = false,
+            headlineOnBackground = BgTokens.darkTextPrimary,
+            cardAlphaBoost = 0.12f,
+            scrimTop = 0.70f,
+            scrimBottom = 0.86f,
+            bloomAlpha = 0.64f,
+        )
+
+        CtBackgroundPreset.WARM_SAND -> CtBackgroundColors(
+            base = mix(BgTokens.darkBg, BgTokens.sand, 0.16f),
+            second = mix(BgTokens.darkBg, BgTokens.sand, 0.16f),
+            gradient = false,
+            headlineOnBackground = BgTokens.darkTextPrimary,
+            cardAlphaBoost = 0.12f,
+            scrimTop = 0.70f,
+            scrimBottom = 0.86f,
+            bloomAlpha = 0.64f,
+        )
+
+        CtBackgroundPreset.MORNING_MIST -> CtBackgroundColors(
+            base = BgTokens.darkBg,
+            second = mix(BgTokens.darkBg, BgTokens.teal, 0.18f),
+            gradient = true,
+            headlineOnBackground = BgTokens.darkTextPrimary,
+            cardAlphaBoost = 0.14f,
+            scrimTop = 0.70f,
+            scrimBottom = 0.88f,
+            bloomAlpha = 0.58f,
+        )
+
+        CtBackgroundPreset.SUNSET_ANGLE -> CtBackgroundColors(
+            base = BgTokens.darkBg,
+            second = mix(BgTokens.darkBg, BgTokens.sand, 0.18f),
+            gradient = true,
+            headlineOnBackground = BgTokens.darkTextPrimary,
+            cardAlphaBoost = 0.14f,
+            scrimTop = 0.70f,
+            scrimBottom = 0.88f,
+            bloomAlpha = 0.58f,
+        )
+
+        CtBackgroundPreset.TEAL_INDIGO -> CtBackgroundColors(
+            base = mix(BgTokens.darkBg, BgTokens.teal, 0.14f),
+            second = mix(BgTokens.darkBg, BgTokens.blue, 0.18f),
+            gradient = true,
+            headlineOnBackground = BgTokens.darkTextPrimary,
+            cardAlphaBoost = 0.14f,
+            scrimTop = 0.70f,
+            scrimBottom = 0.88f,
+            bloomAlpha = 0.58f,
         )
 
         CtBackgroundPreset.WARM_WHITE -> CtBackgroundColors(
@@ -417,7 +474,7 @@ object CtBackgroundPalette {
             cardAlphaBoost = 0.10f,
             scrimTop = 0.70f,
             scrimBottom = 0.86f,
-            bloomAlpha = 0.8f,
+            bloomAlpha = 0.72f,
         )
     }
 
@@ -448,21 +505,11 @@ object CtBackgroundImage {
      * 0 = 不模糊（仅在用户显式选择）；1=12dp / 2=24dp（默认）/ 3=40dp。
      * 背景层单独模糊，其 σ 不影响前景清晰度。
      */
-    fun blurSigmaFor(blur: Int): Float = when (blur.coerceIn(0, 3)) {
-        0 -> 0f
-        1 -> 12f
-        2 -> 24f
-        3 -> 40f
-        else -> 24f
-    }
+    fun blurSigmaFor(blur: Int): Float = blur.coerceIn(0, 40).toFloat()
 
-    /** 模糊档展示名（设置页）。 */
-    fun blurLabel(blur: Int): String = when (blur.coerceIn(0, 3)) {
-        0 -> "不模糊"
-        1 -> "轻"
-        2 -> "标准"
-        else -> "强"
-    }
+    /** 模糊展示名（设置页）：连续 dp，便于滑杆读数。 */
+    fun blurLabel(blur: Int): String =
+        if (blur <= 0) "不模糊" else "${blur.coerceIn(0, 40)} dp"
 
     /**
      * 计算压缩后的目标尺寸（保持比例、**只缩小不放大**）。
@@ -584,3 +631,4 @@ data class CtBackgroundCheck(
     /** 是否全部满足 AA（正文 4.5 : 1）。 */
     val passesAA: Boolean get() = headlineOnBackground >= 4.5 && bodyOnCard >= 4.5
 }
+

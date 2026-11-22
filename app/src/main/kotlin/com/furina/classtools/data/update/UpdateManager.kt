@@ -61,6 +61,8 @@ class UpdateManager(
     private var downloadJob: Job? = null
     private var downloadSession: UpdateDownloadSession? = null
     private var downloadedApk: DownloadedApk? = null
+    private var backgroundDownload = false
+    private var backgroundInfo: UpdateInfo? = null
 
     fun attachHost() {
         _hostAttached.value = true
@@ -116,11 +118,10 @@ class UpdateManager(
     private fun applyCheckResult(result: UpdateCheckResult) {
         when (result) {
             is UpdateCheckResult.Available -> {
-                // 2026-11-22 用户要求：检测到新版本即自动后台下载；弹窗仍展示进度，
-                // 下载完成后不自动安装，等用户点「立即安装」。
+                // 2026-11-22 用户要求：检测到新版本只弹窗，由用户选择「立即更新 / 后台下载 / 稍后」，
+                // 不再自动开始下载。
                 _checkStatus.value = UpdateCheckStatus.Available(result.info)
                 openDialog(result.info)
-                startDownload()
             }
 
             is UpdateCheckResult.UpToDate -> {
@@ -178,8 +179,72 @@ class UpdateManager(
         }
     }
 
+    /**
+     * 后台下载：立即关闭弹窗、继续下载；下载完成后再弹「立即安装」，下载期间不占前台。
+     * 强制更新不支持后台（必须保持弹窗进度）。
+     */
+    fun startBackgroundDownload() {
+        val ui = _dialog.value ?: return
+        if (!UpdateDialogPolicy.isDismissible(ui.info)) return
+        val canStart = when (ui.download) {
+            is UpdateDownloadState.Idle, is UpdateDownloadState.Failed -> true
+            else -> false
+        }
+        if (!canStart) return
+        backgroundDownload = true
+        backgroundInfo = ui.info
+        startDownload()
+        if (_dialog.value?.download is UpdateDownloadState.Downloading) {
+            _dialog.value = null
+        } else {
+            backgroundDownload = false
+            backgroundInfo = null
+        }
+    }
+
     private fun onDownloadEvent(info: UpdateInfo, event: UpdateDownloadEvent) {
-        val current = _dialog.value ?: return
+        val current = _dialog.value
+        if (current == null) {
+            // 后台下载：弹窗已关闭，仅在完成/失败时重新给出可操作结果，进度不占前台。
+            if (!backgroundDownload || backgroundInfo?.versionCode != info.versionCode) return
+            when (event) {
+                is UpdateDownloadEvent.Done -> {
+                    if (event.apk.source == UpdateDownloadSource.DOWNLOAD_MANAGER && info.sha256.isNotBlank()) {
+                        if (UpdateApkVerifier.verify(context, event.apk, info.sha256) == false) {
+                            backgroundDownload = false
+                            backgroundInfo = null
+                            _dialog.value = UpdateDialogUi(
+                                info = info,
+                                currentVersionName = currentVersionName,
+                                download = UpdateDownloadState.Failed("安装包校验失败，请重新下载"),
+                            )
+                            return
+                        }
+                    }
+                    downloadedApk = event.apk
+                    backgroundDownload = false
+                    backgroundInfo = null
+                    _dialog.value = UpdateDialogUi(
+                        info = info,
+                        currentVersionName = currentVersionName,
+                        download = UpdateDownloadState.Ready(event.apk),
+                    )
+                }
+
+                is UpdateDownloadEvent.Failed -> {
+                    backgroundDownload = false
+                    backgroundInfo = null
+                    _dialog.value = UpdateDialogUi(
+                        info = info,
+                        currentVersionName = currentVersionName,
+                        download = UpdateDownloadState.Failed(event.reason),
+                    )
+                }
+
+                is UpdateDownloadEvent.Progress -> Unit
+            }
+            return
+        }
         if (current.info.versionCode != info.versionCode) return
         when (event) {
             is UpdateDownloadEvent.Progress -> {

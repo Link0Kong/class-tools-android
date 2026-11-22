@@ -1345,20 +1345,18 @@ private fun RootTabs(
                     onOpenPowerPicker = onOpenPowerPicker,
                 )
 
-                1 -> CtAdaptiveContent(spec = spec) {
-                    AllToolsScreen(
-                        onOpenTool = onOpenTool,
-                        isAdmin = session.isAdmin,
-                        userDataRepository = container.userDataRepository,
-                        quickToolIds = quickToolIds,
-                        onQuickToolsChange = onHomeToolsChange,
-                        onRefresh = {
-                            scope.launch {
-                                runCatching { container.userDataRepository.pull(force = true) }
-                            }
-                        },
-                    )
-                }
+                1 -> AllToolsScreen(
+                    onOpenTool = onOpenTool,
+                    isAdmin = session.isAdmin,
+                    userDataRepository = container.userDataRepository,
+                    quickToolIds = quickToolIds,
+                    onQuickToolsChange = onHomeToolsChange,
+                    onRefresh = {
+                        scope.launch {
+                            runCatching { container.userDataRepository.pull(force = true) }
+                        }
+                    },
+                )
 
                 else -> ProfileScreen(
                     session = session,

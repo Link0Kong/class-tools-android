@@ -59,7 +59,7 @@ class AppSettingsStore(private val context: Context) {
      * 冷启动首帧用 [startupImmersiveLight] 同步镜像，避免「先按均衡画一帧再跳变」。
      */
     val immersiveLight: Flow<CtLightSetting> = store.data.map { prefs ->
-        CtLightSetting.fromStorage(prefs[KEY_IMMERSIVE_LIGHT])
+        prefs[KEY_IMMERSIVE_LIGHT]?.let { CtLightSetting.fromStorage(it) } ?: CtLightSetting.Off
     }
 
     /** 远程公告（热更）；null = 无公告。 */
@@ -85,9 +85,11 @@ class AppSettingsStore(private val context: Context) {
         AppearanceSettings.DEFAULT_HIDE_STATUS_BAR,
     )
 
-    /** 首帧同步读取沉浸光感（未写入过 = 均衡）。 */
+    /** 首帧同步读取沉浸光感（未写入过 = 关闭，保持当前实色 M3 卡片）。 */
     fun startupImmersiveLight(): CtLightSetting =
-        CtLightSetting.fromStorage(startupPrefs.getString(STARTUP_KEY_IMMERSIVE_LIGHT, null))
+        startupPrefs.getString(STARTUP_KEY_IMMERSIVE_LIGHT, null)
+            ?.let { CtLightSetting.fromStorage(it) }
+            ?: CtLightSetting.Off
 
     /** 应用远程配置（只覆盖白名单项；version 递增才生效一次）。 */
     suspend fun applyRemoteConfig(config: com.furina.classtools.data.remoteconfig.RemoteConfig) {

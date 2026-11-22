@@ -27,7 +27,9 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -61,6 +63,7 @@ import com.furina.classtools.ui.theme.CtTypeScale
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import com.furina.classtools.ui.theme.rememberCtColors
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 // =============================================================================
 // 「我的 → 外观 → 背景」—— 2026-11-20 简洁化重做
@@ -324,48 +327,37 @@ private fun BackgroundSheet(
                 }
             }
 
-            // ---- 模糊档（仅自定义图片时出现） ----
+            // ---- 模糊（仅自定义图片时出现；0–40dp 连续滑杆） ----
             if (selection.hasImage) {
                 Spacer(Modifier.size(CtSpace.md))
-                Text(
-                    text = "图片模糊（不影响前景文字）",
-                    style = CtTypeScale.caption,
-                    color = c.textSecondary,
-                )
-                Spacer(Modifier.size(CtSpace.xs))
-                Row(horizontalArrangement = Arrangement.spacedBy(CtSpace.sm)) {
-                    (0..CtBackgroundSelection.MAX_CUSTOM_BLUR).forEach { level ->
-                        val selected = selection.customBlur == level
-                        Surface(
-                            onClick = { onBlurChange(level) },
-                            shape = CircleShape,
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                            } else {
-                                c.container
-                            },
-                            contentColor = if (selected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                c.textSecondary
-                            },
-                            modifier = Modifier.heightIn(min = 40.dp),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .heightIn(min = 40.dp)
-                                    .padding(horizontal = 16.dp),
-                            ) {
-                                Text(
-                                    text = CtBackgroundImage.blurLabel(level),
-                                    style = CtTypeScale.label,
-                                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                                    modifier = Modifier.align(Alignment.Center),
-                                )
-                            }
-                        }
-                    }
+                var blurDraft by remember(selection.customBlur) {
+                    mutableFloatStateOf(selection.customBlur.toFloat())
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "图片模糊（不影响前景文字）",
+                        style = CtTypeScale.caption,
+                        color = c.textSecondary,
+                    )
+                    Text(
+                        text = CtBackgroundImage.blurLabel(blurDraft.roundToInt()),
+                        style = CtTypeScale.caption,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Slider(
+                    value = blurDraft,
+                    onValueChange = { blurDraft = it },
+                    onValueChangeFinished = { onBlurChange(blurDraft.roundToInt()) },
+                    valueRange = CtBackgroundSelection.MIN_CUSTOM_BLUR.toFloat()..
+                        CtBackgroundSelection.MAX_CUSTOM_BLUR.toFloat(),
+                    steps = CtBackgroundSelection.MAX_CUSTOM_BLUR - CtBackgroundSelection.MIN_CUSTOM_BLUR - 1,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

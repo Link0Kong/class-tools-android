@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +55,7 @@ import com.furina.classtools.ui.theme.ClassToolsTheme
 fun UpdateDialog(
     ui: UpdateDialogUi,
     onDownload: () -> Unit,
+    onBackgroundDownload: () -> Unit,
     onCancelDownload: () -> Unit,
     onInstall: () -> Unit,
     onOpenInstallSettings: () -> Unit,
@@ -152,6 +154,15 @@ fun UpdateDialog(
                     TextButton(onClick = onCancelDownload) {
                         Text("取消下载")
                     }
+                } else if (ui.download is UpdateDownloadState.Idle || ui.download is UpdateDownloadState.Failed) {
+                    Row {
+                        TextButton(onClick = onBackgroundDownload) {
+                            Text("后台下载")
+                        }
+                        TextButton(onClick = onDismiss) {
+                            Text("稍后")
+                        }
+                    }
                 } else {
                     TextButton(onClick = onDismiss) {
                         Text("稍后")
@@ -168,7 +179,11 @@ private fun DownloadStatus(ui: UpdateDialogUi) {
     when (val download = ui.download) {
         is UpdateDownloadState.Idle -> {
             Text(
-                text = if (ui.info.force) "需要自动下载新版本后继续使用。" else "正在自动下载安装包…",
+                text = if (ui.info.force) {
+                    "此版本为强制更新，需要下载安装包后继续使用。"
+                } else {
+                    "选择「立即更新」在本页查看进度，或「后台下载」关闭弹窗、下载完成后再提示安装。"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -253,6 +268,10 @@ fun UpdateHost(
     UpdateDialog(
         ui = ui,
         onDownload = { manager.startDownload() },
+        onBackgroundDownload = {
+            manager.startBackgroundDownload()
+            CtToastBus.show("已转入后台下载，完成后会提示安装")
+        },
         onCancelDownload = { manager.cancelDownload() },
         onInstall = { manager.install() },
         onOpenInstallSettings = { manager.openInstallPermissionSettings() },
@@ -275,6 +294,10 @@ fun UpdateDialogHost(
     UpdateDialog(
         ui = ui,
         onDownload = { manager.startDownload() },
+        onBackgroundDownload = {
+            manager.startBackgroundDownload()
+            CtToastBus.show("已转入后台下载，完成后会提示安装")
+        },
         onCancelDownload = { manager.cancelDownload() },
         onInstall = { manager.install() },
         onOpenInstallSettings = { manager.openInstallPermissionSettings() },
@@ -316,6 +339,7 @@ private fun UpdateDialogAvailablePreview() {
         UpdateDialog(
             ui = UpdateDialogUi(info = previewInfo, currentVersionName = "1.0.0-beta2"),
             onDownload = {},
+            onBackgroundDownload = {},
             onCancelDownload = {},
             onInstall = {},
             onOpenInstallSettings = {},
@@ -337,6 +361,7 @@ private fun UpdateDialogDownloadingPreview() {
                 ),
             ),
             onDownload = {},
+            onBackgroundDownload = {},
             onCancelDownload = {},
             onInstall = {},
             onOpenInstallSettings = {},
@@ -358,6 +383,7 @@ private fun UpdateDialogForceReadyPreview() {
                 ),
             ),
             onDownload = {},
+            onBackgroundDownload = {},
             onCancelDownload = {},
             onInstall = {},
             onOpenInstallSettings = {},
@@ -365,5 +391,8 @@ private fun UpdateDialogForceReadyPreview() {
         )
     }
 }
+
+
+
 
 

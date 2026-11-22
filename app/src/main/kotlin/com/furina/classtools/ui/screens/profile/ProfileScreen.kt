@@ -847,16 +847,28 @@ private fun ImmersiveLightRows(
                     .padding(start = com.furina.classtools.ui.theme.HarmonyTokens.ElementGap),
             ) {
                 Text(
-                    text = "沉浸光感",
+                    text = "沉浸光感卡片",
                     style = CtText.body,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = ctLightSummaryText(),
+                    text = if (setting.enabled) ctLightSummaryText() else "实色卡片 · 更省电、更稳",
                     style = CtText.label,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Switch(
+                checked = setting.enabled,
+                onCheckedChange = { enabled ->
+                    onSettingChange(
+                        if (enabled) {
+                            CtLightSetting(CtLightIntensity.BALANCED, true)
+                        } else {
+                            CtLightSetting.Off
+                        },
+                    )
+                },
+            )
         }
         CtLightSetting.choices.forEach { option ->
             val selected = option == setting

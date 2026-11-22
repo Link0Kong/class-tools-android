@@ -51,8 +51,9 @@ fun ClassToolsThemeHost(
         .collectAsStateWithLifecycle(initialValue = initialAppearanceMode)
     val hideStatusBar by container.appSettings.hideStatusBar
         .collectAsStateWithLifecycle(initialValue = initialHideStatusBar)
-    // 2026-11-21：按 M3 标准移除「沉浸光感」选择，统一实色 surface（不再读本机档位）。
-    val immersiveLight = com.furina.classtools.ui.theme.CtLightSetting.Off
+    // 沉浸光感卡片：用户可自由切回旧玻璃材质（强/均衡/弱）或关闭为实色 M3 卡片。
+    val immersiveLight by container.appSettings.immersiveLight
+        .collectAsStateWithLifecycle(initialValue = container.appSettings.startupImmersiveLight())
     // 外观模式：跟随系统 / 强制浅色 / 强制深色（我的 → 外观 三选一）。
     val darkTheme = appearanceMode.resolveDark(isSystemInDarkTheme())
 

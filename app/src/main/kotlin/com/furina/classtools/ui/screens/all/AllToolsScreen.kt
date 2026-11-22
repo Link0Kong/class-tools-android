@@ -344,6 +344,25 @@ fun AllToolsScreen(
                         containerHeightPx = coordinates.size.height.toFloat()
                     },
             ) {
+                // 吸顶栏作为全宽覆盖层放在滚动内容之前，避免被内容最大宽/左右 padding 收窄。
+                CtStickyHeaderBar(
+                    title = "全部工具",
+                    progress = ctStickyHeaderProgress(scrollState.value.toFloat(), density.density),
+                    hazeState = hazeState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .zIndex(2f),
+                    actions = {
+                        CtGlassIconButton(
+                            icon = if (editing) Icons.Rounded.Check else Icons.Rounded.Tune,
+                            contentDescription = if (editing) "完成编辑" else "编辑首页快捷",
+                            onClick = {
+                                editing = !editing
+                                if (!editing) draggingId = null
+                            },
+                        )
+                    },
+                )
                 Column(
                     modifier = Modifier
                         .widthIn(max = contentMaxWidth)
@@ -503,22 +522,6 @@ fun AllToolsScreen(
                     }
                 }
 
-                // 常驻悬浮玻璃条：滚动后由完全透明渐变到「材质 + 模糊」（官方渐变模糊）。
-                CtStickyHeaderBar(
-                    title = "全部工具",
-                    progress = ctStickyHeaderProgress(scrollState.value.toFloat(), density.density),
-                    hazeState = hazeState,
-                    actions = {
-                        CtGlassIconButton(
-                            icon = if (editing) Icons.Rounded.Check else Icons.Rounded.Tune,
-                            contentDescription = if (editing) "完成编辑" else "编辑首页快捷",
-                            onClick = {
-                                editing = !editing
-                                if (!editing) draggingId = null
-                            },
-                        )
-                    },
-                )
             }
             }
         }
@@ -557,6 +560,7 @@ private fun HarmonyAllToolsHeader(
         },
     )
 }
+
 
 
 

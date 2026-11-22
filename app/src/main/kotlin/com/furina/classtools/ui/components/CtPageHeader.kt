@@ -213,8 +213,7 @@ fun CtStickyHeaderBar(
     val foreground = MaterialTheme.colorScheme.onSurface
     Column(
         modifier = modifier
-            .fillMaxWidth()
-            .graphicsLayer { alpha = p },
+            .fillMaxWidth(),
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -228,6 +227,7 @@ fun CtStickyHeaderBar(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(64.dp)
+                        .graphicsLayer { alpha = p }
                         .padding(start = 16.dp, end = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
