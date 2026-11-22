@@ -168,7 +168,7 @@ private fun DownloadStatus(ui: UpdateDialogUi) {
     when (val download = ui.download) {
         is UpdateDownloadState.Idle -> {
             Text(
-                text = if (ui.info.force) "需要下载新版本后继续使用。" else "点击「立即更新」下载安装包。",
+                text = if (ui.info.force) "需要自动下载新版本后继续使用。" else "正在自动下载安装包…",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -365,4 +365,5 @@ private fun UpdateDialogForceReadyPreview() {
         )
     }
 }
+
 

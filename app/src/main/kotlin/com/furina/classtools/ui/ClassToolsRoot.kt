@@ -127,6 +127,7 @@ fun ClassToolsRoot(
     val announcement by container.appSettings.remoteAnnouncement.collectAsStateWithLifecycle(null)
     val announcementVersion by container.appSettings.remoteAnnouncementVersion.collectAsStateWithLifecycle(0)
     val dismissedAnnouncementVersion by container.appSettings.dismissedAnnouncementVersion.collectAsStateWithLifecycle(0)
+    var announcementClosedVersion by remember { mutableStateOf(0) }
     val signedIn = sessionState is SessionState.SignedIn
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(snackbarHostState) {
@@ -227,7 +228,8 @@ fun ClassToolsRoot(
 
         // 远程公告（配置热更）：同一版本只弹一次，用户关闭后不再打扰。
         val announcementText = announcement
-        if (!announcementText.isNullOrBlank() && announcementVersion > dismissedAnnouncementVersion) {
+        val latestDismissed = maxOf(dismissedAnnouncementVersion, announcementClosedVersion)
+        if (!announcementText.isNullOrBlank() && announcementVersion > latestDismissed) {
             CtLightAlertDialog(
                 title = "公告",
                 text = announcementText,
@@ -272,6 +274,7 @@ private fun BootSplash() {
         }
     }
 }
+
 
 
 

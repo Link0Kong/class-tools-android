@@ -100,7 +100,6 @@ import com.furina.classtools.ui.components.dock.CtFloatingDock
 import com.furina.classtools.ui.components.dock.CtPageTransitions
 import com.furina.classtools.ui.components.dock.CtTabPager
 import com.furina.classtools.ui.components.dock.rememberCtTabPagerState
-import com.furina.classtools.ui.components.light.CtLightBottomScrim
 import com.furina.classtools.ui.motion.SharedViewMotion
 import com.furina.classtools.ui.screens.all.AllToolsScreen
 import com.furina.classtools.ui.screens.cloudspace.CloudSpaceScreen
@@ -1394,13 +1393,7 @@ private fun RootTabs(
         // 这一条灰底会把光场横向切断（用户反馈「只有工作台背景是全屏的」）。
         // 系统导航栏本身是透明 + 无对比度蒙层（MainActivity 已设置），无需再垫底色。
 
-        // 沉浸光感「底部渐变颜色蒙层」（官方：底部悬浮 = THIN + 渐变颜色蒙层延展底部）：
-        // 页面内容滚动到底部时被柔和吞没，浮岛 dock 之外不再有硬边内容压边。
-        CtLightBottomScrim(
-            modifier = Modifier.align(Alignment.BottomCenter),
-            height = 112.dp,
-        )
-
+        // M3 NavigationBar 自带容器分层，不再叠加底部渐变蒙层（会把内容压暗/产生灰带）。
         CtFloatingDock(
             destinations = destinations,
             selectedIndex = pagerState.currentPage,
@@ -1497,4 +1490,6 @@ private class ContainerVoteMemberSource(
             ?.members?.let(MemberCategoryBuilder::all).orEmpty()
     }
 }
+
+
 

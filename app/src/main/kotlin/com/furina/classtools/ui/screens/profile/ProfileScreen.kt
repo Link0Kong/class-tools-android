@@ -283,7 +283,7 @@ fun ProfileScreen(
         showClearCacheConfirm = true
     }
 
-    /** 「检查更新」：手动检查（不受每日节流限制）；发现新版由 UpdateHost 弹窗，其余结果 Snackbar 提示。 */
+    /** 「检查更新」：手动检查；发现新版由 UpdateHost 弹窗并自动后台下载，其余结果 Snackbar 提示。 */
     fun requestUpdateCheck() {
         val manager = resolvedUpdateManager ?: return
         scope.launch {
@@ -1183,6 +1183,7 @@ private fun rememberHideStatusBar(
     val value by store.hideStatusBar.collectAsStateWithLifecycle(initialValue = fallback)
     return value
 }
+
 
 
 

@@ -17,8 +17,8 @@ import kotlinx.coroutines.sync.Mutex
  * 更新流程编排（检测 → 弹窗 → 用户选择「立即更新」→ 下载 → sha256 校验 → 用户点「立即安装」拉起系统安装器）。
  *
  * 行为契约（用户 2026-11-17 晚要求）：
- * - [checkOnStart]：根级 `UpdateHost` 挂载（App 冷启动）时调用，**每次冷启动自动检查一次并只弹窗**，
- *   **不自动下载**（[UpdateAutoCheckGate] 保证同一进程只自动检查一次）；
+ * - [checkOnStart]：根级 `UpdateHost` 挂载（App 冷启动）时调用，**每次冷启动自动检查一次**；
+ *   发现新版本后**自动后台下载**（弹窗展示进度，不自动安装）；
  * - 手动检查（我的 → 检查更新）：同样只弹窗，等用户点「立即更新」；
  * - 下载完成**不自动拉起安装器**：弹窗显示「立即安装」，由用户点击决定；
  * - `force=true`：弹窗不可取消（无「稍后」、下载中无「取消下载」）；
@@ -74,7 +74,7 @@ class UpdateManager(
 
     /**
      * App 冷启动自动检查（根级 `UpdateHost` 挂载时调用）：
-     * 去掉每日节流后改为「每次冷启动检查一次」，发现新版本直接弹窗（自动路径默认开始下载）。
+     * 去掉每日节流后改为「每次冷启动检查一次」，发现新版本直接弹窗并自动后台下载。
      *
      * - [UpdateAutoCheckGate]：同一进程内只自动检查一次；失败不重置闸门 = 失败退避（下次冷启动再试）；
      * - [checkMutex] 防并发：已有检查在运行时跳过本次自动检查（不阻塞、不重复请求）；
@@ -116,9 +116,11 @@ class UpdateManager(
     private fun applyCheckResult(result: UpdateCheckResult) {
         when (result) {
             is UpdateCheckResult.Available -> {
-                // 只弹窗：自动检查/手动检查都等用户点「立即更新」（用户 2026-11-17 晚要求）。
+                // 2026-11-22 用户要求：检测到新版本即自动后台下载；弹窗仍展示进度，
+                // 下载完成后不自动安装，等用户点「立即安装」。
                 _checkStatus.value = UpdateCheckStatus.Available(result.info)
                 openDialog(result.info)
+                startDownload()
             }
 
             is UpdateCheckResult.UpToDate -> {
@@ -272,6 +274,8 @@ class UpdateManager(
     fun dismissDialog() {
         val ui = _dialog.value ?: return
         if (!UpdateDialogPolicy.isDismissible(ui.info)) return
+        // 自动后台下载进行中不让「稍后/返回」把它取消；要停只能点明确的「取消下载」。
+        if (ui.download is UpdateDownloadState.Downloading) return
         store.markDismissed(ui.info.versionCode)
         downloadJob?.cancel()
         downloadJob = null
@@ -327,3 +331,5 @@ object UpdateRuntime {
         }
     }
 }
+
+

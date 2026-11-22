@@ -22,9 +22,9 @@ import org.junit.Test
 
 /**
  * UpdateManager 行为单测（用户 2026-11-17 晚要求）：
- * - 自动检查/手动检查发现新版本 → **只弹窗，不自动下载**；
+ * - 自动检查/手动检查发现新版本 → **弹窗并自动后台下载**；
  * - 下载完成（Ready）→ **不自动拉起安装器**，等用户点「立即安装」；
- * - 点击「立即更新」后才 enqueue；force 不可取消；
+ * - 自动下载幂等；force 不可取消；
  * - 弹窗携带「当前版本 → 新版本」与可选包大小；
  * - 全假实现（FakeTransport/FakeDownloader/假安装器），不触碰系统服务。
  */
@@ -119,31 +119,32 @@ class UpdateManagerTest {
     // ------------------------------------------------------------ 检测只弹窗
 
     @Test
-    fun `自动检查发现新版本 只弹窗 不自动下载`() = runTest {
+    fun `自动检查发现新版本 自动后台下载并弹窗`() = runTest {
         val h = harness()
         h.manager.checkOnStart()
         advanceUntilIdle()
 
         assertNotNull("checkStatus=${h.manager.checkStatus.value}", h.manager.dialog.value)
-        assertEquals(0, h.downloader.calls)
+        assertEquals(1, h.downloader.calls)
         assertTrue(h.manager.checkStatus.value is UpdateCheckStatus.Available)
         val ui = h.manager.dialog.value!!
         assertEquals("1.0.0-beta2", ui.currentVersionName)
         assertEquals(86, ui.info.versionCode)
         assertEquals(6_120_000L, ui.info.sizeBytes)
-        assertTrue(ui.download is UpdateDownloadState.Idle)
+        assertTrue(ui.download is UpdateDownloadState.Downloading)
         assertTrue(h.installs.isEmpty())
     }
 
     @Test
-    fun `手动检查发现新版本 同样只弹窗 不自动下载`() = runTest {
+    fun `手动检查发现新版本 同样自动后台下载`() = runTest {
         val h = harness()
         val result = h.manager.checkNow()
         advanceUntilIdle()
 
         assertTrue(result is UpdateCheckResult.Available)
         assertNotNull(h.manager.dialog.value)
-        assertEquals(0, h.downloader.calls)
+        assertEquals(1, h.downloader.calls)
+        assertTrue(h.manager.dialog.value!!.download is UpdateDownloadState.Downloading)
     }
 
     @Test
@@ -174,6 +175,7 @@ class UpdateManagerTest {
         h.manager.checkOnStart()
         advanceUntilIdle()
         val firstDialog = h.manager.dialog.value
+        h.manager.cancelDownload()
         h.manager.dismissDialog()
         h.manager.checkOnStart()
         advanceUntilIdle()
@@ -181,20 +183,19 @@ class UpdateManagerTest {
         assertNotNull(firstDialog)
     }
 
-    // ------------------------------------------------------------ 用户点击下载
+    // ------------------------------------------------------------ 自动下载/幂等
 
     @Test
-    fun `点击立即更新后才 enqueue`() = runTest {
+    fun `自动下载幂等 再次点击不重复 enqueue`() = runTest {
         val h = harness()
         h.manager.checkOnStart()
         advanceUntilIdle()
-        assertEquals(0, h.downloader.calls)
+        assertEquals(1, h.downloader.calls)
 
         h.manager.startDownload()
         runCurrent()
 
         assertEquals(1, h.downloader.calls)
-        assertTrue(h.manager.dialog.value!!.download is UpdateDownloadState.Downloading)
     }
 
     @Test
@@ -307,8 +308,15 @@ class UpdateManagerTest {
         advanceUntilIdle()
         assertEquals(86, h.manager.dialog.value!!.info.versionCode)
 
+        // 自动下载进行中不允许「稍后」把后台下载取消。
+        h.manager.dismissDialog()
+        assertNotNull(h.manager.dialog.value)
+
+        h.manager.cancelDownload()
         h.manager.dismissDialog()
         assertNull(h.manager.dialog.value)
         assertEquals(86, h.store.dismissed)
     }
 }
+
+

@@ -96,10 +96,14 @@ class AppSettingsStore(private val context: Context) {
         config.appearance?.let { setAppearanceMode(AppearanceMode.fromStorage(it)) }
         config.hideStatusBar?.let { setHideStatusBar(it) }
         config.dynamicColor?.let { setDynamicColor(it) }
-        if (!config.announcement.isNullOrBlank()) {
-            store.edit { prefs ->
+        store.edit { prefs ->
+            if (!config.announcement.isNullOrBlank()) {
                 prefs[KEY_REMOTE_ANNOUNCEMENT] = config.announcement
                 prefs[KEY_REMOTE_ANNOUNCEMENT_VERSION] = config.version
+            } else {
+                // 新配置不再带公告 → 清掉旧公告，避免旧版本公告永久挂着。
+                prefs.remove(KEY_REMOTE_ANNOUNCEMENT)
+                prefs.remove(KEY_REMOTE_ANNOUNCEMENT_VERSION)
             }
         }
         store.edit { prefs -> prefs[KEY_REMOTE_CONFIG_VERSION] = config.version }
@@ -156,5 +160,6 @@ class AppSettingsStore(private val context: Context) {
  * 预览 / 孤立组件为 null → 「我的」页回退到入参（预览可控），生产环境直接读写本机设置。
  */
 val LocalAppSettingsStore = staticCompositionLocalOf<AppSettingsStore?> { null }
+
 
 
