@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.roster
 
+import com.furina.classtools.ui.components.CtPrimaryTabs
+
 import com.furina.classtools.ui.components.CtSnackbarHost
 
 import com.furina.classtools.ui.components.light.ctLightMaterial
@@ -404,24 +406,18 @@ private fun RosterCategoryTabs(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp),
     ) {
-        Row(
+        CtPrimaryTabs(
+            labels = categories.mapIndexed { index, option ->
+                "${option.label} ${counts.getOrElse(index) { 0 }}"
+            },
+            selectedIndex = pagerState.currentPage,
+            onSelect = { index ->
+                scope.launch {
+                    if (reduceMotion) pagerState.scrollToPage(index) else pagerState.animateScrollToPage(index)
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            categories.forEachIndexed { index, option ->
-                CtToolChip(
-                    text = "${option.label} ${counts.getOrElse(index) { 0 }}",
-                    selected = pagerState.currentPage == index,
-                    onClick = {
-                        scope.launch {
-                            // reduceMotion：立即切；正常：spring 吸附约 300ms。
-                            if (reduceMotion) pagerState.scrollToPage(index) else pagerState.animateScrollToPage(index)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
+        )
     }
 }
 
@@ -597,4 +593,5 @@ private fun MemberRow(
         }
     }
 }
+
 

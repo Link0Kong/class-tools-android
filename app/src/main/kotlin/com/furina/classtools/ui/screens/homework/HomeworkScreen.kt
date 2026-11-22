@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.homework
 
+import com.furina.classtools.ui.components.CtPrimaryTabs
+
 import com.furina.classtools.ui.components.CtSnackbarHost
 
 import com.furina.classtools.ui.components.light.ctLightMaterial
@@ -425,25 +427,23 @@ private fun HomeworkFilterTabs(
             .fillMaxWidth()
             .padding(start = 16.dp, end = 16.dp, top = 2.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            filters.forEachIndexed { index, filter ->
-                CtToolChip(
-                    text = when (filter) {
-                        HomeworkFilter.ALL -> "全部 $allCount"
-                        HomeworkFilter.UNFINISHED -> "未完成 $unfinishedCount"
-                        HomeworkFilter.DONE -> "已完成 $doneCount"
-                    },
-                    selected = pagerState.currentPage == index,
-                    onClick = {
-                        scope.launch {
-                            if (reduceMotion) pagerState.scrollToPage(index)
-                            else pagerState.animateScrollToPage(index)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
+        CtPrimaryTabs(
+            labels = filters.map { filter ->
+                when (filter) {
+                    HomeworkFilter.ALL -> "全部 $allCount"
+                    HomeworkFilter.UNFINISHED -> "未完成 $unfinishedCount"
+                    HomeworkFilter.DONE -> "已完成 $doneCount"
+                }
+            },
+            selectedIndex = pagerState.currentPage,
+            onSelect = { index ->
+                scope.launch {
+                    if (reduceMotion) pagerState.scrollToPage(index)
+                    else pagerState.animateScrollToPage(index)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -776,5 +776,7 @@ private fun AttachmentRow(attachment: HomeworkAttachmentMeta) {
 
 /** 页面内部阶段（四态中的加载/错误两态由它承载）。 */
 private enum class Phase { LOADING, READY, FAILED }
+
+
 
 

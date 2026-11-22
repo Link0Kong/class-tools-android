@@ -1071,7 +1071,7 @@ private fun ActionRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = CtText.body,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1079,7 +1079,7 @@ private fun ActionRow(
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
-                    style = CtText.caption,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = if (subtitleHighlight) {
                         MaterialTheme.colorScheme.error
                     } else {
@@ -1126,13 +1126,13 @@ private fun SwitchRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = CtText.body,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
-                    style = CtText.caption,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -1198,6 +1198,7 @@ private fun rememberHideStatusBar(
     val value by store.hideStatusBar.collectAsStateWithLifecycle(initialValue = fallback)
     return value
 }
+
 
 
 
