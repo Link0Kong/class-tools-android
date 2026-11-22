@@ -490,7 +490,7 @@ private fun QuickLoginButton(
         enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp),
+            .heightIn(min = 40.dp),
         shape = CtShapeTokens.pill,
     ) {
         if (inProgress) {
@@ -512,6 +512,7 @@ private fun QuickLoginButton(
         }
     }
 }
+
 
 
 

@@ -640,7 +640,7 @@ fun DrawBottomBar(
             if (step != DrawStep.CONFIG) {
                 OutlinedButton(
                     onClick = onBackStep,
-                    modifier = Modifier.height(52.dp),
+                    modifier = Modifier.heightIn(min = 40.dp),
                     enabled = !isDrawing,
                 ) { Text("上一步") }
             }
@@ -711,3 +711,4 @@ fun DrawHint(text: String, modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxWidth(),
     )
 }
+
