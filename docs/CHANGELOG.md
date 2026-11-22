@@ -1,5 +1,24 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-22 · 1.0.0-beta48 / vc131：工具顺序 / 首页勾选跨端同步修复（体测、名单换端不再丢）
+
+> 用户反馈：「自定义顺序和自定义首页的云同步似乎失效，我在安卓端的排序无法同步到小程序」；
+> 小程序侧同一时间出现「部分工具无法勾选到首页」。
+
+- **根因（跨端 id 不一致，主因）**：userdata v6 的 `homeTools` / `prefs.toolOrder` 是五端共用的同一份数组，
+  但安卓本机 id 是体测 `fit`、名单 `roster`（另有独立 `group` 分组），网页是 `ft` / `committee`，小程序是 `ft` / `bz`。
+  安卓读写 blob 时把 `ft` / `committee` 当作未知 id 过滤 → 从网页/小程序同步来的**体测、名单会从「首页常用工具」
+  与排序里消失**（或被补到末尾），本机再保存时还会把过滤后的数组回推云端，形成「排序同步不过去 / 勾选被改掉」的观感。
+- **`data/tool/ToolCatalog.kt`**：新增 `syncIdOf` / `localIdOf` / `bySyncId` / `toSyncIds` / `fromSyncIds`
+  （本机 `fit→ft`、`roster→committee`；读入时 `ft/fit→fit`、`committee/roster/bz→roster`，`group` 保持原样）。
+- **`features/home/HomeToolsEditor.kt`**：`apply` 写 canonical id（≤4 截断在映射后），`read` 映射回本机 id。
+- **`ui/screens/all/ToolOrderLogic.kt`**：`ToolOrderPrefs.read/apply` 同样走映射，顺序数组不再丢体测/名单。
+- **`ui/navigation/MainNavHost.kt`**：`homeTools` section 先 `bySyncId` 再渲染首页常用工具，兼容网页/小程序写入。
+- **测试**：新增 `ToolCatalogSyncIdTest`（4 条）、`HomeToolsEditorTest`（4 条），`ToolOrderLogicTest` 补 2 条跨端映射用例；
+  `testDebugUnitTest` **1883 用例 / 0 失败 / 2 skipped**。
+- **发布**：beta48 / vc131（`assembleRelease` 自动推送更新渠道）。
+- **未改**：userdata v6 顶层键 / 11 section / 合并算法；鸿蒙端仍按本机 id 读写同一数组，后续可用同一映射对齐。
+
 ## 2026-11-22 · 1.0.0-beta32 / vc115：OPPO 推送 AppSecret 大小写修复（错误码 16）
 
 > 用户提供 OPPO 开放平台凭证后核对发现：**客户端内置 AppSecret 与开放平台原文大小写不一致**。
