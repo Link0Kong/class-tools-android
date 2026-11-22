@@ -235,7 +235,9 @@ fun CtGlassSurface(
     content: @Composable () -> Unit,
 ) {
     val c = rememberCtColors()
-    if (opaque) {
+    val lightEnabled = LocalCtLight.current.enabled
+    // 玻璃化开关关：实色 M3；开：走下方磨砂玻璃材质（beta1 风格）。
+    if (opaque && !lightEnabled) {
         // M3 filled card：surfaceContainerHigh 实色，浅色/深色都由主题角色给出。
         val container = MaterialTheme.colorScheme.surfaceContainerHigh
         val border = if (c.dark) {

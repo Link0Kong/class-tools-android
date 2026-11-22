@@ -1,6 +1,8 @@
 package com.furina.classtools.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -54,6 +56,20 @@ fun ClassToolsThemeHost(
     // 沉浸光感卡片：用户可自由切回旧玻璃材质（强/均衡/弱）或关闭为实色 M3 卡片。
     val immersiveLight by container.appSettings.immersiveLight
         .collectAsStateWithLifecycle(initialValue = container.appSettings.startupImmersiveLight())
+    // 玻璃材质切换的全局过渡：材质本身立即换，外层做 260ms 淡入，避免「啪」一下跳变。
+    val glassTransition = androidx.compose.animation.core.Animatable(1f)
+    var glassTransitionInitialized = remember { false }
+    LaunchedEffect(immersiveLight.enabled) {
+        if (!glassTransitionInitialized) {
+            glassTransitionInitialized = true
+            return@LaunchedEffect
+        }
+        glassTransition.snapTo(0.72f)
+        glassTransition.animateTo(
+            targetValue = 1f,
+            animationSpec = androidx.compose.animation.core.tween(260),
+        )
+    }
     // 外观模式：跟随系统 / 强制浅色 / 强制深色（我的 → 外观 三选一）。
     val darkTheme = appearanceMode.resolveDark(isSystemInDarkTheme())
 
@@ -69,10 +85,17 @@ fun ClassToolsThemeHost(
         ) {
             // 全局隐藏系统状态栏（下滑临时显示）；关闭时恢复 statusBarsPadding 的常规行为。
             CtImmersiveStatusBar(enabled = hideStatusBar) {
-                content()
+                androidx.compose.foundation.layout.Box(
+                    modifier = androidx.compose.ui.Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = glassTransition.value },
+                ) {
+                    content()
+                }
             }
         }
     }
 }
+
 
 

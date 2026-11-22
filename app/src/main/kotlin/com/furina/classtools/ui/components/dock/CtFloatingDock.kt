@@ -151,6 +151,7 @@ fun CtFloatingDock(
     // 2026-11-20 沉浸光感 v2：浮岛改用统一材质引擎（THIN 档 + 真模糊 + 点光源高光 + 折射亮边），
     // 不再按明暗自建两套手绘材质 —— 深浅色差异全部由 CtGlassTable 表达（深色更实、亮边代替投影）。
     val dockShape = RoundedCornerShape(CtRadius.hero)
+    val glass = com.furina.classtools.ui.theme.LocalCtLight.current.enabled
     // M3 NavigationBar：整宽、80dp、surfaceContainer，无圆角/无阴影。
     // 仍保留跟手指示器动画，但外观按标准导航栏而不是悬浮玻璃条。
     val pillShadowElevation = 0.dp
@@ -158,16 +159,38 @@ fun CtFloatingDock(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.navigationBars),
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .then(
+                if (glass) {
+                    Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                } else {
+                    Modifier
+                },
+            ),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (glass) {
+                        Modifier.ctGlass(
+                            level = com.furina.classtools.ui.theme.CtLightLevel.THIN,
+                            shape = dockShape,
+                            bodySafe = false,
+                            haze = hazeState,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
+            color = if (glass) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
+            shape = if (glass) dockShape else androidx.compose.ui.graphics.RectangleShape,
         ) {
             androidx.compose.foundation.layout.BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(if (glass) Modifier.padding(horizontal = 8.dp) else Modifier)
                     // 200% 字体下允许底栏随文案长高。
                     .heightIn(min = CtDockLogic.DOCK_HEIGHT_DP.dp),
             ) {

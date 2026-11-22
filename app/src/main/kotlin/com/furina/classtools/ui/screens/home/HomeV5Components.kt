@@ -137,7 +137,7 @@ internal fun HomeHeroCard(
         label = "homeHeroPress",
     )
 
-    Surface(
+    CtGlassSurface(
         onClick = onOpenTimetable,
         modifier = Modifier
             .fillMaxWidth()
@@ -147,9 +147,6 @@ internal fun HomeHeroCard(
                 scaleY = pressScale
             },
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        interactionSource = int,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
