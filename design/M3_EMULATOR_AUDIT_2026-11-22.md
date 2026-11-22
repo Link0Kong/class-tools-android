@@ -104,12 +104,19 @@
 - 全部工具吸顶栏移出 `CtAdaptiveContent` 的左右 padding，作为全宽覆盖层；surface 不透明，滚动后覆盖整个顶部。
 - 更新弹窗不再自动下载：`立即更新 / 后台下载 / 稍后`；后台下载关闭弹窗，完成后再提示安装。
 
+## beta50 外观开关/模糊预览
+
+- 修复 `AppearanceSection` 没有渲染 `ImmersiveLightRows`：现在「沉浸光感卡片」Switch 真正出现在外观分组内。
+- 模糊滑杆拖动时调用 `BackgroundStore.previewCustomBlur`（只改内存）实时预览，松手才持久化。
+- Slider 使用 M3 `SliderDefaults.colors` + 连续滑杆 + `stateDescription`；去掉 39 个刻点。
+
 ## 仍需继续
 
 - 平板「我的」仍是单列 720dp，未做 M3 双栏；
 - 名册/作业/通知的分类条仍是 FilterChip 形态，是否改 PrimaryTabRow 待定；
 - PPT 空态卡片宽度偏窄；地图页底部浮层控件未 M3 化；
 - 部分工具页仍有自定义图表/地图控件，不属于 Material 组件。
+
 
 
 

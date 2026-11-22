@@ -814,6 +814,11 @@ private fun AppearanceSection(
             checked = dynamicColorEnabled,
             onCheckedChange = onDynamicColorChange,
         )
+        RowDivider()
+        ImmersiveLightRows(
+            setting = immersiveLight,
+            onSettingChange = onImmersiveLightChange,
+        )
     }
 }
 

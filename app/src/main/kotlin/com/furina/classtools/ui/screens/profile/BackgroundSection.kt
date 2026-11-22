@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.material3.Text
@@ -44,6 +45,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -183,6 +186,7 @@ internal fun BackgroundSection(
                 )
             },
             onBlurChange = { level -> store?.setCustomBlur(level) },
+            onBlurPreview = { level -> store?.previewCustomBlur(level) },
             onDeleteImage = {
                 scope.launch {
                     store?.deleteImage()
@@ -239,6 +243,7 @@ private fun BackgroundSheet(
     onPickPreset: (CtBackgroundPreset) -> Unit,
     onPickImage: () -> Unit,
     onBlurChange: (Int) -> Unit,
+    onBlurPreview: (Int) -> Unit,
     onDeleteImage: () -> Unit,
 ) {
     val c = rememberCtColors()
@@ -330,7 +335,7 @@ private fun BackgroundSheet(
             // ---- 模糊（仅自定义图片时出现；0–40dp 连续滑杆） ----
             if (selection.hasImage) {
                 Spacer(Modifier.size(CtSpace.md))
-                var blurDraft by remember(selection.customBlur) {
+                var blurDraft by remember {
                     mutableFloatStateOf(selection.customBlur.toFloat())
                 }
                 Row(
@@ -351,12 +356,25 @@ private fun BackgroundSheet(
                 }
                 Slider(
                     value = blurDraft,
-                    onValueChange = { blurDraft = it },
+                    onValueChange = {
+                        blurDraft = it
+                        onBlurPreview(it.roundToInt())
+                    },
                     onValueChangeFinished = { onBlurChange(blurDraft.roundToInt()) },
                     valueRange = CtBackgroundSelection.MIN_CUSTOM_BLUR.toFloat()..
                         CtBackgroundSelection.MAX_CUSTOM_BLUR.toFloat(),
-                    steps = CtBackgroundSelection.MAX_CUSTOM_BLUR - CtBackgroundSelection.MIN_CUSTOM_BLUR - 1,
-                    modifier = Modifier.fillMaxWidth(),
+                    // M3 连续滑杆：不画 39 个刻点，拖动时实时预览、松手持久化。
+                    steps = 0,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            stateDescription = CtBackgroundImage.blurLabel(blurDraft.roundToInt())
+                        },
                 )
             }
         }
@@ -430,5 +448,6 @@ private fun PresetChip(
         )
     }
 }
+
 
 

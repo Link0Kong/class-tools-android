@@ -92,12 +92,19 @@ class BackgroundStore(context: Context) {
         persist(next)
     }
 
-    /** 调整自定义图片的模糊档（0..3）。 */
+    /** 调整自定义图片的模糊半径（0..40dp）。 */
     fun setCustomBlur(blur: Int) {
         val next = _selection.value.copy(
             customBlur = blur.coerceIn(CtBackgroundSelection.MIN_CUSTOM_BLUR, CtBackgroundSelection.MAX_CUSTOM_BLUR),
         )
         persist(next)
+    }
+
+    /** 滑杆拖动中的实时预览：只改内存，不写盘；松手再由 [setCustomBlur] 持久化。 */
+    fun previewCustomBlur(blur: Int) {
+        _selection.value = _selection.value.copy(
+            customBlur = blur.coerceIn(CtBackgroundSelection.MIN_CUSTOM_BLUR, CtBackgroundSelection.MAX_CUSTOM_BLUR),
+        )
     }
 
     /**
