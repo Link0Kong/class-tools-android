@@ -226,14 +226,30 @@ object TimetableWeekLogic {
 
     const val MIN_WEEK: Int = 1
     const val DEFAULT_MAX_WEEK: Int = 18
+    const val MAX_WEEK: Int = 30
 
-    /** 数据里出现的最大周次（至少 18 周，与 web/mp 一致）。 */
-    fun maxWeekOf(courses: List<Course>): Int {
-        var max = DEFAULT_MAX_WEEK
+    /**
+     * 最大周次：课程周次 ∪ 当前教学周 ∪ 18，上限 30 —— 与网页端 `ttMaxWeek` 完全一致。
+     * 之前漏了「当前周」，学期后段会出现当前周被 18 夹住、翻不到本周的问题。
+     */
+    fun maxWeekOf(courses: List<Course>, currentWeek: Int? = null): Int {
+        var max = maxOf(DEFAULT_MAX_WEEK, currentWeek ?: 0)
         courses.forEach { course ->
             TtCalendar.parseWeeks(course.weeks).forEach { week -> if (week > max) max = week }
         }
-        return max
+        return max.coerceAtMost(MAX_WEEK)
+    }
+
+    /** 显示节次数：与网页端 maxP 一致，至少 10 节、最多 12 节（TtPeriods 上限）。 */
+    fun periodCount(courses: List<Course>): Int =
+        (courses.maxOfOrNull { it.end } ?: 0).coerceIn(10, TtPeriods.COUNT)
+
+    /** 周视图显示列：与网页端 ttVisibleDays 一致，周末仅在该周有课时显示。 */
+    fun visibleDays(courses: List<Course>, week: Int?): List<Int> {
+        val weekend = (5..6).filter { day ->
+            courses.any { course -> course.day == day && TtCalendar.isActive(course, week) }
+        }
+        return (0..4).toList() + weekend
     }
 
     /** 当前教学周 + 偏移 → 实际展示周（夹到 1..maxWeek；无当前周返回 null）。 */
@@ -310,7 +326,7 @@ object TimetableLayout {
                 blockPaddingDp = 4,
             )
         }
-        val scale = fontScale.coerceIn(1f, 1.35f)
+        val scale = fontScale.coerceIn(1f, 2f)
         if (scale <= 1.01f) return base
         return base.copy(
             rowHeightDp = (base.rowHeightDp * scale).toInt(),
@@ -484,3 +500,7 @@ object TimetableExport {
         return buildString { repeat(4) { append(alphabet[random.nextInt(alphabet.length)]) } }
     }
 }
+
+
+
+

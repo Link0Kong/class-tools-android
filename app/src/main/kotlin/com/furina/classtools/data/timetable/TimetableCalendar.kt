@@ -28,13 +28,13 @@ object TtCalendar {
         return runCatching { LocalDate.parse(text.substring(0, 10), DATE_FORMATTER) }.getOrNull()
     }
 
-    /** 解析周次表达式："1-16,18" / "2-4,6-9"；容忍中文逗号/顿号/空格；非法 token 忽略。 */
+    /** 解析周次表达式："1-16,18" / "2-4,6-9" / "1~16周"；与网页端 parseWeeks 同口径。 */
     fun parseWeeks(spec: String): Set<Int> {
-        val text = spec.trim()
+        val text = spec.replace("周", "").trim()
         if (text.isEmpty()) return emptySet()
         val out = LinkedHashSet<Int>()
         text.split(',', '，', ';', '；', ' ').forEach { tokenRaw ->
-            val token = tokenRaw.trim()
+            val token = tokenRaw.trim().replace('~', '-').replace('—', '-')
             if (token.isEmpty()) return@forEach
             val dash = token.indexOf('-')
             if (dash > 0 && dash < token.length - 1) {

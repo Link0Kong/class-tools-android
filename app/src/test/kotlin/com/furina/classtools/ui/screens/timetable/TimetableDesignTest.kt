@@ -122,6 +122,33 @@ class TimetableDesignTest {
     }
 
     @Test
+    fun maxWeek_includesCurrentWeekAndCapsAt30() {
+        // 与网页 ttMaxWeek 一致：max(课程周, 当前周, 18)，上限 30。
+        assertEquals(18, TimetableWeekLogic.maxWeekOf(emptyList(), null))
+        assertEquals(25, TimetableWeekLogic.maxWeekOf(emptyList(), 25))
+        assertEquals(30, TimetableWeekLogic.maxWeekOf(emptyList(), 40))
+        assertEquals(25, TimetableWeekLogic.maxWeekOf(snapshot.c, 25))
+    }
+
+    @Test
+    fun visibleDays_weekendsOnlyWhenActiveThisWeek() {
+        assertEquals(listOf(0, 1, 2, 3, 4), TimetableWeekLogic.visibleDays(snapshot.c, 10))
+        val sat = Course(name = "周六课", day = 5, start = 1, end = 2, weeks = "1-20")
+        assertEquals(listOf(0, 1, 2, 3, 4, 5), TimetableWeekLogic.visibleDays(snapshot.c + sat, 10))
+        val sun = Course(name = "周日课", day = 6, start = 1, end = 2, weeks = "1-20", parity = "even")
+        assertEquals(listOf(0, 1, 2, 3, 4, 5), TimetableWeekLogic.visibleDays(snapshot.c + sat + sun, 9))
+        assertEquals(listOf(0, 1, 2, 3, 4, 5, 6), TimetableWeekLogic.visibleDays(snapshot.c + sat + sun, 10))
+    }
+
+    @Test
+    fun periodCount_matchesWebAtLeast10AtMost12() {
+        assertEquals(10, TimetableWeekLogic.periodCount(emptyList()))
+        assertEquals(10, TimetableWeekLogic.periodCount(listOf(Course(end = 4))))
+        assertEquals(12, TimetableWeekLogic.periodCount(listOf(Course(end = 12))))
+        assertEquals(12, TimetableWeekLogic.periodCount(listOf(Course(end = 14))))
+    }
+
+    @Test
     fun displayWeek_clamps() {
         assertEquals(10, TimetableWeekLogic.displayWeek(10, 0, 18))
         assertEquals(18, TimetableWeekLogic.displayWeek(10, 9, 18))

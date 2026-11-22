@@ -242,8 +242,8 @@ fun TimetableViewScreen(
     val termStart = remember(snapshot) { TtCalendar.parseTermStart(snapshot.termStart) }
     val today = remember(nowMillis) { Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate() }
     val todayIndex = remember(today) { TtCalendar.dayIndex(today) }
-    val maxWeek = remember(snapshot) { TimetableWeekLogic.maxWeekOf(snapshot.c) }
     val currentWeek = plan?.week
+    val maxWeek = remember(snapshot, currentWeek) { TimetableWeekLogic.maxWeekOf(snapshot.c, currentWeek) }
 
     var weekOffset by remember { mutableIntStateOf(initialWeekOffset) }
     var viewMode by remember { mutableStateOf(if (initialDayView) TimetableViewMode.DAY else TimetableViewMode.WEEK) }
@@ -1044,8 +1044,10 @@ private fun NextSessionBar(plan: TtPlan?, dark: Boolean, nowMillis: Long) {
 
 @Composable
 private fun WeekGridV5(grid: TimetableGridContext, fillHeight: Boolean = false) {
-    // 周视图始终展示 7 天；周末无课时不再隐藏，保证「进入即看到完整一周」。
-    val days = remember { (0 until 7).toList() }
+    // 与网页端 ttVisibleDays 一致：周一~周五固定，周六/周日仅当该周有课时才显示。
+    val days = remember(grid.snapshot.c, grid.displayWeek) {
+        TimetableWeekLogic.visibleDays(grid.snapshot.c, grid.displayWeek)
+    }
     val showNow = grid.now != null && days.contains(grid.todayIndex)
 
     Surface(
@@ -1061,16 +1063,17 @@ private fun WeekGridV5(grid: TimetableGridContext, fillHeight: Boolean = false) 
                 }
                 val labelWidth = metrics.labelWidthDp.dp
                 val headerHeight = metrics.headerHeightDp.dp
-                // 填入剩余高度：把行高压到一屏 12 节都能看见（下限 30dp，避免文字完全不可读）。
+                val periodCount = TimetableWeekLogic.periodCount(grid.snapshot.c)
+                // 填入剩余高度：行高按实际显示节次数压缩（下限 30dp，避免文字完全不可读）。
                 val rowHeight = if (fillHeight) {
-                    ((maxHeight - headerHeight - 2.dp) / TtPeriods.COUNT.toFloat())
+                    ((maxHeight - headerHeight - 2.dp) / periodCount.toFloat())
                         .coerceIn(30.dp, metrics.rowHeightDp.dp)
                 } else {
                     metrics.rowHeightDp.dp
                 }
                 val available = maxWidth - labelWidth - 4.dp
                 val columnWidth = TimetableLayout.columnWidthDp(available.value, days.size).dp
-                val gridHeight = rowHeight * TtPeriods.COUNT
+                val gridHeight = rowHeight * periodCount
                 val blockShape = remember(metrics) { RoundedCornerShape(metrics.blockCornerDp.dp) }
 
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -1089,7 +1092,7 @@ private fun WeekGridV5(grid: TimetableGridContext, fillHeight: Boolean = false) 
                                 maxLines = 1,
                             )
                         }
-                        for (period in 1..TtPeriods.COUNT) {
+                        for (period in 1..periodCount) {
                             Column(
                                 modifier = Modifier
                                     .height(rowHeight)
@@ -1097,17 +1100,27 @@ private fun WeekGridV5(grid: TimetableGridContext, fillHeight: Boolean = false) 
                                     .padding(top = 2.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                Text(
-                                    text = "$period",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Text(
-                                    text = TtPeriods.startText(period),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    maxLines = 1,
-                                )
+                                if (fontScale > 1.3f) {
+                                    // 大字号：节次与开始时间合并一行，避免两行在压缩行高里被裁掉。
+                                    Text(
+                                        text = "$period ${TtPeriods.startText(period)}",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                    )
+                                } else {
+                                    Text(
+                                        text = "$period",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        text = TtPeriods.startText(period),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        maxLines = 1,
+                                    )
+                                }
                             }
                         }
                     }
@@ -1129,7 +1142,7 @@ private fun WeekGridV5(grid: TimetableGridContext, fillHeight: Boolean = false) 
                             Canvas(modifier = Modifier.fillMaxSize()) {
                                 val gridLine = if (grid.dark) CtPalette.MediaOnScrim.copy(alpha = 0.15f) else CtPalette.MediaScrimSoft.copy(alpha = 0.09f)
                                 val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 7f))
-                                for (period in 1..TtPeriods.COUNT) {
+                                for (period in 1..periodCount) {
                                     val y = period * rowHeight.toPx()
                                     drawLine(
                                         color = gridLine,
@@ -2294,4 +2307,9 @@ private fun Modifier.timetableSwipe(
             }
         }
     }
+
+
+
+
+
 

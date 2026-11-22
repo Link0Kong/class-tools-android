@@ -37,6 +37,9 @@ class TimetableCalendarTest {
         assertEquals(setOf(1, 2, 3, 4, 5), TtCalendar.parseWeeks("1-5"))
         assertEquals(setOf(1, 2, 3, 4, 16, 18), TtCalendar.parseWeeks("1-4,16,18"))
         assertEquals(setOf(2, 3, 4, 6, 7, 8, 9), TtCalendar.parseWeeks("2-4,6-9"))
+        assertEquals(setOf(1, 2, 3, 4, 5), TtCalendar.parseWeeks("1~5周"))
+        assertEquals(setOf(1, 2, 3, 4, 5), TtCalendar.parseWeeks("1—5"))
+        assertEquals(setOf(1, 2, 3, 4, 5), TtCalendar.parseWeeks("1-5周"))
     }
 
     @Test

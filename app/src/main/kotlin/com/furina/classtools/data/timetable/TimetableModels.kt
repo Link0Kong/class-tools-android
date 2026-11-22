@@ -41,9 +41,9 @@ data class TtSnapshot(
     val t: String = "",
     val meta: TtMeta? = null,
 ) {
-    /** 开学日解析优先级：meta.termStart → t。 */
+    /** 开学日解析优先级：与网页端一致，课程数据 `t` 优先，meta.termStart 仅兜底。 */
     val termStart: String
-        get() = meta?.termStart?.takeIf { it.isNotBlank() } ?: t
+        get() = t.takeIf { it.isNotBlank() } ?: meta?.termStart.orEmpty()
 }
 
 /** 某节课相对「现在」的状态。 */
@@ -183,4 +183,5 @@ object TtPeriods {
     /** 第 n 节结束时间文案。 */
     fun endText(period: Int): String = PERIODS.getOrNull(period - 1)?.second.orEmpty()
 }
+
 
