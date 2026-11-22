@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.identity
 
+import androidx.compose.foundation.layout.heightIn
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -353,7 +355,7 @@ fun IdentityScreen(
                         enabled = canSubmit,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(40.dp),
+                            .heightIn(min = 40.dp),
                         shape = CtShapeTokens.pill,
                     ) {
                         if (verifying) {
@@ -510,6 +512,8 @@ private fun QuickLoginButton(
         }
     }
 }
+
+
 
 
 

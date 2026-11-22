@@ -163,7 +163,7 @@ fun CtToolPrimaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(40.dp),
+            .heightIn(min = 40.dp),
         enabled = enabled,
         shape = CtShapeTokens.pill,
         colors = ButtonDefaults.buttonColors(
@@ -347,6 +347,7 @@ fun CtToolErrorState(
         CtToolPrimaryButton(text = retryText, onClick = onRetry, modifier = Modifier.fillMaxWidth())
     }
 }
+
 
 
 

@@ -90,6 +90,11 @@ fun CtSegmentedButtons(
                     Text(
                         text = option.label,
                         style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -98,4 +103,7 @@ fun CtSegmentedButtons(
         }
     }
 }
+
+
+
 

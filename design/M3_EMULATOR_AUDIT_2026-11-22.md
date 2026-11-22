@@ -41,10 +41,16 @@
 - Profile 行标题/副标题 → bodyLarge/bodyMedium，最小行高 56dp。
 - PPT 空态卡片改为占满内容宽。
 
+## beta40 追加
+
+- 主按钮改用 `heightIn(min=40.dp)`，200% 字号下按钮随文案长高，不再裁字。
+- SegmentedButton 显式指定选中/未选中文字色，深色下对比稳定。
+
 ## 仍需继续
 
 - 平板「我的」仍是单列 720dp，未做 M3 双栏；
 - 名册/作业/通知的分类条仍是 FilterChip 形态，是否改 PrimaryTabRow 待定；
 - PPT 空态卡片宽度偏窄；地图页底部浮层控件未 M3 化；
 - 部分工具页仍有自定义图表/地图控件，不属于 Material 组件。
+
 
