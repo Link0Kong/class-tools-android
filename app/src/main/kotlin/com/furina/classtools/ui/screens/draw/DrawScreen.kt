@@ -42,10 +42,10 @@ import com.furina.classtools.features.draw.DrawEntry
 import com.furina.classtools.features.draw.DrawError
 import com.furina.classtools.features.draw.DrawExportFactory
 import com.furina.classtools.features.draw.DrawExportPayload
+import com.furina.classtools.features.draw.DrawLastResult
+import com.furina.classtools.features.draw.DrawLastResultStore
 import com.furina.classtools.features.draw.DrawRandom
 import com.furina.classtools.features.draw.DrawResult
-import com.furina.classtools.features.draw.DrawResultSheetPayload
-import com.furina.classtools.features.draw.DrawSheetFactory
 import com.furina.classtools.features.draw.DrawSortMode
 import com.furina.classtools.features.draw.DrawStep
 import com.furina.classtools.features.draw.DrawTransition
@@ -84,6 +84,7 @@ import kotlinx.coroutines.launch
  * 设计约束：
  * - 页面不自己构造 AppContainer/仓库，全部依赖由参数注入（便于预览与测试）；
  * - 参数持久化走 `UserDataRepository` 的 `draw` section（`USERDATA_V6.md`），失败静默（抽签本身不受影响）；
+ * - 每次抽签成功把「最近一次结果」写入本机 [DrawLastResultStore]（分组页独立读取，不靠页面跳转）；
  * - 导出本轮只产出 [DrawExportPayload]，不绘制 Canvas/不引第三方库；
  * - 四态：正常 / 空（无结果）/ 加载（恢复参数、抽签中）/ 错误（未登录或恢复失败）。
  *
@@ -91,6 +92,7 @@ import kotlinx.coroutines.launch
  * @param initialStep 预览/测试注入的初始步骤
  * @param initialCandidates 预览注入的候选
  * @param initialResult 预览注入的结果
+ * @param lastResultStore 本机最近抽签存储（预览/测试可传 null）
  * @param forcedErrorMessage 预览注入的错误态（非空时直接显示错误页）
  * @param skipRestore 预览/测试：跳过 userdata 恢复
  */
@@ -99,8 +101,7 @@ fun DrawScreen(
     onBack: () -> Unit,
     session: Session?,
     onExport: (DrawExportPayload) -> Unit,
-    onGroup: (DrawResult) -> Unit = {},
-    onExportSheet: (DrawResultSheetPayload) -> Unit = {},
+    lastResultStore: DrawLastResultStore? = null,
     modifier: Modifier = Modifier,
     members: List<ClassMember> = emptyList(),
     userDataRepository: UserDataRepository? = null,
@@ -135,6 +136,9 @@ fun DrawScreen(
     var restoreAttempt by remember { mutableIntStateOf(0) }
     var isDrawing by remember { mutableStateOf(false) }
     var autoRedraw by rememberSaveable { mutableStateOf(true) }
+    // 记录已写入本机「最近抽签」的结果对象：首次组合（含进程重建恢复）不重复写时间戳；
+    // 用引用比较，保证同参数的重新抽签/剔除补抽即使结果相同也会更新。
+    var lastPersistedResult by remember { mutableStateOf(workflow.result) }
 
     val configStore = remember(userDataRepository) {
         userDataRepository?.let { UserDataDrawConfigStore(it) }
@@ -216,6 +220,17 @@ fun DrawScreen(
         }
     }
 
+    // 最近一次抽签结果 → 本机持久化（分组页「最近抽签」独立读取，跨进程重启可用）。
+    // 结果变化（首次抽签 / 重新抽签 / 剔除补抽 / 排序）都会写；重置只清结果、保留上次成功记录。
+    LaunchedEffect(workflow.result, lastResultStore) {
+        val result = workflow.result ?: return@LaunchedEffect
+        if (result === lastPersistedResult) return@LaunchedEffect
+        if (result.entries.isEmpty()) return@LaunchedEffect
+        val store = lastResultStore ?: return@LaunchedEffect
+        runCatching { store.save(DrawLastResult.from(result)) }
+            .onSuccess { lastPersistedResult = result }
+    }
+
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -279,11 +294,6 @@ fun DrawScreen(
                                     onExport(DrawExportFactory.create(result))
                                     notify("已生成导出参数（导出卡片接入中）")
                                 }
-                            },
-                            onGroup = { result -> onGroup(result) },
-                            onExportSheet = { result ->
-                                onExportSheet(DrawSheetFactory.create(result))
-                                notify("已生成结果单参数")
                             },
                             onSelectStep = { target ->
                                 while (workflow.step.index > target.index) {
@@ -353,12 +363,8 @@ private fun DrawReadyContent(
     onReroll: () -> Unit,
     onEditConfig: () -> Unit,
     onExport: () -> Unit,
-    onGroup: (DrawResult) -> Unit,
-    onExportSheet: (DrawResult) -> Unit,
     onSelectStep: (DrawStep) -> Unit,
 ) {
-    // D-02：记录哪一次结果已用于分组（同一结果对象再次进入结果页保持徽标；重新抽签后自然重置）。
-    var groupedResult by remember { mutableStateOf<DrawResult?>(null) }
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wide = maxWidth >= WIDE_BREAKPOINT
         val horizontal = if (wide) 20.dp else 12.dp
@@ -408,20 +414,12 @@ private fun DrawReadyContent(
                         DrawStep.RESULT -> DrawResultCard(
                             result = workflow.result,
                             autoRedraw = autoRedraw,
-                            grouped = groupedResult === workflow.result,
                             onToggleAutoRedraw = onToggleAutoRedraw,
                             onRemove = onRemove,
                             onSortChange = onSortChange,
                             onReroll = onReroll,
                             onEditConfig = onEditConfig,
                             onExport = onExport,
-                            onGroup = {
-                                workflow.result?.let {
-                                    groupedResult = it
-                                    onGroup(it)
-                                }
-                            },
-                            onExportSheet = { workflow.result?.let(onExportSheet) },
                         )
                     }
                 }
@@ -462,20 +460,12 @@ private fun DrawReadyContent(
                         DrawResultCard(
                             result = workflow.result,
                             autoRedraw = autoRedraw,
-                            grouped = groupedResult === workflow.result,
                             onToggleAutoRedraw = onToggleAutoRedraw,
                             onRemove = onRemove,
                             onSortChange = onSortChange,
                             onReroll = onReroll,
                             onEditConfig = onEditConfig,
                             onExport = onExport,
-                            onGroup = {
-                                workflow.result?.let {
-                                    groupedResult = it
-                                    onGroup(it)
-                                }
-                            },
-                            onExportSheet = { workflow.result?.let(onExportSheet) },
                         )
                     }
                 }

@@ -38,7 +38,7 @@ data class TextBlock(
     val lines: List<TextLine> = emptyList(),
     /** 整体等宽强调（20px/800 primary，行高 30）。 */
     val mono: Boolean = false,
-    /** 原子行：不拆行内换行（结果单模式）。 */
+    /** 原子行：不拆行内换行。 */
     val atomic: Boolean = false,
 ) : ExportBlock
 

@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -54,12 +53,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
+import com.furina.classtools.features.draw.DrawLastResult
+import com.furina.classtools.features.draw.DrawLastResultStore
 import com.furina.classtools.features.group.GroupConfig
 import com.furina.classtools.features.group.GroupConfigCodec
 import com.furina.classtools.features.group.GroupEngine
 import com.furina.classtools.features.group.GroupExportFactory
 import com.furina.classtools.features.group.GroupExportPayload
 import com.furina.classtools.features.group.GroupMember
+import com.furina.classtools.features.group.GroupMemberResolver
 import com.furina.classtools.features.group.GroupMode
 import com.furina.classtools.features.group.GroupRandom
 import com.furina.classtools.features.group.GroupResult
@@ -79,16 +81,15 @@ import com.furina.classtools.ui.components.expressive.CtBottomSheetFooter
 import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
 import com.furina.classtools.ui.components.expressive.CtChipGroup
 import com.furina.classtools.ui.components.expressive.CtChipOption
-import com.furina.classtools.ui.components.expressive.CtSegmentOption
-import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
-import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.theme.CtRadius
-import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -96,26 +97,28 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 /**
- * 分组工具页（抽签三步的第 2 步；配置 → 分组结果）。
+ * 分组工具页（独立工具：配置 + 结果同页，不依赖抽签流程）。
  *
- * 接线方式（由 Lead 在 MainNavHost 完成）：
+ * 接线方式（MainNavHost）：
  * ```kotlin
  * "group" -> GroupScreen(
- *     onBack = { navController.popBackStack() },
+ *     onBack = { popTool(toolId) },
  *     onExport = { payload -> exportCoordinator.exportGroup(payload) },
  *     session = session,
  *     userDataRepository = container.userDataRepository,
- *     prevMembers = drawResultForGroup(),                 // 上一步抽签结果（座号+姓名）
  *     rosterMembers = classMembers.map { GroupMember(it.seat, it.name) },
+ *     lastResultStore = SharedPreferencesDrawLastResultStore(context), // 本机最近抽签
  * )
  * ```
  *
+ * - 成员来源：全班（名单 + 全选）/ 最近抽签（本机持久化）/ 手动选择；
+ * - 最近抽签不依赖抽签页跳转或内存传递，进程重启后仍可读；
  * - 参数持久化：`userdata.group`（GroupConfigCodec），防抖 600ms；失败静默；
- * - 导出：产出 [GroupExportPayload]（GroupsBlock + 参数区），绘制由 Lead 的导出协调器负责；
- * - 四态：加载（恢复参数）/ 空（来源无成员）/ 错误 / 正常；≥600dp 左右分栏。
+ * - 旧数据 `source=prev` 但本机没有最近抽签时给出友好提示（不崩溃）。
  *
- * @param prevMembers 上一步抽签结果（来源「上一步抽签序号」）
- * @param rosterMembers 班级名单（来源「班级名单」）
+ * @param prevMembers 可选的内存兜底（预览/测试）；生产不依赖它
+ * @param rosterMembers 班级名单（全班/手动选择/姓名派生）
+ * @param lastResultStore 本机最近抽签存储；null = 预览/测试不读
  * @param initialConfig / initialResult / initialStep 预览注入
  * @param skipRestore 预览/测试：跳过 userdata 恢复与保存
  * @param randomSeed 预览/测试：固定随机 seed
@@ -129,6 +132,7 @@ fun GroupScreen(
     userDataRepository: UserDataRepository? = null,
     prevMembers: List<GroupMember> = emptyList(),
     rosterMembers: List<GroupMember> = emptyList(),
+    lastResultStore: DrawLastResultStore? = null,
     initialConfig: GroupConfig = GroupConfig(),
     initialResult: GroupResult? = null,
     initialStep: GroupStep? = null,
@@ -160,6 +164,11 @@ fun GroupScreen(
     var inlineError by remember { mutableStateOf<String?>(null) }
     var showRosterPicker by remember { mutableStateOf(false) }
     var restored by remember { mutableStateOf(skipRestore) }
+
+    // 最近抽签：本机持久化是唯一来源；SharedPreferences 读取很小，直接在 remember 中读。
+    val lastDraw: DrawLastResult? = remember(lastResultStore) {
+        runCatching { lastResultStore?.load() }.getOrNull()
+    }
 
     // 1) 恢复 userdata.group 参数
     LaunchedEffect(skipRestore) {
@@ -195,21 +204,30 @@ fun GroupScreen(
         randomSeed?.let { SeededGroupRandom(it) } ?: com.furina.classtools.features.group.defaultGroupRandom()
     }
 
+    val allSeats = remember(rosterMembers) { GroupMemberResolver.allClassSeats(rosterMembers) }
+    val prevMembersResolved = remember(lastDraw, rosterMembers, prevMembers) {
+        GroupMemberResolver.fromLastDraw(lastDraw, rosterMembers, prevMembers)
+    }
     val effectiveMembers: List<GroupMember> = when (state.config.source) {
-        GroupSource.PREV -> prevMembers
+        GroupSource.PREV -> prevMembersResolved
         GroupSource.NAMES -> {
-            if (state.config.selectedSeats.isEmpty()) rosterMembers
-            else rosterMembers.filter { it.seat in state.config.selectedSeats }
+            val selected = state.config.selectedSeats.toSet()
+            rosterMembers.filter { it.seat in selected }
         }
     }
     val rosterSelected = when (state.config.source) {
         GroupSource.NAMES -> effectiveMembers.isNotEmpty()
+        // PREV 的「没有最近抽签」由 GroupValidator 给 NO_MEMBERS 文案。
         GroupSource.PREV -> true
     }
 
     fun updateConfig(newConfig: GroupConfig) {
         inlineError = null
         state = GroupWorkflow.updateConfig(state, newConfig)
+    }
+
+    fun saveSelection(seats: List<Int>) {
+        updateConfig(state.config.copy(source = GroupSource.NAMES, selectedSeats = seats.distinct().sorted()))
     }
 
     fun runGrouping() {
@@ -240,7 +258,7 @@ fun GroupScreen(
                 title = "分组",
                 onBack = onBack,
                 actions = {
-                    if (state.step == GroupStep.RESULT) {
+                    if (state.result != null) {
                         IconButton(onClick = { regroup() }) {
                             Icon(Icons.Rounded.Refresh, contentDescription = "重新分组")
                         }
@@ -259,12 +277,15 @@ fun GroupScreen(
                         state = state,
                         effectiveMembers = effectiveMembers,
                         rosterMembers = rosterMembers,
+                        allSeats = allSeats,
+                        lastDraw = lastDraw,
                         inlineError = inlineError,
                         onUpdateConfig = ::updateConfig,
                         onRunGrouping = ::runGrouping,
                         onRegroup = ::regroup,
-                        onBackToConfig = { state = GroupWorkflow.back(state) },
                         onOpenRosterPicker = { showRosterPicker = true },
+                        onSelectAll = { saveSelection(allSeats) },
+                        onClearSelection = { saveSelection(emptyList()) },
                         onExport = { export() },
                         onCopy = {
                             val result = state.result ?: return@GroupContent
@@ -281,7 +302,7 @@ fun GroupScreen(
                 selected = state.config.selectedSeats.toSet(),
                 onConfirm = { seats ->
                     showRosterPicker = false
-                    updateConfig(state.config.copy(selectedSeats = seats.sorted()))
+                    saveSelection(seats.toList())
                 },
                 onDismiss = { showRosterPicker = false },
             )
@@ -291,20 +312,62 @@ fun GroupScreen(
 
 private enum class GroupPhase { LOADING, READY, ERROR }
 
+/** 成员来源的三个展示分段（「全班」与「手动选择」在 userdata 里仍是 source=names）。 */
+private enum class MemberSourceTab { ALL, LAST_DRAW, MANUAL }
+
+private fun sourceTabOf(config: GroupConfig, allSeats: List<Int>): MemberSourceTab = when {
+    config.source == GroupSource.PREV -> MemberSourceTab.LAST_DRAW
+    allSeats.isNotEmpty() && config.selectedSeats.toSet() == allSeats.toSet() -> MemberSourceTab.ALL
+    else -> MemberSourceTab.MANUAL
+}
+
 @Composable
 private fun GroupContent(
     state: GroupWorkflowState,
     effectiveMembers: List<GroupMember>,
     rosterMembers: List<GroupMember>,
+    allSeats: List<Int>,
+    lastDraw: DrawLastResult?,
     inlineError: String?,
     onUpdateConfig: (GroupConfig) -> Unit,
     onRunGrouping: () -> Unit,
     onRegroup: () -> Unit,
-    onBackToConfig: () -> Unit,
     onOpenRosterPicker: () -> Unit,
+    onSelectAll: () -> Unit,
+    onClearSelection: () -> Unit,
     onExport: () -> Unit,
     onCopy: () -> Unit,
 ) {
+    val lastDrawCount = lastDraw?.result?.size ?: 0
+    val configCard: @Composable () -> Unit = {
+        ConfigCard(
+            config = state.config,
+            memberCount = effectiveMembers.size,
+            rosterCount = rosterMembers.size,
+            allSeats = allSeats,
+            lastDrawCount = lastDrawCount,
+            lastDrawTime = lastDraw?.atMillis?.takeIf { it > 0 }?.let(::formatDrawTime).orEmpty(),
+            inlineError = inlineError,
+            onUpdate = onUpdateConfig,
+            onOpenRosterPicker = onOpenRosterPicker,
+            onSelectAll = onSelectAll,
+            onClearSelection = onClearSelection,
+        )
+    }
+    val primaryActions: @Composable () -> Unit = {
+        PrimaryActions(
+            result = state.result,
+            canRun = effectiveMembers.isNotEmpty(),
+            onRun = onRunGrouping,
+            onRegroup = onRegroup,
+            onExport = onExport,
+            onCopy = onCopy,
+        )
+    }
+    val resultArea: @Composable () -> Unit = {
+        ResultArea(state = state)
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val expanded = maxWidth >= 600.dp
@@ -318,32 +381,15 @@ private fun GroupContent(
                         modifier = Modifier.weight(0.42f).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        StepIndicator(state.step, onBackToConfig)
-                        ConfigCard(
-                            config = state.config,
-                            memberCount = effectiveMembers.size,
-                            rosterCount = rosterMembers.size,
-                            inlineError = inlineError,
-                            onUpdate = onUpdateConfig,
-                            onOpenRosterPicker = onOpenRosterPicker,
-                        )
-                        PrimaryActions(
-                            step = state.step,
-                            result = state.result,
-                            canRun = effectiveMembers.isNotEmpty(),
-                            onRun = onRunGrouping,
-                            onRegroup = onRegroup,
-                            onBackToConfig = onBackToConfig,
-                            onExport = onExport,
-                            onCopy = onCopy,
-                        )
+                        configCard()
+                        primaryActions()
                         Spacer(modifier = Modifier.height(CtSpace.sm))
                     }
                     Column(
                         modifier = Modifier.weight(0.58f).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        ResultArea(state = state, onExport = onExport, onCopy = onCopy)
+                        resultArea()
                         Spacer(modifier = Modifier.height(CtSpace.sm))
                     }
                 }
@@ -356,36 +402,12 @@ private fun GroupContent(
                             .padding(horizontal = padding),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        StepIndicator(state.step, onBackToConfig)
-                        when (state.step) {
-                            GroupStep.CONFIG -> ConfigCard(
-                                config = state.config,
-                                memberCount = effectiveMembers.size,
-                                rosterCount = rosterMembers.size,
-                                inlineError = inlineError,
-                                onUpdate = onUpdateConfig,
-                                onOpenRosterPicker = onOpenRosterPicker,
-                            )
-
-                            GroupStep.RESULT -> ResultArea(
-                                state = state,
-                                onExport = onExport,
-                                onCopy = onCopy,
-                            )
-                        }
+                        configCard()
+                        resultArea()
                         Spacer(modifier = Modifier.height(CtSpace.sm))
                     }
                     Box(modifier = Modifier.fillMaxWidth().padding(horizontal = padding)) {
-                        PrimaryActions(
-                            step = state.step,
-                            result = state.result,
-                            canRun = effectiveMembers.isNotEmpty(),
-                            onRun = onRunGrouping,
-                            onRegroup = onRegroup,
-                            onBackToConfig = onBackToConfig,
-                            onExport = onExport,
-                            onCopy = onCopy,
-                        )
+                        primaryActions()
                     }
                     Spacer(modifier = Modifier.navigationBarsPadding().height(6.dp))
                 }
@@ -453,55 +475,97 @@ private fun GroupCompactInfoRow(label: String, value: String) {
 }
 
 @Composable
-private fun StepIndicator(step: GroupStep, onBackToConfig: () -> Unit, modifier: Modifier = Modifier) {
-    CtToolSegmented(
-        options = listOf("1 配置", "2 分组结果"),
-        selectedIndex = if (step == GroupStep.CONFIG) 0 else 1,
-        onSelect = { index ->
-            if (index == 0 && step == GroupStep.RESULT) onBackToConfig()
-        },
-        modifier = modifier.fillMaxWidth(),
-    )
-}
-
-@Composable
 private fun ConfigCard(
     config: GroupConfig,
     memberCount: Int,
     rosterCount: Int,
+    allSeats: List<Int>,
+    lastDrawCount: Int,
+    lastDrawTime: String,
     inlineError: String?,
     onUpdate: (GroupConfig) -> Unit,
     onOpenRosterPicker: () -> Unit,
+    onSelectAll: () -> Unit,
+    onClearSelection: () -> Unit,
 ) {
+    val tab = sourceTabOf(config, allSeats)
     GroupCompactCard(title = "分组设置") {
         Text("成员来源", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         CtToolSegmented(
-            options = listOf(GroupSource.PREV.label, GroupSource.NAMES.label),
-            selectedIndex = if (config.source == GroupSource.PREV) 0 else 1,
+            options = listOf(
+                if (rosterCount > 0) "全班 $rosterCount" else "全班",
+                if (lastDrawCount > 0) "最近抽签 $lastDrawCount" else "最近抽签",
+                if (tab == MemberSourceTab.MANUAL && memberCount > 0) "手动 $memberCount" else "手动选择",
+            ),
+            selectedIndex = when (tab) {
+                MemberSourceTab.ALL -> 0
+                MemberSourceTab.LAST_DRAW -> 1
+                MemberSourceTab.MANUAL -> 2
+            },
             onSelect = { index ->
-                onUpdate(
-                    config.copy(
-                        source = if (index == 0) GroupSource.PREV else GroupSource.NAMES,
-                    ),
-                )
+                when (index) {
+                    0 -> onUpdate(
+                        config.copy(
+                            source = GroupSource.NAMES,
+                            selectedSeats = allSeats,
+                        ),
+                    )
+
+                    1 -> if (lastDrawCount > 0) onUpdate(config.copy(source = GroupSource.PREV))
+
+                    else -> {
+                        val seats = if (config.source == GroupSource.NAMES && tab == MemberSourceTab.MANUAL) {
+                            config.selectedSeats
+                        } else {
+                            emptyList()
+                        }
+                        onUpdate(config.copy(source = GroupSource.NAMES, selectedSeats = seats))
+                    }
+                }
             },
             modifier = Modifier.fillMaxWidth(),
+            enabledOptions = listOf(rosterCount > 0, lastDrawCount > 0, rosterCount > 0),
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "成员：${memberCount} 人",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
+        when (tab) {
+            MemberSourceTab.ALL -> Text(
+                text = "全班 $rosterCount 人 · 已全选",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (config.source == GroupSource.NAMES) {
-                TextButton(onClick = onOpenRosterPicker) {
-                    Text("选择名单（${config.selectedSeats.size}/$rosterCount）")
+
+            MemberSourceTab.LAST_DRAW -> if (lastDrawCount > 0) {
+                Text(
+                    text = "最近抽签 $lastDrawCount 人" + if (lastDrawTime.isNotBlank()) " · $lastDrawTime" else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    text = "还没有抽签结果",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            MemberSourceTab.MANUAL -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "已选 $memberCount/$rosterCount 人",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onOpenRosterPicker, enabled = rosterCount > 0) {
+                        Text("选择名单")
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = onSelectAll, enabled = rosterCount > 0) { Text("全选") }
+                    TextButton(onClick = onClearSelection, enabled = memberCount > 0) { Text("清空") }
                 }
             }
         }
@@ -595,60 +659,50 @@ private fun NumberStepper(
 
 @Composable
 private fun PrimaryActions(
-    step: GroupStep,
     result: GroupResult?,
     canRun: Boolean,
     onRun: () -> Unit,
     onRegroup: () -> Unit,
-    onBackToConfig: () -> Unit,
     onExport: () -> Unit,
     onCopy: () -> Unit,
 ) {
-    when (step) {
-        GroupStep.CONFIG -> CtToolPrimaryButton(
+    if (result == null) {
+        CtToolPrimaryButton(
             text = "开始分组",
             onClick = onRun,
             enabled = canRun,
             modifier = Modifier.fillMaxWidth(),
         )
-
-        GroupStep.RESULT -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(onClick = onBackToConfig) { Text("修改参数") }
-                CtToolPrimaryButton(
-                    text = "重新分组",
-                    onClick = onRegroup,
-                    modifier = Modifier.weight(1f),
-                )
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Rounded.IosShare, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("导出图片")
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(onClick = onExport) {
-                    Icon(Icons.Rounded.IosShare, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("导出图片")
-                }
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onCopy, enabled = result != null) {
-                    Icon(Icons.Rounded.ContentCopy, contentDescription = "复制分组结果")
-                }
+            OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("复制")
             }
         }
+        CtToolPrimaryButton(
+            text = "重新分组",
+            onClick = onRegroup,
+            enabled = canRun,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
 @Composable
-private fun ResultArea(
-    state: GroupWorkflowState,
-    onExport: () -> Unit,
-    onCopy: () -> Unit,
-) {
+private fun ResultArea(state: GroupWorkflowState) {
     val result = state.result
     if (result == null) {
         GroupCompactCard {
@@ -663,7 +717,7 @@ private fun ResultArea(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "设置参数后开始分组",
+                    text = "选择成员来源后开始分组",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -671,11 +725,18 @@ private fun ResultArea(
         }
         return
     }
+    val sizes = result.groups.map { it.size }
+    val eachLabel = if (sizes.isEmpty()) "0" else "${sizes.min()}–${sizes.max()}"
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         GroupCompactCard(
-            title = "${result.snapshot.groupCount} 组 · ${result.totalMembers} 人",
+            title = "分组结果",
             trailing = { CtPill(text = result.snapshot.modeLabel) },
         ) {
+            Text(
+                text = "共 ${result.totalMembers} 人 · ${result.snapshot.groupCount} 组 · 每组 $eachLabel 人",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             GroupCompactInfoRow(
                 label = "来源",
                 value = "${result.snapshot.sourceLabel} · ${result.snapshot.innerLabel}",
@@ -775,6 +836,14 @@ private fun RosterPickerSheet(
     }
 }
 
+/** 最近抽签时间：`MM-dd HH:mm`（本机时区）。 */
+private fun formatDrawTime(atMillis: Long): String =
+    runCatching {
+        Instant.ofEpochMilli(atMillis)
+            .atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
+    }.getOrDefault("")
+
 @Composable
 private fun CenteredLoading(text: String) {
     Column(
@@ -827,4 +896,3 @@ private fun validateConfig(config: GroupConfig, members: List<GroupMember>): Str
         is GroupValidation.Valid -> null
         is GroupValidation.Invalid -> validation.error.message
     }
-

@@ -62,7 +62,7 @@ import com.furina.classtools.ui.theme.ctEmphasized
 private val previewSegments = listOf(
     CtSegmentOption(key = "draw", label = "抽签"),
     CtSegmentOption(key = "group", label = "分组"),
-    CtSegmentOption(key = "result", label = "结果单"),
+    CtSegmentOption(key = "result", label = "结果"),
 )
 
 private val previewChips = listOf(

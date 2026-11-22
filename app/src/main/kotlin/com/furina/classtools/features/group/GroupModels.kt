@@ -9,12 +9,12 @@ package com.furina.classtools.features.group
  *   （blob 里统一用网页词汇：`source: prev|names`、`mode: groups|pergroup`、`sel: 座号数组`）。
  */
 
-/** 成员来源。 */
+/** 成员来源（wire 值仍只有 prev/names，契约 §4：不新增枚举值）。 */
 enum class GroupSource(val wire: String, val label: String) {
-    /** 上一步抽签结果（带序号/可选姓名）。 */
-    PREV("prev", "上一步抽签序号"),
+    /** 本机持久化的最近一次抽签结果（带序号/可选姓名）。 */
+    PREV("prev", "最近抽签"),
 
-    /** 班级名单（按座号选择）。 */
+    /** 班级名单（按座号选择；「全班」= 名单 + 全选）。 */
     NAMES("names", "班级名单"),
     ;
 
@@ -89,7 +89,7 @@ data class MemberGroup(
  * 分组参数快照（导出卡「参数配置」区 + 结果页摘要用）。
  *
  * 文案与网页/小程序 `cfg` 对齐：
- * `source=上一步抽签序号|班级名单（N 人）`、`mode=按组数(N 组)|按每组人数(N 人)`、
+ * `source=最近抽签（N 人）|班级名单（N 人）`、`mode=按组数(N 组)|按每组人数(N 人)`、
  * `inner=打乱后随机分配|按原顺序轮流分配`。
  */
 data class GroupConfigSnapshot(
@@ -110,7 +110,7 @@ data class GroupResult(
     val totalMembers: Int get() = groups.sumOf { it.size }
 }
 
-/** 分组向导步骤（配置 → 分组结果；分组本身是抽签三步的第 2 步）。 */
+/** 分组内部步骤（配置 → 分组结果；分组是独立工具，不依赖抽签步骤）。 */
 enum class GroupStep {
     CONFIG,
     RESULT,

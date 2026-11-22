@@ -67,6 +67,7 @@ import com.furina.classtools.data.calendar.CalendarIntentFactory
 import com.furina.classtools.data.calendar.CalendarWriteResult
 import com.furina.classtools.data.calendar.CourseCalendarMapper
 import com.furina.classtools.data.calendar.NoticeCalendarMapper
+import com.furina.classtools.data.draw.SharedPreferencesDrawLastResultStore
 import com.furina.classtools.data.fitrecs.FitRecsLoadResult
 import com.furina.classtools.data.fitrecs.FitRecsWriteResult
 import com.furina.classtools.data.member.ClassLeagueRepository
@@ -187,8 +188,10 @@ fun MainNavHost(
     val rootView = LocalView.current
     val scope = rememberCoroutineScope()
 
-    // 抽签结果 → 分组页的携带数据（共享状态，不放进导航参数）。
-    var drawGroupMembers by remember { mutableStateOf<List<GroupMember>>(emptyList()) }
+    // 抽签/分组的「最近抽签」本机存储：抽签成功写入，分组页独立读取（不依赖页面跳转或内存传递）。
+    val drawLastResultStore = remember(context) {
+        SharedPreferencesDrawLastResultStore(context.applicationContext)
+    }
     // 本机外观偏好：壁纸取色开关（Profile → 外观）。
     // 常用工具来自同步的 userdata v6 homeTools（原始值：空列表 = 小程序同款空态引导）。
     // 2026-11-22：先把跨端同步 id 换回本机 id（ft→fit、committee/bz→roster），
@@ -519,23 +522,32 @@ fun MainNavHost(
                     session = session,
                     userDataRepository = container.userDataRepository,
                     onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW) },
-                    onGroup = { result ->
-                        // 抽签结果（座号+姓名）→ 分组页「上一步抽签序号」来源
-                        drawGroupMembers = result.entries.map { entry ->
-                            GroupMember(seat = entry.number, name = entry.name.orEmpty())
-                        }
-                        navController.navigate(Routes.tool("group"))
-                    },
-                    onExportSheet = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW) },
+                    lastResultStore = drawLastResultStore,
                 )
 
-                "group" -> GroupScreen(
-                    onBack = { popTool(toolId) },
-                    session = session,
-                    userDataRepository = container.userDataRepository,
-                    prevMembers = drawGroupMembers,
-                    onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.GROUP) },
-                )
+                "group" -> {
+                    // 班级名单：先读缓存；缓存为空时再触发一次加载（独立工具页可直接进入，不依赖先抽签）。
+                    var roster by remember { mutableStateOf<List<GroupMember>>(emptyList()) }
+                    LaunchedEffect(Unit) {
+                        val cached = runCatching { container.classMembersRepository.cached() }
+                            .getOrDefault(emptyList())
+                        val members = cached.ifEmpty {
+                            (runCatching { container.classMembersRepository.load() }.getOrNull()
+                                as? ClassMembersResult.Success)?.members.orEmpty()
+                        }
+                        roster = members
+                            .filter { it.seat > 0 }
+                            .map { GroupMember(seat = it.seat, name = it.name) }
+                    }
+                    GroupScreen(
+                        onBack = { popTool(toolId) },
+                        session = session,
+                        userDataRepository = container.userDataRepository,
+                        rosterMembers = roster,
+                        lastResultStore = drawLastResultStore,
+                        onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.GROUP) },
+                    )
+                }
 
                 "map" -> CampusMapScreen(
                     onBack = { popTool(toolId) },

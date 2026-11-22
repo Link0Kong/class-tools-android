@@ -4,7 +4,7 @@ package com.furina.classtools.features.group
  * 分组校验 + 向导状态机（纯 Kotlin，可单测）。
  *
  * 校验口径（与 web/mp 一致）：
- * - 成员为空：PREV → 「请先在第 1 步抽签」；NAMES → 「请先选择名单」；
+ * - 成员为空：PREV → 「还没有抽签结果，先抽签或换成员来源」；NAMES → 「请先选择名单」；
  * - 成员 <2：拒绝；
  * - GROUPS 模式 n<2 拒绝；PER_GROUP 模式 n<1 拒绝（上限 99）；
  * - GROUPS 模式 n>成员数：**不拒绝**，按成员数 clamp（网页 doGroup 同）；
@@ -27,7 +27,7 @@ object GroupValidator {
                 GroupError(
                     code = GroupErrorCode.NO_MEMBERS,
                     message = when (config.source) {
-                        GroupSource.PREV -> "请先在第 1 步抽签"
+                        GroupSource.PREV -> "还没有抽签结果，先抽签或换成员来源"
                         GroupSource.NAMES -> "请先选择名单"
                     },
                 ),

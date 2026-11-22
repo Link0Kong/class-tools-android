@@ -34,7 +34,7 @@ private fun ExportCardPreview() {
     val now = 1_760_000_000_000L
     val spec = remember {
         ExportCardSpec(
-            title = "抽签工作流结果单",
+            title = "抽签工作流结果",
             sub = "Step 1 + Step 2",
             file = ExportCardNaming.fileName(
                 kind = ExportKind.DRAW_WORKFLOW,

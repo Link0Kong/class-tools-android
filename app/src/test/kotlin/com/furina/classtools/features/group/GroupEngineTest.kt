@@ -115,7 +115,7 @@ class GroupEngineTest {
             GroupConfig(mode = GroupMode.GROUPS, n = 3, shuffle = true),
             SeededGroupRandom(1),
         )
-        assertEquals("上一步抽签序号", result.snapshot.sourceLabel)
+        assertEquals("最近抽签（9 人）", result.snapshot.sourceLabel)
         assertEquals("按组数(3 组)", result.snapshot.modeLabel)
         assertEquals("打乱后随机分配", result.snapshot.innerLabel)
         assertEquals(9, result.snapshot.total)

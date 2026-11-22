@@ -86,7 +86,7 @@ data class DrawRemoveLog(
     val added: DrawEntry? = null,
 )
 
-/** 一次抽签的完整结果（含候选池快照与参数快照，便于结果单/导出/重抽）。 */
+/** 一次抽签的完整结果（含候选池快照与参数快照，便于导出/重抽/最近抽签持久化）。 */
 data class DrawResult(
     val entries: List<DrawEntry>,
     val pool: List<DrawEntry>,

@@ -45,7 +45,6 @@ object ShareSpecs {
     fun defaultTitle(kind: ShareKind): String = when (kind) {
         ShareKind.DRAW -> "抽签结果"
         ShareKind.GROUP -> "分组结果"
-        ShareKind.SUM -> "抽签分组结果单"
         ShareKind.HOMEWORK -> "班级作业板"
         ShareKind.FITNESS -> "体测成绩"
         ShareKind.TIMETABLE -> "课程表"
@@ -102,7 +101,7 @@ object ShareSpecs {
         val textLines = spec.blocks.filterIsInstance<TextBlock>().sumOf { it.lines.size }
 
         val stats = when (kind) {
-            ShareKind.DRAW, ShareKind.SUM -> listOfNotNull(
+            ShareKind.DRAW -> listOfNotNull(
                 ShareStat("结果", chips.takeIf { it > 0 }?.toString().orEmpty()),
                 ShareStat("行数", textLines.takeIf { it > 0 }?.toString().orEmpty()),
             )

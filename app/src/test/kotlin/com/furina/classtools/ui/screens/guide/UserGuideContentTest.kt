@@ -199,7 +199,7 @@ class UserGuideContentTest {
 
     @Test
     fun `按 id 与分类查找`() {
-        assertEquals("抽签三步", UserGuideContent.cardOf("draw")?.title)
+        assertEquals("抽签", UserGuideContent.cardOf("draw")?.title)
         assertEquals("常见问题", UserGuideContent.sectionOf("faq")?.title)
         assertNull(UserGuideContent.cardOf("missing"))
         assertNull(UserGuideContent.sectionOf("missing"))

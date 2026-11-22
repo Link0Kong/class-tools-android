@@ -16,7 +16,6 @@ package com.furina.classtools.features.share
 enum class ShareKind {
     DRAW,
     GROUP,
-    SUM,
     HOMEWORK,
     FITNESS,
     TIMETABLE,
@@ -31,7 +30,6 @@ enum class ShareKind {
         get() = when (this) {
             DRAW -> "抽签"
             GROUP -> "分组"
-            SUM -> "结果单"
             HOMEWORK -> "作业"
             FITNESS -> "体测"
             TIMETABLE -> "课表"
@@ -46,7 +44,6 @@ enum class ShareKind {
         get() = when (this) {
             DRAW -> "draw"
             GROUP -> "group"
-            SUM -> "draw"
             HOMEWORK -> "hw"
             FITNESS -> "ft"
             TIMETABLE -> "tt"

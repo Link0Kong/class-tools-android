@@ -98,7 +98,7 @@ object GroupEngine {
     fun snapshotOf(config: GroupConfig, groups: List<MemberGroup>): GroupConfigSnapshot {
         val total = groups.sumOf { it.size }
         val sourceLabel = when (config.source) {
-            GroupSource.PREV -> "上一步抽签序号"
+            GroupSource.PREV -> "最近抽签（$total 人）"
             GroupSource.NAMES -> "班级名单（$total 人）"
         }
         val modeLabel = when (config.mode) {

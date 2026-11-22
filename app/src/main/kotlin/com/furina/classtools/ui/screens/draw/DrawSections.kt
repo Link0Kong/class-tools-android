@@ -27,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tune
@@ -392,36 +391,24 @@ fun DrawPreviewCard(
     }
 }
 
-/** STEP3 结果卡（胶囊 + 剔除 + 排序 + 剔除记录；v6 卡片/按钮）。 */
+/** 结果卡（胶囊 + 剔除 + 排序 + 剔除记录 + 导出；v6 卡片/按钮）。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DrawResultCard(
     result: DrawResult?,
     autoRedraw: Boolean,
-    grouped: Boolean = false,
     onToggleAutoRedraw: (Boolean) -> Unit,
     onRemove: (Int) -> Unit,
     onSortChange: (DrawSortMode) -> Unit,
     onReroll: () -> Unit,
     onEditConfig: () -> Unit,
     onExport: () -> Unit,
-    onGroup: () -> Unit,
-    onExportSheet: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val hasEntries = result != null && result.entries.isNotEmpty()
     val trailing: (@Composable () -> Unit)? = if (hasEntries) {
         {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CtPill(text = "${result!!.entries.size} 个 · 池 ${result.pool.size}")
-                if (grouped) {
-                    Spacer(Modifier.width(6.dp))
-                    CtPill(
-                        text = "已用于分组",
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    )
-                }
-            }
+            CtPill(text = "${result!!.entries.size} 个 · 池 ${result.pool.size}")
         }
     } else {
         null
@@ -507,20 +494,11 @@ fun DrawResultCard(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = onGroup) {
-                Icon(Icons.Rounded.Groups, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("用此结果分组")
-            }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onExport) { Text("导出抽签图") }
+        OutlinedButton(onClick = onExport, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("导出抽签图")
         }
-
-        CtToolPrimaryButton(
-            text = "导出结果单",
-            onClick = onExportSheet,
-        )
     }
 }
 

@@ -21,9 +21,9 @@ import com.furina.classtools.ui.theme.ClassToolsTheme
 // =============================================================================
 // fitrecs + 抽签→分组 联动预览（task-13）
 //
-// - 37 抽签 STEP3 结果页 · 结果单 + 用此结果分组（浅色）
+// - 37 抽签 STEP3 结果页 · 剔除/排序/导出（浅色）
 // - 38 抽签 STEP3 结果页 · 有剔除记录（深色）
-// - 39 分组 · 上一步抽签结果入口（浅色）
+// - 39 分组 · 最近抽签/全班来源（浅色）
 // - 40 体测历史 · 云端两条记录（浅色）
 // =============================================================================
 
@@ -86,7 +86,7 @@ private fun previewDrawGroupMembers(): List<GroupMember> = previewDrawResult().e
     GroupMember(seat = entry.number, name = entry.name.orEmpty())
 }
 
-@Preview(name = "37 抽签 STEP3 · 结果单/分组入口 · 浅色", showBackground = true, widthDp = 412, heightDp = 1000)
+@Preview(name = "37 抽签 STEP3 · 结果页 · 浅色", showBackground = true, widthDp = 412, heightDp = 1000)
 @Composable
 private fun DrawResultSheetLightPreview() {
     ClassToolsTheme(darkTheme = false) {
@@ -94,8 +94,6 @@ private fun DrawResultSheetLightPreview() {
             onBack = {},
             session = null,
             onExport = {},
-            onGroup = {},
-            onExportSheet = {},
             initialConfig = previewDrawResult().config,
             initialStep = DrawStep.RESULT,
             initialResult = previewDrawResult(),
@@ -112,8 +110,6 @@ private fun DrawResultSheetDarkPreview() {
             onBack = {},
             session = null,
             onExport = {},
-            onGroup = {},
-            onExportSheet = {},
             initialConfig = previewDrawResult().config,
             initialStep = DrawStep.RESULT,
             initialResult = previewDrawResult(logged = true),
@@ -122,7 +118,7 @@ private fun DrawResultSheetDarkPreview() {
     }
 }
 
-@Preview(name = "39 分组 · 上一步抽签结果入口 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "39 分组 · 最近抽签/全班来源 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
 private fun DrawToGroupPreview() {
     ClassToolsTheme(darkTheme = false) {

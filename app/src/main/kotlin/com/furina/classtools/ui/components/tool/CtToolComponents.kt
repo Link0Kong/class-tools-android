@@ -182,6 +182,7 @@ fun CtToolSegmented(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    enabledOptions: List<Boolean>? = null,
 ) {
     com.furina.classtools.ui.components.expressive.CtSegmentedButtons(
         options = options.mapIndexed { index, label ->
@@ -194,6 +195,7 @@ fun CtToolSegmented(
         onSelect = { key -> key.toIntOrNull()?.let(onSelect) },
         modifier = modifier.fillMaxWidth(),
         showCheckIcon = false,
+        enabledOptions = enabledOptions,
     )
 }
 

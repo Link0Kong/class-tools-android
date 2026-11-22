@@ -47,6 +47,7 @@ data class CtSegmentOption(
  * @param selectedKey 当前选中的 key
  * @param onSelect 选中回调（点击已选中项也会回调，调用方自行幂等）
  * @param showCheckIcon 无自定义图标时，选中是否展示 M3 对勾图标
+ * @param enabledOptions 逐项禁用（缺省/长度不足时视为启用；用于「最近抽签」无结果时置灰）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,16 +58,18 @@ fun CtSegmentedButtons(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     showCheckIcon: Boolean = true,
+    enabledOptions: List<Boolean>? = null,
 ) {
     if (options.isEmpty()) return
     SingleChoiceSegmentedButtonRow(modifier = modifier) {
         options.forEachIndexed { index, option ->
             val selected = option.key == selectedKey
+            val optionEnabled = enabled && (enabledOptions?.getOrNull(index) ?: true)
             SegmentedButton(
                 selected = selected,
                 onClick = { onSelect(option.key) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                enabled = enabled,
+                enabled = optionEnabled,
                 icon = when {
                     option.icon != null -> {
                         {
@@ -90,10 +93,10 @@ fun CtSegmentedButtons(
                     Text(
                         text = option.label,
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
+                        color = when {
+                            !optionEnabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            selected -> MaterialTheme.colorScheme.onSecondaryContainer
+                            else -> MaterialTheme.colorScheme.onSurface
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

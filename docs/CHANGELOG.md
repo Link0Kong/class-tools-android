@@ -1,5 +1,32 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-22 · 1.0.0-beta53 / vc136：抽签与分组独立 + 最近抽签持久化 + 分组页优化
+
+> 对齐 `web/group/CONTRACT.md`：抽签与分组拆成两个独立工具；抽签页不再有「去分组 / 下一步」，
+> 分组页的「最近抽签」改为读本机持久化结果（跨进程重启仍可用），并支持「全班」快捷。
+
+- **抽签页**：删除结果卡「用此结果分组」按钮与 `onGroup` 回调链（`DrawScreen` / DrawSections / `MainNavHost` / 预览），
+  不再把抽签结果直接送进分组页；保留三步（配置 / 候选 / 结果）、剔除重抽、排序、导出抽签图。
+- **结果单下线**：删除「导出结果单」按钮、`DrawResultSheetPayload` / `DrawSheetFactory` / `ShareKind.SUM` 与对应单测
+  （契约 §1.3）；抽签图导出、分组图导出不受影响。
+- **最近抽签持久化**：新增 `features/draw/DrawLastResultStore.kt`（纯 Kotlin 编解码 + 键值接口）与
+  `data/draw/SharedPreferencesDrawLastResultStore.kt`（`ct_draw_last` 私有偏好，不进 userdata v6、不跨端同步）。
+  抽签成功 / 重新抽签 / 剔除补抽 / 排序都会写入序号数组 + 参数快照（range/count/dup/sort）+ 时间戳；重置保留上一次成功结果。
+- **分组页**：新增 `GroupMemberResolver`，`PREV` 来源改从本机存储解析成员（内存 `prevMembers` 仅预览/兜底）；
+  来源分段改为「全班 N / 最近抽签 N / 手动选择 N」，无抽签结果时置灰并提示「还没有抽签结果」；
+  手动名单支持「全选 / 清空」，底部名单弹层保留「全选」；结果摘要统一为「共 N 人 · M 组 · 每组 x–y 人」；
+  结果操作保留重新分组 / 复制 / 导出；移除「1 配置 / 2 分组结果」步骤条，配置与结果同页。
+- **兼容**：`userdata.group.source` 仍只有 `prev/names`（「全班」= `names` + 全选，不新增枚举值）；
+  旧数据 `source=prev` 且本机无最近抽签时给「还没有抽签结果，先抽签或换成员来源」提示，不崩溃；未引入新依赖。
+- **验证**：`testDebugUnitTest` **1890 用例 / 0 失败 / 2 skipped**（新增 `DrawLastResultStoreTest`、`GroupSourcesTest`、
+  `DrawGroupSeparationTest`；删除结果单测试；更新分组快照文案与使用说明期望）。
+- **发布**：beta53 / vc136，APK **6,124,166 B / SHA-256
+  `30486a1a7aa325ecc80e3364c544ca6a957fe0cddc7a2fd09d98267f4ea65c0c`**；ECS 与 OSS 的 `latest.json` 均回读
+  `versionCode=136 / 1.0.0-beta53`，APK 均 HTTP 200。
+- **并发说明**：本版包含并行会话已提交的 `d749589`（glass / beta52 vc135）；为避开发版撞号，本版顺延为 beta53 / vc136。
+  首次 `assembleRelease` 时 OSS `latest.json` 被并行会话写成 beta52 导致末尾校验失败（APK 已上传），
+  重跑 `:app:publishUpdateChannel` 后 ECS/OSS 双通道一致。
+
 ## 2026-11-22 · 1.0.0-beta48 / vc131：工具顺序 / 首页勾选跨端同步修复（体测、名单换端不再丢）
 
 > 用户反馈：「自定义顺序和自定义首页的云同步似乎失效，我在安卓端的排序无法同步到小程序」；
