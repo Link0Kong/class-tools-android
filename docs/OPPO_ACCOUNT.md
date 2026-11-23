@@ -2,14 +2,15 @@
 
 > 用户 2026-11-17 要求：**一个学号最多绑定 3 个 OPPO 账号**；允许 **OPPO 账号快捷登录**。
 > 服务端验证（OPPO token/openid 换取、绑定表、上限校验）由 Lead 在 ECS 新接口
-> `http://121.196.47.2/account` 实现；**客户端只把 OPPO SDK 返回的 authCode 交给服务端，不自行验证 OPPO 身份**。
+> `https://tool.furina.fun/account`（2026-11-23 备案通过后的正式域名；debug 构建用本机调试 IP）实现；
+> **客户端只把 OPPO SDK 返回的 authCode 交给服务端，不自行验证 OPPO 身份**。
 
 ## 1. 改动清单
 
 | 位置 | 内容 |
 | --- | --- |
 | `gradle/libs.versions.toml` | 新增 `oppoAccountOauthWeb = "1.1.3"` 与 `oppo-account-oauth-web`（Maven Central 官方依赖） |
-| `app/build.gradle.kts` | 读取 `oppo.accountAppId` / `oppo.accountAppKey` / `oppo.accountScope` → `BuildConfig.OPPO_ACCOUNT_APP_ID/APP_KEY/SCOPE`；`BuildConfig.ACCOUNT_BASE_URL`（默认 `http://121.196.47.2/account`，gradle 属性 `ct.accountBaseUrl` 可覆盖）；版本 **1.0.0-beta2 / vc85** |
+| `app/build.gradle.kts` | 读取 `oppo.accountAppId` / `oppo.accountAppKey` / `oppo.accountScope` → `BuildConfig.OPPO_ACCOUNT_APP_ID/APP_KEY/SCOPE`；`BuildConfig.ACCOUNT_BASE_URL`（release = `https://tool.furina.fun/account`，debug = 本机调试 IP；gradle 属性 `ct.accountBaseUrl` 可覆盖）；版本 **1.0.0-beta2 / vc85** |
 | `app/oppo.properties.example` | 新增账号服务配置项模板（**真实值放 `app/oppo.properties`，已在 .gitignore，不入库**） |
 | `app/proguard-rules.pro` | keep `com.platform.account.**` / `com.platform.usercenter.**`（SDK 反射/IPC/Manifest 组件） |
 | `AndroidManifest.xml` | **无需手写**：SDK AAR 自动合并 `OAuthWebActivity`、`AcOAuthAccountOperateReceiver` 与 OPPO 账号 App `<queries>`（见 §3） |
@@ -38,8 +39,8 @@ oppo.accountAppKey=<AppKey>
 # oppo.accountScope=openid
 ```
 
-- `BuildConfig.ACCOUNT_BASE_URL` 默认 `http://121.196.47.2/account`；可在本机 `gradle.properties` 用
-  `ct.accountBaseUrl=http://...` 覆盖（备案 HTTPS 后切域名用）。
+- `BuildConfig.ACCOUNT_BASE_URL`：release 为 `https://tool.furina.fun/account`（2026-11-23 备案通过），
+  debug 为本机调试 IP；可在本机 `gradle.properties` 用 `ct.accountBaseUrl=https://...` 覆盖。
 - **未配置行为**（AppID 或 AppKey 为空）：身份页不显示「OPPO 账号快捷登录」，「我的 → 账号」不显示入口；
   其它功能不受影响；不会请求 OPPO SDK / ECS。
 - **仅 ColorOS 手机显示**（用户 2026-11-17 晚反馈）：严格按 ColorOS/OPPO ROM 系统属性判断
@@ -63,7 +64,8 @@ oppo.accountAppKey=<AppKey>
   - `com.platform.account.oauth.web.ui.OAuthWebActivity`（H5 授权兜底，`exported=false`）；
   - `com.platform.usercenter.oauth.asm.AcOAuthAccountOperateReceiver`（`com.usercenter.action.receiver.SUPPORT_LOGIN`）；
   - `<queries>`：`com.oplus.account` / `com.heytap.usercenter` / `com.heytap.vip` / `com.oppo.usercenter` / `com.oneplus.account` / `com.oplus.vip`。
-- 明文网络：`res/xml/network_security_config.xml` 已放行 `121.196.47.2`（此前校园地图 H5 同时使用），无需改动。
+- 明文网络：2026-11-23 备案通过后 main 的 `res/xml/network_security_config.xml` 不再放行 `121.196.47.2`
+  （release 全 https）；debug 的独立配置仍保留该 IP 供本机调试。
 
 ## 4. 客户端流程
 
@@ -95,7 +97,7 @@ oppo.accountAppKey=<AppKey>
 
 ## 5. ECS 服务端契约（客户端消费方，Lead 实现）
 
-Base：`ACCOUNT_BASE_URL`（默认 `http://121.196.47.2/account`），JSON；身份接口带 `X-Class-Token`。
+Base：`ACCOUNT_BASE_URL`（release 默认 `https://tool.furina.fun/account`，debug 为本机调试 IP），JSON；身份接口带 `X-Class-Token`。
 
 | 接口 | 请求 | 成功 | 失败 |
 | --- | --- | --- | --- |

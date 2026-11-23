@@ -66,9 +66,11 @@ val vivoApiKey = (vivoProps.getProperty("vivo.apiKey") ?: "").trim()
 //      → 老部署脚本/本机自定义配置行为不变。
 //   2) ct.restProfile：cloudbase | staging | selfhosted（两种 buildType 强制同档；回滚用）
 //   3) ct.restBaseUrlDebug / ct.restBaseUrlRelease：按 buildType 的显式 URL
-//   4) buildType 默认档：debug → staging（ECS 影子验证）；release → cloudbase（备案暂停期的可用网关；
+//   4) buildType 默认档：debug → staging（ECS 影子验证）；release → cloudbase（P4 切流前的可用网关；
 //      2026-11-19 修复：此前 release 默认 selfhosted，tool.furina.fun DNS 暂停导致通知/登录全失败）
 // 三档地址可用 ct.restBase.cloudbase / ct.restBase.staging / ct.restBase.selfhosted 覆盖。
+// 2026-11-23 网站备案已通过、正式域名 https://tool.furina.fun 可用；REST 后端切流属于 P4 数据迁移，
+// 本次**不改** release 默认档（仍 cloudbase），只把 ECS 服务地址切回正式域名。
 // ============================================================================
 val REST_CLOUDBASE_DEFAULT = "https://tool-d4gosudok46e0e081.api.tcloudbasegateway.com/v1/rdb/rest/"
 val REST_STAGING_DEFAULT = "http://121.196.47.2/v1/rdb/rest-next/"
@@ -91,9 +93,10 @@ fun restUrlOfProfile(profile: String, fallback: String): String = restUrlByProfi
 val debugRestUrl = legacyRestOverride
     ?: (if (restProfileOverride != null) restUrlOfProfile(restProfileOverride, REST_STAGING_DEFAULT)
         else (gradleProp("ct.restBaseUrlDebug") ?: REST_STAGING_DEFAULT))
-// 2026-11-19 修复：tool.furina.fun 仍处备案暂停（DNS 不解析），release 默认改回 CloudBase 网关，
+// 2026-11-19 修复：当时 tool.furina.fun 备案暂停（DNS 不解析），release 默认改回 CloudBase 网关，
 // 否则 release APK 的登录/通知/数据请求全部 DNS 失败（用户反馈安卓通知工具收不到通知）。
-// 备案 + HTTPS 恢复后：-Pct.restProfile=selfhosted，或把下面的默认改回 REST_SELFHOSTED_DEFAULT。
+// 2026-11-23 备案已通过、域名 HTTPS 可用；但 REST 后端切流属于 P4 数据迁移，release 默认仍保持
+// CloudBase。P4 切流时：-Pct.restProfile=selfhosted，或把下面的默认值改为 REST_SELFHOSTED_DEFAULT。
 val releaseRestUrl = legacyRestOverride
     ?: (if (restProfileOverride != null) restUrlOfProfile(restProfileOverride, REST_CLOUDBASE_DEFAULT)
         else (gradleProp("ct.restBaseUrlRelease") ?: REST_CLOUDBASE_DEFAULT))
@@ -102,49 +105,51 @@ val releaseRestProfile = if (legacyRestOverride != null) "custom" else (restProf
 
 // ----------------------------------------------------------------------------
 // ECS 现有服务地址（账号 / 云空间 drop / 更新清单 / 校园地图 / PPT 媒体 / 法律全文）：
-// 备案前只有 IP 入口（debug + release 都用 http IP）；备案 + HTTPS 后切回正式域名。
-//
-// 2026-11-19（网络审计 P0 收口）：`tool.furina.fun` 仍 NXDOMAIN，而 release 之前把这 5 个地址
-// 写成 `https://tool.furina.fun/...` → release 的 OPPO 账号/文件传输/更新检查/在线地图/法律全文
-// 全部 DNS 失败。现改为**按 profile 决定**（与 REST 的 ct.restProfile 同一套思路）：
-//   ct.ecsProfile = ecsIp（默认，备案暂停期）| selfhosted（备案 + HTTPS 恢复后）
-//   - ecsIp      → http://121.196.47.2/{account,drop,android/latest.json,map/...,...}
-//                  （main 的 network_security_config 已按「仅此一 IP」放行明文，不再全局开）
-//   - selfhosted → https://tool.furina.fun/...（严格 https、禁止明文 IP）
+// 2026-11-23 网站 ICP 备案已通过（闽ICP备2026042939号-2），正式域名 https://tool.furina.fun
+// （阿里云杭州 ECS + Caddy 自动 HTTPS），同源路由 /account、/drop、/android/latest.json、/map/...、
+// /pptfiles/...、/legal/...。
+//   - release → 一律 https://tool.furina.fun/...（**绝不能出现明文 IP**）
+//   - debug   → 保留 http://121.196.47.2 本机调试入口（staging REST + ECS 调试；
+//               只有 debug 的 network_security_config 放行明文）
+// ct.ecsProfile 仅为兼容旧脚本保留：release 只接受 selfhosted，其它值（含已移除的 ecsIp）直接构建失败。
 // 显式覆盖（优先级最高，非默认值 = 覆盖两种 buildType）：
 //   ct.accountBaseUrl / ct.cloudspaceBaseUrl / ct.updateBaseUrl / ct.mapBaseUrl / ct.webBaseUrl
 //   ct.accountBaseUrlRelease / ct.cloudspaceBaseUrlRelease ... 按 buildType 覆盖
+// release 仍由 :app:verifyReleaseEndpoints 断言 5 个地址都落在 https://tool.furina.fun。
 // ----------------------------------------------------------------------------
-val ECS_HTTP = "http://121.196.47.2"
+val ECS_HTTP = "http://121.196.47.2" // 仅 debug / 本机调试
 val ECS_HTTPS = "https://tool.furina.fun"
 
 val ecsProfileOverride = gradleProp("ct.ecsProfile")
-val releaseEcsProfile = ecsProfileOverride ?: "ecsIp"
-val releaseEcsBase = if (releaseEcsProfile == "selfhosted") ECS_HTTPS else ECS_HTTP
+val releaseEcsProfile = ecsProfileOverride ?: "selfhosted"
+if (releaseEcsProfile != "selfhosted") {
+    throw GradleException(
+        "ct.ecsProfile=$releaseEcsProfile 已移除：2026-11-23 备案通过后 release 只能使用 $ECS_HTTPS" +
+            "（只接受 selfhosted；明文 IP 仅 debug 构建保留）",
+    )
+}
+val releaseEcsBase = ECS_HTTPS
 
-val accountBaseUrlDefault = "$ECS_HTTP/account"
+val accountBaseUrlDefault = "$ECS_HTTPS/account"
 val accountUrl = gradleProp("ct.accountBaseUrl")
 val accountExplicit = accountUrl?.takeIf { it != accountBaseUrlDefault }
-val debugAccountUrl = accountExplicit ?: (gradleProp("ct.accountBaseUrlDebug") ?: accountBaseUrlDefault)
+val debugAccountUrl = accountExplicit ?: (gradleProp("ct.accountBaseUrlDebug") ?: "$ECS_HTTP/account")
 val releaseAccountUrl = accountExplicit ?: (gradleProp("ct.accountBaseUrlRelease") ?: "$releaseEcsBase/account")
 
-val cloudspaceUrlDefault = "$ECS_HTTP/drop"
 val cloudspaceUrl = gradleProp("ct.cloudspaceBaseUrl")
 val debugCloudspaceUrl = cloudspaceUrl ?: "$ECS_HTTP/drop"
 val releaseCloudspaceUrl = gradleProp("ct.cloudspaceBaseUrlRelease") ?: cloudspaceUrl ?: "$releaseEcsBase/drop"
 
-val updateUrlDefault = "$ECS_HTTP/android/latest.json"
 val updateUrl = gradleProp("ct.updateBaseUrl")
 val debugUpdateUrl = updateUrl ?: "$ECS_HTTP/android/latest.json"
 val releaseUpdateUrl = gradleProp("ct.updateBaseUrlRelease") ?: updateUrl ?: "$releaseEcsBase/android/latest.json"
 
-val mapUrlDefault = "$ECS_HTTP/map/campus_final_25d.html"
 val mapUrl = gradleProp("ct.mapBaseUrl")
 val debugMapUrl = mapUrl ?: "$ECS_HTTP/map/campus_final_25d.html"
 val releaseMapUrl = gradleProp("ct.mapBaseUrlRelease") ?: mapUrl ?: "$releaseEcsBase/map/campus_final_25d.html"
 
 // PPT 在线媒体 ECS 缓存（2026-11-18 迁移优化）：OSS 香港 /ppt/** → WEB_BASE_URL + /pptfiles/<path>。
-// 法律全文（legal/android/*.html）也走 WEB_BASE_URL；随 ct.ecsProfile 一起切换。
+// 法律全文（legal/android/*.html）也走 WEB_BASE_URL；release 走 https 正式域名，debug 走本机调试 IP。
 // 显式覆盖：ct.webBaseUrl（非默认值 = 覆盖两种 buildType）。
 val webBaseUrlOverride = gradleProp("ct.webBaseUrl")
 val debugWebBaseUrl = webBaseUrlOverride ?: ECS_HTTP
@@ -216,7 +221,8 @@ android {
             versionNameSuffix = "-debug"
             isMinifyEnabled = false
             // 2026-11-18 自建后端切流：调试构建默认连 ECS staging 影子库（http IP，仅 debug 放行明文）。
-            // 也用于 ECS 账号/云空间/更新/地图服务的备案前 IP 调试入口。
+            // 也用于 ECS 账号/云空间/更新/地图服务的本机 IP 调试入口（2026-11-23 备案已通过，
+            // 正式版不出现明文 IP；正式域名见 release）。
             buildConfigField("String", "REST_BASE_URL", buildConfigString(debugRestUrl))
             buildConfigField("String", "REST_PROFILE", buildConfigString(debugRestProfile))
             buildConfigField("String", "ACCOUNT_BASE_URL", buildConfigString(debugAccountUrl))
@@ -233,8 +239,8 @@ android {
             // 只在 keystore.properties 存在时使用正式签名；缺失时保持未签名（不静默回退 debug 签名，
             // 避免把 debug 签名的包当发布包分发；构建/发布脚本应显式校验）。
             signingConfigs.findByName("release")?.let { signingConfig = it }
-            // 2026-11-18 自建后端切流：release 默认走备案后 HTTPS 正式域名（不含 staging 明文 IP；
-            // 备案前请勿发布 release 构建，或 -Pct.restProfile=cloudbase 回滚到 CloudBase）。
+            // 2026-11-23 备案已通过：release 的 ECS 服务一律走 https://tool.furina.fun 正式域名
+            // （不含任何明文 IP）；REST 仍默认 CloudBase，P4 切流前不动（见文件顶部说明）。
             buildConfigField("String", "REST_BASE_URL", buildConfigString(releaseRestUrl))
             buildConfigField("String", "REST_PROFILE", buildConfigString(releaseRestProfile))
             buildConfigField("String", "ACCOUNT_BASE_URL", buildConfigString(releaseAccountUrl))
@@ -273,18 +279,20 @@ android {
 }
 
 /**
- * release 构建安全闸门（2026-11-18 自建后端切流；2026-11-19 适配 ECS profile）：
- * - **REST** 永远必须 https 且不含 staging 明文 IP（CloudBase 网关或备案后的 tool.furina.fun）；
- * - **ECS 服务**（账号/云空间/更新/地图/PPT 媒体+法律全文）按 `ct.ecsProfile`：
- *   `ecsIp`（默认，备案暂停期）→ 必须是 `http://121.196.47.2/...`（明文仅此一个 IP，见 main 的
- *   network_security_config），并打印 WARN；`selfhosted` → 必须 https + 不含明文 IP。
+ * release 构建安全闸门（2026-11-23 备案通过后）：
+ * - **REST** 永远必须 https 且不含 staging 明文 IP（CloudBase 网关，或 P4 切流后的
+ *   https://tool.furina.fun）；
+ * - **ECS 服务**（账号/云空间/更新/地图/PPT 媒体+法律全文）必须全部落在
+ *   `https://tool.furina.fun`：严格 https、以正式域名开头、不含 121.196.47.2 明文 IP；
+ *   `ct.ecsProfile` 只接受 `selfhosted`（ecsIp 分支已随备案通过移除）。
  * 只做配置校验（不构建 APK / 不打分发包），发布前执行：
  *   .\gradlew.bat :app:verifyReleaseEndpoints
  */
 tasks.register("verifyReleaseEndpoints") {
     group = "verification"
-    description = "校验 release 构建的 REST 为 https，ECS 地址与 ct.ecsProfile 一致（ecsIp 或 https 域名）"
+    description = "校验 release 的 REST 为 https、5 个 ECS 地址均为 https://tool.furina.fun 正式域名（无明文 IP）"
     // 用 task inputs 传值而不是闭包捕获脚本对象（兼容 org.gradle.configuration-cache）。
+    inputs.property("expectedEcsBase", ECS_HTTPS)
     inputs.property("releaseRestUrl", releaseRestUrl)
     inputs.property("releaseAccountUrl", releaseAccountUrl)
     inputs.property("releaseCloudspaceUrl", releaseCloudspaceUrl)
@@ -297,8 +305,12 @@ tasks.register("verifyReleaseEndpoints") {
     inputs.property("debugRestProfile", debugRestProfile)
     doLast {
         val ecsProfile = inputs.properties["releaseEcsProfile"] as String
+        val expectedEcsBase = inputs.properties["expectedEcsBase"] as String
         val restUrl = inputs.properties["releaseRestUrl"] as String
-        // REST：始终 https + 不含明文 IP（放宽的唯一例外是 ECS 那 5 个地址，且仅在 ecsIp profile 下）
+        check(ecsProfile == "selfhosted") {
+            "release 只接受 ct.ecsProfile=selfhosted（ecsIp 明文分支已移除）：$ecsProfile"
+        }
+        // REST：始终 https + 不含明文 IP；CloudBase 或 https://tool.furina.fun（P4 切流后）。
         check(restUrl.startsWith("https://")) { "release REST_BASE_URL must be https: $restUrl" }
         check(!restUrl.contains("121.196.47.2")) { "release REST_BASE_URL must not contain staging IP: $restUrl" }
         if (inputs.properties["releaseRestProfile"] == "cloudbase") {
@@ -306,8 +318,8 @@ tasks.register("verifyReleaseEndpoints") {
                 "release REST profile=cloudbase but REST_BASE_URL is not CloudBase gateway"
             }
         } else {
-            check(restUrl.startsWith("https://tool.furina.fun/")) {
-                "release REST_BASE_URL must be https://tool.furina.fun/ when profile != cloudbase"
+            check(restUrl.startsWith("$expectedEcsBase/")) {
+                "release REST_BASE_URL must be $expectedEcsBase/ when profile != cloudbase"
             }
         }
         val ecsChecks = listOf(
@@ -317,21 +329,13 @@ tasks.register("verifyReleaseEndpoints") {
             "MAP_BASE_URL" to (inputs.properties["releaseMapUrl"] as String),
             "WEB_BASE_URL" to (inputs.properties["releaseWebBaseUrl"] as String),
         )
-        if (ecsProfile == "selfhosted") {
-            ecsChecks.forEach { (name, url) ->
-                check(url.startsWith("https://")) { "release $name must be https under ecsProfile=selfhosted: $url" }
-                check(!url.contains("121.196.47.2")) { "release $name must not contain staging IP: $url" }
+        ecsChecks.forEach { (name, url) ->
+            check(url.startsWith("https://")) { "release $name must be https: $url" }
+            // WEB_BASE_URL 是「基址」（无尾斜杠），其余是完整路径；两者都必须落在正式域名上。
+            check(url == expectedEcsBase || url.startsWith("$expectedEcsBase/")) {
+                "release $name must point at $expectedEcsBase: $url"
             }
-        } else {
-            check(ecsProfile == "ecsIp") { "unknown ct.ecsProfile=$ecsProfile（只能是 ecsIp / selfhosted）" }
-            ecsChecks.forEach { (name, url) ->
-                // WEB_BASE_URL 是「基址」（无尾斜杠），其余是完整路径；两者都要求落在该 IP 上。
-                check(url == "http://121.196.47.2" || url.startsWith("http://121.196.47.2/")) {
-                    "release $name must be http://121.196.47.2[/...] under ecsProfile=ecsIp: $url"
-                }
-            }
-            println("WARN: release 使用 ECS 明文 IP（ecsProfile=ecsIp，备案暂停期）；" +
-                "该 IP 已在 app/src/main/res/xml/network_security_config.xml 单独放行，其余域名仍禁明文")
+            check(!url.contains("121.196.47.2")) { "release $name must not contain staging IP: $url" }
         }
         println("verifyReleaseEndpoints OK")
         println("  REST_PROFILE=" + (inputs.properties["releaseRestProfile"] as String) +

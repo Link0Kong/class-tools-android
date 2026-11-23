@@ -23,12 +23,12 @@
 |---|---|---|
 | ~~1~~ | ✅ 「清除云端数据」编排 | 已实现：`data/privacy/PrivacyRepository.clearCloudData()`（userdata 空 v6 upsert、marks 全部 true → val=false、fitrecs 逐条 arch=true，无 DELETE）+ `DataPrivacyScreen` 二次确认；E2E 待验证 |
 | ~~2~~ | ✅ 导出我的数据 JSON | 已实现：脱敏 sid、白名单 9 section、power 电费/tt 课表/roster 名单原文不导出；写 cache/exports + FileProvider 分享 |
-| 3 | 备案信息 | 「关于」页预留备案号位置（上线填真实备案号并链接工信部备案系统） |
+| ~~3~~ | ✅ 备案信息（APP 端不展示） | 2026-11-23 网站 ICP 备案已通过（**闽ICP备2026042939号-2**，<https://beian.miit.gov.cn/>）；按用户决定 **APP 端不显示「备案信息」行**，主源码已确认无「上线前填写」占位 |
 | 4 | 隐私政策/用户协议正式文本 | 当前为内嵌草稿，需法务/管理员确认后替换；建议增加生效日期与变更通知 |
 | 5 | 删除账号/数据删除请求渠道 | 目前依赖班级管理员人工处理；若上架商店需明确入口（邮件/群公告） |
 | 6 | Release 包合规 | `assembleRelease` 已签名；上架前补隐私合规检测（无第三方 SDK 采集、无广告） |
 | 7 | 未成年人提示 | 隐私政策已含一行；如需更严格可加首启额外提示 |
-| 8 | 数据传输安全 | 仅 HTTPS（CloudBase 网关）；证书校验使用系统默认；不校验证书固定 |
+| 8 | 数据传输安全 | 仅 HTTPS（CloudBase 网关 + `https://tool.furina.fun`；教务系统 `210.34.74.77` 为契约例外）；证书校验使用系统默认；不校验证书固定 |
 
 ## 3. 与网页/小程序口径一致性
 

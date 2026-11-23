@@ -39,7 +39,8 @@ cd <项目根>
 - 渠道：`-Pct.updateChannel=beta`
 - 只编译不发版：`-Pct.skipUpdateChannel=true`
 - 上传脚本：`web/deploy/android_release.py`（凭据仍只在 `web/deploy/creds.env` / 环境变量，不入库）
-- 发布后核对：`http://121.196.47.2/android/latest.json`、`.../android/classtools-<version>.apk`、OSS `android/latest.json`
+- 发布后核对：`https://tool.furina.fun/android/latest.json`、`.../android/classtools-<version>.apk`、OSS `android/latest.json`
+  （release 不再依赖明文 IP；`latest.json` 里的 `apkUrl` 必须是 https 正式域名）
 - **同 versionCode 不会静默覆盖渠道**：若渠道已有同 vc 但 sha 不同，脚本会提示 `bump versionCode` 并跳过；发新版必须先提升 versionCode（`--force` 仅用于人工补救）。
 
 ## 3. Release 验证（已实测）
@@ -59,7 +60,8 @@ cd <项目根>
 
 - 版本号在 `app/build.gradle.kts` 的 `versionCode` / `versionName`；每次发布递增 `versionCode`。
 - APP 备案所需的包名/公钥/签名 MD5 可在 `apksigner verify --print-certs` 输出中取得。
-- 发布前检查：`docs/REPORT_M0_20261107.md` §4 的已知问题（备案号、隐私政策页、通知提醒等）。
+- 发布前检查：`docs/REPORT_M0_20261107.md` §4 的已知问题（隐私政策页、通知提醒等）。
+  备案号已不适用：2026-11-23 网站备案已通过（闽ICP备2026042939号-2），用户决定 APP 端不展示备案信息行。
 
 ## 5. 安全红线
 

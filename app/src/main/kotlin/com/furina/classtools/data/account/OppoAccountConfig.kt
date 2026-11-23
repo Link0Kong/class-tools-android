@@ -1,5 +1,6 @@
 package com.furina.classtools.data.account
 
+import com.furina.classtools.BuildConfig
 import java.security.SecureRandom
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -24,15 +25,19 @@ data class OppoAccountConfig(
     val effectiveScope: String
         get() = scope.trim().ifBlank { DEFAULT_SCOPE }
 
-    /** 账号服务根地址（去掉结尾 `/`；空 → 默认 IP 调试入口）。 */
+    /** 账号服务根地址（去掉结尾 `/`；空 → 构建期注入的默认地址）。 */
     val normalizedBaseUrl: String
         get() = baseUrl.trim().trimEnd('/').ifBlank { DEFAULT_BASE_URL }
 
     companion object {
         const val DEFAULT_SCOPE: String = "openid"
 
-        /** ECS 账号接口默认根（与 Lead 契约一致；gradle 属性 ct.accountBaseUrl 可覆盖）。 */
-        const val DEFAULT_BASE_URL: String = "http://121.196.47.2/account"
+        /**
+         * ECS 账号接口默认根：**由 BuildConfig 按 buildType 注入**（与 Lead 契约一致；
+         * debug = 本机调试 IP，release = `https://tool.furina.fun/account`；gradle 属性
+         * `ct.accountBaseUrl` / `ct.accountBaseUrlRelease` 可覆盖）。
+         */
+        val DEFAULT_BASE_URL: String = BuildConfig.ACCOUNT_BASE_URL
 
         fun of(appId: String?, appKey: String?, scope: String?, baseUrl: String?): OppoAccountConfig =
             OppoAccountConfig(

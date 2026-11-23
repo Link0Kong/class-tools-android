@@ -18,7 +18,7 @@ val NetJson = Json {
 
 object ApiConfig {
     const val REST_BASE = "https://tool-d4gosudok46e0e081.api.tcloudbasegateway.com/v1/rdb/rest/"
-    const val TT_LEGACY_URL = "https://tool.furina.fun/tt.json"   // 2026-11-07 起 DNS 已暂停，仅兜底
+    const val TT_LEGACY_URL = "https://tool.furina.fun/tt.json"   // 2026-11-23 备案通过已恢复；仅兜底
     const val HEADER_TOKEN_WEB = "X-Device-Id"    // 网页头（服务端也认）
     const val HEADER_TOKEN_APP = "X-Class-Token"  // Android 统一用这个
     // PUBLISHABLE_KEY 从 BuildConfig/本地配置读取：公开 JWT（role=anon），禁止把服务端高权限 key 打进 APK

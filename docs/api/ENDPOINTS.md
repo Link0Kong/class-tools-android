@@ -214,7 +214,7 @@ GET {REST}site_assets?select=body,meta,updated_at&id=eq.tt
 ```
 
 - `body` 可能是 **jsonb 对象或 JSON 字符串**（CloudBase jsonb 返回对象；MP 兼容字符串）；必须含 `c` 数组 `[已核实 WEB:7047-7057; MP/cloud.js:1606-1618]`。
-- 空行/格式错 → 回退 `GET https://tool.furina.fun/tt.json`（**不带身份头**；2026-11-07 起该域名已暂停，可只保留本机缓存）。
+- 空行/格式错 → 回退 `GET https://tool.furina.fun/tt.json`（**不带身份头**；2026-11-23 ICP 备案通过后该域名已恢复，仍可只保留本机缓存）。
 
 ### E25 service_health（管理员，可选）
 

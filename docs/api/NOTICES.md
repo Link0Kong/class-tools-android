@@ -196,7 +196,7 @@ mostUrgent(all, done):
 
 **附件处理**（2026-11-10 起为「data URI ↔ 签名 URL」双形态，契约唯一真源 `web/attachments/CONTRACT.md`）：
 - `items[].src`/`url` 旧数据是 `data:<mime>;base64,...`；外置迁移后是签名 URL
-  `https://<host>/att/<id>?exp=<unix秒>&sig=<hex64>`（备案期调试可能 `http://<ip>/att/...`）。
+  `https://<host>/att/<id>?exp=<unix秒>&sig=<hex64>`（debug 调试也可能 `http://<ip>/att/...`）。
   **只判断 `^https?://`，不写死域名**；GET 直出字节、无鉴权头、内容不可变（`Cache-Control: immutable`）。
 - 图片（`kind=img`）：data URI 走 `ApiNoticeRawAttachmentLoader` 按需拉原始行 + `BitmapFactory` 采样解码；
   URL 走 `container.pptImageLoader`（`data/ppt` 的 OkHttp + BitmapFactory + 内存 LRU），失败占位不崩。

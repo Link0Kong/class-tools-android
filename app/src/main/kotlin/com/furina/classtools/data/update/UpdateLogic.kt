@@ -190,11 +190,13 @@ object UpdateJsonParser {
 /**
  * 更新远端地址（按顺序 fallback）：
  * 1) 主入口（按 buildType 注入，2026-11-18 自建后端切流）：
- *    - debug：`http://121.196.47.2/android/latest.json`（备案前唯一公网入口，debug 放行明文）；
- *    - release：`https://tool.furina.fun/android/latest.json`（备案 + HTTPS 启用后；不含明文 IP）。
- * 2) 阿里云 OSS 公共读域名（IP 不可达时的兜底，始终 https）。
- * 注意（P4 切流）：ECS `/android/latest.json` 里的 `apkUrl` 也应在备案后改成 https 正式域名，
- * 否则 release 会被 network_security_config 拒绝明文下载（见 deploy/migration/CLIENTS.md）。
+ *    - debug：`http://121.196.47.2/android/latest.json`（本机调试入口，debug 放行明文）；
+ *    - release：`https://tool.furina.fun/android/latest.json`
+ *      （2026-11-23 备案已通过，正式域名全 https；不含明文 IP）。
+ * 2) 阿里云 OSS 公共读域名（主入口不可达时的兜底，始终 https）。
+ * 注意（发版）：ECS `/android/latest.json` 里的 `apkUrl` 必须写成 https 正式域名
+ * （由 Lead 在域名切换后统一发版写入），否则 release 会被 network_security_config 拒绝明文下载
+ * （见 deploy/migration/CLIENTS.md）。
  */
 object UpdateEndpoints {
     val PRIMARY: String = BuildConfig.UPDATE_BASE_URL

@@ -1,5 +1,35 @@
 # 版本记录（Android 客户端）
 
+## 2026-11-23 · ICP 备案通过：release 切回 `https://tool.furina.fun`（移除明文 IP；本次不发版）
+
+> 网站 ICP 备案已通过：**闽ICP备2026042939号-2**（工信部入口 <https://beian.miit.gov.cn/>），
+> 正式域名 `https://tool.furina.fun`（阿里云杭州 ECS + Caddy 自动 HTTPS）恢复。release 的账号 / 云空间 /
+> 更新清单 / 校园地图 / PPT 媒体 / 法律全文从临时明文 IP `http://121.196.47.2/...` 切回 https 正式域名。
+
+- **`app/build.gradle.kts`**：`ct.ecsProfile` 默认改为 `selfhosted`，且只接受该值（`ecsIp` 分支移除，
+  其它值在配置期直接构建失败）；release 的 5 个 ECS 地址固定 `https://tool.furina.fun/...`，
+  debug 保留 `http://121.196.47.2` 本机调试入口。REST 默认值**未改**（仍 CloudBase，P4 数据迁移后再切）。
+- **`:app:verifyReleaseEndpoints`**：删除 `ecsIp` 校验与 WARN，改为断言 5 个 ECS 地址全部 https、
+  以 `https://tool.furina.fun` 为前缀、不含 `121.196.47.2`。
+- **网络安全配置**：main 删除 `121.196.47.2` 的 cleartext 放行（只保留教务 `210.34.74.77`）；
+  debug 配置保留 staging IP 供本机调试，注释同步更新。
+- **产品代码**：`OppoAccountConfig` / `HonorAccountConfig` 的默认账号根地址改为读取
+  `BuildConfig.ACCOUNT_BASE_URL`（debug = 调试 IP、release = https 正式域名），main 中不再有明文 IP 常量；
+  更新弹窗预览数据改用 https。全仓确认主源码无「备案信息 / 上线前填写」占位（APP 端按用户决定不展示备案信息行）。
+- **文档**：CHANGELOG / PRIVACY_COMPLIANCE / OPPO_ACCOUNT / ROADMAP / RELEASE_BUILD / api/NOTICES 等
+  的「备案期 / 备案暂停 / 上线前填写」临时口径改为正式域名与已通过说明（历史验收报告保留原样）。
+- **验证（真实执行）**：
+  - `:app:verifyReleaseEndpoints` OK：`REST_PROFILE=cloudbase ECS_PROFILE=selfhosted`，
+    ACCOUNT / CLOUDSPACE / UPDATE / MAP / WEB 均为 `https://tool.furina.fun...`；debug 仍 staging IP。
+  - `:app:testDebugUnitTest`：**1895 用例 / 0 失败 / 0 错误 / 2 skipped**（154 suites）。
+  - `:app:assembleRelease --project-prop "ct.skipUpdateChannel=true"`：APK **6,107,746 B /
+    SHA-256 `1E0CB767C4EA99D6391F0CC823C49461517059EFC080BB65689ED1C35367F80E`**，v2 签名通过
+    （证书 SHA-256 `974854df…bec4a1a`）；release `BuildConfig` 实测 5 个 ECS 地址全为 https 正式域名。
+  - 说明：本机 checkout 目录的 Windows ACL 拒绝子进程写入，`computeOppoSign` 写 `build/opposign` 失败
+    （OPPOSign 仅 OPPO 商店需要），故 release 编译验证附加 `-Pct.skipOppoSign=true`；
+    **未上传更新渠道**（发版由 Lead 在域名切换完成后统一执行）。
+- **未做**：未发版（versionCode/versionName 未动）、未真机验证、未把 REST 切到 selfhosted（P4 数据迁移）。
+
 ## 2026-11-22 · 1.0.0-beta53 / vc136：抽签与分组独立 + 最近抽签持久化 + 分组页优化
 
 > 对齐 `web/group/CONTRACT.md`：抽签与分组拆成两个独立工具；抽签页不再有「去分组 / 下一步」，

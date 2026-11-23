@@ -6,7 +6,7 @@ package com.furina.classtools.data.notices
  * 附件内容在 `items[]` 里有两种形态，**必须同时兼容**：
  * 1. 旧数据内联：`data:<mime>;base64,<payload>`（继续支持，不改行为）；
  * 2. 新数据外置：`https://tool.furina.fun/att/<id>?exp=<unix秒>&sig=<hex64>`，
- *    备案期调试也可能是 `http://<ip>/att/...`。
+ *    debug 调试也可能是 `http://<ip>/att/...`。
  *    **代码只判断 `^https?://`，不写死域名**；GET 直出字节、无需请求头/cookie、内容不可变。
  *
  * 出现位置：图片 `item.src`、文件 `item.url`、压缩包内文件 `item.archive.files[].url`。

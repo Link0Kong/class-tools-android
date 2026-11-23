@@ -11,11 +11,12 @@ import com.furina.classtools.BuildConfig
  *
  * 映射规则（仅作用于在线播放/预览/下载 URL，manifest 归一化后统一经 [PptManifest.resolveImage] 走这里）：
  * - 仅当 host = [OSS_HOST] 且 path 以 `/ppt/` 开头时映射；
- * - 目标：[BuildConfig.WEB_BASE_URL] + `/pptfiles` + path（debug = `http://121.196.47.2`，release = `https://tool.furina.fun`）；
+ * - 目标：[BuildConfig.WEB_BASE_URL] + `/pptfiles` + path（debug = `http://121.196.47.2` 本机调试，
+ *   release = `https://tool.furina.fun` 正式域名，2026-11-23 备案已通过）；
  * - `data:` / `file:` / `content:` / 本地路径 / 其它域名 / 非 `/ppt/` 路径 → 原样返回（不误伤外链/内嵌资源）；
  * - 编码路径与 `?query` 原样保留（Caddy 解码后由缓存服务按 OSS pathname 命中；Range 由既有播放器/OkHttp 支持）。
  *
- * 回滚（备案期/ECS 缓存故障）：把 [ENABLED] 置为 `false` 重新构建即可回到 OSS 直链（其它代码无需改）。
+ * 回滚（ECS 缓存故障 / 需要回退 OSS 直链）：把 [ENABLED] 置为 `false` 重新构建即可（其它代码无需改）。
  */
 object PptEcsUrl {
 
@@ -31,7 +32,7 @@ object PptEcsUrl {
     /** 回滚开关：false = 全部原样返回（OSS 直链，旧行为）。 */
     const val ENABLED: Boolean = true
 
-    /** 默认 ECS 缓存基址：WEB_BASE_URL + `/pptfiles`（debug=http IP，release=备案后 https 域名）。 */
+    /** 默认 ECS 缓存基址：WEB_BASE_URL + `/pptfiles`（debug=本机调试 IP，release=https 正式域名）。 */
     fun defaultBase(): String {
         val web = BuildConfig.WEB_BASE_URL.trim().trimEnd('/')
         return if (web.isEmpty()) "" else web + ECS_PATH_PREFIX

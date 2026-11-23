@@ -61,12 +61,12 @@ private const val TAG = "CampusMap"
 /**
  * 离线地图 H5（打包进 APK `assets/map/`，H5 已内置全部地图数据、无外部 fetch）——**首选加载**。
  *
- * 2026-11-16 根因：地图一直依赖 ECS `http://121.196.47.2/map/...`，用户网络/DNS/防火墙稍有波动即白屏。
+ * 2026-11-16 根因：地图曾依赖 ECS 明文 IP 的 `/map/...`，用户网络/DNS/防火墙稍有波动即白屏。
  * 把同一份 H5 放进 APK 后走 `file:///android_asset/`，无需任何网络请求即可渲染。
  */
 private const val ASSET_MAP_URL = "file:///android_asset/map/campus_final_25d.html?embed=1"
 
-/** 地图 H5 网络版（降级用；2026-11-18 按 buildType 注入：debug=ECS IP 调试入口，release=备案后 https 正式域名）。 */
+/** 地图 H5 网络版（降级用；2026-11-18 按 buildType 注入：debug=本机调试 IP，release=https 正式域名）。 */
 private val MAP_BASE: String = BuildConfig.MAP_BASE_URL
 private const val MAP_VERSION = "202611160800"
 

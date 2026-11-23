@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- DEBUG 构建专用（2026-11-18 自建后端切流）：
+    <!-- DEBUG 构建专用（2026-11-18 自建后端切流；2026-11-23 备案通过后仍保留本机调试入口）：
          * 教务系统仅 HTTP：210.34.74.77；
-         * ECS 备案前唯一公网入口 http://121.196.47.2/（staging PostgREST、账号、云空间、更新清单、地图 H5）。
+         * 本机调试入口 http://121.196.47.2/（staging PostgREST、账号、云空间、更新清单、地图 H5），
+           仅 debug 放行；正式域名已是 https://tool.furina.fun。
          体验版/正式版（release）不允许明文：main 的 network_security_config 不含 121.196.47.2，
-         REST 走 https://tool.furina.fun/v1/rdb/rest/（备案 + HTTPS 启用后）。 -->
+         release 的 ECS 地址一律 https://tool.furina.fun/...，REST 仍走 CloudBase（P4 切流前）。 -->
     <base-config cleartextTrafficPermitted="false" />
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">210.34.74.77</domain>

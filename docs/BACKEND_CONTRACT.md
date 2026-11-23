@@ -40,9 +40,9 @@
 | 数据库 | **PostgreSQL**（该环境没有文档型数据库，禁止 `db.collection()` 思路） |
 | API 形态 | PostgREST 风格：`{REST}/v1/rdb/rest/<table>?<query>` |
 | REST 根 | `https://tool-d4gosudok46e0e081.api.tcloudbasegateway.com/v1/rdb/rest/`（结尾保留 `/`） |
-| 静态资源 | 网页在 `https://tool.furina.fun/tools/`（2026-11-07 起 DNS 暂停、转 CloudBase 快照）；课表旧兜底 `https://tool.furina.fun/tt.json` |
+| 静态资源 | 网页在 `https://tool.furina.fun/tools/`（2026-11-23 ICP 备案通过，域名与 HTTPS 已恢复；此前 2026-11-07 暂停期转 CloudBase 快照）；课表旧兜底 `https://tool.furina.fun/tt.json` |
 | CORS | 网关只白名单了网页来源 + 自定义头 `X-Device-Id`；小程序走 `wx.request` 无 CORS 问题；**Android 原生 HTTP 无 CORS 限制**，但仍需带全请求头 `[已核实 CB:19, CB:119; 推断-Android 无浏览器预检]` |
-| 域名要求 | 仅 CloudBase 网关域名；`tool.furina.fun` 只是课表旧兜底，可不配 |
+| 域名要求 | REST 仍走 CloudBase 网关；`tool.furina.fun` 已备案恢复，承担 ECS 账号 / 云空间 / 更新 / 地图 / PPT 媒体 / 法律全文（release 一律 https） |
 
 ### 1.2 全局请求头 `[已核实 WEB:1846-1848, MP/cloud.js:127-142]`
 
@@ -180,7 +180,7 @@ Content-Type: application/json
 | E23 | GET | `power_history` | `select=ts,quantity&roomverify=eq.<rv>&ts=gte.<ISO>&order=ts.asc&limit=2000` | 趋势采样 |
 | E24 | GET | `site_assets` | `select=body,meta,updated_at&id=eq.tt` | 课表快照（首选） |
 | E25 | GET | `service_health` | `select=id,name,kind,status,detail,meta,checked_at&order=id`（管理员） | 诊断（可选） |
-| E26 | GET | `https://tool.furina.fun/tt.json` | 无（不带身份头） | 课表旧兜底（DNS 已暂停，可能不可达） |
+| E26 | GET | `https://tool.furina.fun/tt.json` | 无（不带身份头） | 课表旧兜底（2026-11-23 备案通过后已恢复） |
 
 ---
 

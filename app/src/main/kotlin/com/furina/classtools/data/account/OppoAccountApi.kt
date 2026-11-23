@@ -21,7 +21,7 @@ import kotlinx.serialization.json.contentOrNull
 /**
  * ECS 账号服务（OPPO 账号绑定学号 / OPPO 快捷登录）。
  *
- * 唯一契约（Lead 定义，ECS `http://121.196.47.2/account`，JSON）：
+ * 唯一契约（Lead 定义，ECS 账号服务 `https://tool.furina.fun/account`（debug 为本机调试 IP），JSON）：
  * - `POST /oppo/login`  body `{"code":"<authCode>"}`；
  * - `POST /oppo/bind`   header `X-Class-Token`，body `{"code":"<authCode>"}`；
  * - `GET  /oppo/bindings` header `X-Class-Token`；

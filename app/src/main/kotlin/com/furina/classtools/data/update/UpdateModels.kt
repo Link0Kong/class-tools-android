@@ -8,7 +8,7 @@ package com.furina.classtools.data.update
  * {
  *   "versionCode": 79,
  *   "versionName": "1.0.0-beta1",
- *   "apkUrl": "http://121.196.47.2/android/classtools-1.0.0-beta1.apk",
+ *   "apkUrl": "https://tool.furina.fun/android/classtools-1.0.0-beta1.apk",
  *   "notes": "1. 检查更新与自动更新\n2. 测试版本",
  *   "force": false,
  *   "channel": "test",

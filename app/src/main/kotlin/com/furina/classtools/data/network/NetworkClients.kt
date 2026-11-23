@@ -11,14 +11,14 @@ import okhttp3.Protocol
  * 全局 OkHttp 网络栈（2026-11-18 网络体验优化）。
  *
  * 背景：此前每个数据模块各自 `OkHttpClient.Builder()`（REST 网关、教务、云空间、附件下载、PPT 图片、
- * 更新检查/下载…），每个 client 都有独立连接池与 Dispatcher —— 同一个主机（ECS IP / 备案后域名）
+ * 更新检查/下载…），每个 client 都有独立连接池与 Dispatcher —— 同一个主机（正式域名 / 本机调试 IP）
  * 的 TCP/TLS 连接无法复用，握手次数翻倍、弱网首包更慢。
  *
  * 本对象提供**唯一共享的连接池 + Dispatcher**，各模块的 client 只按自己的超时口径配置：
  * - 连接池：maxIdle=8 / keepAlive=5min（同一 host 的 HTTP/1.1 keep-alive 与 HTTP/2 多路复用都复用）；
  * - Dispatcher：maxRequests=64 / maxRequestsPerHost=16（并发上限，避免打爆移动网络/服务端）；
  * - 协议：显式 HTTP/2 优先、回退 HTTP/1.1（OkHttp 对 HTTPS 默认协商 h2；staging 的 http IP 无 h2c，
- *   自动走 HTTP/1.1 keep-alive 复用——与迁移计划 P4 备案后 HTTPS/HTTP2 一致）；
+ *   自动走 HTTP/1.1 keep-alive 复用——与正式域名的 HTTPS/HTTP2 一致）；
  * - `retryOnConnectionFailure(false)`：重试策略统一由 App 层控制（写请求绝不自动重试）。
  *
  * 线程约定：这些 client 全部同步 `execute()`，调用方在 Dispatchers.IO 上执行（见 [OkHttpTransport]）。

@@ -58,7 +58,7 @@ POST https://account-drcn.platform.hihonorcloud.com/rest.php?nsp_svc=GOpen.User.
   ```json
   {"client_id":"<Client ID>","client_secret":"<Client Secret>","redirect_uri":"honorid://redirect_url"}
   ```
-- 部署：`cd web && python deploy\ecs_account.py deploy`；健康检查 `http://121.196.47.2/account/__health` 应返回 `providers.honor=true`。
+- 部署：`cd web && python deploy\ecs_account.py deploy`；健康检查 `https://tool.furina.fun/account/__health` 应返回 `providers.honor=true`。
 
 ## 4. 已验证 / 未验证（如实）
 

@@ -28,8 +28,8 @@ data class HonorAccountConfig(
     companion object {
         const val DEFAULT_SCOPE: String = "openid profile"
 
-        /** 与 OPPO 共用同一个 ECS 账号服务根地址（gradle 属性 ct.accountBaseUrl 可覆盖）。 */
-        const val DEFAULT_BASE_URL: String = OppoAccountConfig.DEFAULT_BASE_URL
+        /** 与 OPPO 共用同一个 ECS 账号服务根地址（BuildConfig 按 buildType 注入；gradle 属性可覆盖）。 */
+        val DEFAULT_BASE_URL: String = OppoAccountConfig.DEFAULT_BASE_URL
 
         fun of(clientId: String?, scope: String?, baseUrl: String?): HonorAccountConfig =
             HonorAccountConfig(

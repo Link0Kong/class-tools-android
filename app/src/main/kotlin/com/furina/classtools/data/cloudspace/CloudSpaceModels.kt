@@ -16,8 +16,8 @@ object CloudSpaceDefaults {
 
     /**
      * drop 服务地址（2026-11-18 按 buildType 注入，见 deploy/migration/CLIENTS.md）：
-     * - debug：http://121.196.47.2/drop（备案前唯一公网入口，debug 的 network_security_config 放行明文）；
-     * - release：https://tool.furina.fun/drop（备案 + HTTPS 启用后；不含明文 IP）。
+     * - debug：http://121.196.47.2/drop（本机调试入口，debug 的 network_security_config 放行明文）；
+     * - release：https://tool.furina.fun/drop（2026-11-23 备案已通过，正式域名全 https；不含明文 IP）。
      */
     val BASE_URL: String = BuildConfig.CLOUDSPACE_BASE_URL
 
