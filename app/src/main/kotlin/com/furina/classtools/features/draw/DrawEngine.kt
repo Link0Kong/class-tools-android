@@ -86,12 +86,15 @@ object DrawEngine {
             entries = result.entries.toMutableList().apply { removeAt(index) },
             log = result.log + DrawRemoveLog(removed = removed),
         )
-        return DrawOutcome.Success(if (autoRedraw) refill(updated, random, limit = 1) else updated)
+        return DrawOutcome.Success(if (autoRedraw) refill(updated, random, latestRemovalOnly = true) else updated)
     }
 
     /** 按本轮目标数量补齐缺额。候选用尽时保留已有结果。 */
-    fun refill(result: DrawResult, random: DrawRandom, limit: Int = result.config.count): DrawResult {
-        val missing = minOf(result.config.count - result.entries.size, limit)
+    fun refill(result: DrawResult, random: DrawRandom): DrawResult = refill(result, random, latestRemovalOnly = false)
+
+    private fun refill(result: DrawResult, random: DrawRandom, latestRemovalOnly: Boolean): DrawResult {
+        val outstanding = result.config.count - result.entries.size
+        val missing = if (latestRemovalOnly) minOf(outstanding, 1) else outstanding
         if (missing <= 0) return result
         val blocked = result.log.mapTo(mutableSetOf()) { it.removed.number }
         if (!result.config.allowDuplicates) result.entries.mapTo(blocked) { it.number }
@@ -100,8 +103,13 @@ object DrawEngine {
         val count = if (result.config.allowDuplicates) missing else minOf(missing, available.size)
         val added = pick(result.config.copy(count = count), available, random)
         val replacements = added.iterator()
-        val log = result.log.map { record ->
-            if (record.added == null && replacements.hasNext()) record.copy(added = replacements.next()) else record
+        val log = result.log.mapIndexed { index, record ->
+            val canFill = !latestRemovalOnly || index == result.log.lastIndex
+            if (canFill && record.added == null && replacements.hasNext()) {
+                record.copy(added = replacements.next())
+            } else {
+                record
+            }
         }
         val entries = applySort(result.entries + added, result.config.sort, random)
         return result.copy(entries = entries, log = log)

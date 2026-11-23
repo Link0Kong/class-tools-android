@@ -50,6 +50,16 @@ class DrawWorkflowTest {
     }
 
     @Test
+    fun `自动补抽记录对应本次剔除`() {
+        val before = requireNotNull(readyResultState().result)
+        val manual = (DrawEngine.removeAndRedraw(before, 0, false, random) as DrawOutcome.Success).result
+        val automatic = (DrawEngine.removeAndRedraw(manual, 0, true, random) as DrawOutcome.Success).result
+        assertNull(automatic.log.first().added)
+        assertEquals(automatic.entries.last(), automatic.log.last().added)
+        assertEquals(before.entries.size - 1, automatic.entries.size)
+    }
+
+    @Test
     fun `初始状态在第一步`() {
         assertEquals(DrawStep.CONFIG, DrawWorkflowState().step)
     }
