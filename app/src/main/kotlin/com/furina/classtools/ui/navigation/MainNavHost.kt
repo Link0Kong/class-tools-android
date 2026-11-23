@@ -494,6 +494,11 @@ fun MainNavHost(
                     type = NavType.BoolType
                     defaultValue = false
                 },
+                navArgument(Routes.MAP_ROOM_ARG) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
             // MainActivity 内：进入/返回由 ToolTransitionOverlay 负责，NavHost 不再叠加位移。
             // ToolActivity 独立宿主：起点工具没有栈内转场；工具内部 push（如 课表 → 地图）用统一页间转场。
@@ -559,7 +564,14 @@ fun MainNavHost(
 
                 "map" -> CampusMapScreen(
                     onBack = { popTool(toolId) },
-                    onOpenTimetable = { navController.navigate(Routes.tool("tt")) },
+                    onOpenTimetable = {
+                        if (navController.previousBackStackEntry?.arguments?.getString(Routes.TOOL_ARG) == "tt") {
+                            popTool(toolId)
+                        } else {
+                            navController.navigate(Routes.tool("tt"))
+                        }
+                    },
+                    room = entry.arguments?.getString(Routes.MAP_ROOM_ARG),
                 )
 
                 "fit" -> {
@@ -762,7 +774,7 @@ fun MainNavHost(
 
                 "tt" -> TimetableViewScreen(
                     onBack = { popTool(toolId) },
-                    onOpenMap = { navController.navigate(Routes.tool("map")) },
+                    onOpenMap = { room -> navController.navigate(Routes.campusMap(room)) },
                     repository = container.timetableRepository,
                     loginRepository = container.timetableLoginRepository,
                     sessionSid = session.sid,

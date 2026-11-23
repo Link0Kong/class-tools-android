@@ -172,7 +172,7 @@ enum class TimetableViewMode { WEEK, DAY }
 @Composable
 fun TimetableViewScreen(
     onBack: () -> Unit,
-    onOpenMap: (() -> Unit)? = null,
+    onOpenMap: ((String?) -> Unit)? = null,
     repository: TimetableRepository,
     modifier: Modifier = Modifier,
     initialSnapshot: TtSnapshot? = null,
@@ -409,7 +409,7 @@ fun TimetableViewScreen(
                     onBack = onBack,
                     actions = {
                         if (onOpenMap != null) {
-                            TextButton(onClick = onOpenMap) { Text("地图") }
+                            TextButton(onClick = { onOpenMap(null) }) { Text("地图") }
                         }
                         if (source == TtSource.PERSONAL) {
                             CtPill(
@@ -576,6 +576,9 @@ fun TimetableViewScreen(
                     displayWeek = displayWeek,
                     termStart = termStart,
                     onAddToCalendar = onAddToCalendar,
+                    onOpenMap = onOpenMap?.let { open ->
+                        { selectedCourse = null; open(course.room) }
+                    },
                 )
             }
         }
@@ -1954,6 +1957,7 @@ fun TimetableCourseDetailContent(
     displayWeek: Int?,
     onAddToCalendar: ((Course, Int, LocalDate) -> Unit)? = null,
     termStart: LocalDate? = null,
+    onOpenMap: (() -> Unit)? = null,
 ) {
     val dark = LocalCtDarkTheme.current
     val pair = if (dark) TimetablePalette.darkOf(course.name) else TimetablePalette.lightOf(course.name)
@@ -2015,6 +2019,15 @@ fun TimetableCourseDetailContent(
                         )
                     }
                 }
+            }
+        }
+        if (onOpenMap != null && course.room.isNotBlank()) {
+            FilledTonalButton(
+                onClick = onOpenMap,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                shape = CtShapeTokens.pill,
+            ) {
+                Text("在地图查看教室")
             }
         }
         val week = displayWeek
