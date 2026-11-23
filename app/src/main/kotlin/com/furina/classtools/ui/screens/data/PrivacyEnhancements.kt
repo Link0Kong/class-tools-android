@@ -186,13 +186,11 @@ private fun LocalStatCell(stat: LocalDataStat, modifier: Modifier = Modifier) {
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
-            maxLines = 1,
         )
         Text(
             text = stat.label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
         )
     }
 }

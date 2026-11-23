@@ -38,7 +38,9 @@ class UserDataDrawConfigStore(
     override suspend fun save(config: DrawConfig) {
         val current = userDataRepository.currentSections.first()
         val next = LinkedHashMap<String, kotlinx.serialization.json.JsonElement>(current)
-        next["draw"] = DrawConfigCodec.toJson(config)
+        val existing = current["draw"] as? JsonObject
+        val updated = DrawConfigCodec.toJson(config)
+        next["draw"] = if (existing == null) updated else JsonObject(existing + updated)
         userDataRepository.updateCurrent(JsonObject(next))
     }
 }

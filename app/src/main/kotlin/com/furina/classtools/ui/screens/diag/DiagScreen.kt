@@ -58,7 +58,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -575,8 +574,6 @@ private fun SummaryStrip(
                     text = extra.joinToString(" · "),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -588,7 +585,6 @@ private fun SummaryStrip(
                 text = "最后更新 $lastUpdated",
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
             )
         }
     }
@@ -630,8 +626,6 @@ private fun DiagCard(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .weight(1f)
                     .semantics { heading() },
@@ -711,8 +705,6 @@ private fun AiAnalysisRow(
                 text = DiagUiText.collapseTitle(analysis.title),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             if (DiagUiText.autoFixable(analysis)) {
@@ -720,7 +712,6 @@ private fun AiAnalysisRow(
                     text = "⚙ 可自动修复",
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                     color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
                 )
                 Spacer(modifier = Modifier.width(6.dp))
             }
@@ -842,8 +833,6 @@ private fun RelatedRepairBlock(repair: RepairTask, nowMillis: Long) {
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             CtPill(text = DiagUiText.repairStatusLabel(repair.status))
         }
@@ -852,8 +841,6 @@ private fun RelatedRepairBlock(repair: RepairTask, nowMillis: Long) {
                 text = "结果：" + DiagSanitizer.sanitizeDisplay(repair.result, 200),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
         }
         val timeText = buildList {
@@ -1075,8 +1062,6 @@ private fun DeviceCheckBlock(
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             if (reportable) {
@@ -1178,8 +1163,6 @@ private fun ServiceHealthRowBlock(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = row.statusLabel,
@@ -1193,8 +1176,6 @@ private fun ServiceHealthRowBlock(
                 text = DiagSanitizer.sanitizeDisplay(row.detail, 240),
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
         }
         val checkedAt = row.checkedAt.takeIf { it.isNotBlank() }
@@ -1308,8 +1289,6 @@ private fun MyReportsCard(reports: List<ClientDiagRow>, nowMillis: Long) {
                             text = DiagSanitizer.sanitizeDisplay(row.message, 160).ifBlank { "(无描述)" },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = listOf(row.kind, row.level, relativeTime(row.ts, nowMillis))

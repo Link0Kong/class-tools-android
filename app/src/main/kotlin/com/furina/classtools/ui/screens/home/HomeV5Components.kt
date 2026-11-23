@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +40,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.timetable.TtPlan
@@ -172,16 +172,12 @@ internal fun HomeHeroCard(
                 text = "$greeting，${session.name.trim().ifBlank { "同学" }}",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 12.dp),
             )
             Text(
                 text = subLine,
                 style = CtText.caption,
                 color = colors.heroSub,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 6.dp),
             )
             // 摘要分割线（#D8E4DE；鸿蒙 heroCard 摘要行上边框）
@@ -203,8 +199,6 @@ internal fun HomeHeroCard(
                         text = summary,
                         style = CtText.label,
                         color = colors.heroTitle,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Text(
@@ -263,8 +257,6 @@ internal fun HomeInfoCard(
                     text = title,
                     style = CtTypeScale.sectionTitle,
                     color = c.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 if (!badge.isNullOrBlank()) {
                     Spacer(modifier = Modifier.width(CtSpace.xs))
@@ -359,8 +351,6 @@ internal fun QuickToolTile(
                     text = tool.name,
                     style = CtTypeScale.caption,
                     color = c.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             CtPressLayer(alpha = press.overlayAlpha, modifier = Modifier.clip(CtShape.input))
@@ -385,7 +375,7 @@ internal fun EditableToolTile(
         animationSpec = if (reduceMotion) snap() else CtMotion.spatialFast,
         label = "editToolScale",
     )
-    Box(modifier = modifier.height(96.dp)) {
+    Box(modifier = modifier.heightIn(min = 96.dp)) {
         Surface(
             onClick = onClick,
             modifier = Modifier
@@ -434,8 +424,6 @@ internal fun EditableToolTile(
                     text = tool.name,
                     style = CtText.label,
                     color = colors.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

@@ -12,6 +12,7 @@ import com.furina.classtools.data.account.OppoAccountDeviceSupport
 import com.furina.classtools.data.account.OppoAccountManager
 import com.furina.classtools.data.auth.ApiAuthRepository
 import com.furina.classtools.data.auth.AuthRepository
+import com.furina.classtools.data.background.BackgroundStore
 import com.furina.classtools.data.diag.AndroidDeviceProbe
 import com.furina.classtools.data.diag.ClientDiagPendingStore
 import com.furina.classtools.data.diag.ClientDiagReporter
@@ -20,6 +21,7 @@ import com.furina.classtools.data.diag.DefaultDiagRepository
 import com.furina.classtools.data.diag.DiagRepository
 import com.furina.classtools.data.diag.FileClientDiagPendingStore
 import com.furina.classtools.data.diag.installCrashHandler
+import com.furina.classtools.data.draw.SharedPreferencesDrawLastResultStore
 import com.furina.classtools.data.fitrecs.DefaultFitRecsRepository
 import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.calendar.AndroidCalendarWriter
@@ -84,6 +86,7 @@ import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.data.reminder.ReminderScheduler
 import com.furina.classtools.data.reminder.ReminderSettingsStore
 import com.furina.classtools.data.reminder.WorkManagerReminderScheduler
+import com.furina.classtools.data.remoteconfig.RemoteConfigRepository
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionStore
 import com.furina.classtools.data.settings.AppSettingsStore
@@ -100,9 +103,13 @@ import com.furina.classtools.data.timetable.TimetableRepository
 import com.furina.classtools.data.timetable.UserDataTimetablePersonalStore
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 极简手工依赖注入容器（不引入 Hilt/Koin，保持构建与运行轻量）。
@@ -119,6 +126,22 @@ class AppContainer(context: Context) {
     private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val sessionStore: SessionStore = SessionStore(appContext)
+    val backgroundStore: BackgroundStore by lazy { BackgroundStore(appContext) }
+    val drawLastResultStore by lazy { SharedPreferencesDrawLastResultStore(appContext) }
+
+    private val sessionPreparation = Mutex()
+    @Volatile
+    private var preparedSession: Session? = null
+
+    private val remoteConfigRefresh = appScope.launch(start = CoroutineStart.LAZY) {
+        RemoteConfigRepository().fetch()?.let { config ->
+            runCatching { appSettings.applyRemoteConfig(config) }
+        }
+    }
+
+    fun refreshRemoteConfig() {
+        remoteConfigRefresh.start()
+    }
 
     @Volatile
     private var activeSession: Session? = null
@@ -127,7 +150,19 @@ class AppContainer(context: Context) {
     val currentSession: Session?
         get() = activeSession
 
-    fun updateActiveSession(session: Session?) {
+    internal fun isSessionPrepared(session: Session): Boolean =
+        preparedSession == session && activeSession == session
+
+    /** 本机设置就绪后即可进入页面，网络刷新由前台生命周期调度。 */
+    internal suspend fun prepareSession(session: Session) = sessionPreparation.withLock {
+        if (isSessionPrepared(session)) return@withLock
+        updateActiveSession(session)
+        userDataRepository.hydrateFromLocal()
+        preparedSession = session
+        warmReminderCaches()
+    }
+
+    internal fun updateActiveSession(session: Session?) {
         val previousSid = activeSession?.sid
         activeSession = session
         // 启动/登录后在线时补报本机待发的崩溃/诊断队列（契约 §2：启动后补报）。
@@ -142,13 +177,15 @@ class AppContainer(context: Context) {
         // OPPO PUSH：登录 / 切换账号 / token 恢复后，用缓存 RegistrationID 重新上传到当前账号
         // （未登录时 manager 内部跳过，等下次 onSessionChanged；重复上传由幂等门跳过）。
         if (previousSid != session?.sid) {
-            runCatching { oppoPushManager.onSessionChanged() }
-            runCatching { vivoPushManager.onSessionChanged() }
+            if (session != null && !session.debug) {
+                runCatching { oppoPushManager.onSessionChanged() }
+                runCatching { vivoPushManager.onSessionChanged() }
+            }
             // 云空间会话绑定班级身份；切号/退出时丢弃内存会话与游标，避免串号。
-            runCatching { cloudSpaceRepository.reset() }
+            if (cloudSpace.isInitialized()) cloudSpaceRepository.reset()
             // 账号绑定列表按学号区分：切号/退出时丢弃内存列表，避免显示上一个账号的绑定。
-            runCatching { oppoAccountManager.clearBindings() }
-            runCatching { honorAccountManager.clearBindings() }
+            if (oppoAccount.isInitialized()) oppoAccountManager.clearBindings()
+            if (honorAccount.isInitialized()) honorAccountManager.clearBindings()
         }
     }
 
@@ -180,6 +217,7 @@ class AppContainer(context: Context) {
         ),
         currentSid = { activeSession?.sid },
         scope = appScope,
+        syncAllowed = { activeSession?.debug == false },
     )
 
     val marksRepository: MarksRepository = DefaultMarksRepository(
@@ -311,7 +349,7 @@ class AppContainer(context: Context) {
     ) }
 
     /** 临时云空间（ECS drop 服务）：同账号跨设备；token 只放 X-Device-Id 请求头。 */
-    val cloudSpaceRepository: CloudSpaceRepository by lazy {
+    private val cloudSpace = lazy {
         CloudSpaceRepository(
             api = CloudSpaceApi(
                 baseUrl = CloudSpaceDefaults.BASE_URL,
@@ -487,7 +525,7 @@ class AppContainer(context: Context) {
      * - 仅 ColorOS 手机展示入口（严格按 ColorOS/OPPO ROM 系统属性判断；非 ColorOS 隐藏）。
      * 懒加载：未进入身份页/「我的」前不创建。
      */
-    val oppoAccountManager: OppoAccountManager by lazy {
+    private val oppoAccount = lazy {
         OppoAccountManager(
             config = OppoAccountConfig.of(
                 appId = BuildConfig.OPPO_ACCOUNT_APP_ID,
@@ -508,7 +546,7 @@ class AppContainer(context: Context) {
      * - 客户端只把荣耀 SDK 的 authorizationCode 交给 ECS `/honor` 系列接口，**不自行验证** openId；
      * - 仅荣耀设备展示入口（Build.MANUFACTURER=HONOR 或 SDK isHonorMachine）。
      */
-    val honorAccountManager: HonorAccountManager by lazy {
+    private val honorAccount = lazy {
         val authSdk = HonorIdAuthSdk()
         HonorAccountManager(
             config = HonorAccountConfig.of(
@@ -530,7 +568,11 @@ class AppContainer(context: Context) {
         )
     }
 
-    /** ColorOS 系系统属性探测（用户要求：只有 ColorOS 手机才显示 OPPO 账号入口；探测异常按「非 ColorOS」处理）。 */
+    val cloudSpaceRepository: CloudSpaceRepository by cloudSpace
+    val oppoAccountManager: OppoAccountManager by oppoAccount
+    val honorAccountManager: HonorAccountManager by honorAccount
+
+    /** ColorOS 系系统属性探测（探测异常按「非 ColorOS」处理）。 */
     private fun hasColorOsRom(): Boolean = runCatching {
         val systemProperties = Class.forName("android.os.SystemProperties")
         val get = systemProperties.getMethod("get", String::class.java)
@@ -556,22 +598,19 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * 登录后预热提醒所需的本机缓存（作业/课表/marks），保证次日提醒的数据可用。
+     * 登录后预热提醒所需的作业、课表缓存。
      * 只读网络拉取，幂等（各仓库有 TTL）。
      */
-    fun warmReminderCaches() {
+    private fun warmReminderCaches() {
         appScope.launch {
             runCatching { homeworkRepository.load(force = false) }
             runCatching { timetableRepository.load(force = false) }
-            runCatching { marksRepository.refresh(force = false) }
         }
     }
 
     /** 退出登录：清内存会话、名单缓存（本机业务数据按账号隔离，下次登录同账号仍可用）。 */
     suspend fun signOut() {
-        runCatching { oppoAccountManager.clearBindings() }
-        runCatching { honorAccountManager.clearBindings() }
-        activeSession = null
+        updateActiveSession(null)
         sessionStore.clear()
         classMembersRepository.clear()
     }
@@ -587,10 +626,10 @@ class AppContainer(context: Context) {
     }
 
     /** 刷新主数据（回前台 / 进入主页调用）。失败静默，由页面展示缓存。 */
-    suspend fun refreshCoreData() {
-        classMembersRepository.load(force = false)
-        marksRepository.refresh(force = false)
-        userDataRepository.pull(force = false)
+    suspend fun refreshCoreData(): Unit = coroutineScope {
+        launch { classMembersRepository.load(force = false) }
+        launch { marksRepository.refresh(force = false) }
+        launch { userDataRepository.pull(force = false) }
     }
 }
 

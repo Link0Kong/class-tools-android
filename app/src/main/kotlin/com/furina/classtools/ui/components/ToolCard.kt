@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.style.TextOverflow
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtAnimatedEntrance
@@ -80,7 +78,7 @@ fun ToolCard(
             frosted = true,
             body = true,
         ) {
-            Box(modifier = Modifier.fillMaxSize().then(contentSemantics)) {
+            Box(modifier = Modifier.fillMaxWidth().then(contentSemantics)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -113,15 +111,11 @@ fun ToolCard(
                             text = tool.name,
                             style = CtTypeScale.title16,
                             color = c.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = tool.subtitle,
                             style = CtTypeScale.caption,
                             color = c.textSecondary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -129,7 +123,7 @@ fun ToolCard(
                 if (press.overlayAlpha > 0.001f) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .matchParentSize()
                             .graphicsLayer { alpha = press.overlayAlpha },
                     )
                 }

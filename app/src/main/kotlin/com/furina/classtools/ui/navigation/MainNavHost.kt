@@ -54,8 +54,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.CancellationException
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -67,11 +69,11 @@ import com.furina.classtools.data.calendar.CalendarIntentFactory
 import com.furina.classtools.data.calendar.CalendarWriteResult
 import com.furina.classtools.data.calendar.CourseCalendarMapper
 import com.furina.classtools.data.calendar.NoticeCalendarMapper
-import com.furina.classtools.data.draw.SharedPreferencesDrawLastResultStore
 import com.furina.classtools.data.fitrecs.FitRecsLoadResult
 import com.furina.classtools.data.fitrecs.FitRecsWriteResult
 import com.furina.classtools.data.member.ClassLeagueRepository
 import com.furina.classtools.data.member.ClassLeagueResult
+import com.furina.classtools.data.member.ClassMember
 import com.furina.classtools.data.member.ClassMembersRepository
 import com.furina.classtools.data.member.ClassMembersResult
 import com.furina.classtools.data.member.MemberCategory
@@ -188,10 +190,6 @@ fun MainNavHost(
     val rootView = LocalView.current
     val scope = rememberCoroutineScope()
 
-    // 抽签/分组的「最近抽签」本机存储：抽签成功写入，分组页独立读取（不依赖页面跳转或内存传递）。
-    val drawLastResultStore = remember(context) {
-        SharedPreferencesDrawLastResultStore(context.applicationContext)
-    }
     // 本机外观偏好：壁纸取色开关（Profile → 外观）。
     // 常用工具来自同步的 userdata v6 homeTools（原始值：空列表 = 小程序同款空态引导）。
     // 2026-11-22：先把跨端同步 id 换回本机 id（ft→fit、committee/bz→roster），
@@ -217,15 +215,15 @@ fun MainNavHost(
         syncEnabled = runCatching { container.isSyncEnabled() }.getOrDefault(true)
     }
 
-    // 启动主界面时后台刷新：名单 / marks / userdata（TTL 内不重复请求）。
-    // 独立 ToolActivity 不重复拉取：MainActivity 已加载，工具页自己的仓库按需刷新，
-    // 避免目标 Activity 首帧被重复网络/状态更新拖慢（共享元素要尽快出内容）。
-    LaunchedEffect(standaloneTool) {
-        if (!standaloneTool) runCatching { container.refreshCoreData() }
-    }
-    // 回前台刷新（marks 强拉由 refreshCoreData 内部 TTL/节流控制）。
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        if (!standaloneTool) scope.launch { runCatching { container.refreshCoreData() } }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner, session.sid, standaloneTool) {
+        if (!standaloneTool) {
+            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                runCatching { container.refreshCoreData() }.onFailure {
+                    if (it is CancellationException) throw it
+                }
+            }
+        }
     }
 
     // 根页 Pager 状态 hoist 到 NavHost 外层：进入工具页再返回时保持当前 Tab。
@@ -517,13 +515,23 @@ fun MainNavHost(
             // 工具页系统返回也播放「收回卡片」退场动画（屏幕内弹层自己的 BackHandler 后注册，优先处理）。
             BackHandler { popTool(toolId) }
             when (toolId) {
-                "draw" -> DrawScreen(
-                    onBack = { popTool(toolId) },
-                    session = session,
-                    userDataRepository = container.userDataRepository,
-                    onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW) },
-                    lastResultStore = drawLastResultStore,
-                )
+                "draw" -> {
+                    val loadMembers: suspend () -> List<ClassMember> = remember(container) {
+                        {
+                            container.classMembersRepository.cached().ifEmpty {
+                                (container.classMembersRepository.load() as? ClassMembersResult.Success)?.members.orEmpty()
+                            }
+                        }
+                    }
+                    DrawScreen(
+                        onBack = { popTool(toolId) },
+                        session = session,
+                        userDataRepository = container.userDataRepository,
+                        onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW) },
+                        lastResultStore = container.drawLastResultStore,
+                        loadMembers = loadMembers,
+                    )
+                }
 
                 "group" -> {
                     // 班级名单：先读缓存；缓存为空时再触发一次加载（独立工具页可直接进入，不依赖先抽签）。
@@ -544,7 +552,7 @@ fun MainNavHost(
                         session = session,
                         userDataRepository = container.userDataRepository,
                         rosterMembers = roster,
-                        lastResultStore = drawLastResultStore,
+                        lastResultStore = container.drawLastResultStore,
                         onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.GROUP) },
                     )
                 }

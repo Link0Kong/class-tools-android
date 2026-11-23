@@ -103,7 +103,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.BuildConfig
@@ -573,8 +572,6 @@ private fun ProfileHeroCard(session: Session) {
                         text = session.name.ifBlank { "班级成员" },
                         style = CtText.heading,
                         color = colors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = "班级工具站" + if (session.isAdmin) " · 管理员" else "",
@@ -654,8 +651,6 @@ private fun DataSection(
                     text = extras.joinToString(" · ") { (label, value) -> "$label $value" },
                     style = CtText.caption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -691,13 +686,11 @@ private fun MetricCell(label: String, value: String, modifier: Modifier = Modifi
             style = CtText.title,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
         )
         Text(
             text = label,
             style = CtText.caption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
         )
     }
 }
@@ -1096,8 +1089,6 @@ private fun ActionRow(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
@@ -1108,8 +1099,6 @@ private fun ActionRow(
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -1157,8 +1146,6 @@ private fun SwitchRow(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -1190,8 +1177,6 @@ private fun ValueRow(title: String, value: String) {
             text = value,
             style = CtText.body,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }

@@ -36,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtRadius
@@ -182,8 +181,6 @@ private fun CtFabActionRow(
             Text(
                 text = action.label,
                 style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }

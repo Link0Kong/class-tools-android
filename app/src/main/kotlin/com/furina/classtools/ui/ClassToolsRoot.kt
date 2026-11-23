@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +32,7 @@ import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.ui.components.BrandMark
 import com.furina.classtools.ui.components.CtContainerTransformHost
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastHost
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.components.update.UpdateHost
@@ -63,6 +61,7 @@ fun ClassToolsRoot(
     )
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var preparedSession by remember(container) { mutableStateOf<Session?>(null) }
 
     // OPPO 账号快捷登录状态（身份页；成功后的会话流程与学号+姓名核验完全一致）。
     var oppoLoginInProgress by remember { mutableStateOf(false) }
@@ -73,11 +72,7 @@ fun ClassToolsRoot(
     val activity = remember(context) { context.findActivity() }
 
     fun completeLogin(session: Session) {
-        container.updateActiveSession(session)
-        scope.launch {
-            container.sessionStore.save(session)
-            runCatching { container.classMembersRepository.load(force = true) }
-        }
+        scope.launch { container.sessionStore.save(session) }
     }
 
     val honorLauncher = rememberLauncherForActivityResult(
@@ -100,18 +95,12 @@ fun ClassToolsRoot(
         }
     }
 
-    // 把会话同步给数据层（tokenProvider / currentSid 读取），并做 29 天本地过期判定。
     LaunchedEffect(sessionState) {
         when (val state = sessionState) {
             is SessionState.SignedIn -> {
                 if (state.session.isLikelyValid()) {
-                    container.updateActiveSession(state.session)
-                    // 先把本机持久化的 userdata section 恢复给 UI（离线/同步关闭时也能看到上次偏好），
-                    // 再决定是否开启云同步（Debug 预览会话没有真实 token，关闭推送避免 401 清会话）。
-                    runCatching { container.userDataRepository.hydrateFromLocal() }
-                    container.userDataRepository.setSyncEnabled(!state.session.debug)
-                    container.classMembersRepository.load(force = false)
-                    container.warmReminderCaches()
+                    container.prepareSession(state.session)
+                    preparedSession = state.session
                 } else {
                     container.updateActiveSession(null)
                     container.sessionStore.clear()
@@ -119,6 +108,7 @@ fun ClassToolsRoot(
             }
 
             SessionState.SignedOut -> {
+                preparedSession = null
                 container.updateActiveSession(null)
             }
             SessionState.Loading -> Unit
@@ -130,10 +120,6 @@ fun ClassToolsRoot(
     val dismissedAnnouncementVersion by container.appSettings.dismissedAnnouncementVersion.collectAsStateWithLifecycle(0)
     var announcementClosedVersion by remember { mutableStateOf(0) }
     val signedIn = sessionState is SessionState.SignedIn
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(snackbarHostState) {
-        CtToastBus.messages.collect { message -> snackbarHostState.showSnackbar(message) }
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         CtContainerTransformHost {
@@ -161,7 +147,6 @@ fun ClassToolsRoot(
                                 }
                             oppoLoginInProgress = false
                             when (result) {
-                                // 与学号+姓名成功一致：更新 active session → 落盘 → 预热名单。
                                 is OppoSessionLoginResult.Success -> completeLogin(result.session)
                                 is OppoSessionLoginResult.Unbound -> oppoLoginError = result.message
                                 is OppoSessionLoginResult.Failure -> oppoLoginError = result.message
@@ -196,29 +181,33 @@ fun ClassToolsRoot(
             )
 
             is SessionState.SignedIn -> {
-                MainNavHost(
-                    container = container,
-                    session = state.session,
-                    initialToolId = pendingToolId,
-                    onInitialToolConsumed = onPendingToolConsumed,
-                    initialNoticeId = pendingNoticeId,
-                    onInitialNoticeConsumed = onPendingNoticeConsumed,
-                    onSignOut = {
-                        scope.launch {
-                            container.authRepository.logout()
-                            container.signOut()
-                            // M-02：退出登录给一个明确结果提示。
-                            CtToastBus.show("已退出登录")
-                        }
-                    },
-                )
+                if (!state.session.isLikelyValid() ||
+                    (preparedSession != state.session && !container.isSessionPrepared(state.session))
+                ) {
+                    BootSplash()
+                } else {
+                    MainNavHost(
+                        container = container,
+                        session = state.session,
+                        initialToolId = pendingToolId,
+                        onInitialToolConsumed = onPendingToolConsumed,
+                        initialNoticeId = pendingNoticeId,
+                        onInitialNoticeConsumed = onPendingNoticeConsumed,
+                        onSignOut = {
+                            scope.launch {
+                                container.authRepository.logout()
+                                container.signOut()
+                                CtToastBus.show("已退出登录")
+                            }
+                        },
+                    )
+                }
             }
         }
         }
 
         // 全局 M3 Snackbar：所有 CtToastBus 消息都在底栏上方显示。
-        CtSnackbarHost(
-            hostState = snackbarHostState,
+        CtToastHost(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()

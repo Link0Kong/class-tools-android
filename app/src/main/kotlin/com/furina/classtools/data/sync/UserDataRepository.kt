@@ -114,10 +114,13 @@ class DefaultUserDataRepository(
     private val json: Json = NetJson,
     /** Android 全量客户端拥有全部 section；如某端只想写部分，可收窄（未拥有 section 原样保留云端值）。 */
     private val ownedSections: Set<String> = UserdataV6.SECTION_KEYS.toSet(),
+    private val syncAllowed: () -> Boolean = { true },
 ) : UserDataRepository {
 
     private val _currentSections = MutableStateFlow(JsonObject(emptyMap()))
     override val currentSections: StateFlow<JsonObject> = _currentSections.asStateFlow()
+    @Volatile
+    private var sectionsSid: String? = null
 
     private val pushMutex = Mutex()
     private var debounceJob: Job? = null
@@ -126,8 +129,11 @@ class DefaultUserDataRepository(
     // ------------------------------------------------------------ 本机状态
 
     override suspend fun updateCurrent(sections: JsonObject) {
+        val sid = sidOrNull()
         val normalized = UserdataV6.sectionsOf(sections)
         local.writeCurrent(normalized)
+        if (sid != sidOrNull()) return
+        sectionsSid = sid
         _currentSections.value = normalized
         onLocalChanged()
     }
@@ -138,7 +144,7 @@ class DefaultUserDataRepository(
 
     private suspend fun onLocalChanged() {
         if (sidOrNull() == null) return
-        if (!local.syncEnabled()) return
+        if (!syncEnabled()) return
 
         val current = normalizedCurrent()
         _currentSections.value = current
@@ -194,7 +200,7 @@ class DefaultUserDataRepository(
 
     override suspend fun pull(force: Boolean): UserdataPullResult {
         val sid = sidOrNull() ?: return UserdataPullResult.Disabled
-        if (!local.syncEnabled()) return UserdataPullResult.Disabled
+        if (!syncEnabled()) return UserdataPullResult.Disabled
 
         val now = clock()
         if (!force && now - local.lastPullAt() < config.ttlMs) {
@@ -205,6 +211,7 @@ class DefaultUserDataRepository(
             is ApiResult.Failure -> return UserdataPullResult.Failure(result.error)
             is ApiResult.Success -> result.value
         }
+        if (sid != sidOrNull()) return UserdataPullResult.Disabled
         val wasV5 = remote != null && UserdataV6.numMs(remote["v"]) == 5L
 
         val base = local.readCache()
@@ -257,7 +264,7 @@ class DefaultUserDataRepository(
 
     override suspend fun push(force: Boolean, forceKeys: Set<String>): UserdataPushResult {
         val sid = sidOrNull() ?: return UserdataPushResult.Disabled
-        if (!local.syncEnabled()) return UserdataPushResult.Disabled
+        if (!syncEnabled()) return UserdataPushResult.Disabled
         if (clock() < local.holdUntil()) return UserdataPushResult.Held
 
         // Mutex.withLock 的 action 不是 suspend，这里手动 lock/unlock 以支持挂起调用。
@@ -360,25 +367,28 @@ class DefaultUserDataRepository(
         }
     }
 
-    override suspend fun syncEnabled(): Boolean = local.syncEnabled()
+    override suspend fun syncEnabled(): Boolean = syncAllowed() && local.syncEnabled()
 
     override suspend fun cachedBlob(): JsonObject? = local.readCache()
 
     override suspend fun hydrateFromLocal() {
-        if (sidOrNull() == null) return
-        // 已有镜像（例如刚 pull 过）不覆盖，避免启动竞态用旧本机值盖掉新数据。
-        if (_currentSections.value.isNotEmpty()) return
-        val stored = runCatching { local.readCurrent() }.getOrNull() ?: return
-        if (stored.isEmpty()) return
-        _currentSections.value = UserdataV6.sectionsOf(stored)
+        val sid = sidOrNull() ?: return
+        if (sectionsSid == sid && _currentSections.value.isNotEmpty()) return
+        val stored = local.readCurrent()
+        if (sid != sidOrNull()) return
+        sectionsSid = sid
+        _currentSections.value = if (stored.isEmpty()) stored else UserdataV6.sectionsOf(stored)
     }
 
     // ------------------------------------------------------------ 内部工具
 
     private suspend fun persistApplied(merged: JsonObject) {
+        val sid = sidOrNull()
         val sections = UserdataV6.sectionsOf(merged)
         local.writeCache(merged)
         local.writeCurrent(sections)
+        if (sid != sidOrNull()) return
+        sectionsSid = sid
         _currentSections.value = sections
     }
 

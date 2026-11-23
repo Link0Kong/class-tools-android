@@ -406,7 +406,6 @@ private fun MapNoticeBar(message: String, onRetryLocal: () -> Unit) {
                 text = message,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onRetryLocal) { Text("重试离线版") }
@@ -429,7 +428,6 @@ private fun MapFallbackBanner(
                 text = message,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),

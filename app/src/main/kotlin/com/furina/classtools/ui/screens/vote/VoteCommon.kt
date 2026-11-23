@@ -57,7 +57,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.member.MemberCategory
 import com.furina.classtools.data.member.MemberEntry
@@ -631,8 +630,6 @@ internal fun VoteMemberPickerSheet(
                             Text(
                                 text = "${member.seat}  ${member.name}",
                                 style = MaterialTheme.typography.bodyLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
                             )
                             if (member.badge.isNotBlank()) {

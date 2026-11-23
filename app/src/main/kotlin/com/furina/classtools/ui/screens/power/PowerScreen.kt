@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -66,7 +67,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.power.PowerDirectoryRepository
@@ -101,6 +101,7 @@ import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
 import com.furina.classtools.ui.theme.CtRadius
+import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtTokens
 import com.furina.classtools.ui.theme.ctEmphasized
 import com.furina.classtools.ui.theme.rememberReduceMotion
@@ -743,8 +744,6 @@ private fun PickRoomCard(sel: String, onPick: () -> Unit) {
                 text = if (sel.isBlank()) "未选择" else PowerRooms.labelOf(sel),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             Text(
@@ -775,47 +774,34 @@ private fun HeroCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // 余额 hero：环形仪表 + 大数字（ctEmphasized displaySmall）
-            RingGauge(
-                progress = ringArc,
-                accent = stateColor,
-                diameter = 96.dp,
-                description = "剩余电量 ${PowerStats.fmtMain(row?.q)} ${row?.unit ?: "度"}，${PowerStats.stateText(state)}",
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = PowerStats.fmtMain(row?.q),
-                        style = MaterialTheme.ctEmphasized.displaySmallEmphasized,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = row?.unit ?: "度",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(CtTokens.Spacing.elementGap),
-                ) {
-                    CtPill(
-                        text = PowerStats.stateText(state),
-                        containerColor = stateColor.copy(alpha = 0.16f),
-                        contentColor = stateColor,
-                    )
-                    if (slowRoom) {
-                        CtPill(text = "日更", containerColor = MaterialTheme.colorScheme.tertiaryContainer)
-                    }
-                }
+            RingGauge(progress = ringArc, accent = stateColor, diameter = 72.dp)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(CtSpace.xs)) {
                 Text(
                     text = "剩余电量",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(
+                    text = "${PowerStats.fmtMain(row?.q)} ${row?.unit ?: "度"}",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(CtTokens.Spacing.elementGap),
+                    verticalArrangement = Arrangement.spacedBy(CtSpace.xxs),
+                ) {
+                    val scheme = MaterialTheme.colorScheme
+                    val (container, content) = when (state) {
+                        PowerState.LOW -> scheme.errorContainer to scheme.onErrorContainer
+                        PowerState.WARN -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+                        PowerState.OK -> scheme.primaryContainer to scheme.onPrimaryContainer
+                        PowerState.IDLE -> scheme.surfaceContainerHigh to scheme.onSurfaceVariant
+                    }
+                    CtPill(text = PowerStats.stateText(state), containerColor = container, contentColor = content)
+                    if (slowRoom) {
+                        CtPill(text = "日更", containerColor = scheme.tertiaryContainer, contentColor = scheme.onTertiaryContainer)
+                    }
+                }
                 Text(
                     text = "更新 ${PowerStats.updText(row?.updatedAt).ifBlank { "—" }}",
                     style = MaterialTheme.typography.bodySmall,
@@ -830,18 +816,11 @@ private fun HeroCard(
 private fun RingGauge(
     progress: Float,
     accent: Color,
-    description: String? = null,
-    diameter: Dp = 104.dp,
-    content: @Composable () -> Unit,
+    diameter: Dp,
 ) {
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
     Box(
-        modifier = Modifier
-            .size(diameter)
-            .semantics {
-                // 自定义 Canvas 环形图读屏播报（无障碍：图形信息不缺失）。
-                if (!description.isNullOrBlank()) contentDescription = description
-            },
+        modifier = Modifier.size(diameter),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -872,7 +851,6 @@ private fun RingGauge(
                 style = Stroke(width = stroke, cap = StrokeCap.Round),
             )
         }
-        content()
     }
 }
 
@@ -921,8 +899,6 @@ private fun TrendSection(
                         text = trendTitle,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                     val subtitle = slowUpdateText.takeIf { it.isNotBlank() && !slowRoom }
                     if (subtitle != null) {
@@ -930,8 +906,6 @@ private fun TrendSection(
                             text = subtitle,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -971,8 +945,6 @@ private fun TrendSection(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.End,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -1139,8 +1111,6 @@ private fun Tile(
                     text = tile.label,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 if (tile.ref) {
                     Text(
@@ -1162,8 +1132,6 @@ private fun Tile(
                     text = tile.value,
                     style = MaterialTheme.typography.headlineSmall,
                     color = accent,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 if (tile.unit.isNotBlank()) {
                     Text(
@@ -1179,8 +1147,6 @@ private fun Tile(
                     text = tile.sub,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             val availableCompare = compare?.takeIf { it.available }
@@ -1252,15 +1218,11 @@ private fun BillCell(label: String, value: String, modifier: Modifier = Modifier
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }

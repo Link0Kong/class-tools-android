@@ -51,7 +51,6 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
@@ -460,8 +459,6 @@ private fun FitCompactCard(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
                     } else {
@@ -484,13 +481,11 @@ private fun FitStat(label: String, value: String, modifier: Modifier = Modifier)
             style = MaterialTheme.typography.titleSmall,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
         )
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
         )
     }
 }
@@ -649,8 +644,6 @@ private fun ScoreCard(calc: FitCalc) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.End,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.width(88.dp),
                 )
                 Text(
@@ -760,8 +753,6 @@ private fun HistoryCard(
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = "${record.totalText()} 分 · ${record.grade}",
@@ -778,8 +769,6 @@ private fun HistoryCard(
                         text = record.detailText(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
                     )
                     // 相邻可点按钮之间按鸿蒙「控件间距」留 8vp，避免三个文字按钮贴在一起（2026-11-20）
                     Row(horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap)) {

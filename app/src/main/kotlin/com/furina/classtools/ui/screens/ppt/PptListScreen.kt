@@ -69,7 +69,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -471,8 +470,6 @@ fun PptListContent(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.weight(1f),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
                         )
                         TextButton(onClick = onUpload) { Text("重试") }
                         IconButton(onClick = onDismissUploadError) {
@@ -661,8 +658,6 @@ private fun PptDeckCard(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
                     // v1.2 续播徽标（契约 §11.3.4：7 天内 + 有进度）
@@ -686,8 +681,6 @@ private fun PptDeckCard(
                         text = meta,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 // v2.0 列表小标签（§12.4.1：「兼容版」/「PDF」，不写长句）
@@ -735,8 +728,6 @@ private fun PptDeckCard(
                         text = PptStatusTexts.errorLine(deck.error),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -783,13 +774,13 @@ private fun PptStatusPill(text: String, failed: Boolean) {
         } else {
             MaterialTheme.colorScheme.onPrimaryContainer
         },
-        modifier = Modifier.height(22.dp),
+        modifier = Modifier.heightIn(min = 22.dp),
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 10.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = text, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            Text(text = text, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -924,8 +915,6 @@ private fun PptTitleDialog(
                     text = "$fileName · ${PptLimits.formatBytes(sizeBytes)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 CtToolField(
                     label = "演示标题",

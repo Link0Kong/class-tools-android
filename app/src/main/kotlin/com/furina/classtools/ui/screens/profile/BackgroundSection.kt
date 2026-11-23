@@ -48,7 +48,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.background.BackgroundStore
 import com.furina.classtools.data.background.CtBackgroundImage
@@ -144,8 +143,6 @@ internal fun BackgroundSection(
                     text = backgroundSummary(selection) + " · 点击更换",
                     style = CtTypeScale.caption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Text(
@@ -314,8 +311,6 @@ private fun BackgroundSheet(
                         text = "长边 ≤${CtBackgroundImage.MAX_LONG_EDGE} · JPEG ${CtBackgroundImage.JPEG_QUALITY}",
                         style = CtTypeScale.caption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 if (selection.hasImage) {
@@ -443,8 +438,6 @@ private fun PresetChip(
             text = preset.label,
             style = CtTypeScale.caption,
             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }

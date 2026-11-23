@@ -8,6 +8,7 @@ import com.furina.classtools.features.draw.DrawConfig
 import com.furina.classtools.features.draw.DrawEngine
 import com.furina.classtools.features.draw.DrawEntry
 import com.furina.classtools.features.draw.DrawOutcome
+import com.furina.classtools.features.draw.DrawPoolSource
 import com.furina.classtools.features.draw.DrawResult
 import com.furina.classtools.features.draw.SeededDrawRandom
 import com.furina.classtools.features.draw.DrawSortMode
@@ -86,18 +87,35 @@ private fun DrawStep1LightPreview() {
     }
 }
 
-@Preview(name = "11 抽签 STEP2 候选 · 浅色", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "11 抽签更多设置", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
-private fun DrawStep2LightPreview() {
+private fun DrawOptionsPreview() {
     ClassToolsTheme(darkTheme = false) {
         DrawScreen(
             onBack = {},
             session = previewSession,
             onExport = {},
             members = previewMembers,
+            initialConfig = previewConfig.copy(poolSource = DrawPoolSource.ROSTER),
+            skipRestore = true,
+        )
+    }
+}
+
+@Preview(name = "抽签结果 · 窄屏大字体", showBackground = true, widthDp = 320, heightDp = 760, fontScale = 2f)
+@Composable
+private fun DrawLargeFontResultPreview() {
+    ClassToolsTheme(darkTheme = true) {
+        val result = previewResult()
+        DrawScreen(
+            onBack = {},
+            session = previewSession,
+            onExport = {},
             initialConfig = previewConfig,
-            initialStep = DrawStep.PREVIEW,
-            initialCandidates = previewCandidates(),
+            initialStep = DrawStep.RESULT,
+            initialResult = result.copy(
+                entries = listOf(result.entries.first().copy(name = "用于验证长名称展示的抽签参与者")) + result.entries.drop(1),
+            ),
             skipRestore = true,
         )
     }

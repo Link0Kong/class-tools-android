@@ -49,7 +49,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.visits.VisitAccount
@@ -412,14 +411,11 @@ private fun SummaryCell(value: String, label: String, modifier: Modifier = Modif
                 text = value,
                 style = CtTypeScale.metric,
                 color = colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = label,
                 style = CtTypeScale.caption,
                 color = colors.textSecondary,
-                maxLines = 1,
             )
         }
     }
@@ -595,7 +591,6 @@ private fun LegendItem(stat: VisitClientStat) {
             text = "${stat.label} ${stat.count} · ${stat.percent}%",
             style = CtTypeScale.caption,
             color = colors.textSecondary,
-            maxLines = 1,
         )
     }
 }
@@ -691,8 +686,6 @@ private fun DistributionRow(item: DistributionItem) {
                 text = item.label,
                 style = CtTypeScale.caption,
                 color = colors.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(8.dp))
@@ -751,8 +744,6 @@ private fun AccountCard(
                             text = account.name,
                             style = CtTypeScale.title16,
                             color = colors.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
                         Spacer(Modifier.width(8.dp))
@@ -785,8 +776,6 @@ private fun AccountCard(
                         text = account.devText,
                         style = CtTypeScale.caption,
                         color = colors.textTertiary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
 
                     Spacer(Modifier.height(8.dp))
@@ -905,8 +894,6 @@ private fun DeviceDetailRow(device: VisitDeviceStat) {
             text = device.label,
             style = CtTypeScale.caption,
             color = colors.textSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(8.dp))
@@ -914,7 +901,6 @@ private fun DeviceDetailRow(device: VisitDeviceStat) {
             text = "${device.count} 次",
             style = CtTypeScale.micro,
             color = colors.textTertiary,
-            maxLines = 1,
         )
         if (device.lastTs > 0) {
             Spacer(Modifier.width(6.dp))
@@ -922,7 +908,6 @@ private fun DeviceDetailRow(device: VisitDeviceStat) {
                 text = "最近 ${VisitStats.formatTime(device.lastTs)}",
                 style = CtTypeScale.micro,
                 color = colors.textTertiary,
-                maxLines = 1,
             )
         }
     }
@@ -947,7 +932,6 @@ private fun MiniTag(
         Text(
             text = text,
             style = CtTypeScale.micro,
-            maxLines = 1,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
         )
     }

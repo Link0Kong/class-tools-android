@@ -71,7 +71,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -723,8 +722,6 @@ private fun CourseRow(index: Int, sessionInfo: SessionInfo) {
                 text = sessionInfo.name,
                 style = CtText.body,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = listOf(sessionInfo.span, sessionInfo.room)
@@ -732,8 +729,6 @@ private fun CourseRow(index: Int, sessionInfo: SessionInfo) {
                     .joinToString(" · "),
                 style = CtText.caption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
         if (sessionInfo.state == SessionState.ONGOING) {
@@ -784,8 +779,6 @@ private fun HomePowerCard(card: HomePowerCard?, loading: Boolean, onOpen: () -> 
                         text = card.label,
                         style = CtText.body,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = when {
@@ -920,8 +913,6 @@ private fun RotatingText(item: HomeRotationItem) {
             },
             style = CtText.body,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -1199,8 +1190,6 @@ private fun HomeMutedLine(text: String) {
         text = text,
         style = CtText.body,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
     )
 }
 

@@ -12,6 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -43,6 +45,8 @@ class BackgroundStore(context: Context) {
 
     /** 已解码的背景位图（null = 当前不是自定义图片 / 文件丢失）。 */
     private val _bitmap = MutableStateFlow<Bitmap?>(null)
+    private val imageAccess = Mutex()
+    private var decodedFile: String? = null
 
     /** 背景位图（背景层订阅；切换/删除时自动更新）。 */
     val bitmap: StateFlow<Bitmap?> = _bitmap.asStateFlow()
@@ -59,22 +63,13 @@ class BackgroundStore(context: Context) {
     fun load(): CtBackgroundSelection =
         CtBackgroundSelection.fromStorage(prefs.getString(KEY, null))
 
-    /** 同步的首帧位图解码（仅当已选自定义图片且文件存在；在 IO 线程调用）。 */
-    suspend fun loadStartupBitmap(): Bitmap? = withContext(Dispatchers.IO) {
-        val s = _selection.value
-        if (!s.hasImage) return@withContext null
-        decodeFile(imageFile(s))?.also { _bitmap.value = it }
-    }
-
     /** 自定义图片的本地文件（**只允许**私有目录内的合法文件名）。 */
     fun imageFile(selection: CtBackgroundSelection = _selection.value): File? {
         val name = selection.customImageFile ?: return null
         if (!CtBackgroundImage.isValidFileName(name)) return null
-        val root = dir.canonicalFile
-        val file = File(root, name)
         return runCatching {
-            // 防路径穿越：规范化后必须仍在私有背景目录内
-            val canonical = file.canonicalFile
+            val root = dir.canonicalFile
+            val canonical = File(root, name).canonicalFile
             if (canonical.path.startsWith(root.path + File.separator) && canonical.isFile) canonical else null
         }.getOrNull()
     }
@@ -114,17 +109,21 @@ class BackgroundStore(context: Context) {
      * @return true = 成功；失败原因见 [lastError]（不抛给 UI）
      */
     suspend fun importImage(uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        imageAccess.withLock { importImageLocked(uri) }
+    }
+
+    private fun importImageLocked(uri: Uri): Boolean {
         _lastError.value = null
         val decoded = runCatching { decodeScaled(uri) }.getOrNull()
         if (decoded == null) {
             _lastError.value = "无法读取这张图片"
-            return@withContext false
+            return false
         }
         val file = runCatching { writeJpeg(decoded.first) }.getOrNull()
         if (file == null) {
             decoded.first.recycle()
             _lastError.value = "保存图片失败（存储空间不足？）"
-            return@withContext false
+            return false
         }
         // 新图替换旧图：删除除新文件外的所有 bg_*.jpg
         runCatching {
@@ -139,37 +138,35 @@ class BackgroundStore(context: Context) {
             file = file.name,
             blur = _selection.value.customBlur,
         )
-        persist(next)
+        decodedFile = file.name
         _bitmap.value = decoded.first
-        true
+        persist(next)
+        return true
     }
 
     /** 删除自定义图片 → 恢复默认（暖白）背景，并删除私有目录里的图片。 */
     suspend fun deleteImage() = withContext(Dispatchers.IO) {
-        val current = _selection.value
-        runCatching {
-            dir.listFiles()?.forEach { f ->
-                if (f.isFile && f.name.startsWith(CtBackgroundImage.FILE_PREFIX)) f.delete()
+        imageAccess.withLock {
+            runCatching {
+                dir.listFiles()?.forEach { f ->
+                    if (f.isFile && f.name.startsWith(CtBackgroundImage.FILE_PREFIX)) f.delete()
+                }
             }
+            persist(CtBackgroundSelection.withoutImage(_selection.value))
+            // Compose 的上一帧可能仍持有位图，由运行时在最后一个引用释放后回收。
+            _bitmap.value = null
+            decodedFile = null
         }
-        val next = CtBackgroundSelection.withoutImage(current)
-        persist(next)
-        _bitmap.value?.recycle()
-        _bitmap.value = null
     }
 
-    /**
-     * 启动时恢复位图（进入主界面后调用；失败静默回退预设）。
-     *
-     * @param capability 当前设备光感能力（用于决定是否需要解码；不解码也能显示图片，只是没有模糊）
-     */
+    /** 主界面和独立工具页共用已经解码的图片。 */
     suspend fun restoreBitmap() = withContext(Dispatchers.IO) {
-        val s = _selection.value
-        if (!s.hasImage) {
-            _bitmap.value = null
-            return@withContext
+        imageAccess.withLock {
+            val selected = _selection.value
+            if (!selected.hasImage || selected.customImageFile == decodedFile) return@withLock
+            _bitmap.value = decodeFile(imageFile(selected))
+            decodedFile = selected.customImageFile
         }
-        decodeFile(imageFile(s))?.let { _bitmap.value = it }
     }
 
     private fun persist(next: CtBackgroundSelection) {
@@ -192,9 +189,8 @@ class BackgroundStore(context: Context) {
     private fun decodeScaled(uri: Uri): Pair<Bitmap, Int>? {
         val bounds = readBounds(uri) ?: return null
         var sample = 1
-        while (bounds.first / (sample * 2) >= CtBackgroundImage.MAX_LONG_EDGE &&
-            bounds.second / (sample * 2) >= CtBackgroundImage.MAX_LONG_EDGE
-        ) {
+        val longEdge = maxOf(bounds.first, bounds.second)
+        while (longEdge / (sample * 2) >= CtBackgroundImage.MAX_LONG_EDGE) {
             sample *= 2
         }
         val opts = BitmapFactory.Options().apply {

@@ -1,8 +1,6 @@
 package com.furina.classtools.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -10,9 +8,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.AppContainer
-import com.furina.classtools.data.background.BackgroundStore
+import androidx.compose.runtime.withFrameNanos
 import com.furina.classtools.data.background.LocalBackgroundStore
-import com.furina.classtools.data.remoteconfig.RemoteConfigRepository
 import com.furina.classtools.data.settings.LocalAppSettingsStore
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.CtImmersiveStatusBar
@@ -30,18 +27,13 @@ import com.furina.classtools.ui.theme.CtImmersiveStatusBar
 @Composable
 fun ClassToolsThemeHost(
     container: AppContainer,
-    backgroundStore: BackgroundStore,
     content: @Composable () -> Unit,
 ) {
-    // 冷启动恢复已保存的背景位图（IO 线程解码，主线程不阻塞；失败静默回退预设）。
-    LaunchedEffect(backgroundStore) {
-        runCatching { backgroundStore.restoreBitmap() }
-    }
-    // 设置热更：启动时拉一次白名单配置；失败静默，不影响主题首帧。
-    LaunchedEffect(Unit) {
-        RemoteConfigRepository().fetch()?.let { config ->
-            runCatching { container.appSettings.applyRemoteConfig(config) }
-        }
+    val backgroundStore = container.backgroundStore
+    LaunchedEffect(container) {
+        withFrameNanos { }
+        container.refreshRemoteConfig()
+        backgroundStore.restoreBitmap()
     }
     // 外观偏好存本机（不进 userdata）：外观模式 / 隐藏状态栏 / 玻璃材质均实时生效。
     // 壁纸取色（Material You）功能已移除，固定关闭。
@@ -49,27 +41,14 @@ fun ClassToolsThemeHost(
     // 首帧用 SharedPreferences 镜像同步初始化，避免冷启动先按系统/默认渲染一帧再跳变。
     val initialAppearanceMode = remember { container.appSettings.startupAppearanceMode() }
     val initialHideStatusBar = remember { container.appSettings.startupHideStatusBar() }
+    val initialImmersiveLight = remember { container.appSettings.startupImmersiveLight() }
     val appearanceMode by container.appSettings.appearanceMode
         .collectAsStateWithLifecycle(initialValue = initialAppearanceMode)
     val hideStatusBar by container.appSettings.hideStatusBar
         .collectAsStateWithLifecycle(initialValue = initialHideStatusBar)
     // 沉浸光感卡片：用户可自由切回旧玻璃材质（强/均衡/弱）或关闭为实色 M3 卡片。
     val immersiveLight by container.appSettings.immersiveLight
-        .collectAsStateWithLifecycle(initialValue = container.appSettings.startupImmersiveLight())
-    // 玻璃材质切换的全局过渡：材质本身立即换，外层做 260ms 淡入，避免「啪」一下跳变。
-    val glassTransition = androidx.compose.animation.core.Animatable(1f)
-    var glassTransitionInitialized = remember { false }
-    LaunchedEffect(immersiveLight.enabled) {
-        if (!glassTransitionInitialized) {
-            glassTransitionInitialized = true
-            return@LaunchedEffect
-        }
-        glassTransition.snapTo(0.72f)
-        glassTransition.animateTo(
-            targetValue = 1f,
-            animationSpec = androidx.compose.animation.core.tween(260),
-        )
-    }
+        .collectAsStateWithLifecycle(initialValue = initialImmersiveLight)
     // 外观模式：跟随系统 / 强制浅色 / 强制深色（我的 → 外观 三选一）。
     val darkTheme = appearanceMode.resolveDark(isSystemInDarkTheme())
 
@@ -84,15 +63,7 @@ fun ClassToolsThemeHost(
             LocalBackgroundStore provides backgroundStore,
         ) {
             // 全局隐藏系统状态栏（下滑临时显示）；关闭时恢复 statusBarsPadding 的常规行为。
-            CtImmersiveStatusBar(enabled = hideStatusBar) {
-                androidx.compose.foundation.layout.Box(
-                    modifier = androidx.compose.ui.Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = glassTransition.value },
-                ) {
-                    content()
-                }
-            }
+            CtImmersiveStatusBar(enabled = hideStatusBar, content = content)
         }
     }
 }

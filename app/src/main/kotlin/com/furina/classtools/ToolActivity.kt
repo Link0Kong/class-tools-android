@@ -5,13 +5,24 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import com.furina.classtools.data.background.BackgroundStore
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.session.Session
+import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.data.tool.ToolCatalog
 import com.furina.classtools.ui.ClassToolsThemeHost
+import com.furina.classtools.ui.components.CtToastHost
 import com.furina.classtools.ui.motion.SharedViewMotion
 import com.furina.classtools.ui.navigation.MainNavHost
 import com.furina.classtools.ui.platform.enableClassToolsEdgeToEdge
+import kotlinx.coroutines.flow.first
 
 /**
  * 工具页独立宿主（只由金标 SharedView 的「工具卡 → 工具页」路径启动）。
@@ -35,21 +46,37 @@ class ToolActivity : ComponentActivity() {
             return
         }
         val container = (application as ClassToolsApp).container
-        // 进程被系统回收后，ToolActivity 仍可从 Intent 恢复 Session：先同步给数据层，
-        // 否则工具页的网络请求会拿不到 token（MainActivity 的 ClassToolsRoot 负责常驻会话）。
-        container.updateActiveSession(launch.session)
-        val backgroundStore = BackgroundStore(this)
         setContent {
-            ClassToolsThemeHost(container = container, backgroundStore = backgroundStore) {
-                MainNavHost(
-                    container = container,
-                    session = launch.session,
-                    onSignOut = { finish() },
-                    startToolId = launch.toolId,
-                    startToolPick = launch.pick,
-                    standaloneTool = true,
-                    onCloseStandaloneTool = { finishWithSharedViewMotion() },
-                )
+            val session by produceState(
+                initialValue = container.currentSession?.takeIf {
+                    it.sid == launch.session.sid && it.isLikelyValid() && container.isSessionPrepared(it)
+                },
+            ) {
+                if (value != null) return@produceState
+                // 从进程重建恢复工具时，以本机保存的有效会话为准。
+                val saved = (container.sessionStore.state.first() as? SessionState.SignedIn)?.session
+                if (saved == null || !saved.isLikelyValid() || saved.sid != launch.session.sid) {
+                    finish()
+                } else {
+                    container.prepareSession(saved)
+                    value = saved
+                }
+            }
+            ClassToolsThemeHost(container) {
+                Box(Modifier.fillMaxSize()) {
+                    session?.let { restored ->
+                        MainNavHost(
+                            container = container,
+                            session = restored,
+                            onSignOut = { finish() },
+                            startToolId = launch.toolId,
+                            startToolPick = launch.pick,
+                            standaloneTool = true,
+                            onCloseStandaloneTool = { finishWithSharedViewMotion() },
+                        )
+                    }
+                    CtToastHost(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp))
+                }
             }
         }
     }

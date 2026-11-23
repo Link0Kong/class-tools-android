@@ -13,7 +13,7 @@ sealed interface DrawOutcome {
  * - 池 = 范围 − 排除号（名单来源再∩名单）；
  * - 不重复：Fisher-Yates 洗牌后取前 count 个；允许重复：count 次独立随机；
  * - 排序：按抽取顺序（默认）/ 从小到大 / 从大到小 / 随机重排；
- * - 剔除重抽：移除指定项后，从「池 − 当前结果」补抽一个（允许重复时从全池补），追加 log。
+ * - 补抽沿用本轮候选池，将剔除号码排除。不重复时，结果中已有的号码也排除。
  */
 object DrawEngine {
 
@@ -82,25 +82,29 @@ object DrawEngine {
             return DrawOutcome.Failure(DrawError(DrawErrorCode.INVALID_INDEX, "要剔除的项不存在"))
         }
         val removed = result.entries[index]
-        val remaining = result.entries.toMutableList().apply { removeAt(index) }
-        if (!autoRedraw) {
-            return DrawOutcome.Success(
-                result.copy(
-                    entries = remaining,
-                    log = result.log + DrawRemoveLog(removed = removed, added = null),
-                ),
-            )
-        }
-        val usedNumbers = if (result.config.allowDuplicates) emptySet() else remaining.map { it.number }.toSet()
-        val available = result.pool.filter { it.number !in usedNumbers }
-        val added = if (available.isEmpty()) null else available[random.nextInt(available.size)]
-        val newEntries = if (added != null) remaining + added else remaining
-        return DrawOutcome.Success(
-            result.copy(
-                entries = newEntries,
-                log = result.log + DrawRemoveLog(removed = removed, added = added),
-            ),
+        val updated = result.copy(
+            entries = result.entries.toMutableList().apply { removeAt(index) },
+            log = result.log + DrawRemoveLog(removed = removed),
         )
+        return DrawOutcome.Success(if (autoRedraw) refill(updated, random, limit = 1) else updated)
+    }
+
+    /** 按本轮目标数量补齐缺额。候选用尽时保留已有结果。 */
+    fun refill(result: DrawResult, random: DrawRandom, limit: Int = result.config.count): DrawResult {
+        val missing = minOf(result.config.count - result.entries.size, limit)
+        if (missing <= 0) return result
+        val blocked = result.log.mapTo(mutableSetOf()) { it.removed.number }
+        if (!result.config.allowDuplicates) result.entries.mapTo(blocked) { it.number }
+        val available = result.pool.filter { it.number !in blocked }
+        if (available.isEmpty()) return result
+        val count = if (result.config.allowDuplicates) missing else minOf(missing, available.size)
+        val added = pick(result.config.copy(count = count), available, random)
+        val replacements = added.iterator()
+        val log = result.log.map { record ->
+            if (record.added == null && replacements.hasNext()) record.copy(added = replacements.next()) else record
+        }
+        val entries = applySort(result.entries + added, result.config.sort, random)
+        return result.copy(entries = entries, log = log)
     }
 
     /** 同参数重新抽一次（结果集合会变，保留原参数）。 */

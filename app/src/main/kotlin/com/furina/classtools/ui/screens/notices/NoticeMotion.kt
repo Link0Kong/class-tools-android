@@ -12,7 +12,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +26,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.grid.LazyGridItemScope
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -346,40 +344,6 @@ internal fun NoticeFilterChips(
                 selected = chip.key == selectedKey,
                 reduceMotion = reduceMotion,
                 previewBounce = previewBounceKey == chip.key,
-                onClick = { onSelect(chip.key) },
-            )
-        }
-    }
-}
-
-/**
- * 单行、可横向滚动的筛选 chips（通知页「滚动内容第一项」用；固定头不再放 chips）。
- *
- * 与 [NoticeFilterChips] 同一视觉/交互（弹性选中、CtToolChip），只是不再换行，
- * 保证 360dp 下也不出现第二行、不挤占固定头部空间。
- */
-@Composable
-internal fun NoticeFilterStrip(
-    chips: List<NoticeChip>,
-    selectedKey: String,
-    onSelect: (String) -> Unit,
-    reduceMotion: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val scroll = rememberScrollState()
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(scroll),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        chips.forEach { chip ->
-            NoticeElasticChip(
-                chip = chip,
-                selected = chip.key == selectedKey,
-                reduceMotion = reduceMotion,
-                previewBounce = false,
                 onClick = { onSelect(chip.key) },
             )
         }

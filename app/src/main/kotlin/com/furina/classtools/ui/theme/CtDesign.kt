@@ -68,7 +68,7 @@ object CtPalette {
     val BarLight = Color(0xFFFBFCFC)
     val TextPrimary = Color(0xFF1C2629)
     val TextSecondary = Color(0xFF4F5A5D)
-    val TextTertiary = Color(0xFF61696C)
+    val TextTertiary = Color(0xFF596164)
     val Divider = Color(0xFFE2E7E8)
     val Outline = Color(0xFF98A4A8)
     val TintTeal = Color(0xFFE7F0ED)

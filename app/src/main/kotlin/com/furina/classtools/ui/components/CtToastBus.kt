@@ -1,5 +1,13 @@
 package com.furina.classtools.ui.components
 
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -9,8 +17,7 @@ import kotlinx.coroutines.flow.asSharedFlow
  * 全 App 统一的应用内消息总线（替代系统 Toast）。
  *
  * 2026-11-22：Toast 在 M3 里没有对应组件，且会被底栏/键盘遮挡、无法统一主题。
- * 所有轻提示改为 M3 Snackbar：调用方只发文本，根级 [ClassToolsRoot] 的
- * CtSnackbarHost 负责展示（位于底栏上方）。
+ * 调用方发送提示文本，由当前前台窗口中的 Snackbar 展示。
  */
 object CtToastBus {
     private val _messages = MutableSharedFlow<String>(
@@ -25,4 +32,16 @@ object CtToastBus {
     fun show(message: String) {
         if (message.isNotBlank()) _messages.tryEmit(message)
     }
+}
+
+@Composable
+internal fun CtToastHost(modifier: Modifier = Modifier) {
+    val host = remember { SnackbarHostState() }
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(owner) {
+        owner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            CtToastBus.messages.collect { host.showSnackbar(it) }
+        }
+    }
+    CtSnackbarHost(hostState = host, modifier = modifier)
 }

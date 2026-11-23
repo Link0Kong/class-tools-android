@@ -5,19 +5,14 @@ import kotlinx.coroutines.isActive
 import androidx.compose.runtime.DisposableEffect
 
 import android.content.Context
-import android.os.Build
 import android.view.Window
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,29 +20,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
-import com.furina.classtools.data.background.CtBackgroundPreset
-import com.furina.classtools.ui.components.background.drawLightField
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.furina.classtools.data.background.CtBackgroundSelection
-import com.furina.classtools.data.background.LocalBackgroundStore
+import com.furina.classtools.ui.components.background.CtAppBackdrop
 import kotlinx.coroutines.delay
-import com.furina.classtools.ui.components.background.asComposeImageBitmap
-import com.furina.classtools.data.background.ctBackgroundBlurSigma
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.draw.clip
 
 /**
  * 全局沉浸式状态栏（2026-11-15 用户要求：app 使用时顶部通知栏隐藏）。
@@ -135,105 +118,9 @@ fun CtImmersiveStatusBar(
         0.dp
     }
 
-    // 全局光场在 App 根绘制（**挂在根 Box 自身的 drawBehind 上**）：
-    // 子节点方案会被布局约束/层叠顺序干扰（实测顶部 63dp 之外会被根底色盖住），
-    // 而 drawBehind 直接使用根 Box 的绘制尺寸，保证从屏幕最顶端到最底端连续。
-    val dark = LocalCtDarkTheme.current
-    val light = LocalCtLight.current
-    val store = LocalBackgroundStore.current
-    val selection = if (store != null) {
-        store.selection.collectAsStateWithLifecycle().value
-    } else {
-        CtBackgroundSelection.DEFAULT
-    }
-    val field = remember(selection.preset, dark, light.setting) {
-        CtLightFields.scaled(
-            field = CtLightFields.of(selection.preset, dark),
-            factor = CtLightFields.alphaFactor(light.setting),
-        )
-    }
-
-    // 自定义图片背景：**必须在 App 根画一次**，否则只有「页面内容区」有图、状态栏留白条仍是光场，
-    // 观感就是「只有工作台背景是全屏的」（用户反馈的根因）。
-    val bgBitmap = if (store != null) {
-        store.bitmap.collectAsStateWithLifecycle().value
-    } else {
-        null
-    }
-    val imageBitmap = if (selection.hasImage && bgBitmap != null) {
-        remember(bgBitmap) { bgBitmap.asComposeImageBitmap() }
-    } else {
-        null
-    }
-    // 背景模糊只看设备能力，不再受「沉浸光感」开关影响（否则固定 Off 后模糊永久失效）。
-    val backgroundBlurCapability = remember(view) {
-        ctBackgroundBlurCapabilityOf(
-            sdkInt = Build.VERSION.SDK_INT,
-            hardwareAccelerated = runCatching { view.isHardwareAccelerated }.getOrDefault(true),
-        )
-    }
-    val blurSigmaDp = remember(selection, backgroundBlurCapability, imageBitmap) {
-        if (imageBitmap == null) 0f else ctBackgroundBlurSigma(selection, backgroundBlurCapability)
-    }
-    val veilAlpha = remember(dark) { if (dark) 0.66f else 0.46f }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .drawBehind {
-                if (imageBitmap == null) {
-                    drawLightField(
-                        field = field,
-                        dark = dark,
-                        virtual = size,
-                        timeMs = 0L,
-                    )
-                }
-            },
-    ) {
-        if (imageBitmap != null) {
-            // 图片层：整屏 Crop + 仅本层模糊（默认不模糊）+ 可读性蒙层；前景永远清晰。
-            val sigmaPx = with(density) { blurSigmaDp.dp.toPx() }
-            androidx.compose.foundation.Image(
-                bitmap = imageBitmap,
-                contentDescription = null,
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        clip = true
-                        if (sigmaPx > 0f) {
-                            renderEffect = androidx.compose.ui.graphics.BlurEffect(
-                                radiusX = sigmaPx,
-                                radiusY = sigmaPx,
-                                edgeTreatment = androidx.compose.ui.graphics.TileMode.Clamp,
-                            )
-                        }
-                    },
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        androidx.compose.ui.graphics.Brush.verticalGradient(
-                            0f to MaterialTheme.colorScheme.background.copy(alpha = veilAlpha * 0.90f),
-                            0.40f to MaterialTheme.colorScheme.background.copy(alpha = veilAlpha * 0.55f),
-                            1f to MaterialTheme.colorScheme.background.copy(alpha = veilAlpha),
-                        ),
-                    ),
-            )
-        }
-        androidx.compose.runtime.CompositionLocalProvider(
-            com.furina.classtools.ui.components.background.LocalCtRootAuroraActive provides true,
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = extraTop),
-            ) {
-                content()
-            }
+    CtAppBackdrop {
+        Box(Modifier.fillMaxSize().padding(top = extraTop)) {
+            content()
         }
     }
 }

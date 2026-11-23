@@ -120,13 +120,11 @@ private fun ExpressCard(target: ExpressTarget, onClick: () -> Unit) {
                     text = target.name,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
                 )
                 Text(
                     text = target.subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
                 )
             }
             Icon(

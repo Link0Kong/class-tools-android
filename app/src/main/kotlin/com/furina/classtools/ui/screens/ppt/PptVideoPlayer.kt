@@ -81,7 +81,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -515,8 +514,6 @@ fun PptVideoPlayer(
                     text = title.ifBlank { "演示" },
                     color = CtPalette.MediaOnScrim.copy(alpha = 0.75f),
                     style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 // 「从头播放」（契约 §11.3.4：控制条/设置提供从头播放）

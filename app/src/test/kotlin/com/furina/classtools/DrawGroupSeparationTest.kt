@@ -33,7 +33,8 @@ class DrawGroupSeparationTest {
             assertFalse("DrawSections 不应再包含 $forbidden", drawSections.contains(forbidden))
         }
         assertTrue("抽签应写入最近抽签存储", drawScreen.contains("DrawLastResult.from"))
-        assertTrue("抽签应保留导出能力", drawSections.contains("导出抽签图"))
+        assertTrue("抽签应保留结果分享入口", drawSections.contains("""onClick = onExport"""))
+        assertTrue("分享应从本轮结果生成导出内容", drawScreen.contains("onExport(DrawExportFactory.create(it))"))
     }
 
     @Test
@@ -43,7 +44,7 @@ class DrawGroupSeparationTest {
         assertFalse(nav.contains("drawGroupMembers"))
         assertFalse(nav.contains("onGroup ="))
         assertFalse("抽签页不应再 navigate 到分组", nav.contains("""Routes.tool("group")"""))
-        assertTrue("分组页应接本机最近抽签存储", nav.contains("lastResultStore = drawLastResultStore"))
+        assertTrue("分组页应接本机最近抽签存储", nav.contains("lastResultStore = container.drawLastResultStore"))
         assertTrue("分组页应接班级名单", nav.contains("rosterMembers = roster"))
     }
 

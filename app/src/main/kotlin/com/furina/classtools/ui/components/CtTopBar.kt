@@ -6,12 +6,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -38,7 +38,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.components.light.CtLightInk
@@ -95,14 +94,13 @@ fun CtTopBar(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp),
+                .heightIn(min = 64.dp),
             color = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = 16.dp, end = 12.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .padding(start = 16.dp, end = 12.dp, top = CtSpace.xs, bottom = CtSpace.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (onBack != null) {
@@ -129,8 +127,6 @@ fun CtTopBar(
                     text = title,
                     style = CtText.heading,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .weight(1f)
                         .semantics { heading() },
@@ -191,8 +187,6 @@ fun CtLightTopBar(
                 text = subtitle,
                 style = CtTypeScale.caption,
                 color = c.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = CtSize.backHit + CtSpace.sm, end = CtSpace.rowPaddingH)
@@ -223,8 +217,6 @@ fun ctTopBarRaw(
                 text = subtitle,
                 style = CtTypeScale.caption,
                 color = c.textSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = CtSize.backHit + CtSpace.sm, end = CtSpace.rowPaddingH),

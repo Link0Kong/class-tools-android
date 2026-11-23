@@ -175,15 +175,23 @@ class ExportCardRenderer(private val scale: Float = 2f) {
         drawDots(X, brandBase - 4f, 3f, 10f)
         drawText("tool.furina.fun", X + 34f, brandBase, paintOf(11f, 800, ink3))
 
+        val titlePaint = paintOf(30f, 800, ink)
+        val titleLines = wrapText(spec.title, titlePaint, CW)
         val titleBase = cardY + 70f
-        drawFittedText(spec.title, X, titleBase, RX, 30f, 22f, 800, ink)
-
-        val subBase = cardY + 94f
-        if (spec.sub.isNotBlank()) {
-            drawFittedText(spec.sub, X, subBase, RX, 13f, 11.5f, 500, ink3)
+        titleLines.forEachIndexed { index, line ->
+            drawText(line, X, titleBase + 36f * index, titlePaint)
         }
 
-        val dividerY = cardY + 118f
+        val subBase = titleBase + 36f * (titleLines.size - 1) + 24f
+        var dividerY = subBase + 24f
+        if (spec.sub.isNotBlank()) {
+            val subPaint = paintOf(13f, 500, ink3)
+            val subLines = wrapText(spec.sub, subPaint, CW)
+            subLines.forEachIndexed { index, line ->
+                drawText(line, X, subBase + 19f * index, subPaint)
+            }
+            dividerY += 19f * (subLines.size - 1)
+        }
         drawDivider(X, RX, dividerY)
 
         // ---------------- 参数配置面板
@@ -389,45 +397,45 @@ class ExportCardRenderer(private val scale: Float = 2f) {
         val nmPaint = paintOf(12f, 500, ink2)
         var rowTop = top
         var x = X
-        var rows = 1
+        var rowHeight = 30f
         block.chips.forEach { chip ->
-            val numW = measure(chip.n.toString(), numPaint)
-            val nmW = if (chip.nm.isNotBlank()) 5f + measure(chip.nm, nmPaint) else 0f
-            val chipW = 11f + numW + nmW + 11f
+            val number = chip.n.toString()
+            val numberWidth = measure(number, numPaint)
+            val nameOffset = 16f + numberWidth
+            val nameLines = if (chip.nm.isBlank()) emptyList() else wrapText(chip.nm, nmPaint, CW - nameOffset - 11f)
+            val chipW = if (nameLines.isEmpty()) {
+                22f + numberWidth
+            } else {
+                nameOffset + nameLines.maxOf { measure(it, nmPaint) } + 11f
+            }
+            val chipHeight = 30f + 17f * (nameLines.size - 1).coerceAtLeast(0)
             if (x + chipW > RX && x > X) {
                 x = X
-                rowTop += 37f
-                rows++
+                rowTop += rowHeight + 7f
+                rowHeight = 30f
             }
-            drawChip(chip, x, rowTop, chipW, numPaint, nmPaint)
+            drawChipBackground(x, rowTop, chipW, chipHeight)
+            val baseline = rowTop + 20f
+            drawText(number, x + 11f, baseline, numPaint)
+            nameLines.forEachIndexed { index, line ->
+                drawText(line, x + nameOffset, baseline + 17f * index, nmPaint)
+            }
             x += chipW + 7f
+            rowHeight = maxOf(rowHeight, chipHeight)
         }
-        return top + rows * 37f - 7f
+        return rowTop + rowHeight
     }
 
-    private fun drawChip(
-        chip: ChipItem,
-        x: Float,
-        top: Float,
-        width: Float,
-        numPaint: Paint,
-        nmPaint: Paint,
-    ) {
+    private fun drawChipBackground(x: Float, top: Float, width: Float, height: Float) {
         if (!drawing) return
         val c = canvas!!
-        tmpRect.set(x * scale, top * scale, (x + width) * scale, (top + 30f) * scale)
+        tmpRect.set(x * scale, top * scale, (x + width) * scale, (top + height) * scale)
         c.drawRoundRect(tmpRect, 15f * scale, 15f * scale, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = chipBg })
         c.drawRoundRect(tmpRect, 15f * scale, 15f * scale, Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = chipBorder
             style = Paint.Style.STROKE
             strokeWidth = 1f * scale
         })
-        val baseline = top + 20f
-        val numW = measure(chip.n.toString(), numPaint)
-        drawText(chip.n.toString(), x + 11f, baseline, numPaint)
-        if (chip.nm.isNotBlank()) {
-            drawText(chip.nm, x + 11f + numW + 5f, baseline, nmPaint)
-        }
     }
 
     private fun drawGroupsBlock(block: GroupsBlock, top: Float): Float {
@@ -555,35 +563,6 @@ class ExportCardRenderer(private val scale: Float = 2f) {
 
     private fun drawText(text: String, x: Float, baseline: Float, paint: Paint) {
         canvas?.drawText(text, x * scale, baseline * scale, paint)
-    }
-
-    /** 超宽时逐级降字号，仍超则截断加省略号。 */
-    private fun drawFittedText(
-        text: String,
-        x: Float,
-        baseline: Float,
-        maxWidth: Float,
-        startSize: Float,
-        minSize: Float,
-        weight: Int,
-        color: Int,
-    ) {
-        if (!drawing) return
-        var size = startSize
-        var paint = paintOf(size, weight, color)
-        while (size > minSize && measure(text, paint) > maxWidth) {
-            size -= 1f
-            paint = paintOf(size, weight, color)
-        }
-        val out = ellipsize(text, paint, maxWidth)
-        canvas!!.drawText(out, x * scale, baseline * scale, paint)
-    }
-
-    private fun ellipsize(text: String, paint: Paint, maxWidth: Float): String {
-        if (measure(text, paint) <= maxWidth) return text
-        var end = text.length
-        while (end > 0 && measure(text.substring(0, end) + "…", paint) > maxWidth) end--
-        return text.substring(0, end) + "…"
     }
 
     private fun wrapCount(text: String, paint: Paint, maxWidth: Float): Int =

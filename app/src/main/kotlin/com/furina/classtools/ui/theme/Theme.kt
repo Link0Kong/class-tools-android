@@ -68,7 +68,7 @@ val LocalCtDarkTheme = staticCompositionLocalOf { false }
 // ---------------------------------------------------------------------------
 // 浅色 ColorScheme（48 角色；数值 = Color.kt ← CtPalette）
 // ---------------------------------------------------------------------------
-private val CtLightColorScheme: ColorScheme = lightColorScheme(
+internal val CtLightColorScheme: ColorScheme = lightColorScheme(
     primary = LightPrimary,
     onPrimary = LightOnPrimary,
     primaryContainer = LightPrimaryContainer,
@@ -122,7 +122,7 @@ private val CtLightColorScheme: ColorScheme = lightColorScheme(
 // ---------------------------------------------------------------------------
 // 深色 ColorScheme（48 角色）
 // ---------------------------------------------------------------------------
-private val CtDarkColorScheme: ColorScheme = darkColorScheme(
+internal val CtDarkColorScheme: ColorScheme = darkColorScheme(
     primary = DarkPrimary,
     onPrimary = DarkOnPrimary,
     primaryContainer = DarkPrimaryContainer,

@@ -33,6 +33,19 @@ sealed interface DrawTransition {
  */
 object DrawWorkflow {
 
+    /** 在参数页直接抽签，结果保留本轮使用的候选池和参数。 */
+    fun quickDraw(
+        state: DrawWorkflowState,
+        rosterSeats: List<Int>,
+        nameOf: (Int) -> String?,
+        random: DrawRandom,
+    ): DrawTransition = when (val outcome = DrawEngine.draw(state.config, rosterSeats, nameOf, random)) {
+        is DrawOutcome.Failure -> DrawTransition.Rejected(outcome.error)
+        is DrawOutcome.Success -> DrawTransition.Next(
+            state.copy(step = DrawStep.RESULT, candidates = emptyList(), result = outcome.result),
+        )
+    }
+
     fun updateConfig(state: DrawWorkflowState, config: DrawConfig): DrawWorkflowState =
         if (state.step == DrawStep.CONFIG) state.copy(config = config) else state
 
@@ -110,12 +123,11 @@ object DrawWorkflow {
         }
         val result = state.result
             ?: return DrawTransition.Rejected(DrawError(DrawErrorCode.INVALID_INDEX, "还没有抽签结果"))
-        val newConfig = state.config.copy(sort = mode)
         val sorted = DrawEngine.sortEntries(result.entries, mode, random)
         return DrawTransition.Next(
             state.copy(
-                config = newConfig,
-                result = result.copy(entries = sorted, config = newConfig),
+                config = state.config.copy(sort = mode),
+                result = result.copy(entries = sorted, config = result.config.copy(sort = mode)),
             ),
         )
     }

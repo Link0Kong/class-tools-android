@@ -355,7 +355,6 @@ private fun DockItem(
                 // M3 navigation bar label = Label Medium（12sp / 500）；不再用 11sp 裸字号。
                 style = MaterialTheme.typography.labelMedium,
                 color = labelColor,
-                maxLines = 1,
             )
             Spacer(modifier = Modifier.height(CtSpace.xxs))
         }

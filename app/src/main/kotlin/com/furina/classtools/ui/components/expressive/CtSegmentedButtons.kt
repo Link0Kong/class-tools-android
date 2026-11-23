@@ -15,7 +15,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.theme.CtMotion
 
@@ -98,8 +97,6 @@ fun CtSegmentedButtons(
                             selected -> MaterialTheme.colorScheme.onSecondaryContainer
                             else -> MaterialTheme.colorScheme.onSurface
                         },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 },
             )

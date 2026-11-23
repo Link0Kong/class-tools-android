@@ -1,13 +1,14 @@
 package com.furina.classtools.ui.components
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 
 /**
  * M3 PrimaryTabRow（页面级筛选/分类切换）。
@@ -22,25 +23,37 @@ fun CtPrimaryTabs(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    PrimaryTabRow(
-        selectedTabIndex = selectedIndex.coerceIn(0, (labels.size - 1).coerceAtLeast(0)),
-        modifier = modifier,
-        containerColor = Color.Transparent,
-        divider = {},
-    ) {
+    if (labels.isEmpty()) return
+    val selected = selectedIndex.coerceIn(labels.indices)
+    val tabs: @Composable () -> Unit = {
         labels.forEachIndexed { index, label ->
             Tab(
-                selected = index == selectedIndex,
+                selected = index == selected,
                 onClick = { onSelect(index) },
                 text = {
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 },
             )
         }
+    }
+    if (LocalDensity.current.fontScale >= 1.5f) {
+        PrimaryScrollableTabRow(
+            selectedTabIndex = selected,
+            modifier = modifier,
+            containerColor = Color.Transparent,
+            divider = {},
+            tabs = tabs,
+        )
+    } else {
+        PrimaryTabRow(
+            selectedTabIndex = selected,
+            modifier = modifier,
+            containerColor = Color.Transparent,
+            divider = {},
+            tabs = tabs,
+        )
     }
 }

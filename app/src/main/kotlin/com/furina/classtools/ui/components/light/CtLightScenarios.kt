@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -38,7 +39,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.components.light.CtLightInk
@@ -123,7 +123,7 @@ fun CtLightTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(CtSize.topBarHeight)
+                .heightIn(min = CtSize.topBarHeight)
                 .padding(start = CtSpace.xs, end = CtSpace.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -151,8 +151,6 @@ fun CtLightTopBar(
                 text = title,
                 style = CtText.heading,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .weight(1f)
                     .semantics { heading() },

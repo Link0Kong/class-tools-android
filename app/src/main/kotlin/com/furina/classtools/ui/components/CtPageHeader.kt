@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.components
 
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 
 import androidx.compose.foundation.layout.WindowInsets
@@ -44,7 +45,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.components.glass.ctGlass
 import com.furina.classtools.ui.components.glass.ctGlassPointerLight
@@ -152,7 +152,6 @@ fun CtRootHeader(
                         text = eyebrow,
                         style = MaterialTheme.typography.labelMedium,
                         color = c.textTertiary,
-                        maxLines = 1,
                     )
                     Spacer(modifier = Modifier.height(CtSpace.xxs))
                 }
@@ -161,8 +160,6 @@ fun CtRootHeader(
                     text = title,
                     style = MaterialTheme.typography.headlineMedium,
                     color = c.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.semantics { heading() },
                 )
             }
@@ -180,8 +177,6 @@ fun CtRootHeader(
                 text = subtitle,
                 style = CtTypeScale.body,
                 color = c.textSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -226,7 +221,7 @@ fun CtStickyHeaderBar(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(64.dp)
+                        .heightIn(min = 64.dp)
                         .graphicsLayer { alpha = p }
                         .padding(start = 16.dp, end = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -236,8 +231,6 @@ fun CtStickyHeaderBar(
                         // M3 small app bar 标题 = Title Large（22sp / 400）。
                         style = MaterialTheme.typography.titleLarge,
                         color = foreground,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
                     Row(

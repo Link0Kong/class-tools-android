@@ -72,7 +72,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.homework.HomeworkAttachmentMeta
 import com.furina.classtools.data.homework.HomeworkDueCalculator
@@ -557,8 +556,6 @@ private fun HomeworkCard(
                             MaterialTheme.colorScheme.onSurface
                         },
                         textDecoration = if (item.done) TextDecoration.LineThrough else null,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
                     if (item.due != null) {
@@ -573,8 +570,6 @@ private fun HomeworkCard(
                         text = body,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Spacer(Modifier.height(3.dp))
@@ -648,7 +643,6 @@ private fun DuePill(text: String, tone: HomeworkDueTone) {
             text = text,
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            maxLines = 1,
         )
     }
 }
@@ -762,8 +756,6 @@ private fun AttachmentRow(attachment: HomeworkAttachmentMeta) {
         Text(
             text = attachment.name,
             style = MaterialTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         Text(

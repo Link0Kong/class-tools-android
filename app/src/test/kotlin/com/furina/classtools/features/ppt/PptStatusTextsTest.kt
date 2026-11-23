@@ -50,13 +50,11 @@ class PptStatusTextsTest {
     }
 
     @Test
-    fun errorLine_flattensAndCaps() {
+    fun errorLine_flattensWhitespaceAndKeepsFullReason() {
         assertEquals("转换失败原因 第二行", PptStatusTexts.errorLine("转换失败原因\n第二行"))
         assertEquals("", PptStatusTexts.errorLine(null))
         val long = "错".repeat(200)
-        val line = PptStatusTexts.errorLine(long)
-        assertEquals(121, line.length) // 120 + 省略号
-        assertTrue(line.endsWith("…"))
+        assertEquals(long, PptStatusTexts.errorLine(long))
     }
 
     @Test

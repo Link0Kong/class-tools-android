@@ -6,6 +6,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,6 +36,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,7 +55,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.components.CtButton
@@ -89,21 +90,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.disabled
-import com.furina.classtools.ui.components.glass.ctGlass
-import com.furina.classtools.ui.components.glass.ctGlassPointerLight
-import com.furina.classtools.ui.components.glass.rememberCtGlassPress
-import com.furina.classtools.ui.theme.CtLightLevel
-import com.furina.classtools.ui.theme.LocalCtLight
-import com.furina.classtools.ui.theme.CtPalette
-import com.furina.classtools.ui.theme.LightPrimary
-import com.furina.classtools.ui.theme.LocalCtDarkTheme
 
 // =============================================================================
 // 统一组件库（全局唯一视觉定义）
@@ -255,8 +246,6 @@ fun CtSectionTitle(
             text = title,
             style = CtTypeScale.sectionTitle,
             color = c.textSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
                 .semantics { heading() },
@@ -324,16 +313,12 @@ fun CtListRow(
                 text = title,
                 style = CtTypeScale.title16,
                 color = c.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
                     style = CtTypeScale.caption,
                     color = subtitleColor ?: c.textSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -434,8 +419,7 @@ fun CtButton(
     /** false = 宽度只包内容（卡内次要动作）；true = 撑满可用宽度（页面主操作）。 */
     fillWidth: Boolean = true,
 ) {
-    val c = rememberCtColors()
-    val dark = LocalCtDarkTheme.current
+    val scheme = MaterialTheme.colorScheme
     val reduceMotion = rememberReduceMotion()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -457,68 +441,41 @@ fun CtButton(
         animationSpec = CtMotion.spatialFast,
         label = "ctButtonScale",
     )
-    val pressState = rememberCtGlassPress()
-    val glassEnabled = LocalCtLight.current.enabled
-
-    val contentColor: Color = when {
-        style == CtButtonStyle.Filled && glassEnabled -> c.primary
-        style == CtButtonStyle.Filled -> c.onPrimary
-        style == CtButtonStyle.Tonal -> c.primary
-        style == CtButtonStyle.Outlined || style == CtButtonStyle.Text -> c.primary
-        else -> c.primary
+    val (container, contentColor) = when {
+        !enabled -> scheme.surfaceContainerHigh to scheme.onSurfaceVariant.copy(alpha = 0.58f)
+        style == CtButtonStyle.Filled -> scheme.primary to scheme.onPrimary
+        style == CtButtonStyle.Tonal -> scheme.secondaryContainer to scheme.onSecondaryContainer
+        style == CtButtonStyle.Outlined -> scheme.surface to scheme.primary
+        else -> Color.Transparent to scheme.primary
     }
-    val disabledAlpha = if (enabled) 1f else 0.38f
-
-    val surface: Modifier = when (style) {
-        CtButtonStyle.Filled -> if (glassEnabled) {
-            Modifier
-                .ctGlass(
-                    level = CtLightLevel.MEDIUM,
-                    shape = shape,
-                    bodySafe = false,
-                    pressState = pressState,
-                )
-                .ctGlassPointerLight(pressState)
-        } else {
-            Modifier.ctFilledButtonSurface(shape = shape, pressed = pressed, enabled = enabled)
-        }
-        CtButtonStyle.Tonal -> Modifier
-            .ctGlass(
-                level = CtLightLevel.MEDIUM,
-                shape = shape,
-                bodySafe = false,
-                pressState = pressState,
-            )
-            .ctGlassPointerLight(pressState)
-        CtButtonStyle.Outlined -> Modifier
-            .clip(shape)
-            .background(c.surface.copy(alpha = if (dark) 0.24f else 0.42f))
-            .border(BorderStroke(1.dp, c.primary.copy(alpha = 0.55f)), shape)
-        CtButtonStyle.Text -> Modifier
+    val border = if (style == CtButtonStyle.Outlined) {
+        Modifier.border(BorderStroke(1.dp, scheme.outline), shape)
+    } else {
+        Modifier
     }
 
     Row(
         modifier = modifier
             .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
-            .height(height)
+            .heightIn(min = height)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-                alpha = disabledAlpha
             }
-            .then(surface)
             .clip(shape)
+            .background(container)
+            .then(border)
             .clickable(
                 enabled = enabled,
                 role = Role.Button,
                 interactionSource = interaction,
-                indication = null,
+                indication = LocalIndication.current,
                 onClick = onClick,
             )
             .semantics {
                 if (!enabled) disabled()
             }
-            .padding(horizontal = CtSpace.xl),
+            .padding(horizontal = CtSpace.lg, vertical = CtSpace.xs),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -535,8 +492,8 @@ fun CtButton(
             text = text,
             style = CtTypeScale.label,
             color = contentColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+            textAlign = TextAlign.Center,
         )
         if (trailingIcon != null) {
             Spacer(modifier = Modifier.width(CtButtonSpec.iconGap))
@@ -549,59 +506,6 @@ fun CtButton(
         }
     }
 }
-
-/**
- * Filled 按钮表面：品牌渐变 + 顶部高光 + 底部柔影 + 按压提亮。
- *
- * 单独抽成 Modifier 便于 Dialog 底部动作条等地方复用同一套视觉。
- */
-private fun Modifier.ctFilledButtonSurface(
-    shape: Shape,
-    pressed: Boolean,
-    enabled: Boolean,
-): Modifier = this
-    .shadow(
-        elevation = if (enabled) 8.dp else 0.dp,
-        shape = shape,
-        clip = false,
-        ambientColor = CtPalette.MistTeal.copy(alpha = 0.45f),
-        spotColor = CtPalette.MistTeal.copy(alpha = 0.55f),
-    )
-    .clip(shape)
-    .drawWithCache {
-        val base = Brush.verticalGradient(
-            listOf(
-                LightPrimary.copy(alpha = 0.96f),
-                CtPalette.MistTeal.copy(alpha = 0.98f),
-            ),
-        )
-        val pressedBrush = Brush.verticalGradient(
-            listOf(
-                LightPrimary.copy(alpha = 1f),
-                LightPrimary.copy(alpha = 1f),
-            ),
-        )
-        val specular = Brush.verticalGradient(
-            0f to Color.White.copy(alpha = 0.28f),
-            0.45f to Color.White.copy(alpha = 0.04f),
-            1f to Color.Transparent,
-        )
-        onDrawBehind {
-            drawRect(brush = if (pressed) pressedBrush else base)
-            drawRect(brush = specular)
-            // 上沿亮线（玻璃质感的"边缘"）+ 下沿暗线（厚度）
-            drawRect(
-                color = Color.White.copy(alpha = 0.32f),
-                topLeft = Offset(0f, 0f),
-                size = Size(size.width, 1.2.dp.toPx()),
-            )
-            drawRect(
-                color = Color.Black.copy(alpha = 0.10f),
-                topLeft = Offset(0f, size.height - 1f),
-                size = Size(size.width, 1f),
-            )
-        }
-    }
 
 /**
  * 文字动作（区块标题右侧 / 卡片内链接）：主色 14 Medium，最小 48dp 触控区。
@@ -648,7 +552,6 @@ fun CtTextAction(
             text = text,
             style = CtTypeScale.label,
             color = color ?: if (enabled) c.primary else c.textTertiary,
-            maxLines = 1,
         )
     }
 }
@@ -869,8 +772,6 @@ fun CtTag(
             text = text,
             style = CtTypeScale.caption,
             modifier = Modifier.padding(horizontal = CtSpace.sm, vertical = CtSpace.xxs),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -910,7 +811,6 @@ fun CtBodyText(
     modifier: Modifier = Modifier,
     color: androidx.compose.ui.graphics.Color? = null,
     style: TextStyle? = null,
-    maxLines: Int = Int.MAX_VALUE,
 ) {
     val c = rememberCtColors()
     Text(
@@ -918,8 +818,6 @@ fun CtBodyText(
         modifier = modifier,
         style = style ?: CtTypeScale.body,
         color = color ?: c.textPrimary,
-        maxLines = maxLines,
-        overflow = TextOverflow.Ellipsis,
     )
 }
 
@@ -929,7 +827,6 @@ fun CtCaptionText(
     text: String,
     modifier: Modifier = Modifier,
     color: androidx.compose.ui.graphics.Color? = null,
-    maxLines: Int = Int.MAX_VALUE,
 ) {
     val c = rememberCtColors()
     Text(
@@ -937,8 +834,6 @@ fun CtCaptionText(
         modifier = modifier,
         style = CtTypeScale.caption,
         color = color ?: c.textSecondary,
-        maxLines = maxLines,
-        overflow = TextOverflow.Ellipsis,
     )
 }
 
@@ -955,7 +850,6 @@ fun CtMetricText(
         modifier = modifier,
         style = CtTypeScale.metric,
         color = color ?: c.textPrimary,
-        maxLines = 1,
     )
 }
 
@@ -977,8 +871,6 @@ fun CtPageTitle(
             text = text,
             style = CtTypeScale.display,
             color = c.textPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
                 .semantics { heading() },

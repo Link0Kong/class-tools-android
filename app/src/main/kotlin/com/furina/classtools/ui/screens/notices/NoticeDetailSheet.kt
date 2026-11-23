@@ -2,12 +2,9 @@
 
 package com.furina.classtools.ui.screens.notices
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -37,23 +34,22 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.notices.MergedMessage
 import com.furina.classtools.data.notices.NoticeGroupDto
@@ -65,12 +61,10 @@ import com.furina.classtools.data.notices.NoticeStatusMachine
 import com.furina.classtools.data.ppt.PptImageLoader
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
-import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
-import com.furina.classtools.ui.theme.rememberReduceMotion
 
 /**
  * 通知详情底部弹层（原生渲染）。
@@ -95,32 +89,27 @@ internal fun NoticeDetailSheet(
     onTogglePin: () -> Unit,
     /** 分享这条通知（生成 5:4 分享卡；标题/分类/状态/摘要/要点/时间地点/来源）。 */
     onShare: ((NoticeGroupDto, Int) -> Unit)? = null,
-    /** 渲染时 now（§3 时间显示按渲染时算相对周；由页面每分钟刷新）。 */
+    loading: Boolean = false,
+    loadError: String? = null,
+    onRetry: () -> Unit = {},
     nowMillis: Long = System.currentTimeMillis(),
 ) {
     CtBottomSheet(onDismissRequest = onDismiss) {
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            // 小屏 / 大字体下压缩正文区高度，避免底部动作按钮被顶出屏幕；
-            // 弹层内部正文仍可滚动，不丢内容。
-            val bodyMaxHeight = if (constraints.hasBoundedHeight) {
-                (maxHeight - 320.dp).coerceIn(160.dp, 460.dp)
-            } else {
-                460.dp
-            }
-            NoticeDetailSheetContent(
-                item = item,
-                rawAttachmentLoader = rawAttachmentLoader,
-                imageLoader = imageLoader,
-                onAddToCalendar = onAddToCalendar,
-                onRemindNotice = onRemindNotice,
-                onDismiss = onDismiss,
-                onToggleDone = onToggleDone,
-                onTogglePin = onTogglePin,
-                onShare = onShare,
-                bodyMaxHeight = bodyMaxHeight,
-                nowMillis = nowMillis,
-            )
-        }
+        NoticeDetailSheetContent(
+            item = item,
+            rawAttachmentLoader = rawAttachmentLoader,
+            imageLoader = imageLoader,
+            onAddToCalendar = onAddToCalendar,
+            onRemindNotice = onRemindNotice,
+            onDismiss = onDismiss,
+            onToggleDone = onToggleDone,
+            onTogglePin = onTogglePin,
+            onShare = onShare,
+            loading = loading,
+            loadError = loadError,
+            onRetry = onRetry,
+            nowMillis = nowMillis,
+        )
     }
 }
 
@@ -141,154 +130,87 @@ internal fun NoticeDetailSheetContent(
     onTogglePin: () -> Unit = {},
     /** 分享这条通知（详情底栏「分享」）。 */
     onShare: ((NoticeGroupDto, Int) -> Unit)? = null,
-    /** 正文可滚动区最大高度（弹层按屏幕剩余空间传入；预览默认 460dp）。 */
-    bodyMaxHeight: androidx.compose.ui.unit.Dp = 460.dp,
+    loading: Boolean = false,
+    loadError: String? = null,
+    onRetry: () -> Unit = {},
     /** 渲染时 now（§3 时间显示：所有日期 token → `M月D日（相对周）`）。 */
     nowMillis: Long = System.currentTimeMillis(),
 ) {
-    // 弹层内容淡入 + 轻微上浮（与卡片「点开延伸」衔接；reduceMotion/静态预览下直接终态）
-    val systemReduceMotion = rememberReduceMotion()
-    val inspection = LocalInspectionMode.current
-    var entered by remember { mutableStateOf(systemReduceMotion || inspection) }
-    LaunchedEffect(Unit) { entered = true }
-    val enterProgress by animateFloatAsState(
-        targetValue = if (entered) 1f else 0f,
-        animationSpec = if (systemReduceMotion) snap() else CtMotion.spatial,
-        label = "noticeDetailEnter",
-    )
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .graphicsLayer {
-                alpha = 0.72f + 0.28f * enterProgress
-                translationY = (1f - enterProgress) * 10.dp.toPx()
-            },
-    ) {
-        // 头部：分类 + 状态 + 已处理 + 关闭
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 8.dp, top = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            NoticeCatPill(cat = item.cat, tone = item.tone)
-            if (item.status != null) {
-                Spacer(Modifier.width(10.dp))
-                DetailStatusLine(status = item.status, modifier = Modifier.weight(1f))
-            } else {
-                Spacer(Modifier.weight(1f))
-            }
-            if (item.done) {
-                CtPill(
-                    text = "已处理",
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Spacer(Modifier.width(4.dp))
-            }
-            IconButton(onClick = onDismiss) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "关闭通知详情",
-                )
-            }
+    val scheme = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth()) {
+        IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End).padding(end = CtSpace.xs)) {
+            Icon(Icons.Rounded.Close, contentDescription = "关闭通知详情")
         }
 
-        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(CtSpace.xs))
-            Text(
-                text = detailMetaText(item, nowMillis),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            DetailTagLine(item = item, nowMillis = nowMillis)
-        }
-
-        Spacer(Modifier.height(CtSpace.md))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-
-        // 正文可滚动区（高度上限 460dp；超长内容内部滚动，不顶掉底部动作区）
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = bodyMaxHeight),
+        Column(
+            modifier = Modifier.weight(1f, fill = false).fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = CtSpace.lg)
+                .padding(bottom = CtSpace.md),
+            verticalArrangement = Arrangement.spacedBy(CtSpace.sm),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(CtSpace.xs),
+                verticalArrangement = Arrangement.spacedBy(CtSpace.xs),
             ) {
-                when {
-                    item.auto != null -> AutoNoticeDetail(
-                        item = item,
-                        rawAttachmentLoader = rawAttachmentLoader,
-                        imageLoader = imageLoader,
-                        nowMillis = nowMillis,
-                    )
-
-                    item.manual != null -> ManualNoticeDetail(
-                        item = item,
-                        rawAttachmentLoader = rawAttachmentLoader,
-                        imageLoader = imageLoader,
-                        nowMillis = nowMillis,
+                NoticeCatPill(cat = item.cat, tone = item.tone)
+                item.status?.let { NoticeStatusLabel(it) }
+                if (item.done) {
+                    CtPill(
+                        text = "已处理",
+                        containerColor = scheme.primaryContainer,
+                        contentColor = scheme.onPrimaryContainer,
                     )
                 }
             }
+            Text(
+                text = item.title.ifBlank { "通知" },
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.semantics { heading() },
+            )
+            val metadata = detailMetaText(item, nowMillis)
+            if (metadata.isNotBlank()) {
+                Text(metadata, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+            }
+            DetailTagLine(item = item, nowMillis = nowMillis)
+            HorizontalDivider()
+
+            if (loading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text("正在加载完整通知…", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+            }
+            if (loadError != null) {
+                Text(loadError, style = MaterialTheme.typography.bodyMedium, color = scheme.error)
+                TextButton(onClick = onRetry) { Text("重试加载详情") }
+            }
+
+            when {
+                item.auto != null -> AutoNoticeDetail(
+                    item = item,
+                    rawAttachmentLoader = rawAttachmentLoader,
+                    imageLoader = imageLoader,
+                    nowMillis = nowMillis,
+                )
+
+                item.manual != null -> ManualNoticeDetail(
+                    item = item,
+                    rawAttachmentLoader = rawAttachmentLoader,
+                    imageLoader = imageLoader,
+                    nowMillis = nowMillis,
+                )
+            }
+
+            HorizontalDivider()
+            DetailActions(
+                item = item,
+                onAddToCalendar = onAddToCalendar,
+                onRemindNotice = onRemindNotice,
+                onToggleDone = onToggleDone,
+                onTogglePin = onTogglePin,
+                onShare = onShare,
+            )
         }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-        DetailActions(
-            item = item,
-            onAddToCalendar = onAddToCalendar,
-            onRemindNotice = onRemindNotice,
-            onToggleDone = onToggleDone,
-            onTogglePin = onTogglePin,
-            onDismiss = onDismiss,
-            onShare = onShare,
-        )
-    }
-}
-
-/** 状态行（详情头部；比卡片多显示一点细节但仍是色点 + 文案）。 */
-@Composable
-private fun DetailStatusLine(
-    status: NoticeStatus,
-    modifier: Modifier = Modifier,
-) {
-    val colors = toneColors(statusTone(status))
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(7.dp)
-                .background(colors.dot, CircleShape),
-        )
-        Spacer(Modifier.width(5.dp))
-        Text(
-            text = status.label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (status.expired) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                colors.dot
-            },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -346,8 +268,6 @@ private fun DetailTagLine(item: NoticeUiItem, nowMillis: Long) {
                     text = "多源合并 ${merged.joinToString("、")}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -668,8 +588,6 @@ private fun DetailTextItem(meta: NoticeItemMeta.Text, anchorMillis: Long?, nowMi
                     text = metaText,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -716,16 +634,12 @@ private fun DetailInfoRow(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
             if (detail.isNotBlank()) {
                 Text(
                     text = detail,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -752,8 +666,6 @@ private fun DetailMergedBlock(meta: NoticeItemMeta.Merged, anchorMillis: Long?, 
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = "${meta.count} 条",
@@ -876,14 +788,13 @@ private fun DetailActions(
     onRemindNotice: ((NoticeGroupDto) -> Unit)?,
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
-    onDismiss: () -> Unit,
     onShare: ((NoticeGroupDto, Int) -> Unit)? = null,
 ) {
     val group = item.auto?.group
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(vertical = CtSpace.xs),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -971,12 +882,6 @@ private fun DetailActions(
                 Spacer(Modifier.width(6.dp))
                 Text(if (item.pinned) "取消置顶" else "置顶")
             }
-        }
-        TextButton(
-            onClick = onDismiss,
-            modifier = Modifier.heightIn(min = 48.dp),
-        ) {
-            Text("关闭")
         }
     }
 }

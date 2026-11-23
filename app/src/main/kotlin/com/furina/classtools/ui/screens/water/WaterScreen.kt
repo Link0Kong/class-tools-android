@@ -72,7 +72,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.power.PowerDirectoryRepository
 import com.furina.classtools.data.power.PowerDirectoryResult
@@ -731,7 +730,6 @@ private fun RoomPickerRow(
                 Text(
                     text = label.ifBlank { "尚未选择宿舍" },
                     style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
                 )
             }
             Text(
@@ -803,7 +801,6 @@ private fun PersonsCard(
                         Text(
                             text = "$option 人",
                             style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
                         )
                     }
                 }
@@ -1102,7 +1099,6 @@ private fun WaterCardHeader(title: String, trailing: (@Composable () -> Unit)? =
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f),
-            maxLines = 2,
         )
         trailing?.invoke()
     }
@@ -1451,7 +1447,6 @@ private fun RoomPickerDialog(
                                         text = roomInfo.room,
                                         style = MaterialTheme.typography.bodySmall,
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                        maxLines = 2,
                                     )
                                 }
                             }

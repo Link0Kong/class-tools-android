@@ -23,6 +23,33 @@ class DrawWorkflowTest {
     }
 
     @Test
+    fun `直接从当前参数抽签并限定选中的名单`() {
+        val config = DrawConfig(start = 1, end = 6, count = 2, excludedText = "3", poolSource = DrawPoolSource.ROSTER)
+        val transition = DrawWorkflow.quickDraw(
+            state = DrawWorkflowState(config = config),
+            rosterSeats = listOf(2, 3, 6, 7),
+            nameOf = { "成员 $it" },
+            random = SeededDrawRandom(44),
+        ) as DrawTransition.Next
+        val result = requireNotNull(transition.state.result)
+        assertEquals(DrawStep.RESULT, transition.state.step)
+        assertEquals(setOf(DrawEntry(2, "成员 2"), DrawEntry(6, "成员 6")), result.entries.toSet())
+        assertTrue(transition.state.candidates.isEmpty())
+    }
+
+    @Test
+    fun `手动补抽沿用本轮范围且跳过已剔除的号码`() {
+        val state = readyResultState()
+        val before = requireNotNull(state.result)
+        val removed = (DrawWorkflow.removeAndRedraw(state, 0, false, random) as DrawTransition.Next).state
+        val after = DrawEngine.refill(requireNotNull(removed.result), random)
+        assertEquals(before.config.count, after.entries.size)
+        assertTrue(after.entries.none { it.number == before.entries.first().number })
+        assertEquals(after.entries.last(), after.log.single().added)
+        assertEquals(before.pool, after.pool)
+    }
+
+    @Test
     fun `初始状态在第一步`() {
         assertEquals(DrawStep.CONFIG, DrawWorkflowState().step)
     }

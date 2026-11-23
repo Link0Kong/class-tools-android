@@ -574,11 +574,11 @@ private fun NoticeRedesignDetailManualDarkPreview() {
 // -----------------------------------------------------------------------------
 
 @Preview(
-    name = "188 通知重做 · 大字体 1.3x",
+    name = "188 通知 · 窄屏大字体",
     showBackground = true,
-    widthDp = 412,
+    widthDp = 320,
     heightDp = 980,
-    fontScale = 1.3f,
+    fontScale = 2f,
 )
 @Composable
 private fun NoticeRedesignLargeFontPreview() {
@@ -592,6 +592,19 @@ private fun NoticeRedesignLargeFontPreview() {
             initialMarks = previewMarks(),
             skipLoad = true,
         )
+    }
+}
+
+@Preview(name = "通知长标题和多行来源", showBackground = true, widthDp = 320, heightDp = 760, fontScale = 2f)
+@Composable
+private fun NoticeLongDetailPreview() {
+    ClassToolsTheme(darkTheme = true) {
+        val item = detailItem("关于 11 月主题班会的通知").copy(
+            title = "关于组织本学期跨学院实践交流与成果展示活动的补充通知",
+            source = "跨学院实践交流与成果展示活动筹备工作群",
+            senderLine = "学生活动组织委员会",
+        )
+        PreviewDetailSheet(item)
     }
 }
 

@@ -49,7 +49,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
@@ -73,14 +72,11 @@ import com.furina.classtools.features.group.GroupValidator
 import com.furina.classtools.features.group.GroupWorkflow
 import com.furina.classtools.features.group.GroupWorkflowState
 import com.furina.classtools.features.group.SeededGroupRandom
+import com.furina.classtools.ui.components.RosterPickerSheet
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
-import com.furina.classtools.ui.components.expressive.CtBottomSheetFooter
-import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
-import com.furina.classtools.ui.components.expressive.CtChipGroup
-import com.furina.classtools.ui.components.expressive.CtChipOption
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
@@ -298,7 +294,7 @@ fun GroupScreen(
 
         if (showRosterPicker) {
             RosterPickerSheet(
-                all = rosterMembers,
+                members = rosterMembers.associate { it.seat to it.label },
                 selected = state.config.selectedSeats.toSet(),
                 onConfirm = { seats ->
                     showRosterPicker = false
@@ -438,8 +434,6 @@ private fun GroupCompactCard(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
                     } else {
@@ -462,14 +456,11 @@ private fun GroupCompactInfoRow(label: String, value: String) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
-            maxLines = 1,
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -788,50 +779,8 @@ private fun GroupCard(
                     text = member.name.ifBlank { "—" },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun RosterPickerSheet(
-    all: List<GroupMember>,
-    selected: Set<Int>,
-    onConfirm: (Set<Int>) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var current by remember { mutableStateOf(selected) }
-    CtBottomSheet(onDismissRequest = onDismiss) {
-        CtBottomSheetHeader(
-            title = "选择名单",
-            subtitle = "已选 ${current.size} / ${all.size} 人",
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            CtChipGroup(
-                options = all.map { member ->
-                    CtChipOption(key = member.seat.toString(), label = member.label)
-                },
-                selectedKeys = current.map { it.toString() }.toSet(),
-                onToggle = { key ->
-                    val seat = key.toIntOrNull() ?: return@CtChipGroup
-                    current = if (seat in current) current - seat else current + seat
-                },
-                multiSelect = true,
-            )
-            CtBottomSheetFooter(
-                primaryText = "确定",
-                onPrimary = { onConfirm(current) },
-                secondaryText = "全选",
-                onSecondary = { current = all.map { it.seat }.toSet() },
-            )
         }
     }
 }

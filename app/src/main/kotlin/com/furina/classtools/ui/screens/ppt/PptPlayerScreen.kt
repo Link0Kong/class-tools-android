@@ -102,7 +102,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -764,8 +763,6 @@ private fun PptStepsPlayer(
                     text = detail.title.ifBlank { "演示" },
                     color = CtPalette.MediaOnScrim.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .padding(start = 20.dp, top = 18.dp, end = 80.dp)
                         .fillMaxWidth(),

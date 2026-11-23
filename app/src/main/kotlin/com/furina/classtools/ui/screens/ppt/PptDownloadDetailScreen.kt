@@ -63,7 +63,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.ppt.PptDeckDetail
 import com.furina.classtools.data.ppt.PptDetailResult
@@ -442,15 +441,11 @@ private fun DetailHeader(detail: PptDeckDetail, imageLoader: PptImageLoader) {
                     text = detail.title.ifBlank { "未命名演示" },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = metaLine(detail),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 if (detail.isReady) {
                     val tags = buildList {
@@ -544,8 +539,6 @@ private fun CompatWarningsCard(warnings: List<String>) {
                 text = warnings.joinToString("；"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -630,8 +623,6 @@ private fun DownloadRowCard(
                     text = sublineOf(row),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             when {
@@ -722,7 +713,6 @@ private fun MediaDownloadGroup(
                 text = PptMediaDownloadLogic.summaryText(rows),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
             )
         }
         rows.forEach { row ->
@@ -774,15 +764,11 @@ private fun MediaDownloadRowCard(
                     text = row.title,
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = mediaSubline(row),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             when {

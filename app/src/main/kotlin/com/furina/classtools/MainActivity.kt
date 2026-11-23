@@ -6,7 +6,6 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
-import com.furina.classtools.data.background.BackgroundStore
 import com.furina.classtools.data.push.OppPushClick
 import com.furina.classtools.data.reminder.ReminderIntentFactory
 import com.furina.classtools.ui.ClassToolsRoot
@@ -35,11 +34,9 @@ class MainActivity : ComponentActivity() {
         pendingToolId.value = toolIdFrom(intent)
         pendingNoticeId.value = noticeIdFrom(intent)
         val container = (application as ClassToolsApp).container
-        // 自定义背景：本机存储（App 私有目录 + SharedPreferences）；只本机、不上传、不进云同步。
-        val backgroundStore = BackgroundStore(this)
         setContent {
             // 主题/外观/背景/系统栏与 ToolActivity 共用同一宿主，保证共享元素两端视觉一致。
-            ClassToolsThemeHost(container = container, backgroundStore = backgroundStore) {
+            ClassToolsThemeHost(container) {
                 ClassToolsRoot(
                     container = container,
                     pendingToolId = pendingToolId.value,

@@ -34,7 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.theme.CtShapeTokens
@@ -92,16 +92,12 @@ fun CtToolCard(
                             text = title,
                             style = CtText.bodyMedium,
                             color = colors.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                         if (subtitle != null) {
                             Text(
                                 text = subtitle,
                                 style = CtText.caption,
                                 color = colors.textSecondary,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -134,16 +130,12 @@ fun CtToolSectionHeader(
                 text = title,
                 style = CtText.heading,
                 color = colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
                     style = CtText.caption,
                     color = colors.textSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -222,16 +214,13 @@ fun CtToolInfoRow(
             style = CtText.label,
             color = colors.textSecondary,
             modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
-        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = value,
             style = CtText.bodyMedium,
             color = if (valueColor == Color.Unspecified) colors.textPrimary else valueColor,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -256,15 +245,11 @@ fun CtToolStat(
             text = value,
             style = CtText.title,
             color = if (valueColor == Color.Unspecified) colors.textPrimary else valueColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = label,
             style = CtText.caption,
             color = colors.textSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -320,8 +305,6 @@ fun CtToolChip(
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         },
         modifier = modifier,

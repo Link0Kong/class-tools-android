@@ -78,6 +78,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -93,7 +94,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -249,7 +249,8 @@ fun TimetableViewScreen(
     val maxWeek = remember(snapshot, currentWeek) { TimetableWeekLogic.maxWeekOf(snapshot.c, currentWeek) }
 
     var weekOffset by remember { mutableIntStateOf(initialWeekOffset) }
-    var viewMode by remember { mutableStateOf(if (initialDayView) TimetableViewMode.DAY else TimetableViewMode.WEEK) }
+    val preferDay = initialDayView || LocalDensity.current.fontScale > 1.3f
+    var viewMode by rememberSaveable { mutableStateOf(if (preferDay) TimetableViewMode.DAY else TimetableViewMode.WEEK) }
     var selectedDay by remember { mutableIntStateOf(todayIndex) }
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
 
@@ -896,7 +897,6 @@ private fun WeekControlBar(
                             text = displayWeek?.let { "第 $it 周" } ?: "我的课表",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
                         )
                         Icon(
                             imageVector = Icons.Rounded.ExpandMore,
@@ -1014,8 +1014,6 @@ private fun NextSessionBar(plan: TtPlan?, dark: Boolean, nowMillis: Long) {
                 Text(
                     text = session.name,
                     style = MaterialTheme.typography.titleSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = buildString {
@@ -1026,8 +1024,6 @@ private fun NextSessionBar(plan: TtPlan?, dark: Boolean, nowMillis: Long) {
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = content.copy(alpha = 0.72f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             if (ongoing != null) {
@@ -1364,6 +1360,7 @@ private fun CourseBlockV5(
             .clickable(
                 interactionSource = interaction,
                 indication = LocalIndication.current,
+                onClickLabel = "查看完整课程信息",
                 onClick = onClick,
             )
             .padding(metrics.blockPaddingDp.dp),
@@ -1373,26 +1370,22 @@ private fun CourseBlockV5(
                 text = TtPeriods.startText(course.start),
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                 fontWeight = FontWeight.Bold,
-                color = content.copy(alpha = 0.78f),
+                color = content,
                 maxLines = 1,
             )
             Text(
                 text = course.name,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = if (metrics.courseNameMaxLines >= 3) CtType.microSize else CtType.microSize,
-                ),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                 fontWeight = FontWeight.SemiBold,
                 color = content,
                 maxLines = if (span >= 2) metrics.courseNameMaxLines else 1,
-                overflow = TextOverflow.Ellipsis,
             )
             if (course.room.isNotBlank() && span >= 2) {
                 Text(
                     text = TtCalendar.roomShort(course.room),
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
-                    color = content.copy(alpha = 0.72f),
+                    color = content,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -1611,13 +1604,11 @@ private fun DaySessionRowV5(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = content,
-                    maxLines = 1,
                 )
                 Text(
                     text = session.endText,
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                     color = content.copy(alpha = 0.7f),
-                    maxLines = 1,
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -1625,8 +1616,6 @@ private fun DaySessionRowV5(
                     text = session.name,
                     style = MaterialTheme.typography.titleSmall,
                     color = content,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = buildString {
@@ -1635,8 +1624,6 @@ private fun DaySessionRowV5(
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = content.copy(alpha = 0.72f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             when (session.state) {
@@ -1737,8 +1724,6 @@ private fun AllCoursesCardV5(
                                 text = name,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
@@ -1748,7 +1733,6 @@ private fun AllCoursesCardV5(
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
                             )
                         }
                     }
@@ -1950,8 +1934,6 @@ private fun SettingsActionRow(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -1994,8 +1976,6 @@ fun TimetableCourseDetailContent(
                     text = course.name.ifBlank { "未命名课程" },
                     style = MaterialTheme.typography.headlineSmall,
                     color = content,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = buildString {
@@ -2007,8 +1987,6 @@ fun TimetableCourseDetailContent(
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = content.copy(alpha = 0.78f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

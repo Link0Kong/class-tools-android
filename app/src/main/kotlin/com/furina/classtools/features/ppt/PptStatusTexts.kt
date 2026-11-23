@@ -48,15 +48,13 @@ object PptStatusTexts {
         }
     }
 
-    /** 失败原因子行（去掉过长/换行，列表最多两行）。 */
-    fun errorLine(error: String?): String {
-        val text = error.orEmpty()
+    /** 整理服务端错误文案的空白，详情可换行显示完整原因。 */
+    fun errorLine(error: String?): String =
+        error.orEmpty()
             .replace('\n', ' ')
             .replace('\r', ' ')
             .replace(Regex("\\s{2,}"), " ")
             .trim()
-        return if (text.length <= 120) text else text.take(120) + "…"
-    }
 
     /** 是否需要在列表页展示「转换机离线 · 任务排队中」横幅（有排队/转换中的任务且心跳判定离线）。 */
     fun shouldShowAgentOfflineBanner(decks: List<com.furina.classtools.data.ppt.PptDeck>, agentOnline: Boolean?): Boolean {

@@ -8,8 +8,10 @@ import com.furina.classtools.data.network.asObjectOrNull
 import com.furina.classtools.data.network.parseJsonOrNull
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -118,15 +120,21 @@ class DefaultNoticesRepository(
     private val manualAccum = ArrayList<ManualNotice>()
     private var hiddenCountAccum = 0
 
-    override suspend fun load(force: Boolean): NoticesLoadResult = mutex.withLock { loadLocked(force) }
+    override suspend fun load(force: Boolean): NoticesLoadResult = withContext(Dispatchers.Default) {
+        mutex.withLock { loadLocked(force) }
+    }
 
-    override suspend fun loadMore(): NoticesLoadResult = mutex.withLock { loadMoreLocked() }
+    override suspend fun loadMore(): NoticesLoadResult = withContext(Dispatchers.Default) {
+        mutex.withLock { loadMoreLocked() }
+    }
 
     override suspend fun cached(): NoticesData? = mutex.withLock { cache }
 
     override suspend fun loadRow(rowId: String): NoticeRow? = mutex.withLock { fetchRow(rowId) }
 
-    override suspend fun hydrateRow(rowId: String): NoticesLoadResult = mutex.withLock { hydrateLocked(rowId) }
+    override suspend fun hydrateRow(rowId: String): NoticesLoadResult = withContext(Dispatchers.Default) {
+        mutex.withLock { hydrateLocked(rowId) }
+    }
 
     // ------------------------------------------------------------ 内部：首屏 / 加载更多
 
