@@ -36,7 +36,10 @@ internal data class WidgetHomework(val rows: List<HomeworkRow>, val fetchedAt: L
             }
             val deadline = item.due?.let { HomeworkDueCalculator.shortDueText(item.row) + " 截止 · " + it.label }
                 ?: item.row.due.ifBlank { "无截止日期" }
-            WidgetLine("作业 · " + item.title, deadline, "class-homework", priority, item.id)
+            val title = item.row.briefTitle()
+            val subject = item.row.subject.trim().takeIf { it.isNotEmpty() && it != title }
+            WidgetLine("作业 · " + title, listOfNotNull(subject, deadline).joinToString(" · "),
+                "class-homework", priority, item.id)
         }
         return WidgetList(items.size, lines, fetchedAt)
     }

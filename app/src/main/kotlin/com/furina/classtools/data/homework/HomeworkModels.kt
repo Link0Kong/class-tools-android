@@ -28,6 +28,10 @@ data class HomeworkRow(
     val ts: Long = 0L,
 )
 
+/** First meaningful line for compact homework views; the subject stays available as context. */
+internal fun HomeworkRow.briefTitle(): String =
+    content.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: subject.trim().ifEmpty { "未命名作业" }
+
 /** 附件数据形态（只用于展示/后续按需读取，不把内容常驻内存）。 */
 enum class HomeworkAttachmentKind {
     /** `data:<mime>;base64,...`（网页/小程序压缩后的内联附件）。 */

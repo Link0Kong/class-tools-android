@@ -271,6 +271,7 @@ fun ClassToolsTheme(
         shapes = CtShapes,
         content = {
             CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides colorScheme.onSurface,
                 LocalCtSpacing provides spacing,
                 LocalCtEmphasizedType provides CtEmphasizedType,
                 LocalCtColors provides ctColorOf(darkTheme),

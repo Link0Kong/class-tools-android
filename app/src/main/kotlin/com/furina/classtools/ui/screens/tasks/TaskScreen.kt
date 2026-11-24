@@ -103,7 +103,7 @@ fun TaskScreen(
     LaunchedEffect(groups) { if (filters.none { it.first == view }) view = "all" }
     ExpressiveBackground(modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
-            CtLightTopBar(title = "任务", scrollPx = 0f, subtitle = if (status.contains("离线") || status.contains("失败") || status.contains("同步中")) status else "${all.count { !it.flag("done") }} 项待办 · ${all.count { !it.flag("done") && it.text("due") == today }} 项今天截止", onBack = onBack, actions = {
+            CtLightTopBar(title = "任务", scrollPx = 0f, subtitle = if (status.contains("离线") || status.contains("失败") || status.contains("同步中")) status else "${all.count { !it.flag("done") }} 项个人待办 · ${all.count { !it.flag("done") && it.text("due") == today }} 项今天截止", onBack = onBack, actions = {
                 IconButton(onClick = { searching = !searching; if (!searching) query = "" }) {
                     Icon(Icons.Rounded.Search, "搜索任务")
                 }

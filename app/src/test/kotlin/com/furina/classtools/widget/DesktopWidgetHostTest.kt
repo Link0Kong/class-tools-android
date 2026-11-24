@@ -67,10 +67,11 @@ class DesktopWidgetHostTest {
 
     @Test fun taskWidgetShowsClassDeadlinesWithoutCountingThemAsPersonalTasks() {
         val now = com.furina.classtools.data.homework.HomeworkDueCalculator.parseDue("2026-11-24", "12:00")!!
-        val assignment = com.furina.classtools.data.homework.HomeworkRow("h1", "实验报告", date = "2026-11-24", time = "16:00")
+        val assignment = com.furina.classtools.data.homework.HomeworkRow("h1", "物理", content = "\n  实验报告  \n交到课代表处", date = "2026-11-24", time = "16:00")
         val data = feed.copy(homework = WidgetHomework(listOf(assignment), now))
         val model = widgetContent(WidgetKind.TASKS, true, null, data, now)
         assertEquals("作业 · 实验报告", model.first.title)
+        assertTrue(model.first.detail.startsWith("物理 · "))
         assertEquals("class-homework", model.first.destination)
         assertEquals("5 待办 · 1 作业", model.summary)
         assertEquals(0, data.homework!!.current(now + 4L * 86_400_000L).count)

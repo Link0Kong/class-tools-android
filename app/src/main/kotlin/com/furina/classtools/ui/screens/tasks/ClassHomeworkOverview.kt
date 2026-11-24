@@ -97,12 +97,15 @@ internal fun ClassHomeworkOverview(brief: HomeworkBrief, onOpen: (String?) -> Un
                 HorizontalDivider(Modifier.padding(top = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f).clickable { onOpen(item.id) }.padding(vertical = 8.dp)) {
-                        Text(item.title.ifBlank { "未命名作业" }, style = MaterialTheme.typography.titleSmall,
+                        val title = item.row.briefTitle()
+                        Text(title, style = MaterialTheme.typography.titleSmall,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val deadline = item.due?.let {
                             HomeworkDueCalculator.shortDueText(item.row) + " · " + it.label
                         } ?: item.row.due.ifBlank { "无截止日期" }
-                        Text(deadline, style = MaterialTheme.typography.bodySmall, color =
+                        val subject = item.row.subject.trim().takeIf { it.isNotEmpty() && it != title }
+                        Text(listOfNotNull(subject, deadline).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall, color =
                             if (item.due?.expired == true) colors.error else colors.onSurfaceVariant)
                     }
                     if (item.due != null && !item.due.expired) {

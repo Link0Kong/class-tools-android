@@ -113,8 +113,8 @@ class WidgetFeedWorker(context: Context, params: WorkerParameters) : CoroutineWo
             val response = (api.get(path) as? ApiResult.Success)?.value ?: return@async null
             val rows = DefaultHomeworkRepository.parseRows(com.furina.classtools.data.network.NetJson, response) ?: return@async null
             val pending = rows.filterNot { snapshot.isDone(MarkKind.HW, it.id) }.map { row ->
-                HomeworkRow(id = row.id, subject = row.subject.ifBlank { row.content.lineSequence().firstOrNull().orEmpty() }
-                    .ifBlank { "未命名作业" }.take(150), date = row.date, time = row.time, due = row.due.take(60), ts = row.ts)
+                HomeworkRow(id = row.id, subject = row.subject.take(80), content = row.briefTitle().take(150),
+                    date = row.date, time = row.time, due = row.due.take(60), ts = row.ts)
             }
             WidgetHomework(pending, now)
         }
