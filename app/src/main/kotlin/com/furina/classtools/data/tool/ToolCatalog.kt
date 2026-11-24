@@ -97,12 +97,12 @@ object ToolCatalog {
         ),
         AppTool(
             id = "hw",
-            name = "作业",
-            subtitle = "截止提醒 · 完成状态",
+            name = "任务",
+            subtitle = "个人待办 · 班级作业",
             icon = Icons.AutoMirrored.Rounded.Assignment,
             accentFamily = "sand",
             category = ToolCategory.STUDY,
-            features = listOf("作业列表与截止倒计时", "完成勾选（云端 marks 同步）", "本地截止提醒通知"),
+            features = listOf("个人任务与步骤", "重要、分组与截止日期", "从班级作业加入任务"),
         ),
         AppTool(
             id = "nt",

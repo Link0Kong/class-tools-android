@@ -146,6 +146,7 @@ fun HomeworkScreen(
     onRemindHomework: ((com.furina.classtools.data.homework.HomeworkRow) -> Unit)? = null,
     /** 预览注入：初始筛选（全部/未完成/已完成）。 */
     initialFilter: HomeworkFilter = HomeworkFilter.ALL,
+    onAddTask: ((HomeworkRow) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -290,7 +291,7 @@ fun HomeworkScreen(
             ) {
                 CtLightTopBar(
                     scrollPx = ctTopBarScrollPx,
-                    title = "作业",
+                    title = "班级作业",
                     subtitle = subtitle.takeIf { it.isNotBlank() },
                     onBack = onBack,
                     actions = {
@@ -394,14 +395,12 @@ fun HomeworkScreen(
         }
     }
 
-    detail?.let { item ->
+    detail?.let { selected -> allItems.find { it.id == selected.id } }?.let { item ->
         HomeworkDetailDialog(
             item = item,
             onRemind = onRemindHomework?.let { cb -> { cb(item.row) } },
-            onToggle = {
-                toggleDone(item)
-                detail = item.copy(done = !item.done)
-            },
+            onToggle = { toggleDone(item) },
+            onAddTask = onAddTask?.let { add -> { add(item.row); detail = null } },
             onDismiss = { detail = null },
         )
     }
@@ -667,6 +666,7 @@ private fun HomeworkDetailDialog(
     onToggle: () -> Unit,
     onDismiss: () -> Unit,
     onRemind: (() -> Unit)? = null,
+    onAddTask: (() -> Unit)? = null,
 ) {
     CtLightAlertDialog(
         onDismissRequest = onDismiss,
@@ -696,6 +696,7 @@ private fun HomeworkDetailDialog(
                 )
                 HorizontalDivider()
                 DetailRow("截止", HomeworkDueCalculator.dueText(item.row))
+                if (onAddTask != null) TextButton(onClick = onAddTask) { Text("加入我的任务") }
                 if (item.row.author.isNotBlank()) DetailRow("发布者", item.row.author)
                 if (item.row.ts > 0) DetailRow("发布时间", HomeworkDueCalculator.tsText(item.row.ts))
                 if (item.attachments.isNotEmpty()) {

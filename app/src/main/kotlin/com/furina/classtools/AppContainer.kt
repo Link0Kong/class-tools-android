@@ -34,6 +34,9 @@ import com.furina.classtools.features.feedback.FeedbackRepository
 import com.furina.classtools.data.fitrecs.FitRecsRepository
 import com.furina.classtools.data.homework.DefaultHomeworkRepository
 import com.furina.classtools.data.homework.HomeworkRepository
+import com.furina.classtools.data.tasks.TaskPreferences
+import com.furina.classtools.data.tasks.TaskRepository
+import com.furina.classtools.data.tasks.scheduleTaskReminders
 import com.furina.classtools.data.marks.DefaultMarksRepository
 import com.furina.classtools.data.marks.MarksRepository
 import com.furina.classtools.data.member.ClassLeagueRepository
@@ -233,6 +236,26 @@ class AppContainer(context: Context) {
     )
 
     val homeworkRepository: HomeworkRepository = DefaultHomeworkRepository(api = apiClient)
+
+    private var taskOwner: Session? = null
+    private var tasks: TaskRepository? = null
+
+    @Synchronized
+    fun tasksFor(session: Session): TaskRepository {
+        if (taskOwner == session) tasks?.let { return it }
+        val store = appContext.getSharedPreferences("tasks_" + (if (session.debug) "debug_" else "") + session.sid, Context.MODE_PRIVATE)
+        val repository = TaskRepository(session.sid, TaskPreferences(store), apiClient, appScope,
+            onChanged = { before, after ->
+                if (!session.debug) scheduleTaskReminders(appContext, session.sid, before, after)
+                if (com.furina.classtools.widget.DesktopWidgets.feedKinds(appContext).isNotEmpty())
+                    com.furina.classtools.widget.DesktopWidgets.refresh(appContext)
+            },
+            canSync = { !session.debug && activeSession?.sid == session.sid && activeSession?.token == session.token },
+        )
+        tasks = repository
+        taskOwner = session
+        return repository
+    }
 
     val noticesRepository: NoticesRepository = DefaultNoticesRepository(
         api = apiClient,

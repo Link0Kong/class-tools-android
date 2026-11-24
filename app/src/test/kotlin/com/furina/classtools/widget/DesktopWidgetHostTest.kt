@@ -37,7 +37,7 @@ class FrameworkWidgetHost : org.robolectric.shadows.ShadowViewGroup()
     instrumentedPackages = ["com.vivo.push.sdk"], shadows = [FrameworkWidgetHost::class])
 class DesktopWidgetHostTest {
     private val app: Application get() = RuntimeEnvironment.getApplication()
-    private val feed = WidgetFeed(tasks = WidgetList(5, (1..5).map { WidgetLine("报告 $it", "周五截止") }, 1),
+    private val feed = WidgetFeed(tasks = WidgetList(5, (1..5).map { WidgetLine("报告 $it", "周五截止") }, 1, taskVersion = 1),
         latestNotices = WidgetList(5, (1..5).map { WidgetLine("通知 $it", "周三报名") }, 1))
 
     private fun options(w: Int, h: Int) = Bundle().apply {
@@ -45,6 +45,17 @@ class DesktopWidgetHostTest {
         putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, w)
         putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, h)
         putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, h)
+    }
+
+    @Test fun legacyHomeworkWidgetCacheIsReplacedByPersonalTasks() {
+        val sid = "3260799999"
+        WidgetFeedStore.save(app, sid, feed.copy(tasks = feed.tasks?.copy(taskVersion = null)))
+        assertNull(WidgetFeedStore.read(app, sid).tasks)
+        app.getSharedPreferences("tasks_" + sid, 0).edit()
+            .putString("local", """{"updatedAt":2,"items":[{"id":"t1","title":"实验"},{"id":"t2","title":"已交","done":true}]}""").commit()
+        val tasks = WidgetFeedStore.read(app, sid).tasks!!
+        assertEquals(1, tasks.count)
+        assertEquals("实验", tasks.rows.single().title)
     }
 
     private fun parcelled(views: RemoteViews): RemoteViews = Parcel.obtain().let { parcel ->

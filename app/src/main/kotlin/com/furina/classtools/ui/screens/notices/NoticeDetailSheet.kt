@@ -84,6 +84,7 @@ internal fun NoticeDetailSheet(
     imageLoader: PptImageLoader?,
     onAddToCalendar: ((NoticeGroupDto) -> Unit)?,
     onRemindNotice: ((NoticeGroupDto) -> Unit)?,
+    onAddTask: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
@@ -101,6 +102,7 @@ internal fun NoticeDetailSheet(
             imageLoader = imageLoader,
             onAddToCalendar = onAddToCalendar,
             onRemindNotice = onRemindNotice,
+            onAddTask = onAddTask,
             onDismiss = onDismiss,
             onToggleDone = onToggleDone,
             onTogglePin = onTogglePin,
@@ -125,6 +127,7 @@ internal fun NoticeDetailSheetContent(
     imageLoader: PptImageLoader? = null,
     onAddToCalendar: ((NoticeGroupDto) -> Unit)? = null,
     onRemindNotice: ((NoticeGroupDto) -> Unit)? = null,
+    onAddTask: (() -> Unit)? = null,
     onDismiss: () -> Unit = {},
     onToggleDone: () -> Unit = {},
     onTogglePin: () -> Unit = {},
@@ -210,6 +213,7 @@ internal fun NoticeDetailSheetContent(
                 onTogglePin = onTogglePin,
                 onShare = onShare,
             )
+            if (onAddTask != null) TextButton(onClick = onAddTask) { Text("加入我的任务") }
         }
     }
 }

@@ -129,6 +129,7 @@ import com.furina.classtools.ui.screens.me.MeStats
 import com.furina.classtools.ui.screens.me.MeStatsBuilder
 import com.furina.classtools.ui.screens.me.ReminderStatus
 import com.furina.classtools.ui.screens.homework.HomeworkScreen
+import com.furina.classtools.ui.screens.tasks.TaskScreen
 import com.furina.classtools.ui.screens.notices.ApiNoticeRawAttachmentLoader
 import com.furina.classtools.ui.screens.notices.NoticesScreen
 import com.furina.classtools.ui.screens.power.PowerScreen
@@ -248,7 +249,8 @@ fun MainNavHost(
                 navController.popBackStack(Routes.ROOT, inclusive = false)
                 pagerState.scrollToPage(0)
             } else {
-                navController.navigate(Routes.tool(initialToolId)) { launchSingleTop = true }
+                val homework = initialToolId == "class-homework"
+                navController.navigate(Routes.tool(if (homework) "hw" else initialToolId, pick = homework)) { launchSingleTop = true }
             }
             onInitialToolConsumed()
         }
@@ -647,13 +649,23 @@ fun MainNavHost(
                     var remindTarget by remember {
                         mutableStateOf<com.furina.classtools.data.homework.HomeworkRow?>(null)
                     }
-                    HomeworkScreen(
-                        onBack = { popTool(toolId) },
+                    val tasks = remember(session) { container.tasksFor(session) }
+                    var showHomework by androidx.compose.runtime.saveable.rememberSaveable(session.sid) {
+                        mutableStateOf(pickInTool)
+                    }
+                    if (!showHomework) {
+                        TaskScreen(tasks, onBack = { popTool(toolId) }, onHomework = { showHomework = true })
+                    } else HomeworkScreen(
+                        onBack = { showHomework = false },
+                        onAddTask = { row ->
+                            toast(context, if (tasks.importHomework(row)) "已加入我的任务" else "这项作业已在任务中")
+                        },
                         session = session,
                         marksRepository = container.marksRepository,
                         homeworkRepository = container.homeworkRepository,
                         onRemindHomework = { row -> remindTarget = row },
                     )
+                    BackHandler(enabled = showHomework && remindTarget == null) { showHomework = false }
                     remindTarget?.let { row ->
                         HomeworkReminderDialog(
                             row = row,
@@ -726,6 +738,10 @@ fun MainNavHost(
                             }
                         },
                         onRemindNotice = { group -> remindTarget = group },
+                        onAddTask = { id, title, summary, deadline ->
+                            val added = container.tasksFor(session).importNotice(id, title, summary, deadline)
+                            toast(context, if (added) "已加入我的任务" else "这条通知已在任务中")
+                        },
                         onShareNotice = { group, attachmentCount ->
                             shareCard = com.furina.classtools.features.share.ShareSpecs.noticeCard(
                                 input = com.furina.classtools.features.share.ShareMappers.notice(
@@ -1358,6 +1374,7 @@ private fun RootTabs(
         ) { page ->
             when (page) {
                 0 -> HomeScreen(
+                    taskRepository = remember(session) { container.tasksFor(session) },
                     session = session,
                     quickToolIds = quickToolIds,
                     onOpenTool = onOpenTool,

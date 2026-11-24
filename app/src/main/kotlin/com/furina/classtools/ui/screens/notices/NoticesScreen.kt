@@ -361,6 +361,7 @@ fun NoticesScreen(
     onAddToCalendar: ((NoticeGroupDto) -> Unit)? = null,
     /** v3：单条通知提醒（Lead 弹出提醒时间选项并排程）。 */
     onRemindNotice: ((NoticeGroupDto) -> Unit)? = null,
+    onAddTask: ((String, String, String, Long?) -> Unit)? = null,
     /** 分享通知（Lead 生成 5:4 分享卡并弹出分享层）。 */
     onShareNotice: ((NoticeGroupDto, Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -930,6 +931,12 @@ fun NoticesScreen(
             imageLoader = imageLoader,
             onAddToCalendar = onAddToCalendar,
             onRemindNotice = onRemindNotice,
+            onAddTask = onAddTask?.let { add -> {
+                val source = item.occurrenceKey ?: item.auto?.id ?: item.manual?.id.orEmpty()
+                val deadline = if (item.occurrenceKey != null) item.whenMillis else
+                    NoticeStatusMachine.parseTs(item.auto?.group?.deadline)
+                add(source, item.title, item.summary, deadline)
+            } },
             onDismiss = { selectedKey = null },
             onToggleDone = { toggleDone(item) },
             onTogglePin = { togglePin(item) },

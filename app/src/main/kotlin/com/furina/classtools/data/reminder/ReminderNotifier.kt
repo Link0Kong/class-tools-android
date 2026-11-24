@@ -38,6 +38,7 @@ object ReminderGrouping {
     const val GROUP_TEST: String = "ct_reminder_group_test"
 
     fun groupKey(kind: ReminderKind): String = when (kind) {
+        ReminderKind.PERSONAL_TASK -> "ct_reminder_group_tasks"
         ReminderKind.HOMEWORK_NEW, ReminderKind.HOMEWORK_DIGEST, ReminderKind.HOMEWORK_DUE -> GROUP_HOMEWORK
         ReminderKind.COURSE_SOON -> GROUP_COURSE
         ReminderKind.NOTICE_NEW, ReminderKind.NOTICE_DIGEST, ReminderKind.NOTICE_DUE,
@@ -49,6 +50,7 @@ object ReminderGrouping {
     }
 
     fun summaryTitle(kind: ReminderKind): String = when (kind) {
+        ReminderKind.PERSONAL_TASK -> "任务提醒"
         ReminderKind.HOMEWORK_NEW, ReminderKind.HOMEWORK_DIGEST, ReminderKind.HOMEWORK_DUE -> "作业提醒"
         ReminderKind.COURSE_SOON -> "上课提醒"
         ReminderKind.NOTICE_NEW, ReminderKind.NOTICE_DIGEST, ReminderKind.NOTICE_DUE,

@@ -150,6 +150,7 @@ enum class ReminderKind(
 
     /** 单条作业截止前提醒（按统一提前时间）。 */
     HOMEWORK_DUE("hw", "homework_due", "作业提醒", "作业截止前与每日截止汇总"),
+    PERSONAL_TASK("hw", "personal_tasks", "任务提醒", "个人任务的指定提醒时间"),
 
     /** 下一节课开始前提醒。 */
     COURSE_SOON("tt", "class_soon", "上课提醒", "下一节课开始前的提醒", highPriority = true),

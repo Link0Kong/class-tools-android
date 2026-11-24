@@ -79,7 +79,11 @@ class MainActivity : ComponentActivity() {
         if (intent?.action == Intent.ACTION_VIEW &&
             intent.dataString == com.furina.classtools.data.timetable.XiaobuCourseCard.TIMETABLE_LINK
         ) "tt" else if (intent?.action == "com.furina.classtools.widget.OPEN.home") "home"
-        else ReminderIntentFactory.toolIdFromExtras(intent?.getStringExtra(ReminderIntentFactory.EXTRA_TOOL_ID))
+        else ReminderIntentFactory.toolIdFromExtras(intent?.getStringExtra(ReminderIntentFactory.EXTRA_TOOL_ID))?.let {
+            val personalTask = intent?.action == "com.furina.classtools.widget.OPEN.hw" ||
+                intent?.getStringExtra(ReminderIntentFactory.EXTRA_REMINDER_KIND) == com.furina.classtools.data.reminder.ReminderKind.PERSONAL_TASK.name
+            if (it == "hw" && !personalTask) "class-homework" else it
+        }
 
     /**
      * OPPO PUSH 点击参数解析：优先 intent extra `noticeId`，否则解析 extra `actionParameters` JSON。

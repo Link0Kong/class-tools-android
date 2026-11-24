@@ -95,12 +95,12 @@ object UserGuideContent {
         GuideCard(
             id = "hw",
             category = GuideCategory.STUDY,
-            title = "作业",
-            subtitle = "完成状态云端同步，截止可提醒",
+            title = "任务",
+            subtitle = "个人待办与班级作业",
             steps = listOf(
-                "作业板分未完成与已完成",
-                "勾选完成会同步到云端",
-                "按截止时间排序查看",
+                "输入标题添加任务，点任务编辑日期和步骤",
+                "点星标设为重要，勾选后可在已完成中恢复",
+                "打开班级作业，可从详情加入我的任务",
             ),
             tip = "截止提醒去「我的 → 提醒设置」开",
             scene = GuideScene.LIST,

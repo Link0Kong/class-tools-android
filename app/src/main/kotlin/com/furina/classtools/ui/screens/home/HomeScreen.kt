@@ -76,6 +76,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.furina.classtools.data.homework.HomeworkLoadResult
 import com.furina.classtools.data.homework.HomeworkRepository
+import com.furina.classtools.data.tasks.TaskRepository
+import com.furina.classtools.data.tasks.pendingTasks
+import com.furina.classtools.data.tasks.text
 import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.data.marks.MarksRepository
 import com.furina.classtools.data.marks.MarksSnapshot
@@ -179,6 +182,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     quickToolIds: List<String> = ToolCatalog.defaultQuickIds,
     homeworkRepository: HomeworkRepository? = null,
+    taskRepository: TaskRepository? = null,
     timetableRepository: TimetableRepository? = null,
     marksRepository: MarksRepository? = null,
     powerRepository: PowerRepository? = null,
@@ -282,6 +286,7 @@ fun HomeScreen(
 
     // 懒加载：作业
     LaunchedEffect(homeworkRepository, refreshToken) {
+        if (taskRepository != null) return@LaunchedEffect
         val repo = homeworkRepository ?: return@LaunchedEffect
         homeworkLoading = true
         homeworkFailed = false
@@ -333,8 +338,13 @@ fun HomeScreen(
     val hwOpenRows = remember(homeworkRows, marks, currentTime) {
         HomeWorkbenchLogic.openHomeworkRows(homeworkRows, marks, currentTime)
     }
-    val hwItems = remember(hwOpenRows, marks, currentTime) {
-        HomeWorkbenchLogic.homeworkRotation(homeworkRows, marks, currentTime)
+    val personal = taskRepository?.snapshot?.collectAsState()?.value
+    val taskStatus = taskRepository?.syncStatus?.collectAsState()?.value
+    LaunchedEffect(taskRepository, refreshToken) { taskRepository?.sync() }
+    val hwItems = remember(personal, hwOpenRows, marks, currentTime) {
+        personal?.pendingTasks()
+            ?.map { HomeRotationItem(it.text("id"), it.text("title"), listOf(it.text("due"), it.text("dueTime")).filter(String::isNotEmpty).joinToString(" ")) }
+            ?: HomeWorkbenchLogic.homeworkRotation(homeworkRows, marks, currentTime)
     }
     val ntEntries: List<NoticeEntry> = noticesData?.auto.orEmpty()
     val ntItems = remember(ntEntries, marks, currentTime) {
@@ -546,8 +556,8 @@ fun HomeScreen(
                             HomeHomeworkCard(
                                 count = hwItems.size,
                                 item = hwItems.getOrNull(hwIndex % maxOf(1, hwItems.size)),
-                                loading = homeworkLoading,
-                                failed = homeworkFailed,
+                                loading = if (personal == null) homeworkLoading else taskStatus == "同步中…",
+                                failed = if (personal == null) homeworkFailed else taskStatus == "仅本机",
                                 onOpen = { openToolId("hw") },
                             )
                         }
@@ -797,17 +807,17 @@ private fun HomeHomeworkCard(
 ) {
     HomeInfoCard(
         icon = Icons.AutoMirrored.Rounded.Assignment,
-        title = "作业待交",
+        title = "待办任务",
         accent = MaterialTheme.colorScheme.tertiary,
         onClick = onOpen,
         badge = count.takeIf { it > 0 }?.toString(),
     ) {
         when {
-            loading && count == 0 -> HomeLoadingRow("同步作业…")
-            failed && count == 0 -> HomeMutedLine("作业同步失败，点开重试")
-            count == 0 -> HomeMutedLine("作业都完成了")
+            loading && count == 0 -> HomeLoadingRow("同步任务…")
+            failed && count == 0 -> HomeMutedLine("仅显示本机任务")
+            count == 0 -> HomeMutedLine("暂无待办任务")
             item != null -> RotatingText(item)
-            else -> HomeMutedLine("暂无待交作业")
+            else -> HomeMutedLine("暂无待办任务")
         }
     }
 }

@@ -9,8 +9,10 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.furina.classtools.BuildConfig
-import com.furina.classtools.data.homework.DefaultHomeworkRepository
-import com.furina.classtools.data.homework.HomeworkLoadResult
+import com.furina.classtools.data.tasks.*
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import com.furina.classtools.data.marks.DefaultMarksRepository
 import com.furina.classtools.data.network.ApiClient
 import com.furina.classtools.data.network.ApiResult
@@ -29,6 +31,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 
+private fun taskList(doc: JsonObject, version: Long, now: Long): WidgetList {
+    val items = doc.pendingTasks()
+    return WidgetList(items.size, items.take(6).map {
+        WidgetLine(it.text("title").take(150), listOf(it.text("due"), it.text("dueTime")).filter(String::isNotBlank).joinToString(" "))
+    }, now, version)
+}
+
 internal object WidgetFeedStore {
     private fun prefs(context: Context) = context.getSharedPreferences("desktop_widget_feed", Context.MODE_PRIVATE)
 
@@ -38,10 +47,18 @@ internal object WidgetFeedStore {
 
     fun read(context: Context, sid: String): WidgetFeed {
         val raw = prefs(context).all
-        if (raw["owner"] != sid) return WidgetFeed()
-        return (raw["feed"] as? String)?.let {
+        val feed = (raw["feed"] as? String)?.takeIf { raw["owner"] == sid }?.let {
             runCatching { Json.decodeFromString(WidgetFeed.serializer(), it) }.getOrNull()
         } ?: WidgetFeed()
+        val tasks = TaskPreferences(context.getSharedPreferences("tasks_" + sid, Context.MODE_PRIVATE))
+        val localText = tasks.read("local")
+        val local = localText?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+        val cloud = feed.tasks?.takeIf { it.taskVersion != null }
+        if (local == null) return feed.copy(tasks = cloud)
+        val version = local.number("updatedAt")
+        val list = if (cloud == null || version >= (cloud.taskVersion ?: 0) || tasks.read("base") != localText)
+            taskList(local, version, System.currentTimeMillis()) else cloud
+        return feed.copy(tasks = list)
     }
 
     fun save(context: Context, sid: String, feed: WidgetFeed) =
@@ -66,19 +83,22 @@ class WidgetFeedWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val session = WidgetFeedStore.session(context)?.takeUnless { it.debug } ?: return@coroutineScope Result.success()
         // The worker can run without an Activity and while the foreground account changes.
         val api = ApiClient(BuildConfig.REST_BASE_URL, BuildConfig.PUBLISHABLE_KEY, tokenProvider = { session.token })
-        val marks = DefaultMarksRepository(api, { session.sid }).refresh()
-        if (marks !is ApiResult.Success) return@coroutineScope retryLater()
         val now = System.currentTimeMillis()
         val previous = WidgetFeedStore.read(context, session.sid)
         val needTasks = WidgetKind.TASKS in kinds || WidgetKind.WORKBENCH in kinds
         val needNotices = WidgetKind.NOTICES in kinds || WidgetKind.WORKBENCH in kinds
         val tasks = async {
             if (!needTasks) return@async null
-            val result = DefaultHomeworkRepository(api).load() as? HomeworkLoadResult.Success ?: return@async null
-            compact(HomeWorkbenchLogic.homeworkRotation(result.rows, marks.value, now), now)
+            val rows = (api.getJson("taskdata?id=eq." + android.net.Uri.encode(session.sid) + "&select=blob,ts") as? ApiResult.Success)?.value as? JsonArray ?: return@async null
+            val row = rows.firstOrNull() as? JsonObject
+            val doc = if (row == null || row.text("blob").isBlank()) emptyTasks else
+                runCatching { Json.parseToJsonElement(row.text("blob")).jsonObject }.getOrNull() ?: return@async null
+            taskList(doc, row?.number("ts") ?: 0L, now)
         }
         val notices = async {
             if (!needNotices) return@async null
+            val marks = DefaultMarksRepository(api, { session.sid }).refresh()
+            if (marks !is ApiResult.Success) return@async null
             val result = DefaultNoticesRepository(api).load() as? NoticesLoadResult.Success ?: return@async null
             val pending = compact(HomeWorkbenchLogic.noticeRotation(result.data.auto, marks.value, now), now)
             val latest = viewContentOf(buildUiItems(result.data, marks.value, now),
