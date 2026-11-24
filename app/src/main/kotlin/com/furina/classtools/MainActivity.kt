@@ -78,7 +78,8 @@ class MainActivity : ComponentActivity() {
     private fun toolIdFrom(intent: Intent?): String? =
         if (intent?.action == Intent.ACTION_VIEW &&
             intent.dataString == com.furina.classtools.data.timetable.XiaobuCourseCard.TIMETABLE_LINK
-        ) "tt" else ReminderIntentFactory.toolIdFromExtras(intent?.getStringExtra(ReminderIntentFactory.EXTRA_TOOL_ID))
+        ) "tt" else if (intent?.action == "com.furina.classtools.widget.OPEN.home") "home"
+        else ReminderIntentFactory.toolIdFromExtras(intent?.getStringExtra(ReminderIntentFactory.EXTRA_TOOL_ID))
 
     /**
      * OPPO PUSH 点击参数解析：优先 intent extra `noticeId`，否则解析 extra `actionParameters` JSON。

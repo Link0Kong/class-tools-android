@@ -165,9 +165,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 147
+        versionCode = 148
     // 测试版本 29：OPPO 推送 AppSecret 改为控制台原文小写（签名 16 修复）。
-        versionName = "1.0.0-beta64"
+        versionName = "1.0.0-beta65"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -269,6 +269,7 @@ android {
             // JVM 单测不 mock android.jar：未 stub 的 Android 方法（如 android.util.Log.w）
             // 返回默认值而不是抛 "not mocked"；纯逻辑单测（OPPO 推送状态机等）可直接覆盖含日志的代码路径。
             isReturnDefaultValues = true
+            isIncludeAndroidResources = true
         }
     }
 
@@ -488,6 +489,7 @@ dependencies {
     implementation(libs.sharedview.kit)
 
     testImplementation(libs.junit)
+    testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation(libs.kotlinx.coroutines.test)
 
     debugImplementation(libs.androidx.compose.ui.tooling)

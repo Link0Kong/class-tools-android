@@ -166,6 +166,33 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/timetable_widget_info" />
         </receiver>
+        <receiver android:name=".widget.WorkbenchWidget" android:exported="false" android:label="工作台">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/workbench_widget_info" />
+        </receiver>
+        <receiver android:name=".widget.NoticesWidget" android:exported="false" android:label="班级通知">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/notices_widget_info" />
+        </receiver>
+        <receiver android:name=".widget.TasksWidget" android:exported="false" android:label="待办任务">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/tasks_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

@@ -1,0 +1,88 @@
+package com.furina.classtools.widget
+
+import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.os.Bundle
+import android.util.SizeF
+import android.util.TypedValue
+import android.view.View
+import android.widget.RemoteViews
+import com.furina.classtools.MainActivity
+import com.furina.classtools.R
+import com.furina.classtools.data.reminder.ReminderIntentFactory
+import kotlin.math.roundToInt
+
+internal object WidgetViews {
+    private data class Layout(val width: Int, val height: Int, val rows: Int, val rowDetails: Boolean = false) {
+        val banner get() = width >= 230 && height < 96
+        val compact get() = height < 96
+    }
+    private val layouts = listOf(Layout(50, 26, 0), Layout(100, 48, 0), Layout(230, 48, 0),
+        Layout(100, 96, 0), Layout(230, 96, 1), Layout(100, 155, 2),
+        Layout(230, 155, 2, true), Layout(100, 235, 4), Layout(230, 235, 4, true))
+
+    fun forHost(context: Context, kind: WidgetKind, model: WidgetContent, options: Bundle): RemoteViews {
+        val scale = context.resources.configuration.fontScale.coerceAtLeast(1f)
+        fun fit(w: Int, h: Int) = layouts.filter { it.width <= w / scale && it.height <= h / scale }
+            .maxByOrNull { it.width * it.height } ?: layouts.first()
+        if (Build.VERSION.SDK_INT >= 31 && !options.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES).isNullOrEmpty()) {
+            val variants = layouts.associate { layout ->
+                SizeF(layout.width * scale, layout.height * scale) to render(context, kind, model, layout)
+            }
+            return RemoteViews(variants)
+        }
+        // Older launchers report the portrait width and landscape height as minima.
+        val minW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180)
+        val minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 96)
+        val portrait = fit(minW, options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minH))
+        val landscape = fit(options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minW), minH)
+        val view = render(context, kind, model, portrait)
+        return if (landscape == portrait) view else RemoteViews(render(context, kind, model, landscape), view)
+    }
+
+    private fun render(context: Context, kind: WidgetKind, model: WidgetContent, layout: Layout): RemoteViews {
+        val views = RemoteViews(context.packageName, if (layout.banner) R.layout.widget_banner else R.layout.timetable_widget)
+        fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
+        val vertical = dp(if (layout.compact) 4 else 8)
+        views.setViewPadding(R.id.widget_root, dp(10), vertical, dp(10), vertical)
+        views.setOnClickPendingIntent(R.id.widget_root, open(context, kind.destination))
+        views.setTextViewText(R.id.widget_heading, model.heading)
+        if (layout.height < 48) views.setViewVisibility(R.id.widget_heading, View.GONE)
+        else views.setViewVisibility(R.id.widget_heading, View.VISIBLE)
+        views.setTextViewText(R.id.widget_course, model.first.title)
+        val details = if (layout.banner && kind == WidgetKind.WORKBENCH && model.more.isNotEmpty()) {
+            model.more.joinToString("\n") { it.title }
+        } else model.first.detail
+        views.setTextViewText(R.id.widget_details, details)
+        val showDetails = (layout.banner || !layout.compact) && details.isNotBlank()
+        views.setViewVisibility(R.id.widget_details, if (showDetails) View.VISIBLE else View.GONE)
+        if (layout.banner) return views
+        val showSummary = layout.width >= 230 && model.summary.isNotBlank()
+        views.setTextViewText(R.id.widget_summary, model.summary)
+        views.setViewVisibility(R.id.widget_summary, if (showSummary) View.VISIBLE else View.GONE)
+        views.setTextViewTextSize(R.id.widget_course, TypedValue.COMPLEX_UNIT_SP, if (layout.compact) 16f else 18f)
+        views.setInt(R.id.widget_course, "setMaxLines", if (layout.height >= 155 && !layout.rowDetails) 2 else 1)
+        views.setInt(R.id.widget_details, "setMaxLines", if (layout.rows == 0) 2 else 1)
+        views.removeAllViews(R.id.widget_list)
+        for (item in model.more.take(layout.rows)) {
+            val row = RemoteViews(context.packageName, R.layout.widget_line)
+            row.setTextViewText(R.id.widget_row_title, item.title)
+            row.setTextViewText(R.id.widget_row_detail, item.detail)
+            row.setViewVisibility(R.id.widget_row_detail, if (layout.rowDetails && item.detail.isNotBlank()) View.VISIBLE else View.GONE)
+            row.setOnClickPendingIntent(R.id.widget_row, open(context, item.destination.ifBlank { kind.destination }))
+            views.addView(R.id.widget_list, row)
+        }
+        return views
+    }
+
+    private fun open(context: Context, destination: String): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).setAction("com.furina.classtools.widget.OPEN.$destination")
+            .putExtra(ReminderIntentFactory.EXTRA_TOOL_ID, destination)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        return PendingIntent.getActivity(context, destination.hashCode(), intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+}

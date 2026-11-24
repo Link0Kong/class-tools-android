@@ -129,6 +129,7 @@ object TtCalendar {
                 SessionInfo(
                     name = course.name.ifBlank { "课程" },
                     room = roomShort(course.room),
+                    fullRoom = course.room.trim(),
                     start = course.start,
                     end = course.end,
                     startText = activeSlot?.first ?: startPeriod.first,

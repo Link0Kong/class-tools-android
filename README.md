@@ -56,6 +56,10 @@ $env:ANDROID_HOME = '<Android SDK 路径>'
 $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 ```
 
+### 安卓桌面卡片
+
+Android 桌面的小组件列表提供「班级课表」「工作台」「班级通知」「待办任务」。可以分别添加和调整大小，也可以在应用的「课表 → 课表接入 → 添加桌面卡片」中选择。窄卡优先显示标题，横条增加时间或摘要，拉高后显示更多项目。以上四种卡片使用 Android 标准桌面组件，在支持小组件的启动器上可用。
+
 ### ColorOS 小布课程卡片联调
 
 向 OPPO 提交包名 `com.furina.classtools`，申请在小布建议桌面卡展示下一节课的名称、起止时间和教室。当前实现采用端侧强调信息模板，点击卡片打开本应用课表。[接入准备](https://open.oppomobile.com/documentation/page/info?id=13572) · [端侧意图共享](https://open.oppomobile.com/documentation/page/info?id=13558) · [卡片模板](https://open.oppomobile.com/documentation/page/info?id=13576)

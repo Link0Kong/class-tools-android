@@ -87,7 +87,8 @@ import com.furina.classtools.data.reminder.ReminderScheduler
 import com.furina.classtools.data.reminder.ReminderSettingsStore
 import com.furina.classtools.data.reminder.WorkManagerReminderScheduler
 import com.furina.classtools.data.remoteconfig.RemoteConfigRepository
-import com.furina.classtools.widget.TimetableWidget
+import com.furina.classtools.widget.DesktopWidgets
+import com.furina.classtools.widget.WidgetFeedStore
 import com.furina.classtools.data.timetable.XiaobuCourseSync
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -595,12 +596,23 @@ class AppContainer(context: Context) {
                 session to sections["tt"]
             }.distinctUntilChanged().collect { refreshCourseSurfaces() }
         }
+        appScope.launch {
+            var initial = true
+            combine(sessionStore.state, marksRepository.marks) { session, marks -> session to marks }
+                .distinctUntilChanged().collect { (session, _) ->
+                    DesktopWidgets.refresh(appContext)
+                    if (session is com.furina.classtools.data.session.SessionState.SignedIn && !session.session.debug) {
+                        WidgetFeedStore.request(appContext, session.session.sid, replace = !initial)
+                    }
+                    initial = false
+                }
+        }
         // 启动不阻塞主线程：WorkManager 初始化与 ensureScheduled 放到后台作用域。
         appScope.launch { runCatching { reminderScheduler.ensureScheduled() } }
     }
 
     private fun refreshCourseSurfaces() {
-        TimetableWidget.refresh(appContext)
+        DesktopWidgets.refresh(appContext)
         refreshCourseCard()
     }
 

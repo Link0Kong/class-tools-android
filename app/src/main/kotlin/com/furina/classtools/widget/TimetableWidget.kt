@@ -7,109 +7,104 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.widget.RemoteViews
-import com.furina.classtools.ClassToolsApp
-import com.furina.classtools.MainActivity
-import com.furina.classtools.R
-import com.furina.classtools.data.reminder.ReminderIntentFactory
-import com.furina.classtools.data.session.SessionState
-import com.furina.classtools.data.timetable.deviceTimetable
-import com.furina.classtools.data.timetable.SessionState as CourseState
+import com.furina.classtools.data.timetable.SessionState
 import com.furina.classtools.data.timetable.TtCalendar
+import com.furina.classtools.data.timetable.deviceTimetable
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class TimetableWidget : AppWidgetProvider() {
+// Keep the original component name so existing timetable widgets survive an update.
+class TimetableWidget : DesktopWidgetProvider() {
+    companion object {
+        fun pin(context: Context) = DesktopWidgets.pin(context, WidgetKind.TIMETABLE)
+    }
+}
+class WorkbenchWidget : DesktopWidgetProvider()
+class NoticesWidget : DesktopWidgetProvider()
+class TasksWidget : DesktopWidgetProvider()
+
+abstract class DesktopWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action in refreshActions) {
-            val pending = goAsync()
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    lock.withLock { render(context) }
-                } finally {
-                    pending.finish()
-                }
-            }
-        } else {
+        if (intent.action !in DesktopWidgets.refreshActions) {
             super.onReceive(context, intent)
+            return
+        }
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                DesktopWidgets.update(context, this@DesktopWidgetProvider.javaClass, intent.action == AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+            } finally {
+                pending.finish()
+            }
         }
     }
 
-    override fun onDisabled(context: Context) {
-        context.getSystemService(AlarmManager::class.java).cancel(alarmIntent(context))
+    override fun onDisabled(context: Context) = DesktopWidgets.cancelAlarm(context, javaClass)
+}
+
+internal object DesktopWidgets {
+    val components = mapOf(WidgetKind.TIMETABLE to TimetableWidget::class.java, WidgetKind.WORKBENCH to WorkbenchWidget::class.java,
+        WidgetKind.NOTICES to NoticesWidget::class.java, WidgetKind.TASKS to TasksWidget::class.java)
+    private const val REFRESH = "com.furina.classtools.widget.REFRESH"
+    val refreshActions = setOf(REFRESH, AppWidgetManager.ACTION_APPWIDGET_UPDATE,
+        AppWidgetManager.ACTION_APPWIDGET_OPTIONS_CHANGED, Intent.ACTION_DATE_CHANGED,
+        Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED)
+    private val lock = Mutex()
+
+    private fun ids(context: Context, provider: Class<out DesktopWidgetProvider>) =
+        AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, provider))
+
+    fun feedKinds(context: Context) = components.filter { (kind, provider) ->
+        kind != WidgetKind.TIMETABLE && ids(context, provider).isNotEmpty()
+    }.keys
+
+    fun refresh(context: Context) {
+        components.values.filter { ids(context, it).isNotEmpty() }.forEach {
+            context.sendBroadcast(Intent(context, it).setAction(REFRESH))
+        }
     }
 
-    companion object {
-        private const val REFRESH = "com.furina.classtools.widget.REFRESH"
-        private val refreshActions = setOf(REFRESH, AppWidgetManager.ACTION_APPWIDGET_UPDATE,
-            AppWidgetManager.ACTION_APPWIDGET_OPTIONS_CHANGED, Intent.ACTION_DATE_CHANGED,
-            Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED)
-        private val lock = Mutex()
+    fun pin(context: Context, kind: WidgetKind): Boolean {
+        val manager = AppWidgetManager.getInstance(context)
+        return manager.isRequestPinAppWidgetSupported &&
+            manager.requestPinAppWidget(ComponentName(context, components.getValue(kind)), null, null)
+    }
 
-        private fun component(context: Context) = ComponentName(context, TimetableWidget::class.java)
-        private fun intent(context: Context) = Intent(context, TimetableWidget::class.java).setAction(REFRESH)
-        private fun alarmIntent(context: Context) = PendingIntent.getBroadcast(context, 0, intent(context),
+    private fun alarmIntent(context: Context, provider: Class<out DesktopWidgetProvider>) =
+        PendingIntent.getBroadcast(context, 0, Intent(context, provider).setAction(REFRESH),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        fun refresh(context: Context) {
-            if (AppWidgetManager.getInstance(context).getAppWidgetIds(component(context)).isNotEmpty()) {
-                context.sendBroadcast(intent(context))
-            }
-        }
+    fun cancelAlarm(context: Context, provider: Class<out DesktopWidgetProvider>) =
+        context.getSystemService(AlarmManager::class.java).cancel(alarmIntent(context, provider))
 
-        fun pin(context: Context): Boolean {
-            val manager = AppWidgetManager.getInstance(context)
-            return manager.isRequestPinAppWidgetSupported && manager.requestPinAppWidget(component(context), null, null)
-        }
-
-        private suspend fun render(context: Context) {
-            val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(component(context))
-            if (ids.isEmpty()) return
-            val sessionStore = (context.applicationContext as ClassToolsApp).container.sessionStore
-            val session = (sessionStore.state.first() as? SessionState.SignedIn)?.session
-                ?.takeIf { it.isLikelyValid() }
-            val snapshot = session?.let { deviceTimetable(context, it.sid) }
-            val now = System.currentTimeMillis()
-            val zone = ZoneId.systemDefault()
-            val plan = snapshot?.let { TtCalendar.plan(it, now, zone) }
-            val current = plan?.today?.firstOrNull { it.state == CourseState.ONGOING }
-            val course = current ?: plan?.next
-            val heading = when {
-                current != null -> "正在上课"
-                course != null -> "${course.dayText} · 下一节"
-                else -> "今日课程"
-            }
-            val title = course?.name ?: when {
-                session == null -> "登录后查看课表"
-                plan?.hasData != true -> "打开课表同步课程"
-                else -> "近期暂无课程"
-            }
-            val details = course?.let { listOf(it.span, "${it.startText}–${it.endText}", it.room)
-                .filter(String::isNotBlank).joinToString(" · ") }.orEmpty()
-            val views = RemoteViews(context.packageName, R.layout.timetable_widget)
-            views.setTextViewText(R.id.widget_heading, heading)
-            views.setTextViewText(R.id.widget_course, title)
-            views.setTextViewText(R.id.widget_details, details)
-            val open = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra(ReminderIntentFactory.EXTRA_TOOL_ID, "tt")
-            }
-            views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(context, 4302,
-                open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-            manager.updateAppWidget(ids, views)
-            val alarm = context.getSystemService(AlarmManager::class.java)
-            val boundary = listOfNotNull(current?.endAt, plan?.next?.startAt, session?.expiresAt,
-                LocalDate.now(zone).plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli())
-                .filter { it > now }.minOrNull()
-            if (session != null && boundary != null) alarm.set(AlarmManager.RTC, boundary + 1000, alarmIntent(context))
-            else alarm.cancel(alarmIntent(context))
-        }
+    suspend fun update(context: Context, provider: Class<out DesktopWidgetProvider>, periodic: Boolean) = lock.withLock {
+        val manager = AppWidgetManager.getInstance(context)
+        val ids = ids(context, provider)
+        if (ids.isEmpty()) return@withLock
+        val kind = components.entries.first { it.value == provider }.key
+        val session = WidgetFeedStore.session(context)
+        val now = System.currentTimeMillis()
+        val zone = ZoneId.systemDefault()
+        val timetable = kind == WidgetKind.TIMETABLE || kind == WidgetKind.WORKBENCH
+        val plan = if (timetable && session != null) deviceTimetable(context, session.sid)?.let {
+            TtCalendar.plan(it, now, zone)
+        } else null
+        val feed = if (kind != WidgetKind.TIMETABLE && session != null) WidgetFeedStore.read(context, session.sid) else WidgetFeed()
+        val model = widgetContent(kind, session != null, plan, feed, now)
+        for (id in ids) manager.updateAppWidget(id, WidgetViews.forHost(context, kind, model, manager.getAppWidgetOptions(id)))
+        if (periodic && session != null && !session.debug && kind != WidgetKind.TIMETABLE) WidgetFeedStore.request(context, session.sid)
+        val current = plan?.today?.firstOrNull { it.state == SessionState.ONGOING }
+        val boundary = listOfNotNull(current?.endAt, plan?.next?.startAt, session?.expiresAt,
+            session?.issuedAt?.takeIf { it > 0 }?.plus(29L * 86_400_000),
+            if (timetable) LocalDate.now(zone).plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() else null)
+            .filter { it > now }.minOrNull()
+        if (session != null && boundary != null) context.getSystemService(AlarmManager::class.java)
+            .set(AlarmManager.RTC, boundary + 1000, alarmIntent(context, provider))
+        else cancelAlarm(context, provider)
     }
 }

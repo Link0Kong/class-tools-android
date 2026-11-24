@@ -244,7 +244,12 @@ fun MainNavHost(
     // 独立工具宿主已经直接以目标工具为起点，不能再 navigate 一次（会叠一层工具页）。
     LaunchedEffect(initialToolId, standaloneTool) {
         if (!standaloneTool && !initialToolId.isNullOrBlank()) {
-            navController.navigate(Routes.tool(initialToolId))
+            if (initialToolId == "home") {
+                navController.popBackStack(Routes.ROOT, inclusive = false)
+                pagerState.scrollToPage(0)
+            } else {
+                navController.navigate(Routes.tool(initialToolId)) { launchSingleTop = true }
+            }
             onInitialToolConsumed()
         }
     }

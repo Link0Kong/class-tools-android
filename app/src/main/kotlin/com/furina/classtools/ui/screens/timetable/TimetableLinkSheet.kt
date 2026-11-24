@@ -332,11 +332,20 @@ fun TimetableLinkSheet(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            TextButton(onClick = {
-                if (!com.furina.classtools.widget.TimetableWidget.pin(context)) {
-                    onMessage("请长按桌面，进入小部件并选择「班级课表」")
+            var chooseWidget by remember { mutableStateOf(false) }
+            androidx.compose.foundation.layout.Box {
+                TextButton(onClick = { chooseWidget = true }) { Text("添加桌面卡片") }
+                androidx.compose.material3.DropdownMenu(expanded = chooseWidget, onDismissRequest = { chooseWidget = false }) {
+                    com.furina.classtools.widget.WidgetKind.entries.forEach { kind ->
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(kind.label) }, onClick = {
+                            chooseWidget = false
+                            if (!com.furina.classtools.widget.DesktopWidgets.pin(context, kind)) {
+                                onMessage("请长按桌面，在班级工具站的小组件中选择「${kind.label}」")
+                            }
+                        })
+                    }
                 }
-            }) { Text("添加桌面课表卡片") }
+            }
             val container = (context.applicationContext as com.furina.classtools.ClassToolsApp).container
             if (remember { container.hasColorOsRom() }) {
                 LinkSectionTitle("小布建议 · 课程提醒")
