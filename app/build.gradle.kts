@@ -66,11 +66,10 @@ val vivoApiKey = (vivoProps.getProperty("vivo.apiKey") ?: "").trim()
 //      → 老部署脚本/本机自定义配置行为不变。
 //   2) ct.restProfile：cloudbase | staging | selfhosted（两种 buildType 强制同档；回滚用）
 //   3) ct.restBaseUrlDebug / ct.restBaseUrlRelease：按 buildType 的显式 URL
-//   4) buildType 默认档：debug → staging（ECS 影子验证）；release → cloudbase（P4 切流前的可用网关；
-//      2026-11-19 修复：此前 release 默认 selfhosted，tool.furina.fun DNS 暂停导致通知/登录全失败）
+//   4) buildType 默认档：debug → staging（ECS 影子验证）；release → selfhosted（2026-11-24 P4 切流；
+//      切流前该域名由 Caddy 同源反代到 CloudBase，所以新版先发布也不会坏）
 // 三档地址可用 ct.restBase.cloudbase / ct.restBase.staging / ct.restBase.selfhosted 覆盖。
-// 2026-11-23 网站备案已通过、正式域名 https://tool.furina.fun 可用；REST 后端切流属于 P4 数据迁移，
-// 本次**不改** release 默认档（仍 cloudbase），只把 ECS 服务地址切回正式域名。
+// 2026-11-24 P4 切流：release 默认档 = selfhosted；回滚用 -Pct.restProfile=cloudbase 重新构建发版。
 // ============================================================================
 val REST_CLOUDBASE_DEFAULT = "https://tool-d4gosudok46e0e081.api.tcloudbasegateway.com/v1/rdb/rest/"
 val REST_STAGING_DEFAULT = "http://121.196.47.2/v1/rdb/rest-next/"
@@ -93,15 +92,14 @@ fun restUrlOfProfile(profile: String, fallback: String): String = restUrlByProfi
 val debugRestUrl = legacyRestOverride
     ?: (if (restProfileOverride != null) restUrlOfProfile(restProfileOverride, REST_STAGING_DEFAULT)
         else (gradleProp("ct.restBaseUrlDebug") ?: REST_STAGING_DEFAULT))
-// 2026-11-19 修复：当时 tool.furina.fun 备案暂停（DNS 不解析），release 默认改回 CloudBase 网关，
-// 否则 release APK 的登录/通知/数据请求全部 DNS 失败（用户反馈安卓通知工具收不到通知）。
-// 2026-11-23 备案已通过、域名 HTTPS 可用；但 REST 后端切流属于 P4 数据迁移，release 默认仍保持
-// CloudBase。P4 切流时：-Pct.restProfile=selfhosted，或把下面的默认值改为 REST_SELFHOSTED_DEFAULT。
+// 2026-11-24 P4 切流：release 默认档改为 selfhosted（正式域名 https://tool.furina.fun/v1/rdb/rest/）。
+// 切流前该域名由 Caddy 同源反代到 CloudBase，所以新版先发布不会坏；Caddy 一切即指向 ECS 自建库。
+// 回滚：-Pct.restProfile=cloudbase（或把下面的默认值改回 REST_CLOUDBASE_DEFAULT）。
 val releaseRestUrl = legacyRestOverride
     ?: (if (restProfileOverride != null) restUrlOfProfile(restProfileOverride, REST_CLOUDBASE_DEFAULT)
-        else (gradleProp("ct.restBaseUrlRelease") ?: REST_CLOUDBASE_DEFAULT))
+        else (gradleProp("ct.restBaseUrlRelease") ?: REST_SELFHOSTED_DEFAULT))
 val debugRestProfile = if (legacyRestOverride != null) "custom" else (restProfileOverride ?: "staging")
-val releaseRestProfile = if (legacyRestOverride != null) "custom" else (restProfileOverride ?: "cloudbase")
+val releaseRestProfile = if (legacyRestOverride != null) "custom" else (restProfileOverride ?: "selfhosted")
 
 // ----------------------------------------------------------------------------
 // ECS 现有服务地址（账号 / 云空间 drop / 更新清单 / 校园地图 / PPT 媒体 / 法律全文）：
@@ -167,9 +165,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 143
+        versionCode = 144
     // 测试版本 29：OPPO 推送 AppSecret 改为控制台原文小写（签名 16 修复）。
-        versionName = "1.0.0-beta60"
+        versionName = "1.0.0-beta61"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -474,6 +472,13 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
+
+    // 扫一扫：CameraX 相机预览 + ZXing 本机解码（不依赖 GMS；仅扫码时申请相机权限）
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.zxing.core)
 
     // 金标联盟（ITGSA）SharedView Kit：荣耀/OPPO/vivo/小米系统侧一镜到底无缝转场。
     // 运行时由 ROM 提供实现；不支持的设备 isViewAnimationSupported()==0，业务回退现有 Compose 转场。
