@@ -94,6 +94,7 @@ import com.furina.classtools.data.timetable.TimetableRepository
 import com.furina.classtools.data.timetable.TodayState
 import com.furina.classtools.data.timetable.TtCalendar
 import com.furina.classtools.data.timetable.TtLoadResult
+import com.furina.classtools.data.timetable.TtSnapshot
 import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
@@ -110,9 +111,6 @@ import com.furina.classtools.ui.components.HarmonySkeletonTextBlock
 import com.furina.classtools.ui.components.NotificationPermissionBanner
 import com.furina.classtools.ui.components.ctStickyHeaderProgress
 import com.furina.classtools.ui.components.glass.CtGlassCard
-import com.furina.classtools.ui.theme.BrandMistTeal
-import com.furina.classtools.ui.theme.BrandSlateBlue
-import com.furina.classtools.ui.theme.BrandWarmSand
 import com.furina.classtools.ui.theme.CtAccents
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShape
@@ -193,7 +191,7 @@ fun HomeScreen(
     onOpenPowerPicker: (() -> Unit)? = null,
     isPageActive: Boolean = true,
     rotationEnabled: Boolean = true,
-    nowMillis: Long = System.currentTimeMillis(),
+    nowMillis: Long? = null,
     initialTtPlan: TtPlan? = null,
     initialHomeworkRows: List<HomeworkRow> = emptyList(),
     initialNoticesData: NoticesData? = null,
@@ -206,7 +204,21 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val spec = rememberCtAdaptiveSpec()
     val zone = remember { ZoneId.systemDefault() }
-    val today = remember(nowMillis) { Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate() }
+    // 页面可见（Lifecycle + 翻页 active）才轮换；不可见暂停
+    var lifecycleResumed by remember { mutableStateOf(true) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { lifecycleResumed = true }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { lifecycleResumed = false }
+    var liveTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(isPageActive, lifecycleResumed, nowMillis) {
+        if (nowMillis == null && isPageActive && lifecycleResumed) {
+            while (true) {
+                liveTime = System.currentTimeMillis()
+                delay(60_000L - liveTime % 60_000L)
+            }
+        }
+    }
+    val currentTime = nowMillis ?: liveTime
+    val today = remember(currentTime) { Instant.ofEpochMilli(currentTime).atZone(zone).toLocalDate() }
 
     var refreshToken by remember { mutableIntStateOf(0) }
     var refreshing by remember { mutableStateOf(false) }
@@ -218,7 +230,10 @@ fun HomeScreen(
     }
 
     // ---- 数据状态 -----------------------------------------------------------
-    var ttPlan by remember { mutableStateOf(initialTtPlan) }
+    var ttSnapshot by remember(timetableRepository) { mutableStateOf<TtSnapshot?>(null) }
+    val ttPlan = remember(ttSnapshot, currentTime, initialTtPlan) {
+        ttSnapshot?.let { TtCalendar.plan(it, currentTime, zone) } ?: initialTtPlan
+    }
     var ttLoading by remember { mutableStateOf(timetableRepository != null && initialTtPlan == null) }
     var homeworkRows by remember { mutableStateOf(initialHomeworkRows) }
     var homeworkLoading by remember { mutableStateOf(homeworkRepository != null && initialHomeworkRows.isEmpty()) }
@@ -251,15 +266,16 @@ fun HomeScreen(
     val effectivePowerSel = powerSel.ifBlank { initialPowerSel?.trim().orEmpty() }
 
     // 懒加载：课表（缓存优先 → 网络）
-    LaunchedEffect(timetableRepository, refreshToken) {
+    LaunchedEffect(timetableRepository, refreshToken, isPageActive) {
+        if (!isPageActive) return@LaunchedEffect
         val repo = timetableRepository ?: return@LaunchedEffect
         ttLoading = true
         runCatching { repo.cached() }.getOrNull()?.let { snapshot ->
-            ttPlan = runCatching { TtCalendar.plan(snapshot, nowMillis, zone) }.getOrNull()
+            ttSnapshot = snapshot
         }
         val result = runCatching { repo.load(force = refreshToken > 0) }.getOrNull()
         if (result is TtLoadResult.Success) {
-            ttPlan = runCatching { TtCalendar.plan(result.snapshot, nowMillis, zone) }.getOrNull()
+            ttSnapshot = result.snapshot
         }
         ttLoading = false
     }
@@ -314,15 +330,15 @@ fun HomeScreen(
     }
 
     // ---- 统计 / 轮换数据 ----------------------------------------------------
-    val hwOpenRows = remember(homeworkRows, marks, nowMillis) {
-        HomeWorkbenchLogic.openHomeworkRows(homeworkRows, marks, nowMillis)
+    val hwOpenRows = remember(homeworkRows, marks, currentTime) {
+        HomeWorkbenchLogic.openHomeworkRows(homeworkRows, marks, currentTime)
     }
-    val hwItems = remember(hwOpenRows, marks, nowMillis) {
-        HomeWorkbenchLogic.homeworkRotation(homeworkRows, marks, nowMillis)
+    val hwItems = remember(hwOpenRows, marks, currentTime) {
+        HomeWorkbenchLogic.homeworkRotation(homeworkRows, marks, currentTime)
     }
     val ntEntries: List<NoticeEntry> = noticesData?.auto.orEmpty()
-    val ntItems = remember(ntEntries, marks, nowMillis) {
-        HomeWorkbenchLogic.noticeRotation(ntEntries, marks, nowMillis)
+    val ntItems = remember(ntEntries, marks, currentTime) {
+        HomeWorkbenchLogic.noticeRotation(ntEntries, marks, currentTime)
     }
     // G13：通知卡展示最后更新时间，便于判断数据是否过期。
     val noticesUpdatedText = remember(noticesData?.fetchedAt) {
@@ -338,10 +354,6 @@ fun HomeScreen(
     var hwIndex by remember { mutableIntStateOf(0) }
     var ntIndex by remember { mutableIntStateOf(0) }
 
-    // 页面可见（Lifecycle + 翻页 active）才轮换；不可见暂停
-    var lifecycleResumed by remember { mutableStateOf(true) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { lifecycleResumed = true }
-    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { lifecycleResumed = false }
     // G22：系统移除动画时停止卡内容自动轮换 + 首屏错峰淡入。
     val reduceMotion = rememberReduceMotion()
     val rotationActive = rotationEnabled &&
@@ -439,8 +451,8 @@ fun HomeScreen(
     val hazeState = rememberHazeState()
     val density = LocalDensity.current
     val stickyProgress = ctStickyHeaderProgress(scrollState.value.toFloat(), density.density)
-    val greeting = remember(today, nowMillis) {
-        HomeWorkbenchLogic.greeting(Instant.ofEpochMilli(nowMillis).atZone(zone).hour)
+    val greeting = remember(today, currentTime) {
+        HomeWorkbenchLogic.greeting(Instant.ofEpochMilli(currentTime).atZone(zone).hour)
     }
     val todayLabel = remember(today) { HomeWorkbenchLogic.dateText(today) }
 
@@ -495,7 +507,7 @@ fun HomeScreen(
                                 date = today,
                                 plan = ttPlan,
                                 loading = ttLoading,
-                                nowMillis = nowMillis,
+                                nowMillis = currentTime,
                                 reduceMotion = reduceMotion,
                                 onOpenTimetable = { openToolId("tt") },
                             )
@@ -641,35 +653,9 @@ private fun HomeTodayCoursesCard(
             else -> {
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     plan.today.forEachIndexed { index, sessionInfo ->
-                        CourseRow(index = index, sessionInfo = sessionInfo)
-                        // H-05：在「已结束」与「未开始」之间插入当前时间线。
-                        val nextSession = plan.today.getOrNull(index + 1)
-                        if (sessionInfo.state == SessionState.DONE &&
-                            nextSession != null &&
-                            nextSession.state != SessionState.DONE
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                HorizontalDivider(
-                                    modifier = Modifier.weight(1f),
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                                )
-                                Text(
-                                    text = "现在",
-                                    style = CtText.caption,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 6.dp),
-                                )
-                                HorizontalDivider(
-                                    modifier = Modifier.weight(1f),
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                                )
-                            }
-                        }
+                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        CourseRow(sessionInfo, isNext = sessionInfo.state == SessionState.NEXT &&
+                            plan.next?.startAt == sessionInfo.startAt)
                     }
                 }
                 if (plan.todayState == TodayState.DONE) {
@@ -691,9 +677,9 @@ private fun HomeTodayCoursesCard(
     }
 }
 
-/** 单节课程行：时间 + 课程色条 + 课程名/节次/教室 + 上课中 pill。 */
+/** 单节课程行：时间、课程名、节次、教室和实时状态。 */
 @Composable
-private fun CourseRow(index: Int, sessionInfo: SessionInfo) {
+private fun CourseRow(sessionInfo: SessionInfo, isNext: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -708,13 +694,6 @@ private fun CourseRow(index: Int, sessionInfo: SessionInfo) {
             maxLines = 1,
             softWrap = false,
             modifier = Modifier.widthIn(min = 46.dp),
-        )
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .height(34.dp)
-                .clip(CircleShape)
-                .background(courseAccent(index)),
         )
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -731,27 +710,15 @@ private fun CourseRow(index: Int, sessionInfo: SessionInfo) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (sessionInfo.state == SessionState.ONGOING) {
+        if (sessionInfo.state == SessionState.ONGOING || isNext) {
+            Spacer(modifier = Modifier.width(6.dp))
             CtPill(
-                text = "上课中",
+                text = if (isNext) "下一节" else "上课中",
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
     }
-}
-
-/** 课程色条（HFUT 课表马卡龙色的克制版：只用于 3dp 色条，不改变卡片底色）。 */
-private fun courseAccent(index: Int): Color {
-    val palette = listOf(
-        BrandMistTeal,
-        BrandSlateBlue,
-        BrandWarmSand,
-        CtAccents.leaf.tintRef,
-        CtAccents.plum.tintRef,
-        CtAccents.clay.tintRef,
-    )
-    return palette[index.mod(palette.size)]
 }
 
 // =============================================================================

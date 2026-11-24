@@ -183,7 +183,7 @@ object TtCalendar {
         if (!hasData) {
             return TtPlan(hasData = false, week = week, today = emptyList(), todayState = TodayState.NODATA, next = null)
         }
-        val sessions = sessionsOn(courses, termStart, today, nowMillis, zone)
+        val sessions = if (week == null) emptyList() else sessionsOn(courses, termStart, today, nowMillis, zone)
         val todayState = when {
             sessions.isEmpty() -> TodayState.NONE
             sessions.any { it.state != SessionState.DONE } -> TodayState.HAS

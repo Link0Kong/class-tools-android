@@ -107,8 +107,14 @@ internal fun HomeHeroCard(
         HomeWorkbenchLogic.heroState(plan, loading, nowMillis)
     }
     val dateText = remember(date) { HomeWorkbenchLogic.dateText(date) }
-    val weekText = remember(plan?.week) {
-        HomeWorkbenchLogic.weekText(plan?.week).ifBlank { "课表未同步" }
+    val weekText = remember(plan?.week, plan?.hasData, loading) {
+        HomeWorkbenchLogic.weekText(plan?.week).ifBlank {
+            when {
+                plan?.hasData == true -> "尚未开学"
+                loading -> "读取中"
+                else -> "课表未同步"
+            }
+        }
     }
     val roleText = session.role.trim()
     val subLine = remember(dateText, roleText, plan?.hasData) {
