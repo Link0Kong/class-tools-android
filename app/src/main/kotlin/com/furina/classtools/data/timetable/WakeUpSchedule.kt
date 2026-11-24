@@ -204,7 +204,7 @@ object WakeUpSchedule {
     // 常量（与 WakeUp 开源版默认值对齐）
     private const val TABLE_ID = 1
     private const val TIME_TABLE_ID = 1
-    private const val COURSE_LEN = 50
+    private const val COURSE_LEN = 40
     private const val ITEM_HEIGHT = 56
     private const val ITEM_ALPHA = 60
     private const val ITEM_TEXT_SIZE = 12

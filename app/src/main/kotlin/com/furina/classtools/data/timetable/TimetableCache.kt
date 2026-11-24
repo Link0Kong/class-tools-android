@@ -15,6 +15,7 @@ import kotlinx.serialization.json.Json
 class FileTimetableCache(
     private val directory: File,
     private val json: Json = NetJson,
+    private val onChanged: () -> Unit = {},
 ) {
     private val file: File = File(directory, CACHE_FILE_NAME)
 
@@ -41,11 +42,12 @@ class FileTimetableCache(
             if (!directory.exists()) directory.mkdirs()
             val envelope = Envelope(savedAt = savedAt, snapshot = snapshot)
             file.writeText(json.encodeToString(Envelope.serializer(), envelope), Charsets.UTF_8)
+            onChanged()
         }
     }
 
     fun clear() {
-        runCatching { file.delete() }
+        runCatching { if (file.delete()) onChanged() }
     }
 
     companion object {

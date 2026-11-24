@@ -87,6 +87,10 @@ import com.furina.classtools.data.reminder.ReminderScheduler
 import com.furina.classtools.data.reminder.ReminderSettingsStore
 import com.furina.classtools.data.reminder.WorkManagerReminderScheduler
 import com.furina.classtools.data.remoteconfig.RemoteConfigRepository
+import com.furina.classtools.widget.TimetableWidget
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collect
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionStore
 import com.furina.classtools.data.settings.AppSettingsStore
@@ -240,7 +244,7 @@ class AppContainer(context: Context) {
     /** 课表仓库：个人 ttLocal > 公共 site_assets 快照 > 本机缓存。 */
     val timetableRepository: TimetableRepository = DefaultTimetableRepository(
         api = apiClient,
-        cache = FileTimetableCache(File(appContext.cacheDir, "timetable")),
+        cache = FileTimetableCache(File(appContext.cacheDir, "timetable"), onChanged = { TimetableWidget.refresh(appContext) }),
         personalStore = timetablePersonalStore,
     )
 
@@ -573,7 +577,7 @@ class AppContainer(context: Context) {
     val honorAccountManager: HonorAccountManager by honorAccount
 
     /** ColorOS 系系统属性探测（探测异常按「非 ColorOS」处理）。 */
-    private fun hasColorOsRom(): Boolean = runCatching {
+    internal fun hasColorOsRom(): Boolean = runCatching {
         val systemProperties = Class.forName("android.os.SystemProperties")
         val get = systemProperties.getMethod("get", String::class.java)
         OppoAccountDeviceSupport.COLOR_OS_ROM_PROPERTIES
@@ -584,6 +588,11 @@ class AppContainer(context: Context) {
     }.getOrDefault(false)
 
     init {
+        appScope.launch {
+            combine(sessionStore.state, userDataRepository.currentSections) { session, sections ->
+                session to sections["tt"]
+            }.distinctUntilChanged().collect { TimetableWidget.refresh(appContext) }
+        }
         // 启动不阻塞主线程：WorkManager 初始化与 ensureScheduled 放到后台作用域。
         appScope.launch { runCatching { reminderScheduler.ensureScheduled() } }
     }

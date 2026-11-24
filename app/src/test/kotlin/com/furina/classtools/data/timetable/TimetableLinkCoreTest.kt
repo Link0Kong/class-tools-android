@@ -131,7 +131,7 @@ class TimetableLinkCoreTest {
         val session = TimetableLink.sessionFor(course(day = 0, start = 3, end = 4), week = 2, termStart = termStart)
         assertNotNull(session)
         assertEquals(millis(2026, 9, 7, 9, 50), session!!.startMillis)
-        assertEquals(millis(2026, 9, 7, 11, 25), session.endMillis)
+        assertEquals(millis(2026, 9, 7, 11, 20), session.endMillis)
     }
 
     @Test

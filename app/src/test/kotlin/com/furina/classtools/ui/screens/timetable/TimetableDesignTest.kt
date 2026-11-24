@@ -295,9 +295,9 @@ class TimetableDesignTest {
         assertEquals(0f, (first as TimetableNowState.Visible).fraction, 0.001f)
         assertTrue(first.label.startsWith("现在 08:10"))
 
-        // 08:30 第 1 节内 20/45 → (0 + 20/45) / 12
+        // 08:30 第 1 节内 20/40 → (0 + 20/40) / 12
         val mid = TimetableNowLogic.indicator(v5Millis(8, 30), v5Zone) as TimetableNowState.Visible
-        assertEquals((20f / 45f) / 12f, mid.fraction, 0.001f)
+        assertEquals((20f / 40f) / 12f, mid.fraction, 0.001f)
 
         // 21:20 第 12 节结束 → 1.0
         val last = TimetableNowLogic.indicator(v5Millis(21, 20), v5Zone) as TimetableNowState.Visible

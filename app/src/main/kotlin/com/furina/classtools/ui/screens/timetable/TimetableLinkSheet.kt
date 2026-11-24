@@ -239,7 +239,7 @@ fun TimetableLinkSheet(
         }
     }
 
-    fun shareWakeUp() {
+    fun shareWakeUp(openInWakeUp: Boolean = false) {
         if (busy) return
         val document = WakeUpSchedule.build(snapshot = snapshot, maxWeeks = maxWeek)
         if (document == null) {
@@ -248,8 +248,23 @@ fun TimetableLinkSheet(
         }
         scope.launch {
             busy = true
-            shareFile(TimetableLinkFiles.writeWakeUp(context, document, termStart), "导入 WakeUp 课程表")
-            busy = false
+            try {
+                val file = TimetableLinkFiles.writeWakeUp(context, document, termStart)
+                if (openInWakeUp) {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                        setDataAndType(TimetableLinkFiles.fileUri(context, file), file.mime)
+                        setPackage("com.suda.yzune.wakeupschedule")
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startIntent(intent, "无法打开 WakeUp。可在下方保存备份，再从 WakeUp 导入")
+                } else {
+                    shareFile(file, "导入 WakeUp 课程表")
+                }
+            } catch (e: java.io.IOException) {
+                onMessage("生成 WakeUp 文件失败，请重试")
+            } finally {
+                busy = false
+            }
         }
     }
 
@@ -315,6 +330,16 @@ fun TimetableLinkSheet(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            TextButton(onClick = {
+                if (!com.furina.classtools.widget.TimetableWidget.pin(context)) {
+                    onMessage("请长按桌面，进入小部件并选择「班级课表」")
+                }
+            }) { Text("添加桌面课表卡片") }
+            if (remember { (context.applicationContext as com.furina.classtools.ClassToolsApp).container.hasColorOsRom() }) {
+                LinkSectionTitle("ColorOS 课程提醒")
+                LinkText("使用小布建议的手机，可将课表导入 WakeUp，并在系统设置的小布建议中开启课程提醒。")
+                CtToolPrimaryButton(text = "在 WakeUp 中导入课表", onClick = { shareWakeUp(true) }, enabled = !busy)
+            }
             // ---- 系统日历 -----------------------------------------------------
             LinkSectionTitle(text = "系统日历")
             if (!hasAccess) {

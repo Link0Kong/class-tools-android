@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.furina.classtools.ClassToolsApp
 import androidx.core.content.ContextCompat
 
 /**
@@ -71,6 +72,8 @@ class AndroidReminderNotifier(
 
     private val appContext: Context = context.applicationContext
 
+    private val colorOs by lazy { (appContext as? ClassToolsApp)?.container?.hasColorOsRom() == true }
+
     private val smallIcon: Int by lazy {
         ReminderSmallIcon.resolve { name ->
             appContext.resources.getIdentifier(name, "drawable", appContext.packageName).takeIf { it != 0 }
@@ -106,12 +109,17 @@ class AndroidReminderNotifier(
         if (!canNotify()) return false
         val pendingIntent = ReminderIntentFactory.pendingIntent(appContext, event) ?: return false
         viewEvent(event)
+        val startAt = event.key.takeIf { event.kind == ReminderKind.COURSE_SOON }
+            ?.removePrefix("class:")?.toLongOrNull()
+        val remaining = (startAt ?: 0L) - System.currentTimeMillis()
+        val liveCourse = startAt != null && remaining > 0 && Build.VERSION.SDK_INT >= 36 && colorOs
+        val body = if (liveCourse) event.body.substringBeforeLast(" · 还有 ") else event.body
         val groupKey = ReminderGrouping.groupKey(event.kind)
         val builder = NotificationCompat.Builder(appContext, event.kind.channelId)
             .setSmallIcon(smallIcon)
             .setContentTitle(event.title)
-            .setContentText(event.body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(event.body))
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(
                 if (event.kind.highPriority) {
                     NotificationCompat.PRIORITY_HIGH
@@ -122,15 +130,23 @@ class AndroidReminderNotifier(
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
-            .setGroup(groupKey)
-            // 子通知静默，仅组摘要提示一次，避免一组多条轮番响铃
-            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
             .setContentIntent(pendingIntent)
+        if (liveCourse && startAt != null) {
+            builder.setWhen(startAt)
+                .setUsesChronometer(true)
+                .setChronometerCountDown(true)
+                .setOngoing(true)
+                .setTimeoutAfter(remaining)
+                .setShortCriticalText("即将上课")
+                .setRequestPromotedOngoing(true)
+        } else {
+            builder.setGroup(groupKey).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
+        }
         val childOk = runCatching {
             NotificationManagerCompat.from(appContext).notify(event.notificationId, builder.build())
             true
         }.getOrDefault(false)
-        if (childOk) {
+        if (childOk && !liveCourse) {
             postGroupSummary(event, groupKey, pendingIntent)
         }
         return childOk

@@ -100,6 +100,7 @@ object TtCalendar {
         date: LocalDate,
         nowMillis: Long,
         zone: ZoneId = ZoneId.systemDefault(),
+        focusOnBell: Boolean = false,
     ): List<SessionInfo> {
         val week = weekOf(termStart, date)
         val di = dayIndex(date)
@@ -110,8 +111,13 @@ object TtCalendar {
             if (!isActive(course, week)) continue
             val startPeriod = TtPeriods.PERIODS.getOrNull(course.start - 1) ?: continue
             val endPeriod = TtPeriods.PERIODS.getOrNull(course.end - 1) ?: continue
-            val startTime = parseTime(startPeriod.first) ?: continue
-            val endTime = parseTime(endPeriod.second) ?: continue
+            val clock = now.atZone(zone)
+            val focus = if (focusOnBell && date == clock.toLocalDate() && clock.toLocalTime() >= LocalTime.parse(startPeriod.first))
+                (course.start..course.end).firstOrNull { clock.toLocalTime() < LocalTime.parse(TtPeriods.endText(it)) }
+            else null
+            val activeSlot = focus?.let { TtPeriods.PERIODS[it - 1] }
+            val startTime = parseTime(activeSlot?.first ?: startPeriod.first) ?: continue
+            val endTime = parseTime(activeSlot?.second ?: endPeriod.second) ?: continue
             val startAt = LocalDateTime.of(date, startTime).atZone(zone).toInstant()
             val endAt = LocalDateTime.of(date, endTime).atZone(zone).toInstant()
             val state = when {
@@ -125,9 +131,9 @@ object TtCalendar {
                     room = roomShort(course.room),
                     start = course.start,
                     end = course.end,
-                    startText = startPeriod.first,
-                    endText = endPeriod.second,
-                    span = spanText(course.start, course.end),
+                    startText = activeSlot?.first ?: startPeriod.first,
+                    endText = activeSlot?.second ?: endPeriod.second,
+                    span = if (focus != null) spanText(focus, focus) else spanText(course.start, course.end),
                     startAt = startAt.toEpochMilli(),
                     endAt = endAt.toEpochMilli(),
                     state = state,
@@ -151,7 +157,7 @@ object TtCalendar {
         for (off in 0 until lookAheadDays) {
             val date = today.plusDays(off.toLong())
             if (weekOf(termStart, date) == null) continue
-            val candidate = sessionsOn(courses, termStart, date, nowMillis, zone)
+            val candidate = sessionsOn(courses, termStart, date, nowMillis, zone, focusOnBell = true)
                 .firstOrNull { it.startAt > now.toEpochMilli() }
                 ?: continue
             val dayText = when (off) {
@@ -183,7 +189,7 @@ object TtCalendar {
         if (!hasData) {
             return TtPlan(hasData = false, week = week, today = emptyList(), todayState = TodayState.NODATA, next = null)
         }
-        val sessions = if (week == null) emptyList() else sessionsOn(courses, termStart, today, nowMillis, zone)
+        val sessions = if (week == null) emptyList() else sessionsOn(courses, termStart, today, nowMillis, zone, focusOnBell = true)
         val todayState = when {
             sessions.isEmpty() -> TodayState.NONE
             sessions.any { it.state != SessionState.DONE } -> TodayState.HAS

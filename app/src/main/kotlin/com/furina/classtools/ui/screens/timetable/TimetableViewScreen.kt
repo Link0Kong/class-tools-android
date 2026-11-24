@@ -54,6 +54,8 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
@@ -409,7 +411,7 @@ fun TimetableViewScreen(
                     onBack = onBack,
                     actions = {
                         if (onOpenMap != null) {
-                            TextButton(onClick = { onOpenMap(null) }) { Text("地图") }
+                            IconButton(onClick = { onOpenMap(null) }) { Icon(Icons.Rounded.Map, "打开校园地图") }
                         }
                         if (source == TtSource.PERSONAL) {
                             CtPill(
@@ -1369,19 +1371,17 @@ private fun CourseBlockV5(
             .padding(metrics.blockPaddingDp.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                text = TtPeriods.startText(course.start),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
-                fontWeight = FontWeight.Bold,
-                color = content,
-                maxLines = 1,
-            )
+            val nameSize = (width.value / 4.5f).coerceIn(10f, 15f)
             Text(
                 text = course.name,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontSize = nameSize.sp,
+                    lineHeight = (nameSize * 1.2f).sp,
+                ),
                 fontWeight = FontWeight.SemiBold,
                 color = content,
-                maxLines = if (span >= 2) metrics.courseNameMaxLines else 1,
+                maxLines = if (span == 1) 2 else (span * 2).coerceAtMost(6),
+                overflow = TextOverflow.Ellipsis,
             )
             if (course.room.isNotBlank() && span >= 2) {
                 Text(
@@ -2022,12 +2022,8 @@ fun TimetableCourseDetailContent(
             }
         }
         if (onOpenMap != null && course.room.isNotBlank()) {
-            FilledTonalButton(
-                onClick = onOpenMap,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                shape = CtShapeTokens.pill,
-            ) {
-                Text("在地图查看教室")
+            IconButton(onClick = onOpenMap) {
+                Icon(Icons.Rounded.Map, contentDescription = "在地图查看教室")
             }
         }
         val week = displayWeek

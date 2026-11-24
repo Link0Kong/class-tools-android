@@ -30,6 +30,19 @@ class TimetableCalendarTest {
         parity: String = "all",
     ) = Course(name = name, day = day, start = start, end = end, weeks = weeks, parity = parity)
 
+    @Test
+    fun doublePeriodPausesAndResumesAtTheBell() {
+        val snapshot = TtSnapshot(c = listOf(course()), t = "2026-08-31")
+        fun plan(hour: Int, minute: Int) = TtCalendar.plan(snapshot,
+            termStart.atTime(hour, minute).atZone(zone).toInstant().toEpochMilli(), zone)
+        assertEquals("08:50", plan(8, 49).today.single().endText)
+        val rest = plan(8, 50)
+        assertEquals(SessionState.NEXT, rest.today.single().state)
+        assertEquals("09:00", rest.next?.startText)
+        assertEquals(SessionState.ONGOING, plan(9, 0).today.single().state)
+        assertEquals(SessionState.DONE, plan(9, 40).today.single().state)
+    }
+
     // ---- parseWeeks ---------------------------------------------------------
 
     @Test

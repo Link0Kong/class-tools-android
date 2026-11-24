@@ -11,7 +11,7 @@ import org.junit.Test
 /**
  * ICS（`.ics`）生成单测：转义 / 折叠 / 时区 / RRULE 周次与单双周 / VALARM / UID 稳定。
  *
- * 时间基准：2026-08-31（周一）开学；第 1 节 08:10-08:55，第 2 节 08:55-09:40，第 3-4 节 09:50-11:25。
+ * 时间基准：2026-08-31（周一）开学；第 1 节 08:10-08:50，第 2 节 09:00-09:40，第 3-4 节 09:50-11:20。
  */
 class TimetableIcsTest {
 
@@ -80,7 +80,7 @@ class TimetableIcsTest {
             nowMillis = 0L,
         )!!.text
         assertTrue(text.contains("DTSTART;TZID=Asia/Shanghai:20260902T095000"))
-        assertTrue(text.contains("DTEND;TZID=Asia/Shanghai:20260902T112500"))
+        assertTrue(text.contains("DTEND;TZID=Asia/Shanghai:20260902T112000"))
     }
 
     // ---- RRULE --------------------------------------------------------------
@@ -101,8 +101,8 @@ class TimetableIcsTest {
             snapshot(course(day = 2, start = 3, end = 4, weeks = "1-16", parity = "odd")),
             nowMillis = 0L,
         )!!.text
-        // 最后一次单周=第 15 周，周三 2026-12-09 11:25 +08 → 03:25Z
-        assertTrue(text.contains("RRULE:FREQ=WEEKLY;INTERVAL=2;UNTIL=20261209T032500Z"))
+        // 最后一次单周=第 15 周，周三 2026-12-09 11:20 +08 → 03:20Z
+        assertTrue(text.contains("RRULE:FREQ=WEEKLY;INTERVAL=2;UNTIL=20261209T032000Z"))
     }
 
     @Test

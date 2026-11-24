@@ -84,7 +84,7 @@ class WakeUpScheduleTest {
         assertEquals(1, obj["id"]!!.jsonPrimitive.int)
         assertEquals("班级课表", obj["name"]!!.jsonPrimitive.content)
         assertFalse(obj["sameLen"]!!.jsonPrimitive.boolean)
-        assertEquals(50, obj["courseLen"]!!.jsonPrimitive.int)
+        assertEquals(40, obj["courseLen"]!!.jsonPrimitive.int)
     }
 
     // ---- 第 2 行：TimeDetailBean 列表 --------------------------------------
@@ -97,11 +97,11 @@ class WakeUpScheduleTest {
         val first = periods[0].jsonObject
         assertEquals(1, first["node"]!!.jsonPrimitive.int)
         assertEquals("08:10", first["startTime"]!!.jsonPrimitive.content)
-        assertEquals("08:55", first["endTime"]!!.jsonPrimitive.content)
+        assertEquals("08:50", first["endTime"]!!.jsonPrimitive.content)
         assertEquals(1, first["timeTable"]!!.jsonPrimitive.int)
         val last = periods[11].jsonObject
         assertEquals(12, last["node"]!!.jsonPrimitive.int)
-        assertEquals("20:30", last["startTime"]!!.jsonPrimitive.content)
+        assertEquals("20:40", last["startTime"]!!.jsonPrimitive.content)
         assertEquals("21:20", last["endTime"]!!.jsonPrimitive.content)
     }
 
