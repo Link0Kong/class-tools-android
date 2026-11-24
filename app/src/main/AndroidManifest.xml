@@ -3,9 +3,6 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- 扫一扫（抽签存根核验 / 电脑扫码登录）：仅扫码页运行时申请，拒绝只影响扫码 -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!-- v2 通知提醒（Android 13+ 运行时申请；拒绝时静默降级） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

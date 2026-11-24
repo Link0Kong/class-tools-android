@@ -165,9 +165,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 144
+        versionCode = 145
     // 测试版本 29：OPPO 推送 AppSecret 改为控制台原文小写（签名 16 修复）。
-        versionName = "1.0.0-beta61"
+        versionName = "1.0.0-beta62"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -472,13 +472,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
-
-    // 扫一扫：CameraX 相机预览 + ZXing 本机解码（不依赖 GMS；仅扫码时申请相机权限）
-    implementation(libs.androidx.camera.core)
-    implementation(libs.androidx.camera.camera2)
-    implementation(libs.androidx.camera.lifecycle)
-    implementation(libs.androidx.camera.view)
-    implementation(libs.zxing.core)
 
     // 金标联盟（ITGSA）SharedView Kit：荣耀/OPPO/vivo/小米系统侧一镜到底无缝转场。
     // 运行时由 ROM 提供实现；不支持的设备 isViewAnimationSupported()==0，业务回退现有 Compose 转场。
