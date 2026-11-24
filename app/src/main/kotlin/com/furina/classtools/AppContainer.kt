@@ -22,6 +22,7 @@ import com.furina.classtools.data.diag.DiagRepository
 import com.furina.classtools.data.diag.FileClientDiagPendingStore
 import com.furina.classtools.data.diag.installCrashHandler
 import com.furina.classtools.data.draw.SharedPreferencesDrawLastResultStore
+import com.furina.classtools.data.draw.DrawProofRepository
 import com.furina.classtools.data.fitrecs.DefaultFitRecsRepository
 import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.calendar.AndroidCalendarWriter
@@ -45,6 +46,7 @@ import com.furina.classtools.data.member.DefaultClassLeagueRepository
 import com.furina.classtools.data.member.DefaultClassMembersRepository
 import com.furina.classtools.data.member.FileClassMemberCache
 import com.furina.classtools.data.network.ApiClient
+import com.furina.classtools.data.scan.QrLoginRepository
 import com.furina.classtools.data.network.OkHttpTransport
 import com.furina.classtools.data.notices.DefaultNoticesRepository
 import com.furina.classtools.data.notices.NoticesRepository
@@ -212,6 +214,14 @@ class AppContainer(context: Context) {
     )
 
     val authRepository: AuthRepository = ApiAuthRepository(apiClient)
+
+    /** 扫一扫 → 抽签存证核验（`rpc/draw_record_get`，只读）。 */
+    val drawProofRepository: DrawProofRepository by lazy { DrawProofRepository(apiClient) }
+
+    /** 扫一扫 → 电脑网页扫码登录（ECS `/account/qr/authorize`，App 不接收 token）。 */
+    val qrLoginRepository: QrLoginRepository by lazy {
+        QrLoginRepository(OkHttpTransport(), BuildConfig.ACCOUNT_BASE_URL)
+    }
 
     val classMembersRepository: ClassMembersRepository = DefaultClassMembersRepository(
         api = apiClient,

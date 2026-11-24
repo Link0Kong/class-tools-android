@@ -140,6 +140,7 @@ import com.furina.classtools.ui.screens.profile.OppoAccountSheet
 import com.furina.classtools.ui.screens.profile.ProfileScreen
 import com.furina.classtools.ui.screens.roster.RollCallScreen
 import com.furina.classtools.ui.screens.roster.RosterScreen
+import com.furina.classtools.ui.screens.scan.ScanScreen
 import com.furina.classtools.ui.screens.settings.PermissionSettingsScreen
 import com.furina.classtools.ui.screens.settings.ReminderSettingsScreen
 import com.furina.classtools.ui.screens.timetable.TimetableViewScreen
@@ -490,6 +491,15 @@ fun MainNavHost(
                 },
                 onOpenPowerPicker = { navController.navigate(Routes.tool("power", pick = true)) },
                 onShareCard = { card -> shareCard = card },
+                onScan = { navController.navigate(Routes.SCAN) },
+            )
+        }
+
+        composable(Routes.SCAN) {
+            ScanScreen(
+                container = container,
+                session = session,
+                onBack = { navController.popBackStack() },
             )
         }
 
@@ -542,6 +552,7 @@ fun MainNavHost(
                         onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW) },
                         lastResultStore = container.drawLastResultStore,
                         loadMembers = loadMembers,
+                        onScan = { navController.navigate(Routes.SCAN) },
                     )
                 }
 
@@ -1162,6 +1173,8 @@ private fun RootTabs(
     onOpenTool: (AppTool) -> Unit,
     onHomeToolsChange: (List<String>) -> Unit,
     onOpenPowerPicker: () -> Unit,
+    /** 根页「扫一扫」：电脑扫码登录 / 抽签存证核验。 */
+    onScan: () -> Unit = {},
     /** 根页发起的分享（我的 → 分享给同学）：交给宿主弹出统一分享层。 */
     onShareCard: (com.furina.classtools.features.share.ShareCardView) -> Unit = {},
 ) {
@@ -1390,6 +1403,7 @@ private fun RootTabs(
                     isPageActive = pagerState.currentPage == 0,
                     onHomeToolsChange = onHomeToolsChange,
                     onOpenPowerPicker = onOpenPowerPicker,
+                    onScan = onScan,
                 )
 
                 1 -> AllToolsScreen(

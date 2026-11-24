@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Casino
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +57,7 @@ import com.furina.classtools.features.draw.DrawWorkflow
 import com.furina.classtools.features.draw.DrawWorkflowState
 import com.furina.classtools.features.draw.UserDataDrawConfigStore
 import com.furina.classtools.features.draw.defaultDrawRandom
+import com.furina.classtools.ui.components.CtGlassIconButton
 import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
@@ -82,6 +84,8 @@ fun DrawScreen(
     forcedErrorMessage: String? = null,
     skipRestore: Boolean = false,
     loadMembers: (suspend () -> List<ClassMember>)? = null,
+    /** 扫码核验：打开「扫一扫」（抽签存证 / 电脑扫码登录同一入口）。 */
+    onScan: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = if (skipRestore && initialResult != null) 1 else 0)
@@ -151,7 +155,19 @@ fun DrawScreen(
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-            ctTopBarRaw(title = "抽签", onBack = onBack)
+            ctTopBarRaw(
+                title = "抽签",
+                onBack = onBack,
+                actions = {
+                    if (onScan != null) {
+                        CtGlassIconButton(
+                            icon = Icons.Rounded.QrCodeScanner,
+                            contentDescription = "扫码核验",
+                            onClick = onScan,
+                        )
+                    }
+                },
+            )
 
             if (screenError != null) {
                 EmptyState(icon = Icons.Rounded.Casino, title = "暂时无法抽签", message = screenError)

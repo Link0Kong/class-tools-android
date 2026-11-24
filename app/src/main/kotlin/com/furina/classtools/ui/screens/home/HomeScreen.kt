@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -189,6 +190,8 @@ fun HomeScreen(
     noticesRepository: NoticesRepository? = null,
     userDataRepository: UserDataRepository? = null,
     onOpenAll: () -> Unit = {},
+    /** 扫一扫：电脑扫码登录 / 抽签存证核验。 */
+    onScan: () -> Unit = {},
     showNotificationPermissionBanner: Boolean = false,
     onOpenPermissions: (() -> Unit)? = null,
     /** H-04：电量卡未关注宿舍时直接打开宿主的选择器（宿主通过路由参数让电费页首帧弹选择器）。 */
@@ -498,6 +501,11 @@ fun HomeScreen(
                                 subtitle = "$todayLabel · $greeting",
                                 actions = {
                                     CtGlassIconButton(
+                                        icon = Icons.Rounded.QrCodeScanner,
+                                        contentDescription = "扫一扫",
+                                        onClick = onScan,
+                                    )
+                                    CtGlassIconButton(
                                         icon = Icons.Rounded.Notifications,
                                         contentDescription = "通知待处理",
                                         badge = ntItems.isNotEmpty(),
@@ -605,6 +613,11 @@ fun HomeScreen(
                 progress = stickyProgress,
                 hazeState = hazeState,
                 actions = {
+                    CtGlassIconButton(
+                        icon = Icons.Rounded.QrCodeScanner,
+                        contentDescription = "扫一扫",
+                        onClick = onScan,
+                    )
                     CtGlassIconButton(
                         icon = Icons.Rounded.Notifications,
                         contentDescription = "通知待处理",
