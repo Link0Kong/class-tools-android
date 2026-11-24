@@ -97,6 +97,7 @@ data class ShareCardView(
     val footerRight: String = "",
     val maskedResults: Boolean = false,
     val link: ShareLink,
+    val fullExport: com.furina.classtools.features.export.ExportCardSpec? = null,
 ) {
     companion object {
         const val MAX_STATS: Int = 3

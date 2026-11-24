@@ -87,6 +87,7 @@ internal fun CtAppBackdrop(
 
 internal fun backdropVeilAlpha(dark: Boolean, hasPhoto: Boolean): Float = when {
     hasPhoto -> if (dark) 0.88f else 0.92f
+    dark -> 0.64f
     else -> 0.74f
 }
 

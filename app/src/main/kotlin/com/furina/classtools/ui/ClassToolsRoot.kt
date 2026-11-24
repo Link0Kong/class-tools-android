@@ -252,7 +252,7 @@ private fun BootSplash() {
         ) {
             BrandMark(size = 72.dp)
             Text(
-                text = "班级工具站",
+                text = "枫丹工具箱",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,

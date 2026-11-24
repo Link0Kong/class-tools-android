@@ -2,4 +2,13 @@
     <color name="widget_ink">#E7EFE9</color>
     <color name="widget_accent">#A4CDB7</color>
     <color name="widget_paper">#1D302B</color>
+    <color name="widget_blue_bg">#182C42</color>
+    <color name="widget_blue_accent">#9DC9F6</color>
+    <color name="widget_blue_ink">#E8F2FF</color>
+    <color name="widget_amber_bg">#342A1B</color>
+    <color name="widget_amber_accent">#E8BE7B</color>
+    <color name="widget_amber_ink">#FCF1D9</color>
+    <color name="widget_lilac_bg">#302638</color>
+    <color name="widget_lilac_accent">#D5B4EC</color>
+    <color name="widget_lilac_ink">#F6EBFE</color>
 </resources>

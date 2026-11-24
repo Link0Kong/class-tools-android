@@ -31,6 +31,11 @@ class MainActivity : ComponentActivity() {
         // 全透明系统栏：避免部分 ROM（ColorOS 等）在底部工具栏下画一条黑色导航栏色带。
         enableClassToolsEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (android.os.Build.VERSION.SDK_INT >= 35) {
+            window.decorView.post {
+                com.furina.classtools.widget.DesktopWidgets.publishPickerPreviews(applicationContext)
+            }
+        }
         pendingToolId.value = toolIdFrom(intent)
         pendingNoticeId.value = noticeIdFrom(intent)
         val container = (application as ClassToolsApp).container

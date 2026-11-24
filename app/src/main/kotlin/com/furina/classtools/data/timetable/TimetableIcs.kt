@@ -192,7 +192,7 @@ object TimetableIcs {
             append(course.teacher.trim())
         }
         append('\n')
-        append("来自班级工具站课表")
+        append("来自枫丹工具箱课表")
     }.trimEnd()
 
     private fun validCourse(course: Course): Boolean =

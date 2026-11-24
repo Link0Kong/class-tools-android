@@ -99,6 +99,34 @@ internal fun changeCompletion(items: List<JsonObject>, id: String, done: Boolean
 internal fun firstOrder(items: List<JsonObject>) =
     (items.minOfOrNull { it.text("order").toDoubleOrNull() ?: 0.0 } ?: 0.0) - 1.0
 
+/** Rank actionable work the same way on the task screen and desktop. Stable order breaks ties. */
+internal fun taskPriority(task: JsonObject, today: String): Int {
+    val due = task.text("due")
+    return when {
+        due.isNotBlank() && due < today -> 0
+        due == today -> 1
+        task.flag("starred") -> 2
+        task.text("myDay") == today -> 3
+        due.isNotBlank() -> 4
+        else -> 5
+    }
+}
+
+internal fun taskPriorityOrder(today: String) = compareBy<JsonObject> { taskPriority(it, today) }
+    .thenBy { taskDeadline(it) ?: Long.MAX_VALUE }
+    .thenBy { it.text("order").toDoubleOrNull() ?: 0.0 }
+
+internal fun taskDueLabel(task: JsonObject, today: String): String {
+    val due = task.text("due")
+    if (due.isBlank()) return ""
+    val day = when {
+        due < today -> "已逾期 " + due.takeLast(5)
+        due == today -> "今天"
+        else -> due.takeLast(5)
+    }
+    return listOf(day, task.text("dueTime")).filter(String::isNotBlank).joinToString(" ") + " 截止"
+}
+
 internal fun JsonObject.pendingTasks() = objects("items").filterNot { it.flag("done") }
     .sortedBy { it.text("order").toDoubleOrNull() ?: 0.0 }
 

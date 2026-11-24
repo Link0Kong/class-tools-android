@@ -44,6 +44,12 @@ abstract class DesktopWidgetProvider : AppWidgetProvider() {
         }
     }
 
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        val prefs = WidgetPalette.prefs(context).edit()
+        appWidgetIds.forEach { prefs.remove(it.toString()) }
+        prefs.apply()
+    }
+
     override fun onDisabled(context: Context) = DesktopWidgets.cancelAlarm(context, javaClass)
 }
 
@@ -66,6 +72,26 @@ internal object DesktopWidgets {
     fun refresh(context: Context) {
         components.values.filter { ids(context, it).isNotEmpty() }.forEach {
             context.sendBroadcast(Intent(context, it).setAction(REFRESH))
+        }
+    }
+
+    @androidx.annotation.RequiresApi(35)
+    fun publishPickerPreviews(context: Context) {
+        val manager = AppWidgetManager.getInstance(context)
+        val category = android.appwidget.AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN
+        val prefs = context.getSharedPreferences("widget_picker_previews", Context.MODE_PRIVATE)
+        val layouts = mapOf(
+            WidgetKind.TIMETABLE to com.furina.classtools.R.layout.widget_preview_timetable,
+            WidgetKind.WORKBENCH to com.furina.classtools.R.layout.widget_preview_workbench,
+            WidgetKind.NOTICES to com.furina.classtools.R.layout.widget_preview_notices,
+            WidgetKind.TASKS to com.furina.classtools.R.layout.widget_preview_tasks,
+        )
+        layouts.forEach { (kind, layout) ->
+            if (prefs.getInt(kind.name, 0) != com.furina.classtools.BuildConfig.VERSION_CODE) {
+                val accepted = runCatching { manager.setWidgetPreview(ComponentName(context, components.getValue(kind)),
+                    category, android.widget.RemoteViews(context.packageName, layout)) }.getOrDefault(false)
+                if (accepted) prefs.edit().putInt(kind.name, com.furina.classtools.BuildConfig.VERSION_CODE).apply()
+            }
         }
     }
 
@@ -96,7 +122,7 @@ internal object DesktopWidgets {
         } else null
         val feed = if (kind != WidgetKind.TIMETABLE && session != null) WidgetFeedStore.read(context, session.sid) else WidgetFeed()
         val model = widgetContent(kind, session != null, plan, feed, now)
-        for (id in ids) manager.updateAppWidget(id, WidgetViews.forHost(context, kind, model, manager.getAppWidgetOptions(id)))
+        for (id in ids) manager.updateAppWidget(id, WidgetViews.forHost(context, kind, model, manager.getAppWidgetOptions(id), WidgetPalette.get(context, id)))
         if (periodic && session != null && !session.debug && kind != WidgetKind.TIMETABLE) WidgetFeedStore.request(context, session.sid)
         val current = plan?.today?.firstOrNull { it.state == SessionState.ONGOING }
         val boundary = listOfNotNull(current?.endAt, plan?.next?.startAt, session?.expiresAt,

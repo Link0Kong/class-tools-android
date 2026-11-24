@@ -290,7 +290,7 @@ sealed interface ReminderTestNotificationResult {
  * 本地立即发一条，用于检查系统权限与通知样式。
  */
 object ReminderTestNotification {
-    const val TITLE: String = "班级工具站 · 测试通知"
+    const val TITLE: String = "枫丹工具箱 · 测试通知"
     const val BODY: String = "通知已开启，作业、通知、投票与水费提醒会在这里出现。"
 
     fun event(nowMillis: Long): ReminderEvent = ReminderEvent(

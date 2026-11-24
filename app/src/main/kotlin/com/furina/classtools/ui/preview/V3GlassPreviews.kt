@@ -73,7 +73,7 @@ private fun GlassCardPreviewFrame(dark: Boolean) {
                     shape = CtShapeTokens.hero,
                 ) {
                     Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("班级工具站", style = MaterialTheme.typography.titleLarge)
+                        Text("枫丹工具箱", style = MaterialTheme.typography.titleLarge)
                         Text(
                             "半透明玻璃 + 顶部折射高光 + 1dp 描边",
                             style = MaterialTheme.typography.bodySmall,

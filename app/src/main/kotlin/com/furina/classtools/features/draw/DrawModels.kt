@@ -92,6 +92,7 @@ data class DrawResult(
     val pool: List<DrawEntry>,
     val config: DrawConfig,
     val log: List<DrawRemoveLog> = emptyList(),
+    val proof: DrawRoundProof? = null,
 ) {
     val isEmpty: Boolean get() = entries.isEmpty()
 }

@@ -23,7 +23,7 @@ object PermissionTexts {
         message = "允许通知后，App 会在作业截止前、上课前发送本机提醒；不申请其他通知用途。",
         rationale = "提醒需要通知权限才能显示在通知栏；你可以只开启「作业提醒」或「课表提醒」，也可随时在系统设置中关闭。",
         settingsTitle = "通知权限已被关闭",
-        settingsMessage = "请到系统设置 → 应用 → 班级工具站 → 通知 中允许通知，然后返回重试。",
+        settingsMessage = "请到系统设置 → 应用 → 枫丹工具箱 → 通知 中允许通知，然后返回重试。",
         confirmLabel = "去开启",
     )
 
@@ -32,7 +32,7 @@ object PermissionTexts {
         message = "允许后，可将课表/有时间的通知写入本机日历，并由系统日历提醒；不会上传日历数据。",
         rationale = "写日程需要读取并写入本机日历权限（仅用于创建你主动添加的课程/通知日程）；选择“不授权”时会改用系统日历的插入界面由你确认。",
         settingsTitle = "日历权限已被关闭",
-        settingsMessage = "请到系统设置 → 应用 → 班级工具站 → 权限 → 日历 中允许读写日历，然后返回重试。",
+        settingsMessage = "请到系统设置 → 应用 → 枫丹工具箱 → 权限 → 日历 中允许读写日历，然后返回重试。",
         confirmLabel = "去开启",
     )
 

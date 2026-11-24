@@ -1,1 +1,10 @@
-<resources><color name="widget_ink">#17352E</color><color name="widget_accent">#386052</color><color name="widget_paper">#EDF5EF</color></resources>
+<resources><color name="widget_ink">#17352E</color><color name="widget_accent">#386052</color><color name="widget_paper">#EDF5EF</color>    <color name="widget_blue_bg">#EBF3FF</color>
+    <color name="widget_blue_accent">#315985</color>
+    <color name="widget_blue_ink">#142E49</color>
+    <color name="widget_amber_bg">#FFF3DC</color>
+    <color name="widget_amber_accent">#805418</color>
+    <color name="widget_amber_ink">#412F16</color>
+    <color name="widget_lilac_bg">#F3EEFF</color>
+    <color name="widget_lilac_accent">#69478C</color>
+    <color name="widget_lilac_ink">#382544</color>
+</resources>

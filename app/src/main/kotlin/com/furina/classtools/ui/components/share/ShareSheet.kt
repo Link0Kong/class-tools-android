@@ -147,7 +147,7 @@ fun ShareSheet(
                         if (busy) return@OutlinedButton
                         busy = true
                         scope.launch {
-                            val outcome = SharePresenter.shareImage(context, view)
+                            val outcome = SharePresenter.shareImage(context, view, preview = preview)
                             busy = false
                             toast(outcome)
                         }
@@ -166,7 +166,7 @@ fun ShareSheet(
                         if (busy) return@OutlinedButton
                         busy = true
                         scope.launch {
-                            val outcome = SharePresenter.saveImage(context, view)
+                            val outcome = SharePresenter.saveImage(context, view, preview = preview)
                             busy = false
                             toast(outcome)
                         }

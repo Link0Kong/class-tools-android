@@ -34,6 +34,20 @@ class MarksRepositoryTest {
         clock = { fixedNow },
     )
 
+    @Test
+    fun switchingAccountsInsideTtlLoadsOwnCompletionEvenOffline() = runTest {
+        var account = sid
+        val transport = FakeTransport { if (account == sid) ApiResponse(200, Fixtures.text("marks_ntdone_rows.json"))
+            else ApiResponse(503, "") }
+        val repo = DefaultMarksRepository(testApiClient(transport), currentSid = { account }, clock = { fixedNow })
+        repo.refresh()
+        assertTrue(repo.marks.value.isDone(MarkKind.HW, "hw_test1"))
+        account = "3260799999"
+        repo.refresh()
+        assertFalse(repo.marks.value.isDone(MarkKind.HW, "hw_test1"))
+        assertTrue(transport.lastRequest().url.contains("seat=eq." + account))
+    }
+
     private fun postRow(transport: FakeTransport): JsonObject {
         val post = transport.requests.last { it.method == HttpMethod.POST }
         val array = Json.parseToJsonElement(post.body!!) as JsonArray

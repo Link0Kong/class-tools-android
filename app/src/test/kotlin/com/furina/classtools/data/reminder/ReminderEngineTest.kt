@@ -313,7 +313,7 @@ class ReminderEngineTest {
         val result = engine(notifier = notifier).testNotification()
         assertEquals(ReminderTestNotificationResult.Sent, result)
         assertEquals(ReminderKind.SYSTEM_TEST, notifier.events.single().kind)
-        assertEquals("班级工具站 · 测试通知", notifier.events.single().title)
+        assertEquals("枫丹工具箱 · 测试通知", notifier.events.single().title)
         assertEquals(1, notifier.channelsEnsured)
     }
 

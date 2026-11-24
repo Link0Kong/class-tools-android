@@ -57,7 +57,7 @@ class DownloadManagerUpdateDownloader(context: Context) : UpdateApkDownloader {
         return runCatching {
             val relativePath = "${UpdateFileNames.PUBLIC_DOWNLOAD_SUB_DIR}/$fileName"
             val request = DownloadManager.Request(Uri.parse(info.apkUrl))
-                .setTitle("班级工具站 ${info.versionName}")
+                .setTitle("枫丹工具箱 ${info.versionName}")
                 .setDescription("正在下载新版本…")
                 .setMimeType(APK_MIME_TYPE)
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)

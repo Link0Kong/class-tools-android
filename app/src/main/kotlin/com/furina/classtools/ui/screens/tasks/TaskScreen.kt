@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.*
@@ -42,7 +43,13 @@ import kotlinx.serialization.json.*
 private val repeats = mapOf("" to "不重复", "daily" to "每天", "weekday" to "工作日", "weekly" to "每周", "monthly" to "每月", "yearly" to "每年")
 
 @Composable
-fun TaskScreen(repository: TaskRepository, onBack: () -> Unit, onHomework: () -> Unit) {
+fun TaskScreen(
+    repository: TaskRepository,
+    onBack: () -> Unit,
+    onHomework: () -> Unit,
+    homeworkOverview: (@Composable () -> Unit)? = null,
+    onRefreshHomework: () -> Unit = {},
+) {
     val snapshot by repository.snapshot.collectAsState()
     val status by repository.syncStatus.collectAsState()
     val scope = rememberCoroutineScope()
@@ -53,7 +60,9 @@ fun TaskScreen(repository: TaskRepository, onBack: () -> Unit, onHomework: () ->
         groups.map { "group-" + it.text("id") to it.text("name") }
     var view by rememberSaveable { mutableStateOf("all") }
     var query by rememberSaveable { mutableStateOf("") }
+    var searching by rememberSaveable { mutableStateOf(false) }
     var quick by rememberSaveable { mutableStateOf("") }
+    var quickDue by rememberSaveable { mutableStateOf("") }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var deleting by rememberSaveable { mutableStateOf<String?>(null) }
     var addGroup by rememberSaveable { mutableStateOf(false) }
@@ -72,7 +81,7 @@ fun TaskScreen(repository: TaskRepository, onBack: () -> Unit, onHomework: () ->
                 listOf(t.text("title"), t.text("notes"), t["tags"].toString()).any { it.contains(query.trim(), true) }
         }.sortedWith(if (view == "done") compareByDescending { it.number("doneAt") }
             else if (view == "planned") compareBy { taskDeadline(it) ?: Long.MAX_VALUE }
-            else compareBy { it.text("order").toDoubleOrNull() ?: 0.0 })
+            else if (view == "all") taskPriorityOrder(today) else compareBy { it.text("order").toDoubleOrNull() ?: 0.0 })
     }
     fun create() {
         val title = quick.trim()
@@ -82,10 +91,11 @@ fun TaskScreen(repository: TaskRepository, onBack: () -> Unit, onHomework: () ->
                 if (view.startsWith("group-")) put("list", view.removePrefix("group-"))
                 if (view == "important") put("starred", true)
                 if (view == "myday") put("myDay", today)
-                if (view == "planned") put("due", today)
+                if (quickDue.isNotBlank()) put("due", quickDue) else if (view == "planned") put("due", today)
             }
         }
         quick = ""
+        quickDue = ""
         query = ""
         if (view == "done") view = "all"
     }
@@ -93,28 +103,28 @@ fun TaskScreen(repository: TaskRepository, onBack: () -> Unit, onHomework: () ->
     LaunchedEffect(groups) { if (filters.none { it.first == view }) view = "all" }
     ExpressiveBackground(modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
-            CtLightTopBar(title = "任务", scrollPx = 0f, subtitle = status, onBack = onBack, actions = {
-                TextButton(onClick = onHomework) { Text("班级作业") }
-                IconButton(onClick = { scope.launch { repository.sync() } }, enabled = status != "同步中…") {
+            CtLightTopBar(title = "任务", scrollPx = 0f, subtitle = if (status.contains("离线") || status.contains("失败") || status.contains("同步中")) status else "${all.count { !it.flag("done") }} 项待办 · ${all.count { !it.flag("done") && it.text("due") == today }} 项今天截止", onBack = onBack, actions = {
+                IconButton(onClick = { searching = !searching; if (!searching) query = "" }) {
+                    Icon(Icons.Rounded.Search, "搜索任务")
+                }
+                if (homeworkOverview == null || searching || view != "all") TextButton(onClick = onHomework) { Text("班级作业") }
+                IconButton(onClick = { onRefreshHomework(); scope.launch { repository.sync() } }, enabled = status != "同步中…") {
                     Icon(Icons.Rounded.Refresh, "同步任务")
                 }
             })
-            LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (homeworkOverview != null && view == "all" && !searching) {
+                    item("class-homework") { homeworkOverview() }
+                    item("personal-heading") { Text("个人任务", style = MaterialTheme.typography.titleMedium) }
+                }
                 item("controls") {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(quick, { quick = it.take(200) }, Modifier.fillMaxWidth(),
-                            label = { Text("添加任务") }, singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { create() }),
-                            trailingIcon = { IconButton(onClick = ::create, enabled = quick.isNotBlank()) {
-                                Icon(Icons.Rounded.Add, "保存任务")
-                            } })
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             filters.forEach { (key, name) -> FilterChip(view == key, { view = key }, { Text(name) }) }
                             if (groups.size < 30) TextButton(onClick = { groupName = ""; addGroup = true }) { Text("新建分组") }
                         }
-                        if (all.isNotEmpty() || query.isNotEmpty()) OutlinedTextField(query, { query = it },
+                        if (searching) OutlinedTextField(query, { query = it },
                             Modifier.fillMaxWidth(), singleLine = true, label = { Text("搜索标题、备注或标签") })
                     }
                 }
@@ -130,12 +140,14 @@ fun TaskScreen(repository: TaskRepository, onBack: () -> Unit, onHomework: () ->
                             Checkbox(done, { value -> repository.edit { list, time -> changeCompletion(list, id, value, time) } },
                                 modifier = Modifier.semantics { contentDescription = if (done) "标记未完成" else "标记完成" })
                             Column(Modifier.weight(1f).padding(vertical = 5.dp)) {
-                                Text(task.text("title"), textDecoration = if (done) TextDecoration.LineThrough else null)
+                                Text(task.text("title"), style = MaterialTheme.typography.titleMedium, textDecoration = if (done) TextDecoration.LineThrough else null)
                                 val group = groups.find { it.text("id") == task.text("list") }
-                                val meta = listOf(task.text("due"), task.text("dueTime"), group?.text("name").orEmpty(),
+                                val meta = listOf(taskDueLabel(task, today), if (task.text("myDay") == today) "我的一天" else "",
+                                    group?.text("name").orEmpty(),
                                     if (task.text("sourceHwId").isNotBlank()) "班级作业" else "",
                                     if (task.text("sourceNoticeId").isNotBlank()) "班级通知" else "").filter(String::isNotBlank)
-                                if (meta.isNotEmpty()) Text(meta.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+                                if (meta.isNotEmpty()) Text(meta.joinToString(" · "), style = MaterialTheme.typography.bodySmall,
+                                    color = if (!done && taskPriority(task, today) == 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             IconToggleButton(task.flag("starred"), { value -> repository.edit { list, time ->
                                 list.map { if (it.text("id") == id) it.withFields { put("starred", value); put("updatedAt", time) } else it }
@@ -168,6 +180,22 @@ fun TaskScreen(repository: TaskRepository, onBack: () -> Unit, onHomework: () ->
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+            Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    OutlinedTextField(quick, { quick = it.take(200) }, Modifier.fillMaxWidth(),
+                        label = { Text("添加任务") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { create() }),
+                        trailingIcon = { IconButton(onClick = ::create, enabled = quick.isNotBlank()) {
+                            Icon(Icons.Rounded.Add, "保存任务")
+                        } })
+                    if (quick.isNotBlank()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(today to "今天截止", LocalDate.now().plusDays(1).toString() to "明天截止").forEach { (date, label) ->
+                            FilterChip(quickDue == date, { quickDue = if (quickDue == date) "" else date }, { Text(label) })
                         }
                     }
                 }

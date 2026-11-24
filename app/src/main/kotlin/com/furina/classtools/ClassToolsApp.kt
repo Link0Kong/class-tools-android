@@ -9,6 +9,11 @@ class ClassToolsApp : Application() {
     lateinit var container: AppContainer
         private set
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        com.furina.classtools.widget.DesktopWidgets.refresh(this)
+    }
+
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)

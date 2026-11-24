@@ -36,6 +36,7 @@ data class DrawExportPayload(
     val qrText: String?,
     val footer: String,
     val generatedAtMillis: Long,
+    val receipt: DrawReceipt? = null,
 )
 
 /**
@@ -54,6 +55,7 @@ object DrawExportFactory {
         result: DrawResult,
         nowMillis: Long = System.currentTimeMillis(),
         randomSuffix: String? = null,
+        receipt: DrawReceipt? = null,
     ): DrawExportPayload {
         val config = result.config
         val zoned = Instant.ofEpochMilli(nowMillis).atZone(ZoneId.systemDefault())
@@ -67,6 +69,7 @@ object DrawExportFactory {
         }
 
         return DrawExportPayload(
+            receipt = receipt,
             title = "随机抽签结果",
             subtitle = "Step 1 / 3",
             fileName = fileName(config, stamp),

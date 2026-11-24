@@ -206,6 +206,7 @@ private fun DrawToggle(label: String, checked: Boolean, onChange: (Boolean) -> U
 @Composable
 internal fun DrawResultHeader(
     result: DrawResult?,
+    exporting: Boolean = false,
     onExport: () -> Unit,
     onRefill: () -> Unit,
     onEdit: () -> Unit,
@@ -230,7 +231,7 @@ internal fun DrawResultHeader(
                         TextButton(onClick = onRefill) { Text("补抽") }
                     }
                     if (result.entries.isNotEmpty()) {
-                        TextButton(onClick = onExport) { Text("分享结果") }
+                        TextButton(onClick = onExport, enabled = !exporting) { Text(if (exporting) "正在确认存证…" else "分享结果") }
                     }
                     TextButton(onClick = onEdit) { Text("调整参数") }
                     TextButton(onClick = onClear) { Text("清空结果") }

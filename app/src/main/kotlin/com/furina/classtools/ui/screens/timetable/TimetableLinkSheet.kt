@@ -336,11 +336,15 @@ fun TimetableLinkSheet(
             androidx.compose.foundation.layout.Box {
                 TextButton(onClick = { chooseWidget = true }) { Text("添加桌面卡片") }
                 androidx.compose.material3.DropdownMenu(expanded = chooseWidget, onDismissRequest = { chooseWidget = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("修改已有卡片配色") }, onClick = {
+                        chooseWidget = false
+                        context.startActivity(android.content.Intent(context, com.furina.classtools.widget.WidgetColorActivity::class.java))
+                    })
                     com.furina.classtools.widget.WidgetKind.entries.forEach { kind ->
                         androidx.compose.material3.DropdownMenuItem(text = { Text(kind.label) }, onClick = {
                             chooseWidget = false
                             if (!com.furina.classtools.widget.DesktopWidgets.pin(context, kind)) {
-                                onMessage("请长按桌面，在班级工具站的小组件中选择「${kind.label}」")
+                                onMessage("请长按桌面，在枫丹工具箱的小组件中选择「${kind.label}」")
                             }
                         })
                     }

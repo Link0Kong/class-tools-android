@@ -112,31 +112,31 @@ object CtGlassTokens {
     fun dark(intensity: CtLightIntensity?, enabled: Boolean): CtGlassSpec = when {
         !enabled -> CtGlassSpec(
             baseAlpha = 0.94f,
-            topHighlightAlpha = 0.05f,
+            topHighlightAlpha = 0.03f,
             edgeTopAlpha = 0.14f,
             edgeBottomAlpha = 0.20f,
             shadowElevation = CtElevation.none,
         )
 
         intensity == CtLightIntensity.STRONG -> CtGlassSpec(
-            baseAlpha = 0.45f,
-            topHighlightAlpha = 0.16f,
+            baseAlpha = 0.8f,
+            topHighlightAlpha = 0.09f,
             edgeTopAlpha = 0.26f,
             edgeBottomAlpha = 0.30f,
             shadowElevation = CtElevation.none,
         )
 
         intensity == CtLightIntensity.WEAK -> CtGlassSpec(
-            baseAlpha = 0.58f,
-            topHighlightAlpha = 0.10f,
+            baseAlpha = 0.83f,
+            topHighlightAlpha = 0.06f,
             edgeTopAlpha = 0.18f,
             edgeBottomAlpha = 0.26f,
             shadowElevation = CtElevation.none,
         )
 
         else -> CtGlassSpec(
-            baseAlpha = 0.52f,
-            topHighlightAlpha = 0.13f,
+            baseAlpha = 0.82f,
+            topHighlightAlpha = 0.07f,
             edgeTopAlpha = 0.22f,
             edgeBottomAlpha = 0.28f,
             shadowElevation = CtElevation.none,

@@ -18,9 +18,9 @@ import java.io.FileOutputStream
  */
 object ExportCardFiles {
 
-    private const val ALBUM = "班级工具站"
+    private const val ALBUM = "枫丹工具箱"
 
-    /** 保存到相册 `Pictures/班级工具站`。返回 content Uri；Android 9 及以下返回 null（降级为分享）。 */
+    /** 保存到相册 `Pictures/枫丹工具箱`。返回 content Uri；Android 9 及以下返回 null（降级为分享）。 */
     fun saveToGallery(context: Context, bitmap: Bitmap, fileName: String): Uri? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             // Android 10 以下写系统相册需要 WRITE_EXTERNAL_STORAGE；这里不申请存储权限，降级为分享。

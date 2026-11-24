@@ -82,6 +82,7 @@ private fun NoticeCardEntry(
     onOpen: (NoticeUiItem) -> Unit,
     onToggleDone: (NoticeUiItem) -> Unit,
     onTogglePin: (NoticeUiItem) -> Unit,
+    onAddTask: ((NoticeUiItem) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     NoticeEntrance(
@@ -101,6 +102,7 @@ private fun NoticeCardEntry(
             onOpen = { onOpen(item) },
             onToggleDone = { onToggleDone(item) },
             onTogglePin = { onTogglePin(item) },
+            onAddTask = onAddTask?.let { add -> { add(item) } },
         )
     }
 }
@@ -121,6 +123,7 @@ internal fun NoticeList(
     onOpen: (NoticeUiItem) -> Unit,
     onToggleDone: (NoticeUiItem) -> Unit,
     onTogglePin: (NoticeUiItem) -> Unit,
+    onAddTask: ((NoticeUiItem) -> Unit)? = null,
     reduceMotion: Boolean,
     appearedKeys: SnapshotStateMap<String, Boolean>,
     selectedKey: String?,
@@ -162,6 +165,7 @@ internal fun NoticeList(
                 onOpen = onOpen,
                 onToggleDone = onToggleDone,
                 onTogglePin = onTogglePin,
+                onAddTask = onAddTask,
                 modifier = this.noticeAnimateItem(reduceMotion),
             )
         }
@@ -392,6 +396,7 @@ private fun NoticeCard(
     onOpen: () -> Unit,
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
+    onAddTask: (() -> Unit)? = null,
     mode: NoticeCardMode = NoticeCardMode.NORMAL,
     reduceMotion: Boolean = false,
     expanded: Boolean = false,
@@ -417,6 +422,12 @@ private fun NoticeCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            Text(
+                text = item.title.ifBlank { "通知" },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+            )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(CtSpace.xs),
                 verticalArrangement = Arrangement.spacedBy(CtSpace.xs),
@@ -428,12 +439,7 @@ private fun NoticeCard(
                 if (item.hidden) ItemFlag(text = "已隐藏", tone = NoticeTone.GREY)
             }
 
-            Text(
-                text = item.title.ifBlank { "通知" },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = scheme.onSurface,
-            )
+
             NoticeCardMeta(item = item, mode = mode)
 
             if (item.summary.isNotBlank()) {
@@ -479,14 +485,8 @@ private fun NoticeCard(
 
                     else -> PinPill(pinned = item.pinned, reduceMotion = reduceMotion, onClick = onTogglePin)
                 }
-                TextButton(onClick = onOpen) {
-                    Text("查看详情")
-                    Icon(
-                        imageVector = Icons.Rounded.ChevronRight,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
+                if (onAddTask != null) TextButton(onClick = onAddTask) { Text("加入任务") }
+
             }
         }
     }

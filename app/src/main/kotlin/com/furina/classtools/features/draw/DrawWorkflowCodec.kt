@@ -129,6 +129,7 @@ object DrawWorkflowCodec {
     }
 
     fun resultToJson(result: DrawResult): JsonObject = buildJsonObject {
+        result.proof?.let { put("proof", kotlinx.serialization.json.Json.encodeToJsonElement(DrawRoundProof.serializer(), it)) }
         put("entries", entriesToJson(result.entries))
         put("pool", entriesToJson(result.pool))
         put("config", configToJson(result.config))
@@ -163,7 +164,10 @@ object DrawWorkflowCodec {
                 DrawRemoveLog(removed = removed, added = entryFromJsonOrNull(logObj["added"]))
             }
             .orEmpty()
-        return DrawResult(entries = entries, pool = pool, config = config, log = log)
+        val proof = obj["proof"]?.let { runCatching {
+            kotlinx.serialization.json.Json.decodeFromJsonElement(DrawRoundProof.serializer(), it)
+        }.getOrNull() }?.takeIf { it.id.matches(Regex("d[0-9a-z]{8,31}")) && it.seed.matches(Regex("[0-9a-f]{16}")) }
+        return DrawResult(entries = entries, pool = pool, config = config, log = log, proof = proof)
     }
 
     private fun entryFromJsonOrNull(element: JsonElement?): DrawEntry? {

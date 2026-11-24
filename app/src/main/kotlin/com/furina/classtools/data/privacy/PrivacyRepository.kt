@@ -433,7 +433,7 @@ object PrivacyExportBuilder {
     ): String {
         val exportedAt = isoFormatter.format(Instant.ofEpochMilli(nowMillis).atZone(zone))
         val root = buildJsonObject {
-            put("app", "班级工具站 Android")
+            put("app", "枫丹工具箱 Android")
             put("format", DefaultPrivacyRepository.EXPORT_FORMAT)
             put("version", 1)
             put("exportedAt", exportedAt)

@@ -22,7 +22,7 @@ object ShareSpecs {
     const val DEFAULT_TITLE: String = "班级工具｜课表 · 作业 · 通知 · 抽签"
 
     /** 网页工具页路径（分享链接统一落到带 `#tab=` 的工具页）。 */
-    const val TOOLS_PATH: String = "tools/index.html"
+
 
     // ------------------------------------------------------------ 链接 / 文案
 
@@ -30,7 +30,7 @@ object ShareSpecs {
     fun toolUrl(baseUrl: String, toolId: String): String {
         val base = baseUrl.trim().trimEnd('/')
         val id = toolId.trim()
-        return if (id.isEmpty()) "$base/$TOOLS_PATH" else "$base/$TOOLS_PATH#tab=$id"
+        return if (id.isEmpty()) "$base/" else "$base/#tab=$id"
     }
 
     /** 分享链接（标题 + 一句话简介 + 网页链接）。 */
@@ -57,7 +57,7 @@ object ShareSpecs {
     /** 「分享给同学」的默认卡片（我的页入口；无业务数据）。 */
     fun appCard(baseUrl: String): ShareCardView = ShareCardView(
         kind = ShareKind.APP,
-        title = "班级工具站",
+        title = "枫丹工具箱",
         badge = "班级工具",
         subtitle = "课表 · 作业 · 通知 · 抽签 · 投票 · 演示",
         stats = listOf(
@@ -148,7 +148,14 @@ object ShareSpecs {
             lines = lines.take(ShareCardView.MAX_LINES),
             footerLeft = spec.foot.ifBlank { "班级工具 · ${kind.badge}" },
             footerRight = timeLabel,
-            link = link(kind, baseUrl, title = spec.title, text = spec.sub),
+            fullExport = spec.takeIf { kind == ShareKind.DRAW },
+            link = link(kind, baseUrl, title = spec.title, text = spec.sub).let { link ->
+                when {
+                    !spec.qr?.url.isNullOrBlank() -> link.copy(url = spec.qr.url, text = "登录班级身份后核验本次抽签")
+                    kind == ShareKind.DRAW -> link.copy(title = "班级抽签工具", text = "本轮尚未存证，结果见分享图片")
+                    else -> link
+                }
+            },
         )
     }
 

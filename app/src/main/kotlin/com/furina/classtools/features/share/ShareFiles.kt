@@ -96,10 +96,11 @@ object SharePresenter {
         context: Context,
         view: ShareCardView,
         renderer: ShareCardRenderer = ShareCardRenderer(),
+        preview: Bitmap? = null,
     ): ShareOutcome {
-        val bitmap = runCatching { renderer.render(view) }.getOrNull()
+        val bitmap = preview ?: runCatching { renderer.render(view) }.getOrNull()
             ?: return ShareOutcome.Failed("生成分享图失败")
-        val intent = ShareFiles.imageIntent(context, bitmap, view)
+        val intent = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ShareFiles.imageIntent(context, bitmap, view) }
             ?: return ShareOutcome.Failed("无法写入分享图")
         val started = runCatching {
             context.startActivity(Intent.createChooser(intent, "分享图片"))
@@ -113,14 +114,15 @@ object SharePresenter {
         context: Context,
         view: ShareCardView,
         renderer: ShareCardRenderer = ShareCardRenderer(),
+        preview: Bitmap? = null,
     ): ShareOutcome {
-        val bitmap = runCatching { renderer.render(view) }.getOrNull()
+        val bitmap = preview ?: runCatching { renderer.render(view) }.getOrNull()
             ?: return ShareOutcome.Failed("生成分享图失败")
-        val uri = runCatching { ExportCardFiles.saveToGallery(context, bitmap, ShareFiles.fileName(view)) }
+        val uri = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ExportCardFiles.saveToGallery(context, bitmap, ShareFiles.fileName(view)) } }
             .getOrNull()
         if (uri != null) return ShareOutcome.Saved
         // Android 9 及以下：相册写入需要存储权限，改为拉起分享面板（与导出卡口径一致）。
-        val intent = ShareFiles.imageIntent(context, bitmap, view)
+        val intent = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ShareFiles.imageIntent(context, bitmap, view) }
             ?: return ShareOutcome.Failed("本机无法保存图片")
         val started = runCatching {
             context.startActivity(Intent.createChooser(intent, "分享图片"))

@@ -77,19 +77,19 @@ object CtPalette {
     val Danger = Color(0xFFB4553F)
 
     // ---- 深色中性（中性深板岩；hero/pill 同族更深一档） ----
-    val DarkBg = Color(0xFF121517)
-    val DarkSurface = Color(0xFF1A1E21)
+    val DarkBg = Color(0xFF10151D)
+    val DarkSurface = Color(0xFF18212C)
     /** 深色卡片底（半透明深玻璃，比页面底亮半档 —— 在深色光场上才能「浮」起来）。 */
-    val DarkContainerLow = Color(0xFF1A1E21)
-    val DarkContainer = Color(0xFF1E2326)
-    val DarkContainerHigh = Color(0xFF232A2E)
-    val DarkContainerHighest = Color(0xFF2B3338)
-    val DarkBar = Color(0xFF171C1F)
-    val DarkTextPrimary = Color(0xFFE7ECEB)
-    val DarkTextSecondary = Color(0xFFA8B4B7)
-    val DarkTextTertiary = Color(0xFF96A3A6)
-    val DarkDivider = Color(0xFF2C353A)
-    val DarkOutline = Color(0xFF6E7B7F)
+    val DarkContainerLow = Color(0xFF1C2632)
+    val DarkContainer = Color(0xFF222F3C)
+    val DarkContainerHigh = Color(0xFF293846)
+    val DarkContainerHighest = Color(0xFF344554)
+    val DarkBar = Color(0xFF151D27)
+    val DarkTextPrimary = Color(0xFFECF1F6)
+    val DarkTextSecondary = Color(0xFFBECCD6)
+    val DarkTextTertiary = Color(0xFFA6B7C5)
+    val DarkDivider = Color(0xFF354452)
+    val DarkOutline = Color(0xFF7C909F)
 
     // ---- 浅色「莫奈纸面」hero（鸿蒙 HomeScreen.heroCard 实测值） ----
     val HeroPaper = Color(0xFFF1F6F2)
@@ -102,12 +102,12 @@ object CtPalette {
     val HeroPaperLink = Color(0xFF4E6D8C)
 
     // ---- 深色 hero（中性 tonal，不含大面积品牌绿） ----
-    val HeroDarkPaper = Color(0xFF1C2427)
-    val HeroDarkBorder = Color(0xFF334044)
-    val HeroDarkPill = Color(0xFF2B3639)
-    val HeroDarkDivider = Color(0xFF364448)
-    val HeroDarkAccent = Color(0xFF8FD0C3)
-    val HeroDarkLink = Color(0xFFA9C4DA)
+    val HeroDarkPaper = Color(0xFF172C33)
+    val HeroDarkBorder = Color(0xFF304B53)
+    val HeroDarkPill = Color(0xFF253E47)
+    val HeroDarkDivider = Color(0xFF36515A)
+    val HeroDarkAccent = Color(0xFF9EDACE)
+    val HeroDarkLink = Color(0xFFB4D4F2)
 
     // ---- 加载骨架（鸿蒙 HomeScreen.skeletonPage 实测三档灰） ----
     val SkeletonStrong = Color(0xFFE9EFF1)

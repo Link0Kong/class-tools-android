@@ -35,7 +35,7 @@ class CtGlassTokensTest {
     fun `dark glass alpha stays in the frosted range`() {
         CtLightIntensity.entries.forEach { intensity ->
             val spec = CtGlassTokens.dark(intensity, enabled = true)
-            assertTrue("${intensity.name} baseAlpha=${spec.baseAlpha}", spec.baseAlpha in 0.45f..0.60f)
+            assertTrue("${intensity.name} baseAlpha=${spec.baseAlpha}", spec.baseAlpha in 0.78f..0.85f)
             assertTrue(spec.topHighlightAlpha > 0f)
             assertTrue("深色也要有高光边（不灰糊）", spec.edgeTopAlpha >= 0.18f)
         }

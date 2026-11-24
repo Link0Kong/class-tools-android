@@ -272,7 +272,7 @@ private fun TopAppBarLargePreview() {
 private fun TopAppBarLargeDarkPreview() {
     ClassToolsTheme(darkTheme = true) {
         Column(modifier = Modifier.fillMaxSize()) {
-            CtTopAppBarLarge(title = "班级工具站", subtitle = "第 12 周 · 11/3-11/9")
+            CtTopAppBarLarge(title = "枫丹工具箱", subtitle = "第 12 周 · 11/3-11/9")
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()

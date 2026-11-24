@@ -113,6 +113,7 @@ import com.furina.classtools.data.timetable.TimetablePersonalStore
 import com.furina.classtools.data.timetable.TimetableRepository
 import com.furina.classtools.data.timetable.UserDataTimetablePersonalStore
 import java.io.File
+import kotlinx.coroutines.async
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -216,6 +217,21 @@ class AppContainer(context: Context) {
     val authRepository: AuthRepository = ApiAuthRepository(apiClient)
 
     /** 扫一扫 → 抽签存证核验（`rpc/draw_record_get`，只读）。 */
+    private var drawOwner: Session? = null
+    private var drawWriter: com.furina.classtools.data.draw.DrawRecordPublisher? = null
+
+    @Synchronized
+    fun submitDrawRecord(account: Session, result: com.furina.classtools.features.draw.DrawResult):
+        kotlinx.coroutines.Deferred<com.furina.classtools.features.draw.DrawReceipt?> {
+        val writer = if (drawOwner == account) drawWriter else null
+        val publisher = writer ?: com.furina.classtools.data.draw.DrawRecordPublisher(ApiClient(
+            BuildConfig.REST_BASE_URL, BuildConfig.PUBLISHABLE_KEY, tokenProvider = { account.token }
+        )).also { drawWriter = it; drawOwner = account }
+        return appScope.async {
+            if (account != currentSession || account.debug) null else publisher.publish(result)
+        }
+    }
+
     val drawProofRepository: DrawProofRepository by lazy { DrawProofRepository(apiClient) }
 
     /** 扫一扫 → 电脑网页扫码登录（ECS `/account/qr/authorize`，App 不接收 token）。 */

@@ -270,7 +270,7 @@ fun DataPrivacyScreen(
                 CtLightTopBar(
                     scrollPx = ctTopBarScroll.value.toFloat(),
                     title = "数据与隐私",
-                    subtitle = session?.let { "账号 ${it.maskedSid}" } ?: "班级工具站",
+                    subtitle = session?.let { "账号 ${it.maskedSid}" } ?: "枫丹工具箱",
                     onBack = onBack,
                     actions = {
                         IconButtonRefresh(enabled = working == null) { reloadToken += 1 }

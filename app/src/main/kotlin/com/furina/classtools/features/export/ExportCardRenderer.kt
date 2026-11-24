@@ -89,12 +89,14 @@ class ExportCardRenderer(private val scale: Float = 2f) {
     private var drawing = false
     private var canvas: Canvas? = null
     private var cursor = 0f
+    private var qrBounds: RectF? = null
     private var contentBottom = 0f
     private val cardPath = Path()
     private val tmpRect = RectF()
 
     /** 渲染为 Bitmap（高 = 逻辑高 * scale）。 */
     fun render(spec: ExportCardSpec): Bitmap {
+        qrBounds = null
         this.spec = spec
         paints.clear()
 
@@ -137,7 +139,10 @@ class ExportCardRenderer(private val scale: Float = 2f) {
         canvas = c
         cursor = 0f
         layoutCard()
+        c.save()
+        qrBounds?.let { c.clipOutRect(it) }
         drawWatermark(c, logicalHeight)
+        c.restore()
         return bitmap
     }
 
@@ -214,6 +219,25 @@ class ExportCardRenderer(private val scale: Float = 2f) {
                 is ChipsBlock -> drawChipsBlock(block, contentTop)
                 is GroupsBlock -> drawGroupsBlock(block, contentTop)
             }
+        }
+
+        spec.qr?.url?.takeIf(String::isNotBlank)?.let { url ->
+            y += 20f
+            val edge = 132
+            if (drawing) {
+                val qr = com.google.zxing.qrcode.QRCodeWriter().encode(url,
+                    com.google.zxing.BarcodeFormat.QR_CODE, edge, edge)
+                val pixels = IntArray(edge * edge) { i -> if (qr[i % edge, i / edge]) Color.BLACK else Color.WHITE }
+                val bitmap = Bitmap.createBitmap(pixels, edge, edge, Bitmap.Config.ARGB_8888)
+                val bounds = RectF(X * scale, y * scale, (X + edge) * scale, (y + edge) * scale)
+                qrBounds = bounds
+                canvas!!.drawBitmap(bitmap, null, bounds,
+                    Paint().apply { isFilterBitmap = false })
+                spec.qrNote.forEachIndexed { i, note ->
+                    drawText(note, X + edge + 18f, y + 48f + i * 26f, paintOf(15f, 600, ink3))
+                }
+            }
+            y += edge
         }
 
         // ---------------- 页脚
@@ -599,6 +623,7 @@ class ExportCardRenderer(private val scale: Float = 2f) {
     // ------------------------------------------------------------------ 模拟布局高度（供预览/测试）
     /** 仅计算逻辑高度（不创建 Bitmap，供 UI 预估）。 */
     fun logicalHeight(spec: ExportCardSpec): Float {
+        qrBounds = null
         this.spec = spec
         paints.clear()
         drawing = false

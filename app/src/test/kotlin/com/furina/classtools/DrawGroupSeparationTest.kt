@@ -34,7 +34,7 @@ class DrawGroupSeparationTest {
         }
         assertTrue("抽签应写入最近抽签存储", drawScreen.contains("DrawLastResult.from"))
         assertTrue("抽签应保留结果分享入口", drawSections.contains("""onClick = onExport"""))
-        assertTrue("分享应从本轮结果生成导出内容", drawScreen.contains("onExport(DrawExportFactory.create(it))"))
+        assertTrue("分享应从本轮结果生成导出内容", drawScreen.contains("onExport(DrawExportFactory.create(result, receipt = receipt))"))
     }
 
     @Test

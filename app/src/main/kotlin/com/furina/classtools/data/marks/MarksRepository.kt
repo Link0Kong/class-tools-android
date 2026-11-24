@@ -78,14 +78,14 @@ class DefaultMarksRepository(
     override val marks: StateFlow<MarksSnapshot> = _marks.asStateFlow()
 
     private val mutex = Mutex()
-    private var cacheLoaded = false
+    private var cachedSid: String? = null
     private var lastFetchAt = 0L
 
     override suspend fun refresh(force: Boolean): ApiResult<MarksSnapshot> {
         val sid = sidOrNull() ?: return ApiResult.Failure(ApiError.Config("请先完成身份验证"))
         mutex.lock()
         try {
-            ensureCacheLoaded()
+            ensureCacheLoaded(sid)
             if (!force && lastFetchAt > 0 && clock() - lastFetchAt < ttlMs) {
                 return ApiResult.Success(_marks.value)
             }
@@ -95,9 +95,9 @@ class DefaultMarksRepository(
                 is ApiResult.Success -> {
                     val rows = parseRows(json, result.value)
                         ?: return ApiResult.Failure(ApiError.Parse("marks 响应不是合法数组"))
-                    local.writeCache(rows)
+                    local.writeCache(local.readCache().filterNot { it.seat == sid } + rows)
                     lastFetchAt = clock()
-                    val snapshot = MarksSnapshot().replaceRows(rows).applyPending(local.readPending())
+                    val snapshot = MarksSnapshot().replaceRows(rows).applyPending(local.readPending().filter { it.seat == sid })
                     _marks.value = snapshot
                     ApiResult.Success(snapshot)
                 }
@@ -116,7 +116,7 @@ class DefaultMarksRepository(
         if (ref.isBlank()) return MarksUpdateResult.Failure(ApiError.Config("ref 为空"))
         mutex.lock()
         try {
-            ensureCacheLoaded()
+            ensureCacheLoaded(sid)
             val row = MarkRow(
                 id = MarkRow.idOf(sid, kind, ref),
                 seat = sid,
@@ -171,17 +171,13 @@ class DefaultMarksRepository(
 
     // ------------------------------------------------------------ 内部
 
-    private suspend fun ensureCacheLoaded() {
-        if (cacheLoaded) return
-        cacheLoaded = true
-        val cached = local.readCache()
-        if (cached.isNotEmpty()) {
-            _marks.value = MarksSnapshot().replaceRows(cached)
-        }
-        val pending = local.readPending()
-        if (pending.isNotEmpty()) {
-            _marks.value = _marks.value.applyPending(pending)
-        }
+    private suspend fun ensureCacheLoaded(sid: String) {
+        if (cachedSid == sid) return
+        val cached = local.readCache().filter { it.seat == sid }
+        val pending = local.readPending().filter { it.seat == sid }
+        _marks.value = MarksSnapshot().replaceRows(cached).applyPending(pending)
+        cachedSid = sid
+        lastFetchAt = 0L
     }
 
     private fun MarksSnapshot.applyPending(pending: List<MarkRow>): MarksSnapshot {

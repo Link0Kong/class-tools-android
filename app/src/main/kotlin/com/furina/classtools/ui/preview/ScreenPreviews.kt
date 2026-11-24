@@ -119,7 +119,7 @@ private fun DesignTokensPreview() {
                     BrandMark(size = 44.dp)
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text("班级工具站", style = MaterialTheme.typography.titleLarge)
+                        Text("枫丹工具箱", style = MaterialTheme.typography.titleLarge)
                         Text(
                             "Material 3 · Expressive",
                             style = MaterialTheme.typography.bodySmall,

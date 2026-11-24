@@ -33,9 +33,9 @@ class ShareSpecsTest {
 
     @Test
     fun `工具链接带 tab 锚点且不重复斜杠`() {
-        assertEquals("$baseUrl/tools/index.html#tab=hw", ShareSpecs.toolUrl(baseUrl, "hw"))
-        assertEquals("$baseUrl/tools/index.html#tab=hw", ShareSpecs.toolUrl("$baseUrl/", " hw "))
-        assertEquals("$baseUrl/tools/index.html", ShareSpecs.toolUrl(baseUrl, ""))
+        assertEquals("$baseUrl/#tab=hw", ShareSpecs.toolUrl(baseUrl, "hw"))
+        assertEquals("$baseUrl/#tab=hw", ShareSpecs.toolUrl("$baseUrl/", " hw "))
+        assertEquals("$baseUrl/", ShareSpecs.toolUrl(baseUrl, ""))
     }
 
     @Test
@@ -251,8 +251,8 @@ class ShareSpecsTest {
     fun `我的页分享卡落到网页首页并带工具介绍`() {
         val view = ShareSpecs.appCard(baseUrl)
         assertEquals(ShareKind.APP, view.kind)
-        assertEquals("班级工具站", view.title)
-        assertEquals("$baseUrl/tools/index.html", view.link.url)
+        assertEquals("枫丹工具箱", view.title)
+        assertEquals("$baseUrl/", view.link.url)
         assertTrue(view.stats.size <= ShareCardView.MAX_STATS)
         assertTrue(view.lines.any { it.label == "抽签" })
     }

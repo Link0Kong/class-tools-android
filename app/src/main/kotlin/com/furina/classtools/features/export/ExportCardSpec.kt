@@ -85,7 +85,7 @@ data class GroupsBlock(
 
 /** 二维码规格（仅抽签剔除重抽记录）。 */
 @Serializable
-data class QrSpec(val n: Int)
+data class QrSpec(val n: Int = 0, val url: String = "")
 
 /** 导出卡片的类型（用于文件命名前缀与页脚）。 */
 enum class ExportKind(val label: String) {

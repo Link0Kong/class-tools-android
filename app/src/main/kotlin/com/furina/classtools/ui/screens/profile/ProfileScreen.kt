@@ -186,7 +186,7 @@ fun ProfileScreen(
     onOpenPermissions: () -> Unit = {},
     showNotificationPermissionBanner: Boolean = false,
     onOpenReminderSettings: () -> Unit = {},
-    /** 分享给同学（生成 5:4 班级工具站分享卡，与小程序端「转发给朋友」同口径）。 */
+    /** 分享给同学（生成 5:4 枫丹工具箱分享卡，与小程序端「转发给朋友」同口径）。 */
     onShareApp: () -> Unit = {},
     appearanceMode: AppearanceMode = AppearanceMode.SYSTEM,
     onAppearanceModeChange: (AppearanceMode) -> Unit = {},
@@ -574,7 +574,7 @@ private fun ProfileHeroCard(session: Session) {
                         color = colors.textPrimary,
                     )
                     Text(
-                        text = "班级工具站" + if (session.isAdmin) " · 管理员" else "",
+                        text = "枫丹工具箱" + if (session.isAdmin) " · 管理员" else "",
                         style = CtText.caption,
                         color = colors.textTertiary,
                     )
@@ -763,7 +763,7 @@ private fun NotifySection(
         ActionRow(
             icon = Icons.Rounded.IosShare,
             title = "分享给同学",
-            subtitle = "把班级工具站发给同学（图片 / 链接）",
+            subtitle = "把枫丹工具箱发给同学（图片 / 链接）",
             onClick = onShareApp,
         )
     }
@@ -1047,7 +1047,7 @@ private fun SignOutSection(
             .padding(top = 8.dp),
     )
     Text(
-        text = "v$version · 班级工具站",
+        text = "v$version · 枫丹工具箱",
         style = CtText.caption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,

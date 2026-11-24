@@ -70,9 +70,9 @@ class CtDesignTokensTest {
         ).map { luminance(it) }
         // 深色：容器越「高」越亮
         dark.zipWithNext().forEach { (a, b) -> assertTrue("dark container 应逐级变亮", a <= b) }
-        assertEquals(Color(0xFF121517), CtPalette.DarkBg)
-        assertEquals(Color(0xFF1A1E21), CtPalette.DarkContainerLow)
-        assertEquals(Color(0xFF232A2E), CtPalette.DarkContainerHigh)
+        assertEquals(Color(0xFF10151D), CtPalette.DarkBg)
+        assertEquals(Color(0xFF1C2632), CtPalette.DarkContainerLow)
+        assertEquals(Color(0xFF293846), CtPalette.DarkContainerHigh)
     }
 
     // ---- 2. 深色 / 浅色 AA ----

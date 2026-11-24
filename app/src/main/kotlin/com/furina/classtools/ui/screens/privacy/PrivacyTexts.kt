@@ -21,7 +21,7 @@ object PrivacyTexts {
     val VERSION_LABEL: String = LegalLinks.VERSION_LABEL
 
     val PRIVACY_POLICY: String = """
-班级工具站 · 隐私政策（摘要 · $VERSION_LABEL）
+枫丹工具箱 · 隐私政策（摘要 · $VERSION_LABEL）
 
 本页是摘要；正式全文见「查看完整版」。两者不一致时以全文为准。
 
@@ -71,7 +71,7 @@ object PrivacyTexts {
 """.trimIndent()
 
     val USER_AGREEMENT: String = """
-班级工具站 · 用户协议（摘要 · $VERSION_LABEL）
+枫丹工具箱 · 用户协议（摘要 · $VERSION_LABEL）
 
 本页是摘要；正式全文见「查看完整版」。两者不一致时以全文为准。
 

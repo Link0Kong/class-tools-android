@@ -29,11 +29,17 @@ fun DrawExportPayload.toCardSpec(): ExportCardSpec {
         title = title,
         sub = subtitle,
         file = fileName,
-        rec = recordId,
-        config = config.map { it.label to it.value },
+        rec = receipt?.id ?: recordId,
+        config = config.map { it.label to it.value } + if (receipt != null) listOf(
+            "存证编号" to receipt.id,
+            "存证时间" to java.time.Instant.ofEpochMilli(receipt.at).atZone(java.time.ZoneId.of("Asia/Shanghai"))
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+            "当天抽签" to "第 ${receipt.seqDay} 次 · 共 ${receipt.todayCount} 次",
+            "记录哈希" to receipt.hash.take(16)
+        ) else listOf("存证状态" to "未获云端确认 · 仅本机结果"),
         blocks = mappedBlocks,
         foot = footer,
-        qr = null,
-        qrNote = removeLogLines.take(3),
+        qr = receipt?.let { QrSpec(url = "https://tool.furina.fun/#verify=" + it.id) },
+        qrNote = listOf("扫码核验本轮抽签", "同班同学登录后可核对原始结果及调整记录"),
     )
 }

@@ -47,6 +47,35 @@ class DesktopWidgetHostTest {
         putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, h)
     }
 
+    @Test fun widgetPickerHasDrawablePreviewsAndInstancesKeepIndependentTints() {
+        for (provider in DesktopWidgets.components.values) {
+            val info = app.packageManager.getReceiverInfo(ComponentName(app, provider), PackageManager.GET_META_DATA)
+            info.loadXmlMetaData(app.packageManager, AppWidgetManager.META_DATA_APPWIDGET_PROVIDER).use { xml ->
+                while (xml.next() != org.xmlpull.v1.XmlPullParser.START_TAG) { }
+                val res = xml.getAttributeResourceValue("http://schemas.android.com/apk/res/android", "previewImage", 0)
+                assertTrue(app.getDrawable(res)!!.intrinsicWidth > 100)
+            }
+        }
+        WidgetPalette.prefs(app).edit().putString("27", "LILAC").commit()
+        assertEquals(WidgetPalette.LILAC, WidgetPalette.get(app, 27))
+        assertEquals(WidgetPalette.SYSTEM, WidgetPalette.get(app, 28))
+        val model = widgetContent(WidgetKind.WORKBENCH, true, null, feed, 5)
+        assertTrue(model.first.title.contains("5 待办"))
+        val root = host(WidgetViews.forHost(app, WidgetKind.WORKBENCH, model, options(300,245), WidgetPalette.LILAC),300,245)
+        assertEquals(app.getColor(WidgetPalette.LILAC.accent), root.findViewById<TextView>(R.id.widget_heading).currentTextColor)
+    }
+
+    @Test fun taskWidgetShowsClassDeadlinesWithoutCountingThemAsPersonalTasks() {
+        val now = com.furina.classtools.data.homework.HomeworkDueCalculator.parseDue("2026-11-24", "12:00")!!
+        val assignment = com.furina.classtools.data.homework.HomeworkRow("h1", "实验报告", date = "2026-11-24", time = "16:00")
+        val data = feed.copy(homework = WidgetHomework(listOf(assignment), now))
+        val model = widgetContent(WidgetKind.TASKS, true, null, data, now)
+        assertEquals("作业 · 实验报告", model.first.title)
+        assertEquals("class-homework", model.first.destination)
+        assertEquals("5 待办 · 1 作业", model.summary)
+        assertEquals(0, data.homework!!.current(now + 4L * 86_400_000L).count)
+    }
+
     @Test fun legacyHomeworkWidgetCacheIsReplacedByPersonalTasks() {
         val sid = "3260799999"
         WidgetFeedStore.save(app, sid, feed.copy(tasks = feed.tasks?.copy(taskVersion = null)))

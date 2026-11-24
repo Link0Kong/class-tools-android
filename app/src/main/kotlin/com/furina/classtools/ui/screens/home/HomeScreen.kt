@@ -497,7 +497,7 @@ fun HomeScreen(
                             CtRootHeader(
                                 title = "工作台",
                                 collapse = ctHeaderCollapseProgress(scrollState.value.toFloat()),
-                                eyebrow = "班级工具站",
+                                eyebrow = "枫丹工具箱",
                                 subtitle = "$todayLabel · $greeting",
                                 actions = {
                                     CtGlassIconButton(

@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.screens.homework
 
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.furina.classtools.ui.components.CtPrimaryTabs
 
 import com.furina.classtools.ui.components.CtSnackbarHost
@@ -147,6 +148,7 @@ fun HomeworkScreen(
     /** 预览注入：初始筛选（全部/未完成/已完成）。 */
     initialFilter: HomeworkFilter = HomeworkFilter.ALL,
     onAddTask: ((HomeworkRow) -> Unit)? = null,
+    initialDetailId: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -258,6 +260,11 @@ fun HomeworkScreen(
         HomeworkDueCalculator.pruneExpired(
             rows.map { row -> HomeworkDueCalculator.toItem(row, marks.isDone(MarkKind.HW, row.id), nowMillis) },
         )
+    }
+    var pendingDetail by rememberSaveable(initialDetailId) { mutableStateOf(initialDetailId) }
+    LaunchedEffect(pendingDetail, allItems) {
+        val id = pendingDetail ?: return@LaunchedEffect
+        allItems.find { it.id == id }?.let { detail = it; pendingDetail = null }
     }
     val unfinishedCount = allItems.count { !it.done }
     val doneCount = allItems.count { it.done }

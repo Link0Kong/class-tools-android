@@ -149,7 +149,7 @@ fun IdentityScreen(
             Spacer(modifier = Modifier.height(if (compactHeight) 10.dp else 20.dp))
 
             Text(
-                text = "班级工具站",
+                text = "枫丹工具箱",
                 style = com.furina.classtools.ui.theme.CtText.title,
                 color = MaterialTheme.colorScheme.onBackground,
             )

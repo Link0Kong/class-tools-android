@@ -31,7 +31,7 @@ import com.furina.classtools.ui.components.BrandMark
  * 结构：
  * ```
  * ┌ 状态栏 insets（edge-to-edge）┐
- * │ ●●● 班级工具站              │  ← 品牌条（BrandMark + 站名；可关闭）
+ * │ ●●● 枫丹工具箱              │  ← 品牌条（BrandMark + 站名；可关闭）
  * │ 大标题（滚动时折叠到 64dp）  │  ← LargeTopAppBar
  * │ 副标题                      │
  * └─────────────────────────────┘
@@ -131,7 +131,7 @@ private fun CtTopAppBarLargeImpl(
             ) {
                 BrandMark(size = 28.dp)
                 Text(
-                    text = "班级工具站",
+                    text = "枫丹工具箱",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                 )

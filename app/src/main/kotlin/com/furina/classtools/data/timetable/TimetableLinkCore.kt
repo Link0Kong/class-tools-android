@@ -10,7 +10,7 @@ import java.time.ZoneId
 /**
  * 「课表接入手机」纯逻辑核心（**无 Android 依赖**，可直接 JVM 单测）。
  *
- * 目标（用户需求）：把班级工具站课表「模拟 WakeUp 课表」接入手机原生能力——
+ * 目标（用户需求）：把枫丹工具箱课表「模拟 WakeUp 课表」接入手机原生能力——
  * 1. 生成 `.ics`（RFC 5545）日历文件：时区固定 `Asia/Shanghai`，每门课按周次生成 `RRULE`，
  *    `VALARM` 提前提醒；UID 稳定（同一学期同一门课重复导出不产生新事件）。
  * 2. 生成 WakeUp 兼容备份 `.wakeup_schedule`（5 行 Gson JSON；格式依据见
@@ -251,7 +251,7 @@ object TimetableLink {
     }
 
     /** 日历事件描述（系统日历详情页展示；含 App 标记用于清理兜底）。 */
-    fun calendarDescription(session: PlannedSession, screenTitle: String = "班级工具站课表"): String = buildString {
+    fun calendarDescription(session: PlannedSession, screenTitle: String = "枫丹工具箱课表"): String = buildString {
         append(session.periodText)
         append(" · 第 ")
         append(session.week)

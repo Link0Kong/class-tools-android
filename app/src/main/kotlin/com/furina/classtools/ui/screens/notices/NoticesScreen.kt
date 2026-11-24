@@ -571,6 +571,13 @@ fun NoticesScreen(
     }
 
     /** 标记已处理：普通通知 ref = 组 id；期次卡 ref = 期次 key（`<gid>@occ:<yyyyMMdd>`，§2.5）。 */
+    val addTaskFromNotice: ((NoticeUiItem) -> Unit)? = onAddTask?.let { add ->
+        { item ->
+            val source = item.occurrenceKey ?: item.auto?.id ?: item.manual?.id.orEmpty()
+            val deadline = if (item.occurrenceKey != null) item.whenMillis else NoticeStatusMachine.parseTs(item.auto?.group?.deadline)
+            add(source, item.title, item.summary, deadline)
+        }
+    }
     fun toggleDone(item: NoticeUiItem) {
         val repository = marksRepository ?: run {
             notify("未登录，无法同步处理状态")
@@ -839,6 +846,7 @@ fun NoticesScreen(
                                             onOpen = { selectedKey = it.key },
                                             onToggleDone = { toggleDone(it) },
                                             onTogglePin = { togglePin(it) },
+                                            onAddTask = addTaskFromNotice,
                                             reduceMotion = reduceMotion,
                                             appearedKeys = appearedKeys,
                                             selectedKey = selectedKey,
@@ -931,12 +939,7 @@ fun NoticesScreen(
             imageLoader = imageLoader,
             onAddToCalendar = onAddToCalendar,
             onRemindNotice = onRemindNotice,
-            onAddTask = onAddTask?.let { add -> {
-                val source = item.occurrenceKey ?: item.auto?.id ?: item.manual?.id.orEmpty()
-                val deadline = if (item.occurrenceKey != null) item.whenMillis else
-                    NoticeStatusMachine.parseTs(item.auto?.group?.deadline)
-                add(source, item.title, item.summary, deadline)
-            } },
+            onAddTask = addTaskFromNotice?.let { add -> { add(item) } },
             onDismiss = { selectedKey = null },
             onToggleDone = { toggleDone(item) },
             onTogglePin = { togglePin(item) },
@@ -1168,36 +1171,17 @@ private fun NoticeOverviewCards(
         NoticeCardFilter.LONGTERM to stats.longterm.toString(),
         NoticeCardFilter.LATEST to stats.latestPostedText.ifBlank { "—" },
     )
+    val order = if (stats.urgent > 0) values.sortedBy { if (it.first == NoticeCardFilter.URGENT) 0 else 1 } else values
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val fontScale = LocalDensity.current.fontScale
-        val columns = when {
-            maxWidth >= 620.dp * fontScale -> 5
-            maxWidth >= 290.dp * fontScale -> 3
-            maxWidth >= 210.dp -> 2
-            else -> 1
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(CtSpace.sm)) {
-            Text(
-                "待处理简报",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.semantics { heading() },
-            )
-            values.chunked(columns).forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(CtSpace.sm),
-                ) {
-                    row.forEach { (filter, value) ->
-                        NoticeStatCard(
-                            filter = filter,
-                            value = value,
-                            active = active == filter,
-                            onClick = { onPick(filter) },
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                        )
-                    }
-                }
+        val tileWidth = ((maxWidth - CtSpace.sm * 2) / 3).coerceIn(98.dp, 148.dp) *
+            LocalDensity.current.fontScale.coerceIn(1f, 1.5f)
+        androidx.compose.foundation.lazy.LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(CtSpace.sm),
+        ) {
+            items(order.size, key = { order[it].first.name }) { index ->
+                val (filter, value) = order[index]
+                NoticeStatCard(filter, value, active == filter, { onPick(filter) },
+                    modifier = Modifier.width(tileWidth))
             }
         }
     }

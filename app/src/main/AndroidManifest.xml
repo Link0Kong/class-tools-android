@@ -65,6 +65,10 @@
             android:name="api_key"
             android:value="${vivoPushApiKey}" />
 
+        <activity android:name=".widget.WidgetColorActivity" android:exported="true"
+            android:label="桌面卡片配色" android:theme="@android:style/Theme.DeviceDefault.Dialog.NoActionBar">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+        </activity>
         <activity
             android:name=".MainActivity"
             android:exported="true"

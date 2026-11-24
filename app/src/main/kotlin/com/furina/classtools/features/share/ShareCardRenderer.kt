@@ -17,6 +17,7 @@ import kotlin.math.roundToInt
 class ShareCardRenderer(private val scale: Float = DEFAULT_SCALE) {
 
     fun render(view: ShareCardView): Bitmap {
+        view.fullExport?.let { return com.furina.classtools.features.export.ExportCardRenderer().render(it) }
         val pixelWidth = (ShareCardSurface.LOGICAL_WIDTH * scale).roundToInt().coerceAtLeast(1)
         val pixelHeight = (ShareCardSurface.LOGICAL_HEIGHT * scale).roundToInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(pixelWidth, pixelHeight, Bitmap.Config.ARGB_8888)

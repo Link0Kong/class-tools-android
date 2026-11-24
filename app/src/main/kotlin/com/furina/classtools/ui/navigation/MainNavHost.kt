@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -546,10 +547,16 @@ fun MainNavHost(
                         }
                     }
                     DrawScreen(
+                        publishProof = if (session.debug) null else { result -> container.submitDrawRecord(session, result) },
                         onBack = { popTool(toolId) },
                         session = session,
                         userDataRepository = container.userDataRepository,
-                        onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW) },
+                        onExport = { payload ->
+                            val publicRecords = android.net.Uri.parse(com.furina.classtools.BuildConfig.REST_BASE_URL).path
+                                ?.trimEnd('/') == "/v1/rdb/rest"
+                            val share = if (publicRecords) payload else payload.copy(receipt = null)
+                            launchExport(share.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW)
+                        },
                         lastResultStore = container.drawLastResultStore,
                         loadMembers = loadMembers,
                         onScan = { navController.navigate(Routes.SCAN) },
@@ -664,10 +671,26 @@ fun MainNavHost(
                     var showHomework by androidx.compose.runtime.saveable.rememberSaveable(session.sid) {
                         mutableStateOf(pickInTool)
                     }
+                    var detailHomeworkId by androidx.compose.runtime.saveable.rememberSaveable(session.sid) {
+                        mutableStateOf<String?>(null)
+                    }
                     if (!showHomework) {
-                        TaskScreen(tasks, onBack = { popTool(toolId) }, onHomework = { showHomework = true })
+                        var revision by remember(session.sid) { mutableIntStateOf(0) }
+                        val brief = com.furina.classtools.ui.screens.tasks.rememberHomeworkBrief(
+                            container.homeworkRepository, container.marksRepository, session.sid, revision,
+                        )
+                        TaskScreen(tasks, onBack = { popTool(toolId) }, onHomework = { showHomework = true },
+                            onRefreshHomework = { revision++ },
+                            homeworkOverview = {
+                                com.furina.classtools.ui.screens.tasks.ClassHomeworkOverview(brief,
+                                    onOpen = { id -> detailHomeworkId = id; showHomework = true },
+                                    onRemind = { remindTarget = it },
+                                    onSettings = { navController.navigate(Routes.REMINDER_SETTINGS) },
+                                    onRetry = { revision++ })
+                            })
                     } else HomeworkScreen(
-                        onBack = { showHomework = false },
+                        initialDetailId = detailHomeworkId,
+                        onBack = { detailHomeworkId = null; showHomework = false },
                         onAddTask = { row ->
                             toast(context, if (tasks.importHomework(row)) "已加入我的任务" else "这项作业已在任务中")
                         },
@@ -676,7 +699,7 @@ fun MainNavHost(
                         homeworkRepository = container.homeworkRepository,
                         onRemindHomework = { row -> remindTarget = row },
                     )
-                    BackHandler(enabled = showHomework && remindTarget == null) { showHomework = false }
+                    BackHandler(enabled = showHomework && remindTarget == null) { detailHomeworkId = null; showHomework = false }
                     remindTarget?.let { row ->
                         HomeworkReminderDialog(
                             row = row,
@@ -703,8 +726,10 @@ fun MainNavHost(
                                                 context,
                                                 "已设置提醒：" + formatReminderTime(result.fireAtMillis),
                                             )
-                                            OneShotScheduleResult.PermissionMissing ->
-                                                toast(context, "请先开启通知权限")
+                                            OneShotScheduleResult.PermissionMissing -> {
+                                                toast(context, "开启通知权限后，即可设置这项作业提醒")
+                                                navController.navigate(Routes.PERMISSIONS)
+                                            }
                                             is OneShotScheduleResult.TooLate ->
                                                 toast(context, "提醒时间已过，请选择更晚的时间")
                                             is OneShotScheduleResult.LimitReached ->

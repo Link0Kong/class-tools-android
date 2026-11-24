@@ -74,6 +74,7 @@ fun DrawScreen(
     session: Session?,
     onExport: (DrawExportPayload) -> Unit,
     lastResultStore: DrawLastResultStore? = null,
+    publishProof: ((DrawResult) -> kotlinx.coroutines.Deferred<com.furina.classtools.features.draw.DrawReceipt?>)? = null,
     modifier: Modifier = Modifier,
     members: List<ClassMember> = emptyList(),
     userDataRepository: UserDataRepository? = null,
@@ -141,10 +142,18 @@ fun DrawScreen(
         runCatching { configStore.save(config) }.onSuccess { persistedConfig = configJson }
     }
 
-    fun applyTransition(transition: DrawTransition) {
+    var exporting by remember { mutableStateOf(false) }
+    fun applyTransition(transition: DrawTransition, round: com.furina.classtools.features.draw.DrawRoundProof? = null) {
         when (transition) {
             is DrawTransition.Next -> {
-                workflow = transition.state
+                val next = transition.state.result
+                val previous = workflow.result
+                val stamp = round ?: if (previous != null && next != null) previous.proof?.after(previous, next) else null
+                workflow = transition.state.copy(result = next?.copy(proof = stamp))
+                if (next != null && stamp != null && stamp != previous?.proof && publishProof != null) {
+                    val snapshot = next.copy(proof = stamp)
+                    publishProof(snapshot)
+                }
                 transition.state.result?.takeUnless { it.isEmpty }?.let { next ->
                     runCatching { lastResultStore?.save(DrawLastResult.from(next)) }
                 }
@@ -205,8 +214,19 @@ fun DrawScreen(
                     }
                     item(key = "result", contentType = "result") {
                         DrawResultHeader(
+                            exporting = exporting,
                             result = result,
-                            onExport = { result?.let { onExport(DrawExportFactory.create(it)) } },
+                            onExport = {
+                                if (!exporting && result != null) {
+                                    exporting = true
+                                    scope.launch {
+                                        try {
+                                            val receipt = kotlinx.coroutines.withTimeoutOrNull(6500) { publishProof?.invoke(result)?.await() }
+                                            if (workflow.result == result) onExport(DrawExportFactory.create(result, receipt = receipt))
+                                        } finally { exporting = false }
+                                    }
+                                }
+                            },
                             onRefill = {
                                 result?.let {
                                     val filled = DrawEngine.refill(it, random)
@@ -264,8 +284,9 @@ fun DrawScreen(
                             } else {
                                 { null }
                             }
-                            val transition = DrawWorkflow.quickDraw(workflow, rosterSeats, nameOf, random)
-                            applyTransition(transition)
+                            val stamp = com.furina.classtools.features.draw.DrawRoundProof.start(config.sort)
+                            val transition = DrawWorkflow.quickDraw(workflow, rosterSeats, nameOf, stamp.random())
+                            applyTransition(transition, stamp)
                             if (transition is DrawTransition.Next) {
                                 showLog = false
                                 scope.launch { listState.scrollToItem(1) }
@@ -286,6 +307,9 @@ fun DrawScreen(
             text = { Text("本页的抽签结果和剔除记录将被清空。") },
             confirmButton = {
                 TextButton(onClick = {
+                    val stamp = result.proof
+                    if (stamp != null) publishProof?.invoke(result.copy(proof = stamp.copy(events = stamp.events +
+                        com.furina.classtools.features.draw.RoundEvent("reset"))))
                     workflow = DrawWorkflow.reset(workflow)
                     showLog = false
                     confirmClear = false

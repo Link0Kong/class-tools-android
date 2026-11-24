@@ -95,7 +95,7 @@ object NoticeCalendarMapper {
             append(action)
             append("时间见日程\n")
         }
-        append("来自班级工具站通知")
+        append("来自枫丹工具箱通知")
     }
 
     /** 通知时间文案（供日历描述/通知内容复用）：`MM-dd HH:mm`。 */

@@ -107,8 +107,8 @@ val DarkOnTertiaryContainer = Color(0xFFFFDCBC)
 
 val DarkError = Color(0xFFFFB4AB)
 val DarkOnError = Color(0xFF690005)
-val DarkErrorContainer = Color(0xFF93000A)
-val DarkOnErrorContainer = Color(0xFFFFDAD6)
+val DarkErrorContainer = Color(0xFF562D35)
+val DarkOnErrorContainer = Color(0xFFFFD9D8)
 
 val DarkBackground = CtPalette.DarkBg
 val DarkOnBackground = CtPalette.DarkTextPrimary

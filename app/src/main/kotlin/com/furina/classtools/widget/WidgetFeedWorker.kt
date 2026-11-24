@@ -10,6 +10,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.furina.classtools.BuildConfig
 import com.furina.classtools.data.tasks.*
+import com.furina.classtools.data.homework.*
+import com.furina.classtools.data.marks.MarkKind
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -21,7 +23,7 @@ import com.furina.classtools.data.notices.NoticesLoadResult
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.data.session.SessionStore
-import com.furina.classtools.ui.screens.home.HomeRotationItem
+import com.furina.classtools.ui.screens.notices.NoticeUiItem
 import com.furina.classtools.ui.screens.home.HomeWorkbenchLogic
 import com.furina.classtools.ui.screens.notices.NoticeCardFilter
 import com.furina.classtools.ui.screens.notices.buildUiItems
@@ -32,10 +34,18 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 
 private fun taskList(doc: JsonObject, version: Long, now: Long): WidgetList {
-    val items = doc.pendingTasks()
-    return WidgetList(items.size, items.take(6).map {
-        WidgetLine(it.text("title").take(150), listOf(it.text("due"), it.text("dueTime")).filter(String::isNotBlank).joinToString(" "))
-    }, now, version)
+    val today = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
+    val items = doc.pendingTasks().sortedWith(taskPriorityOrder(today))
+    val rows = items.take(8).map { task ->
+        val steps = task.objects("steps")
+        val detail = listOfNotNull(
+            taskDueLabel(task, today).takeIf(String::isNotBlank),
+            "重要".takeIf { task.flag("starred") },
+            steps.takeIf { it.isNotEmpty() }?.let { "步骤 ${it.count { step -> step.flag("done") }}/${it.size}" },
+        ).joinToString(" · ")
+        WidgetLine(task.text("title").take(150), detail, priority = taskPriority(task, today), homeworkId = task.text("sourceHwId"))
+    }
+    return WidgetList(items.size, rows, now, version)
 }
 
 internal object WidgetFeedStore {
@@ -95,34 +105,57 @@ class WidgetFeedWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 runCatching { Json.parseToJsonElement(row.text("blob")).jsonObject }.getOrNull() ?: return@async null
             taskList(doc, row?.number("ts") ?: 0L, now)
         }
+        val marks = async { DefaultMarksRepository(api, { session.sid }).refresh() }
+        val homework = async {
+            if (!needTasks) return@async null
+            val snapshot = (marks.await() as? ApiResult.Success)?.value ?: return@async null
+            val path = "homework?select=id,subject,content,due,date,time,ts&archived=eq.false&order=ts.asc"
+            val response = (api.get(path) as? ApiResult.Success)?.value ?: return@async null
+            val rows = DefaultHomeworkRepository.parseRows(com.furina.classtools.data.network.NetJson, response) ?: return@async null
+            val pending = rows.filterNot { snapshot.isDone(MarkKind.HW, it.id) }.map { row ->
+                HomeworkRow(id = row.id, subject = row.subject.ifBlank { row.content.lineSequence().firstOrNull().orEmpty() }
+                    .ifBlank { "未命名作业" }.take(150), date = row.date, time = row.time, due = row.due.take(60), ts = row.ts)
+            }
+            WidgetHomework(pending, now)
+        }
         val notices = async {
             if (!needNotices) return@async null
-            val marks = DefaultMarksRepository(api, { session.sid }).refresh()
-            if (marks !is ApiResult.Success) return@async null
+            val snapshot = (marks.await() as? ApiResult.Success)?.value ?: return@async null
             val result = DefaultNoticesRepository(api).load() as? NoticesLoadResult.Success ?: return@async null
-            val pending = compact(HomeWorkbenchLogic.noticeRotation(result.data.auto, marks.value, now), now)
-            val latest = viewContentOf(buildUiItems(result.data, marks.value, now),
-                cardFilter = NoticeCardFilter.LATEST, nowMillis = now).latest
-            pending to WidgetList(latest.size, latest.take(6).map {
-                WidgetLine(it.title.take(150), listOf(it.cat, it.postedText).filter(String::isNotBlank).joinToString(" · ").take(100))
-            }, now)
+            val items = buildUiItems(result.data, snapshot, now)
+            val latest = viewContentOf(items, cardFilter = NoticeCardFilter.LATEST, nowMillis = now).latest
+            val urgent = viewContentOf(items, cardFilter = NoticeCardFilter.URGENT, nowMillis = now).primary
+                .mapNotNull { it.auto?.id }.toSet()
+            fun rank(item: NoticeUiItem) = when {
+                item.done || item.expired -> 8
+                item.auto?.id in urgent -> 1
+                item.pinned -> 2
+                else -> 5
+            }
+            val pending = HomeWorkbenchLogic.noticeRotation(result.data.auto, snapshot, now)
+            val pendingRows = pending.map { WidgetLine(it.title.take(150), it.sub.take(100),
+                priority = if (it.id in urgent) 1 else 5) }.sortedBy { it.priority }
+            val rows = latest.sortedBy(::rank).take(8).map {
+                val detail = listOf(it.status?.label.orEmpty(), it.cat, it.summary.ifBlank { it.postedText })
+                    .filter(String::isNotBlank).joinToString(" · ").take(100)
+                WidgetLine(it.title.take(150), detail, priority = rank(it))
+            }
+            WidgetList(pending.size, pendingRows.take(8), now) to WidgetList(latest.size, rows, now)
         }
         val taskList = tasks.await()
         val noticeList = notices.await()
+        val assignments = homework.await()
         if (session != WidgetFeedStore.session(context)) return@coroutineScope Result.success()
-        if (taskList != null || noticeList != null) {
+        if (taskList != null || noticeList != null || assignments != null) {
             val updated = WidgetFeed(taskList ?: previous.tasks, noticeList?.first ?: previous.notices,
-                noticeList?.second ?: previous.latestNotices)
+                noticeList?.second ?: previous.latestNotices, assignments ?: previous.homework)
             if (!WidgetFeedStore.save(context, session.sid, updated)) {
                 return@coroutineScope retryLater()
             }
             DesktopWidgets.refresh(context)
         }
-        if ((needTasks && taskList == null) || (needNotices && noticeList == null)) retryLater() else Result.success()
+        if ((needTasks && (taskList == null || assignments == null)) || (needNotices && noticeList == null)) retryLater() else Result.success()
     }
-
-    private fun compact(items: List<HomeRotationItem>, now: Long) = WidgetList(items.size,
-        items.take(6).map { WidgetLine(it.title.take(150), it.sub.take(100)) }, now)
 
     private fun retryLater() = if (runAttemptCount < 3) Result.retry() else Result.failure()
 }

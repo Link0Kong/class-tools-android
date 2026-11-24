@@ -33,7 +33,7 @@ object DrawProofVerifier {
      */
     fun replay(pool: List<Int>, count: Int, allowDuplicates: Boolean, seed: String): List<Int> {
         if (pool.isEmpty() || count <= 0) return emptyList()
-        val rng = Mulberry32(seed)
+        val rng = random(seed)
         if (allowDuplicates) {
             return List(count) { pool[rng.nextInt(pool.size)] }
         }
@@ -57,10 +57,12 @@ object DrawProofVerifier {
     ): Boolean = replay(pool, count, allowDuplicates, seed) == result
 
     /** 网页 `drawSeededInts`：mulberry32（UInt 运算 = JS `Math.imul` + `>>> 0` 的低 32 位语义）。 */
-    private class Mulberry32(seedHex: String) {
+    fun random(seed: String): com.furina.classtools.features.draw.DrawRandom = Mulberry32(seed)
+
+    private class Mulberry32(seedHex: String) : com.furina.classtools.features.draw.DrawRandom {
         private var state: UInt = seedHex.take(8).toUIntOrNull(16) ?: 0u
 
-        fun nextInt(bound: Int): Int {
+        override fun nextInt(bound: Int): Int {
             if (bound <= 0) return 0
             state += 0x6D2B79F5u
             var t = state
