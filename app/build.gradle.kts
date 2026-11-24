@@ -165,9 +165,9 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 146
+        versionCode = 147
     // 测试版本 29：OPPO 推送 AppSecret 改为控制台原文小写（签名 16 修复）。
-        versionName = "1.0.0-beta63"
+        versionName = "1.0.0-beta64"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -188,6 +188,16 @@ android {
         buildConfigField("String", "OPPO_ACCOUNT_APP_ID", buildConfigString(oppoAccountAppId))
         buildConfigField("String", "OPPO_ACCOUNT_APP_KEY", buildConfigString(oppoAccountAppKey))
         buildConfigField("String", "OPPO_ACCOUNT_SCOPE", buildConfigString(oppoAccountScope))
+
+        // 小布建议端侧卡片。各项由 OPPO 为本应用的课程场景分配。
+        for ((field, key) in mapOf(
+            "INTENT" to "intentName", "LAUNCHER" to "launcherServiceId",
+            "ENTITY" to "entityName", "MILESTONE_CODE" to "milestoneCode",
+            "MILESTONE_TEXT" to "milestoneText",
+        )) {
+            buildConfigField("String", "OPPO_COURSE_$field",
+                buildConfigString(oppoProps.getProperty("oppo.courseCard.$key", "").trim()))
+        }
 
         // 荣耀账号服务（app/honor.properties；空串 = 未配置 → 荣耀入口隐藏）。
         buildConfigField("String", "HONOR_ACCOUNT_CLIENT_ID", buildConfigString(honorClientId))

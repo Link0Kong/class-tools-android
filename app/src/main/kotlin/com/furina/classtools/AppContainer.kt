@@ -88,6 +88,7 @@ import com.furina.classtools.data.reminder.ReminderSettingsStore
 import com.furina.classtools.data.reminder.WorkManagerReminderScheduler
 import com.furina.classtools.data.remoteconfig.RemoteConfigRepository
 import com.furina.classtools.widget.TimetableWidget
+import com.furina.classtools.data.timetable.XiaobuCourseSync
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collect
@@ -130,6 +131,7 @@ class AppContainer(context: Context) {
     private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val sessionStore: SessionStore = SessionStore(appContext)
+    internal val xiaobuCourseSync by lazy { XiaobuCourseSync(appContext, this) }
     val backgroundStore: BackgroundStore by lazy { BackgroundStore(appContext) }
     val drawLastResultStore by lazy { SharedPreferencesDrawLastResultStore(appContext) }
 
@@ -244,7 +246,7 @@ class AppContainer(context: Context) {
     /** 课表仓库：个人 ttLocal > 公共 site_assets 快照 > 本机缓存。 */
     val timetableRepository: TimetableRepository = DefaultTimetableRepository(
         api = apiClient,
-        cache = FileTimetableCache(File(appContext.cacheDir, "timetable"), onChanged = { TimetableWidget.refresh(appContext) }),
+        cache = FileTimetableCache(File(appContext.cacheDir, "timetable"), onChanged = { refreshCourseSurfaces() }),
         personalStore = timetablePersonalStore,
     )
 
@@ -591,18 +593,29 @@ class AppContainer(context: Context) {
         appScope.launch {
             combine(sessionStore.state, userDataRepository.currentSections) { session, sections ->
                 session to sections["tt"]
-            }.distinctUntilChanged().collect { TimetableWidget.refresh(appContext) }
+            }.distinctUntilChanged().collect { refreshCourseSurfaces() }
         }
         // 启动不阻塞主线程：WorkManager 初始化与 ensureScheduled 放到后台作用域。
         appScope.launch { runCatching { reminderScheduler.ensureScheduled() } }
     }
 
+    private fun refreshCourseSurfaces() {
+        TimetableWidget.refresh(appContext)
+        refreshCourseCard()
+    }
+
+    private fun refreshCourseCard() {
+        if (xiaobuCourseSync.configured) appScope.launch { xiaobuCourseSync.refresh() }
+    }
+
     /** 用户修改提醒设置后重建调度（或关闭时取消）。 */
     fun rescheduleReminders() {
+        refreshCourseCard()
         runCatching { ReminderRuntime.reschedule(appContext) }
     }
 
     fun cancelReminders() {
+        refreshCourseCard()
         runCatching { ReminderRuntime.cancel(appContext) }
     }
 

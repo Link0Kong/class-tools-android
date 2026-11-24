@@ -631,6 +631,7 @@ fun TimetableViewScreen(
         if (showLinkSheet) {
             TimetableLinkSheet(
                 snapshot = snapshot,
+                sessionSid = sessionSid,
                 termStart = termStart,
                 onDismiss = { showLinkSheet = false },
                 onMessage = { text -> scope.launch { snackbar.showSnackbar(text) } },

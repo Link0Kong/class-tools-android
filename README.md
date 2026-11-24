@@ -56,6 +56,12 @@ $env:ANDROID_HOME = '<Android SDK 路径>'
 $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 ```
 
+### ColorOS 小布课程卡片联调
+
+向 OPPO 提交包名 `com.furina.classtools`，申请在小布建议桌面卡展示下一节课的名称、起止时间和教室。当前实现采用端侧强调信息模板，点击卡片打开本应用课表。[接入准备](https://open.oppomobile.com/documentation/page/info?id=13572) · [端侧意图共享](https://open.oppomobile.com/documentation/page/info?id=13558) · [卡片模板](https://open.oppomobile.com/documentation/page/info?id=13576)
+
+收到课程场景联调配置后，将意图名、桌面卡片 ID、垂域名、里程碑代码和文本填到本机 `app/oppo.properties` 的 `oppo.courseCard.*` 字段，字段名见 `app/oppo.properties.example`。构建后在获准的 ColorOS 设备上进入「课表 → 课表接入」，开启小布课程卡片。用测试课表核对课前出卡、更换教室后的内容更新、点击返回课表，以及关闭开关后撤卡。应用中的「系统已接收」对应系统接口返回成功，桌面展示需要在真机核对。
+
 ### 常用命令
 
 ```powershell

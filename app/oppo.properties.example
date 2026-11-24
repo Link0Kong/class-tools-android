@@ -20,3 +20,11 @@ oppo.accountAppKey=
 # 授权范围 scope（空格分隔；默认仅 openid=静默授权最小权限）。
 # 如需昵称/unionid，先在开放平台为应用申请对应权限，再在下面填写平台要求的 scope。
 # oppo.accountScope=openid
+
+# 小布建议桌面课程提醒（端侧强调信息模板）。按 OPPO 联调确认的字段填写。
+# https://open.oppomobile.com/documentation/page/info?id=13572
+oppo.courseCard.intentName=
+oppo.courseCard.launcherServiceId=
+oppo.courseCard.entityName=
+oppo.courseCard.milestoneCode=
+oppo.courseCard.milestoneText=

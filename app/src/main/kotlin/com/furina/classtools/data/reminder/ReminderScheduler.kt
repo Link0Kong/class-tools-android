@@ -453,6 +453,7 @@ class ReminderWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
+        (applicationContext as? ClassToolsApp)?.container?.xiaobuCourseSync?.refresh()
         val result = runCatching { ReminderEngine(applicationContext).runNow() }.getOrNull()
         if (result != null) {
             Log.i(ReminderLog.TAG, ReminderLog.summary(result))

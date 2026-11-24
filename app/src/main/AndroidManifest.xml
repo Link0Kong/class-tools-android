@@ -32,6 +32,7 @@
          1.1.3 AAR 虽未直接读取该 meta-data，但系统账号服务/H5 兜底可能通过宿主清单识别应用；
          值由 Gradle manifestPlaceholders 从 app/oppo.properties 的 oppo.accountAppId 注入。 -->
     <queries>
+        <provider android:authorities="IntelligentIntent" />
         <provider android:authorities="com.platform.usercenter.account.ams.provider" />
     </queries>
 
@@ -81,6 +82,12 @@
                     android:host="com.furina.classtools"
                     android:path="/notice"
                     android:scheme="classtools" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="classtools" android:host="com.furina.classtools" android:path="/timetable" />
             </intent-filter>
         </activity>
 

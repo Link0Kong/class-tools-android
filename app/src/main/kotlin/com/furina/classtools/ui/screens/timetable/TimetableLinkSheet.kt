@@ -32,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -110,6 +111,7 @@ fun TimetableLinkFab(
 @Composable
 fun TimetableLinkSheet(
     snapshot: TtSnapshot,
+    sessionSid: String,
     termStart: LocalDate?,
     onDismiss: () -> Unit,
     onMessage: (String) -> Unit,
@@ -335,8 +337,33 @@ fun TimetableLinkSheet(
                     onMessage("请长按桌面，进入小部件并选择「班级课表」")
                 }
             }) { Text("添加桌面课表卡片") }
-            if (remember { (context.applicationContext as com.furina.classtools.ClassToolsApp).container.hasColorOsRom() }) {
-                LinkSectionTitle("ColorOS 课程提醒")
+            val container = (context.applicationContext as com.furina.classtools.ClassToolsApp).container
+            if (remember { container.hasColorOsRom() }) {
+                LinkSectionTitle("小布建议 · 课程提醒")
+                val cards = container.xiaobuCourseSync
+                if (cards.configured) {
+                    var enabled by remember(sessionSid) { mutableStateOf(cards.enabledFor(sessionSid)) }
+                    val status by cards.status.collectAsState()
+                    LinkText("开启后，课前会将课程名称、时间和教室交给本机小布建议。提前时间沿用通知工具的上课提醒设置。")
+                    CtToolPrimaryButton(
+                        text = if (enabled) "关闭小布课程卡片" else "开启小布课程卡片",
+                        enabled = !busy && sessionSid.isNotBlank(),
+                        onClick = {
+                            busy = true
+                            scope.launch {
+                                try {
+                                    cards.setEnabled(sessionSid, !enabled)
+                                    enabled = cards.enabledFor(sessionSid)
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        },
+                    )
+                    if (status.isNotBlank()) LinkText(status)
+                } else {
+                    LinkText("班级工具的直连课程卡片待 OPPO 开通。")
+                }
                 LinkText("使用小布建议的手机，可将课表导入 WakeUp，并在系统设置的小布建议中开启课程提醒。")
                 CtToolPrimaryButton(text = "在 WakeUp 中导入课表", onClick = { shareWakeUp(true) }, enabled = !busy)
             }

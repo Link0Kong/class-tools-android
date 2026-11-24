@@ -13,13 +13,9 @@ import com.furina.classtools.MainActivity
 import com.furina.classtools.R
 import com.furina.classtools.data.reminder.ReminderIntentFactory
 import com.furina.classtools.data.session.SessionState
-import com.furina.classtools.data.sync.FileUserDataLocalStore
-import com.furina.classtools.data.sync.UserdataV6
-import com.furina.classtools.data.timetable.FileTimetableCache
+import com.furina.classtools.data.timetable.deviceTimetable
 import com.furina.classtools.data.timetable.SessionState as CourseState
 import com.furina.classtools.data.timetable.TtCalendar
-import com.furina.classtools.data.timetable.TtLocal
-import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
@@ -79,14 +75,7 @@ class TimetableWidget : AppWidgetProvider() {
             val sessionStore = (context.applicationContext as ClassToolsApp).container.sessionStore
             val session = (sessionStore.state.first() as? SessionState.SignedIn)?.session
                 ?.takeIf { it.isLikelyValid() }
-            val snapshot = session?.let {
-                val store = FileUserDataLocalStore(File(context.filesDir, "userdata"), { it.sid })
-                val current = store.readCurrent()
-                val tt = if (current.isNotEmpty()) current[TtLocal.SECTION_KEY]
-                    else store.readCache()?.let { blob -> UserdataV6.sectionsOf(blob)[TtLocal.SECTION_KEY] }
-                TtLocal.snapshotOf(tt)?.takeIf { table -> table.c.isNotEmpty() }
-                    ?: FileTimetableCache(File(context.cacheDir, "timetable")).read()?.snapshot
-            }
+            val snapshot = session?.let { deviceTimetable(context, it.sid) }
             val now = System.currentTimeMillis()
             val zone = ZoneId.systemDefault()
             val plan = snapshot?.let { TtCalendar.plan(it, now, zone) }
