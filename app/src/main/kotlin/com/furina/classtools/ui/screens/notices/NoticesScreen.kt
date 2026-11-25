@@ -828,6 +828,7 @@ fun NoticesScreen(
                                             )
                                             NoticeFilterChips(
                                                 chips = pageChips,
+                                                singleRow = true,
                                                 selectedKey = selectedChipKey,
                                                 onSelect = onPageChipSelect,
                                                 reduceMotion = reduceMotion,
@@ -1213,9 +1214,11 @@ private fun NoticeOverviewCards(
         val columns = ((maxWidth + CtSpace.xs) / (tileMin + CtSpace.xs)).toInt().coerceIn(1, values.size)
         Column(verticalArrangement = Arrangement.spacedBy(CtSpace.xs)) {
             values.chunked(columns).forEach { tiles ->
-                Row(horizontalArrangement = Arrangement.spacedBy(CtSpace.xs)) {
+                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(CtSpace.xs)) {
                     tiles.forEach { (filter, value) ->
-                        NoticeStatCard(filter, value, active == filter, { onPick(filter) }, Modifier.weight(1f))
+                        val span = if (filter == NoticeCardFilter.LATEST) columns - tiles.size + 1 else 1
+                        NoticeStatCard(filter, value, active == filter, { onPick(filter) },
+                            Modifier.weight(span.toFloat()).fillMaxHeight())
                     }
                 }
             }

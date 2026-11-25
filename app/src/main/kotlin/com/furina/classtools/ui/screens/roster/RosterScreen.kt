@@ -4,10 +4,7 @@ package com.furina.classtools.ui.screens.roster
 
 import com.furina.classtools.ui.components.CtPrimaryTabs
 
-import com.furina.classtools.ui.components.CtSnackbarHost
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,12 +16,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,12 +30,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -56,7 +49,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.member.ClassLeagueRepository
@@ -64,73 +56,30 @@ import com.furina.classtools.data.member.ClassLeagueResult
 import com.furina.classtools.data.member.ClassMembersRepository
 import com.furina.classtools.data.member.MemberCategory
 import com.furina.classtools.data.session.Session
-import com.furina.classtools.data.sync.UserDataRepository
-import com.furina.classtools.features.roster.RosterFilter
-import com.furina.classtools.features.roster.RosterLogic
 import com.furina.classtools.features.roster.RosterMember
-import com.furina.classtools.features.roster.RosterRow
-import com.furina.classtools.features.roster.RosterState
-import com.furina.classtools.features.roster.RosterTab
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtLightTopBar
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
-import com.furina.classtools.ui.components.tool.CtToolChip
-import com.furina.classtools.ui.components.tool.CtToolField
-import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
+import com.furina.classtools.data.member.RosterMemberSource
+import com.furina.classtools.ui.components.RosterSearchField
+import com.furina.classtools.ui.components.rememberRosterSearch
 
-/**
- * 名单页（原生，2026-11-14 task-54 起只剩「名册」）。
- *
- * 契约：`docs/api/USERDATA_V6.md` 的 `roster` section + `docs/BACKEND_CONTRACT.md` §7.7：
- * - 名单来源 `class_members`（`ClassMembersRepository`，6h 缓存），只显示姓名/座号/职务/徽章，**不显示学号**；
- * - 「班委 / 团员 / 全班」三分类 = [HorizontalPager]：左右滑动跟手 + spring 吸附，
- *   顶部分类 pill 与 pager 双向联动（点击 `animateScrollToPage`；`currentPage/currentPageOffsetFraction`
- *   驱动选中与指示条跟手）；reduceMotion 时禁用拖拽、点击瞬时切；
- * - 每页保留搜索（跨分类共享）、只看点名名单筛选、勾选加入点名名单、全选点名、下拉刷新、
- *   空/加载/错误/刷新错误条；
- * - 勾选写 `userdata.roster`（`rosterSel/rollSel/rollSt/rollNames` 全部由 [RosterLogic]/[RosterCodec] 复用，
- *   与点名页 [RollCallScreen] 共用 [rememberRosterSync]），同步/姓名迁移语义不变；
- * - 隐私：不导出名单、不显示学号；搜索仅本机。
- *
- * 接线（Lead 负责 MainNavHost）：
- * ```kotlin
- * "roster" -> RosterScreen(
- *     onBack = { popTool(toolId) },
- *     session = session,
- *     classMembersRepository = container.classMembersRepository,
- *     userDataRepository = container.userDataRepository,
- *     classLeagueRepository = container.classLeagueRepository,
- * )
- * ```
- * 点名页见同包 [RollCallScreen]（`"roll"` 路由）。
- *
- * @param initialMembers 预览注入：班级名单
- * @param initialRoster 预览注入：roster section 内存态
- * @param initialCategory 预览注入：默认分类（= 初始 pager 页）
- * @param initialLeagueMembers 预览注入：团员名单
- * @param skipLeagueLoad 预览/测试：跳过团员名单请求
- * @param skipLoad 预览/测试：跳过班级名单请求
- * @param previewCategoryOffset 预览：三分类左右滑动的中间帧（0.42 = 停在「班委/团员」之间；null = 正常渲染）
- * @param forcedErrorMessage 预览注入：错误态
- * @param initialTab 兼容参数：拆分前的「名册 ↔ 点名」页签；点名已独立成 [RollCallScreen]，
- *   名册页不再切页，此参数不生效（仅为既有预览调用保持源码兼容）
- */
+/** 班级名册只展示本班可见的成员资料。 */
 @Composable
 fun RosterScreen(
     onBack: () -> Unit,
     session: Session?,
     classMembersRepository: ClassMembersRepository?,
-    userDataRepository: UserDataRepository?,
+    memberSource: RosterMemberSource? = null,
     modifier: Modifier = Modifier,
     initialMembers: List<RosterMember> = emptyList(),
-    initialRoster: RosterState? = null,
     initialCategory: MemberCategory = MemberCategory.ALL,
     initialLeagueMembers: List<RosterMember> = emptyList(),
     classLeagueRepository: ClassLeagueRepository? = null,
@@ -138,18 +87,11 @@ fun RosterScreen(
     skipLoad: Boolean = false,
     previewCategoryOffset: Float? = null,
     forcedErrorMessage: String? = null,
-    initialTab: RosterTab = RosterTab.ROSTER,
 ) {
-    val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
-    val (rosterState, writeRoster) = rememberRosterSync(
-        userDataRepository = userDataRepository,
-        initialRoster = initialRoster,
-    )
     val membersState = rememberRosterMembersState(
         session = session,
         repository = classMembersRepository,
-        userDataRepository = userDataRepository,
+        userDataRepository = null,
         initialMembers = initialMembers,
         skipLoad = skipLoad,
         forcedErrorMessage = forcedErrorMessage,
@@ -157,13 +99,14 @@ fun RosterScreen(
     )
     val members = membersState.members
 
-    var leagueMembers by remember(initialLeagueMembers) { mutableStateOf(initialLeagueMembers) }
-    var leagueLoading by remember { mutableStateOf(false) }
-    var leagueError by remember { mutableStateOf<String?>(null) }
-    var leagueReloadToken by remember { mutableIntStateOf(0) }
+    var leagueMembers by remember(session?.sid, initialLeagueMembers) { mutableStateOf(initialLeagueMembers) }
+    var leagueLoading by remember(session?.sid) { mutableStateOf(false) }
+    var leagueError by remember(session?.sid) { mutableStateOf<String?>(null) }
+    var leagueReloadToken by remember(session?.sid) { mutableIntStateOf(0) }
 
-    var showOnlyInRoll by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
+    val search = rememberRosterSearch(memberSource)
+    val query = search.query
+    val matches = search.matchedSeats
 
     val categories = MemberCategory.entries
     // 动效：系统「移除动画」时禁用 pager 拖拽并改成瞬时切页；预览注入滑动中间帧时不看系统开关。
@@ -175,12 +118,8 @@ fun RosterScreen(
     ) { categories.size }
     val category = categories.getOrNull(categoryPagerState.currentPage) ?: initialCategory
 
-    fun notify(message: String) {
-        scope.launch { snackbar.showSnackbar(message) }
-    }
-
     // 团员名单：滑到「团员」分类时懒加载（失败降级缓存并提示；无 sid）。
-    LaunchedEffect(category, leagueReloadToken, skipLeagueLoad) {
+    LaunchedEffect(session?.sid, category, leagueReloadToken, skipLeagueLoad) {
         if (skipLeagueLoad || category != MemberCategory.LEAGUE) return@LaunchedEffect
         val repository = classLeagueRepository
         if (repository == null) {
@@ -212,10 +151,15 @@ fun RosterScreen(
         leagueLoading = false
     }
 
+    val leagueDirectory = remember(members, leagueMembers) {
+        val seats = leagueMembers.mapTo(hashSetOf()) { it.seat }
+        members.filter { it.seat in seats }
+    }
     val committeeCount = remember(members) { members.count { it.isCommittee } }
 
     // 沉浸光感顶栏：名册列表滚动量驱动顶栏浮层渐显。
-    val ctTopBarLazyState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listStates = categories.map { androidx.compose.foundation.lazy.rememberLazyListState() }
+    val ctTopBarLazyState = listStates[categoryPagerState.currentPage]
     val ctTopBarScrollPx = if (ctTopBarLazyState.firstVisibleItemIndex > 0) {
         com.furina.classtools.ui.theme.CT_TOP_BAR_FULL_SCROLL_PX
     } else {
@@ -231,21 +175,16 @@ fun RosterScreen(
             ) {
                 CtLightTopBar(
                     scrollPx = ctTopBarScrollPx,
-                    title = "名单 · 名册",
+                    title = "班级名单",
                     subtitle = buildString {
                         if (members.isNotEmpty()) {
                             append("${members.size} 人")
                             if (committeeCount > 0) append(" · 班委 $committeeCount")
-                            if (leagueMembers.isNotEmpty()) append(" · 团员 ${leagueMembers.size}")
+                            if (leagueDirectory.isNotEmpty()) append(" · 团员 ${leagueDirectory.size}")
                         }
                         if (membersState.fromCache) {
                             if (isNotEmpty()) append(" · ")
                             append("本机缓存")
-                        }
-                        val rollCount = rosterState.rollSel.size
-                        if (rollCount > 0) {
-                            if (isNotEmpty()) append(" · ")
-                            append("点名 $rollCount 人")
                         }
                     },
                     onBack = onBack,
@@ -263,40 +202,11 @@ fun RosterScreen(
 
                 RosterCategoryTabs(
                     pagerState = categoryPagerState,
-                    counts = listOf(committeeCount, leagueMembers.size, members.size),
+                    counts = listOf(committeeCount, leagueDirectory.size, members.size),
                     reduceMotion = reduceMotion,
                 )
 
-                CtToolField(
-                    label = "搜索",
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    placeholder = "搜索姓名 / 座号",
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
-                ) {
-                    CtToolChip(
-                        text = "已加入点名 ${rosterState.rollSel.size}",
-                        selected = showOnlyInRoll,
-                        onClick = { showOnlyInRoll = !showOnlyInRoll },
-                    )
-                    Spacer(Modifier.weight(1f))
-                    TextButton(
-                        onClick = {
-                            writeRoster(RosterLogic.selectAll(rosterState, members))
-                            notify("已全选加入点名名单")
-                        },
-                    ) { Text("全选点名") }
-                }
+                RosterSearchField(search, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
 
                 Box(modifier = Modifier.weight(1f)) {
                     when (membersState.phase) {
@@ -326,34 +236,22 @@ fun RosterScreen(
                                 key = { page -> categories[page].name },
                             ) { pageIndex ->
                                 val pageCategory = categories[pageIndex]
-                                val rows = remember(
-                                    pageCategory,
-                                    members,
-                                    leagueMembers,
-                                    query,
-                                    showOnlyInRoll,
-                                    rosterState,
-                                ) {
-                                    val base = when (pageCategory) {
+                                val rows = remember(pageCategory, members, leagueDirectory, query, matches) {
+                                    val group = when (pageCategory) {
                                         MemberCategory.COMMITTEE -> members.filter { it.isCommittee }
-                                        MemberCategory.LEAGUE -> leagueMembers
+                                        MemberCategory.LEAGUE -> leagueDirectory
                                         MemberCategory.ALL -> members
                                     }
-                                    val filtered = RosterLogic.filterRows(base, query, RosterFilter.ALL, rosterState)
-                                    if (showOnlyInRoll) filtered.filter { it.inRoll } else filtered
+                                    group.filter { it.asEntry().matches(query) || it.seat in matches }
                                 }
                                 RosterCategoryPage(
                                     category = pageCategory,
                                     rows = rows,
                                     query = query,
-                                    showOnlyInRoll = showOnlyInRoll,
                                     leagueLoading = leagueLoading,
                                     leagueError = leagueError,
                                     onRetryLeague = { leagueReloadToken += 1 },
-                                    onToggleRoll = { seat ->
-                                        writeRoster(RosterLogic.toggleMemberInRoll(rosterState, seat, members))
-                                    },
-                                    listState = ctTopBarLazyState,
+                                    listState = listStates[pageIndex],
                                 )
                             }
                         }
@@ -370,22 +268,9 @@ fun RosterScreen(
                 }
             }
 
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-            )
-            }
         }
     }
+
 }
 
 // -----------------------------------------------------------------------------
@@ -427,13 +312,11 @@ private fun RosterCategoryTabs(
 @Composable
 private fun RosterCategoryPage(
     category: MemberCategory,
-    rows: List<RosterRow>,
+    rows: List<RosterMember>,
     query: String,
-    showOnlyInRoll: Boolean,
     leagueLoading: Boolean,
     leagueError: String?,
     onRetryLeague: () -> Unit,
-    onToggleRoll: (Int) -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -489,14 +372,12 @@ private fun RosterCategoryPage(
                             query.isNotBlank() -> "未找到匹配成员"
                             category == MemberCategory.LEAGUE -> "团员名单为空"
                             category == MemberCategory.COMMITTEE -> "暂无班委"
-                            showOnlyInRoll -> "暂无点名成员"
                             else -> "名单为空"
                         },
                         message = when {
-                            query.isNotBlank() -> "换个姓名/座号试试"
+                            query.isNotBlank() -> "试试姓名、座号或职务"
                             category == MemberCategory.LEAGUE -> "团员名单同步后自动出现"
                             category == MemberCategory.COMMITTEE -> "班委角色来自班级名单"
-                            showOnlyInRoll -> "取消筛选查看全部成员"
                             else -> "请检查身份验证或稍后重试"
                         },
                     )
@@ -520,8 +401,8 @@ private fun RosterCategoryPage(
                             )
                         }
                     }
-                    items(rows, key = { it.member.seat }) { row ->
-                        MemberRow(row = row, onToggleRoll = { onToggleRoll(row.member.seat) })
+                    items(rows, key = { it.seat }) { member ->
+                        MemberRow(member)
                     }
                 }
             }
@@ -530,65 +411,24 @@ private fun RosterCategoryPage(
 }
 
 @Composable
-private fun MemberRow(
-    row: RosterRow,
-    onToggleRoll: () -> Unit,
-) {
-    // v6：统一卡片外壳 + 两行布局（姓名行 + 职务/状态胶囊行，避免大字体/窄屏胶囊换行挤压）
+private fun MemberRow(member: RosterMember) {
+    val scheme = MaterialTheme.colorScheme
     CtToolCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) {},
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = row.member.seat.toString().padStart(2, '0'),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(32.dp),
-                )
-                Text(
-                    text = row.member.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f),
-                )
-                Checkbox(
-                    checked = row.inRoll,
-                    onCheckedChange = { onToggleRoll() },
-                    modifier = Modifier.size(48.dp),
-                )
-            }
-            val hasTags = row.member.role.isNotBlank() || row.member.badge.isNotBlank() || row.inRoll
-            if (hasTags) {
-                androidx.compose.foundation.layout.FlowRow(
-                    modifier = Modifier.padding(start = 32.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    if (row.member.role.isNotBlank()) {
-                        CtPill(
-                            text = row.member.role,
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
-                    if (row.member.badge.isNotBlank()) {
-                        CtPill(text = row.member.badge)
-                    }
-                    if (row.inRoll) {
-                        CtPill(
-                            text = "点名中",
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            androidx.compose.material3.Surface(shape = androidx.compose.foundation.shape.CircleShape,
+                color = scheme.secondaryContainer, contentColor = scheme.onSecondaryContainer) {
+                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                    Text(member.seat.toString().padStart(2, '0'), style = MaterialTheme.typography.titleSmall)
                 }
             }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(member.name, style = MaterialTheme.typography.titleMedium)
+            }
+            val label = member.role.ifBlank { member.badge }
+            if (label.isNotBlank()) CtPill(label, modifier = Modifier.widthIn(max = 116.dp))
         }
     }
 }
-
-

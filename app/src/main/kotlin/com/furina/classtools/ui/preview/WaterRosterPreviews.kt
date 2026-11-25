@@ -16,7 +16,6 @@ import com.furina.classtools.features.roster.RollStatus
 import com.furina.classtools.features.roster.RosterLogic
 import com.furina.classtools.features.roster.RosterMember
 import com.furina.classtools.features.roster.RosterState
-import com.furina.classtools.features.roster.RosterTab
 import com.furina.classtools.features.water.WaterRecord
 import com.furina.classtools.features.water.WaterRoomState
 import com.furina.classtools.ui.components.CtTopBar
@@ -175,10 +174,10 @@ private fun RosterListLightPreview() {
             onBack = {},
             session = previewSession,
             classMembersRepository = null,
-            userDataRepository = null,
+
             initialMembers = rosterMembers(),
-            initialRoster = previewRosterState(),
-            initialTab = RosterTab.ROSTER,
+
+
             skipLoad = true,
         )
     }
@@ -192,10 +191,10 @@ private fun RosterListDarkPreview() {
             onBack = {},
             session = previewSession,
             classMembersRepository = null,
-            userDataRepository = null,
+
             initialMembers = rosterMembers(),
-            initialRoster = previewRosterState(),
-            initialTab = RosterTab.ROSTER,
+
+
             skipLoad = true,
         )
     }
@@ -241,10 +240,10 @@ private fun RosterEmptyLightPreview() {
             onBack = {},
             session = previewSession,
             classMembersRepository = null,
-            userDataRepository = null,
+
             initialMembers = emptyList(),
-            initialRoster = RosterState(),
-            initialTab = RosterTab.ROSTER,
+
+
             skipLoad = true,
         )
     }

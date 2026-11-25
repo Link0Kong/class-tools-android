@@ -72,14 +72,8 @@ import com.furina.classtools.data.calendar.CourseCalendarMapper
 import com.furina.classtools.data.calendar.NoticeCalendarMapper
 import com.furina.classtools.data.fitrecs.FitRecsLoadResult
 import com.furina.classtools.data.fitrecs.FitRecsWriteResult
-import com.furina.classtools.data.member.ClassLeagueRepository
-import com.furina.classtools.data.member.ClassLeagueResult
 import com.furina.classtools.data.member.ClassMember
-import com.furina.classtools.data.member.ClassMembersRepository
 import com.furina.classtools.data.member.ClassMembersResult
-import com.furina.classtools.data.member.MemberCategory
-import com.furina.classtools.data.member.MemberCategoryBuilder
-import com.furina.classtools.data.member.MemberEntry
 import com.furina.classtools.data.permission.PermissionType
 import com.furina.classtools.data.privacy.LocalDataStats
 import com.furina.classtools.data.reminder.OneShotPlannedTime
@@ -148,7 +142,6 @@ import com.furina.classtools.ui.screens.timetable.TimetableViewScreen
 import com.furina.classtools.ui.screens.vote.VoteCreateScreen
 import com.furina.classtools.ui.screens.vote.VoteDetailScreen
 import com.furina.classtools.ui.screens.vote.VoteListScreen
-import com.furina.classtools.ui.screens.vote.VoteMemberSource
 import com.furina.classtools.ui.screens.tools.ToolPlaceholderScreen
 import com.furina.classtools.ui.screens.water.WaterScreen
 import com.furina.classtools.ui.theme.findActivity
@@ -158,6 +151,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import com.furina.classtools.data.member.ClassRosterSource
 
 /**
  * v2 导航（ColorOS 17 浮岛式）：
@@ -189,6 +183,9 @@ fun MainNavHost(
     onCloseStandaloneTool: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    val memberSource = remember(container, session.sid) {
+        ClassRosterSource(container.classMembersRepository, container.classLeagueRepository)
+    }
     val context = LocalContext.current
     val rootView = LocalView.current
     val scope = rememberCoroutineScope()
@@ -547,6 +544,7 @@ fun MainNavHost(
                         }
                     }
                     DrawScreen(
+                        memberSource = memberSource,
                         publishProof = if (session.debug) null else { result -> container.submitDrawRecord(session, result) },
                         onBack = { popTool(toolId) },
                         session = session,
@@ -565,8 +563,8 @@ fun MainNavHost(
 
                 "group" -> {
                     // 班级名单：先读缓存；缓存为空时再触发一次加载（独立工具页可直接进入，不依赖先抽签）。
-                    var roster by remember { mutableStateOf<List<GroupMember>>(emptyList()) }
-                    LaunchedEffect(Unit) {
+                    var roster by remember(session.sid) { mutableStateOf<List<GroupMember>>(emptyList()) }
+                    LaunchedEffect(session.sid) {
                         val cached = runCatching { container.classMembersRepository.cached() }
                             .getOrDefault(emptyList())
                         val members = cached.ifEmpty {
@@ -578,6 +576,7 @@ fun MainNavHost(
                             .map { GroupMember(seat = it.seat, name = it.name) }
                     }
                     GroupScreen(
+                        memberSource = memberSource,
                         onBack = { popTool(toolId) },
                         session = session,
                         userDataRepository = container.userDataRepository,
@@ -873,14 +872,16 @@ fun MainNavHost(
                 )
 
                 "roster" -> RosterScreen(
+                    memberSource = memberSource,
                     onBack = { popTool(toolId) },
                     session = session,
                     classMembersRepository = container.classMembersRepository,
-                    userDataRepository = container.userDataRepository,
+
                     classLeagueRepository = container.classLeagueRepository,
                 )
 
                 "roll" -> RollCallScreen(
+                    memberSource = memberSource,
                     onBack = { popTool(toolId) },
                     session = session,
                     classMembersRepository = container.classMembersRepository,
@@ -1111,12 +1112,7 @@ fun MainNavHost(
             VoteCreateScreen(
                 repository = container.voteRepository,
                 editingPollId = entry.arguments?.getString(Routes.VOTE_CREATE_ARG),
-                memberSource = remember {
-                    ContainerVoteMemberSource(
-                        classMembersRepository = container.classMembersRepository,
-                        classLeagueRepository = container.classLeagueRepository,
-                    )
-                },
+                memberSource = memberSource,
                 onBack = { navController.popBackStack() },
                 onFinished = { _, _ -> navController.popBackStack() },
             )
@@ -1609,26 +1605,3 @@ private fun HomeworkReminderDialog(
 private fun formatReminderTime(millis: Long): String =
     java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
         .format(java.util.Date(millis))
-
-/** 投票「指定成员」数据源：班委/全班来自 class_members，团员来自 class_league；仅 seat/name/badge。 */
-private class ContainerVoteMemberSource(
-    private val classMembersRepository: ClassMembersRepository,
-    private val classLeagueRepository: ClassLeagueRepository,
-) : VoteMemberSource {
-    override suspend fun load(category: MemberCategory): List<MemberEntry> = when (category) {
-        MemberCategory.COMMITTEE -> (classMembersRepository.load() as? ClassMembersResult.Success)
-            ?.members?.let(MemberCategoryBuilder::committee).orEmpty()
-
-        MemberCategory.LEAGUE -> (classLeagueRepository.load() as? ClassLeagueResult.Success)
-            ?.members?.let(MemberCategoryBuilder::league).orEmpty()
-
-        MemberCategory.ALL -> (classMembersRepository.load() as? ClassMembersResult.Success)
-            ?.members?.let(MemberCategoryBuilder::all).orEmpty()
-    }
-}
-
-
-
-
-
-

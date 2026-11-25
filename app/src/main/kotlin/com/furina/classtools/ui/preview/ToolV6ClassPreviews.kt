@@ -58,11 +58,11 @@ import com.furina.classtools.ui.screens.roster.RosterScreen
 import com.furina.classtools.ui.screens.vote.VoteCreateScreen
 import com.furina.classtools.ui.screens.vote.VoteDetailScreen
 import com.furina.classtools.ui.screens.vote.VoteListScreen
-import com.furina.classtools.ui.screens.vote.VoteMemberSource
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.CtShapeTokens
 import java.time.LocalDateTime
 import java.time.ZoneId
+import com.furina.classtools.data.member.RosterMemberSource
 
 // =============================================================================
 // 工具页 v6 统一设计语言预览（task-47：通知 / 名单 / 投票；task-54：点名拆页）
@@ -380,7 +380,7 @@ private val v6PreviewVoteRepository = V6PreviewVoteRepository(
     detailData = v6PollDetail(),
 )
 
-private val v6PreviewMemberSource = object : VoteMemberSource {
+private val v6PreviewMemberSource = object : RosterMemberSource {
     override suspend fun load(category: MemberCategory): List<MemberEntry> = when (category) {
         MemberCategory.COMMITTEE -> listOf(
             MemberEntry(seat = 1, name = "陈同学", badge = "副团支部书记"),
@@ -468,9 +468,9 @@ private fun ToolV6RosterCommitteeLightPreview() {
             onBack = {},
             session = null,
             classMembersRepository = null,
-            userDataRepository = null,
+
             initialMembers = v6RosterMembers(),
-            initialRoster = v6RosterState(),
+
             initialCategory = MemberCategory.COMMITTEE,
             initialLeagueMembers = v6RosterLeagueMembers(),
             skipLeagueLoad = true,
@@ -487,9 +487,9 @@ private fun ToolV6RosterCategorySwipeMidPreview() {
             onBack = {},
             session = null,
             classMembersRepository = null,
-            userDataRepository = null,
+
             initialMembers = v6RosterMembers(),
-            initialRoster = v6RosterState(),
+
             initialCategory = MemberCategory.COMMITTEE,
             initialLeagueMembers = v6RosterLeagueMembers(),
             skipLeagueLoad = true,

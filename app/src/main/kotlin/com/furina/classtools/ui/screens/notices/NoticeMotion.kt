@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -320,7 +322,7 @@ internal data class NoticeChip(
 )
 
 /**
- * 筛选 chips（FlowRow，可换行适配大字体/窄屏）：
+ * 主列表筛选横向滚动，弹层内换行以展示所有选项。
  * 选中时弹性放大回弹（spring）、勾选图标缩放淡入、容器色渐变；计数用 [CtAnimatedCounter]。
  */
 @Composable
@@ -331,13 +333,9 @@ internal fun NoticeFilterChips(
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
     previewBounceKey: String? = null,
+    singleRow: Boolean = false,
 ) {
-    FlowRow(
-        modifier = modifier.fillMaxWidth(),
-        // 筛选选项（可点胶囊）之间按鸿蒙「控件间距」留 8vp（2026-11-20）
-        horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
-        verticalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
-    ) {
+    val content: @Composable () -> Unit = {
         chips.forEach { chip ->
             NoticeElasticChip(
                 chip = chip,
@@ -347,6 +345,18 @@ internal fun NoticeFilterChips(
                 onClick = { onSelect(chip.key) },
             )
         }
+    }
+    if (singleRow) {
+        Row(
+            modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) { content() }
+    } else {
+        FlowRow(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
+            verticalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
+        ) { content() }
     }
 }
 

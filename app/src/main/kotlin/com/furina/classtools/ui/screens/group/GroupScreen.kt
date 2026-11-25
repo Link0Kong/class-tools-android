@@ -91,6 +91,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import com.furina.classtools.data.member.MemberEntry
+import com.furina.classtools.data.member.RosterMemberSource
 
 /**
  * 分组工具页（独立工具：配置 + 结果同页，不依赖抽签流程）。
@@ -134,6 +136,7 @@ fun GroupScreen(
     initialStep: GroupStep? = null,
     forcedErrorMessage: String? = null,
     skipRestore: Boolean = false,
+    memberSource: RosterMemberSource? = null,
     randomSeed: Long? = null,
 ) {
     val scope = rememberCoroutineScope()
@@ -294,8 +297,9 @@ fun GroupScreen(
 
         if (showRosterPicker) {
             RosterPickerSheet(
-                members = rosterMembers.associate { it.seat to it.label },
-                selected = state.config.selectedSeats.toSet(),
+                source = memberSource,
+                fallbackMembers = rosterMembers.map { MemberEntry(it.seat, it.name) },
+                initialSeats = state.config.selectedSeats.toSet(),
                 onConfirm = { seats ->
                     showRosterPicker = false
                     saveSelection(seats.toList())

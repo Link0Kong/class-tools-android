@@ -422,12 +422,6 @@ private fun NoticeCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text = item.title.ifBlank { "通知" },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = scheme.onSurface,
-            )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(CtSpace.xs),
                 verticalArrangement = Arrangement.spacedBy(CtSpace.xs),
@@ -439,27 +433,23 @@ private fun NoticeCard(
                 if (item.hidden) ItemFlag(text = "已隐藏", tone = NoticeTone.GREY)
             }
 
-
-            NoticeCardMeta(item = item, mode = mode)
-
+            Text(
+                text = item.title.ifBlank { "通知" },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+            )
             if (item.summary.isNotBlank()) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    color = scheme.surfaceContainer,
-                    contentColor = scheme.onSurface,
-                ) {
-                    Text(
-                        text = item.summary,
-                        maxLines = 3,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(CtSpace.sm),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+                Text(
+                    text = item.summary,
+                    maxLines = 3,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
+                )
             }
-
-            HorizontalDivider(color = scheme.outlineVariant)
+            NoticeCardMeta(item = item, mode = mode)
+            HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.65f))
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(CtSpace.xs),

@@ -16,6 +16,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import com.furina.classtools.data.network.ApiError
 
 /**
  * 班级名单仓库实现：`POST rpc/class_members`（body `{}`，带身份 token）。
@@ -107,6 +108,24 @@ class DefaultClassMembersRepository(
                     cache.write(sid, members, now)
                     ClassMembersResult.Success(members, fromCache = false)
                 }
+            }
+        }
+    }
+
+    override suspend fun searchSeats(query: String): ApiResult<Set<Int>> {
+        if (query.isBlank()) return ApiResult.Success(emptySet())
+        val sid = currentSid()?.trim().orEmpty()
+        if (sid.isEmpty()) return ApiResult.Failure(ApiError.Config("请先完成身份验证"))
+        val body = buildJsonObject { put("p_query", JsonPrimitive(query)) }.toString()
+        return when (val reply = api.post(path = "rpc/class_roster_search", body = body)) {
+            is ApiResult.Failure -> reply
+            is ApiResult.Success -> {
+                if (currentSid()?.trim() != sid) return ApiResult.Success(emptySet())
+                val rows = parseJsonOrNull(json, reply.value) as? JsonArray
+                    ?: return ApiResult.Failure(ApiError.Parse("名单搜索结果格式错误"))
+                ApiResult.Success(rows.mapNotNullTo(mutableSetOf()) { row ->
+                    row.asIntOrNull()?.takeIf { it in 1..99 }
+                })
             }
         }
     }

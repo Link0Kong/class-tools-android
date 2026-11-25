@@ -73,6 +73,7 @@ import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtSpace
 import kotlinx.coroutines.launch
+import com.furina.classtools.data.member.RosterMemberSource
 
 /**
  * 点名页（原生，2026-11-14 task-54 从原「名单 · 点名」双页拆成独立工具页）。
@@ -110,6 +111,7 @@ fun RollCallScreen(
     skipLoad: Boolean = false,
     initialMembers: List<RosterMember> = emptyList(),
     initialRoster: RosterState? = null,
+    memberSource: RosterMemberSource? = null,
     forcedErrorMessage: String? = null,
 ) {
     val scope = rememberCoroutineScope()
@@ -403,8 +405,9 @@ fun RollCallScreen(
     if (editingRoster && members.isNotEmpty()) {
         RosterPickerSheet(
             title = "编辑点名名单",
-            members = members.associate { it.seat to "${it.seat} ${it.name}" },
-            selected = rosterState.rollSel.toSet(),
+            source = memberSource,
+            fallbackMembers = members.map { it.asEntry() },
+            initialSeats = rosterState.rollSel.toSet(),
             onConfirm = { seats ->
                 editingRoster = false
                 if (seats.isEmpty() && rosterState.rollSel.isNotEmpty()) {

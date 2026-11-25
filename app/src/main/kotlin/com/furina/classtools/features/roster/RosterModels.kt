@@ -23,7 +23,11 @@ data class RosterMember(
     val badge: String = "",
     val isAdmin: Boolean = false,
 ) {
-    val isCommittee: Boolean get() = role.isNotBlank()
+    val isCommittee: Boolean get() = role.isNotBlank() || badge.contains("班委")
+
+    fun asEntry() = com.furina.classtools.data.member.MemberEntry(
+        seat, name, role.ifBlank { badge }, badge,
+    )
 
     companion object {
         fun from(member: ClassMember): RosterMember = RosterMember(

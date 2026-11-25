@@ -190,14 +190,7 @@ object RosterLogic {
                 }
             }
             .filter { member ->
-                if (q.isEmpty()) {
-                    true
-                } else {
-                    member.name.lowercase().contains(q) ||
-                        member.seat.toString() == q ||
-                        member.role.lowercase().contains(q) ||
-                        member.badge.lowercase().contains(q)
-                }
+                member.asEntry().matches(q)
             }
             .map { member ->
                 RosterRow(

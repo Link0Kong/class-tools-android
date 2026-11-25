@@ -54,8 +54,8 @@ import kotlinx.serialization.json.JsonObject
 // 名单 / 点名共用状态与错误 UI
 //
 // 2026-11-14（task-54）：点名从「名单 · 点名」双页拆成独立页面（RollCallScreen），
-// 名单页只剩三分类名册（RosterScreen）。两个页面必须复用同一套：
-// - `userdata.roster` 读写语义（rollSel/rollSt/rollNames，RosterCodec 键序不变）；
+// 名单页只展示三分类名册（RosterScreen）。
+// - 只有点名使用 `userdata.roster` 读写（rollSel/rollSt/rollNames，RosterCodec 键序不变）；
 // - `class_members` 加载（6h 缓存 / 失败降级旧缓存 / 下拉刷新）；
 // - 空-加载-错误四态与「刷新失败但显示本机缓存」错误条文案。
 // 拆分只移动 UI 结构，不改同步/姓名迁移/隐私语义。
@@ -65,7 +65,7 @@ import kotlinx.serialization.json.JsonObject
 internal enum class RosterPhase { LOADING, READY, ERROR }
 
 /**
- * `userdata.roster` 的内存态 + 写回句柄（名单页 / 点名页共用）。
+ * `userdata.roster` 的点名内存态 + 写回句柄。
  *
  * 语义与拆分前 [`RosterScreen`] 内部实现完全一致：
  * - 操作即时显示，已拉取的名单和出勤在本机写入完成后反映到页面；
@@ -150,11 +150,11 @@ internal fun rememberRosterMembersState(
     forcedErrorMessage: String?,
     unauthenticatedMessage: String,
 ): RosterMembersState {
-    var members by remember(initialMembers) { mutableStateOf(initialMembers) }
-    var fromCache by remember { mutableStateOf(false) }
-    var reloadToken by remember { mutableIntStateOf(0) }
-    var isRefreshing by remember { mutableStateOf(false) }
-    var phase by remember {
+    var members by remember(session?.sid, initialMembers) { mutableStateOf(initialMembers) }
+    var fromCache by remember(session?.sid) { mutableStateOf(false) }
+    var reloadToken by remember(session?.sid) { mutableIntStateOf(0) }
+    var isRefreshing by remember(session?.sid) { mutableStateOf(false) }
+    var phase by remember(session?.sid) {
         mutableStateOf(
             when {
                 forcedErrorMessage != null -> RosterPhase.ERROR
@@ -163,9 +163,9 @@ internal fun rememberRosterMembersState(
             },
         )
     }
-    var errorMessage by remember { mutableStateOf(forcedErrorMessage) }
+    var errorMessage by remember(session?.sid) { mutableStateOf(forcedErrorMessage) }
 
-    LaunchedEffect(reloadToken) {
+    LaunchedEffect(session?.sid, repository, reloadToken) {
         if (skipLoad || forcedErrorMessage != null) {
             phase = RosterPhase.READY
             isRefreshing = false

@@ -11,4 +11,9 @@
     <color name="widget_lilac_bg">#302638</color>
     <color name="widget_lilac_accent">#D5B4EC</color>
     <color name="widget_lilac_ink">#F6EBFE</color>
+    <color name="widget_green_highlight">#253D35</color>
+    <color name="widget_blue_highlight">#20364D</color>
+    <color name="widget_amber_highlight">#473823</color>
+    <color name="widget_lilac_highlight">#3C3046</color>
+    <color name="widget_summary_fill">#206F8390</color>
 </resources>

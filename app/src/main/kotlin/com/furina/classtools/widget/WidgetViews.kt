@@ -50,17 +50,26 @@ internal object WidgetViews {
             if (Build.VERSION.SDK_INT >= 31) setColor(viewId, "setTextColor", colorId)
             else setTextColor(viewId, context.getColor(colorId))
         }
+        val icon = when (kind) {
+            WidgetKind.TIMETABLE -> R.drawable.widget_icon_timetable
+            WidgetKind.WORKBENCH -> R.drawable.widget_icon_workbench
+            WidgetKind.TASKS -> R.drawable.widget_icon_tasks
+            WidgetKind.NOTICES -> R.drawable.widget_icon_notices
+        }
+        views.setImageViewResource(R.id.widget_icon, icon)
+        if (Build.VERSION.SDK_INT >= 31) views.setColor(R.id.widget_icon, "setColorFilter", palette.accent)
+        else views.setInt(R.id.widget_icon, "setColorFilter", context.getColor(palette.accent))
         views.tint(R.id.widget_course, palette.ink)
         views.tint(R.id.widget_heading, palette.accent)
         views.tint(R.id.widget_details, palette.accent)
         if (!layout.banner) views.tint(R.id.widget_summary, palette.accent)
         fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
         val vertical = dp(if (layout.compact) 4 else 8)
-        views.setViewPadding(R.id.widget_root, dp(10), vertical, dp(10), vertical)
+        val horizontal = dp(if (layout.width >= 230) 14 else if (layout.height < 48) 6 else 10)
+        views.setViewPadding(R.id.widget_root, horizontal, vertical, horizontal, vertical)
         views.setOnClickPendingIntent(R.id.widget_root, open(context, kind.destination))
         views.setTextViewText(R.id.widget_heading, model.heading)
-        if (layout.height < 48) views.setViewVisibility(R.id.widget_heading, View.GONE)
-        else views.setViewVisibility(R.id.widget_heading, View.VISIBLE)
+        views.setViewVisibility(R.id.widget_header, if (layout.height < 48) View.GONE else View.VISIBLE)
         views.setTextViewText(R.id.widget_course, model.first.title)
         val titleDestination = if (model.first.destination == "class-homework") model.first.destination else kind.destination
         views.setOnClickPendingIntent(R.id.widget_course, open(context, titleDestination))

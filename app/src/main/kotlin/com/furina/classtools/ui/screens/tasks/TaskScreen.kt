@@ -49,6 +49,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 
 internal val repeats = mapOf("" to "不重复", "daily" to "每天", "weekday" to "工作日", "weekly" to "每周", "monthly" to "每月", "yearly" to "每年")
 
@@ -197,28 +200,50 @@ fun TaskScreen(
                 items(visible, key = { "item-" + it.text("id") }) { task ->
                     val id = task.text("id")
                     val done = task.flag("done")
-                    Card(modifier = if (reduceMotion) Modifier else Modifier.animateItem()) {
-                        Row(Modifier.fillMaxWidth().clickable { detail = id }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val colors = MaterialTheme.colorScheme
+                    Card(
+                        modifier = if (reduceMotion) Modifier else Modifier.animateItem(),
+                        colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().clickable { detail = id }.padding(horizontal = 4.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Checkbox(done, { value -> repository.edit { list, time -> changeCompletion(list, id, value, time) } },
                                 modifier = Modifier.semantics { contentDescription = if (done) "标记未完成" else "标记完成" })
-                            Column(Modifier.weight(1f).padding(vertical = 5.dp)) {
-                                Text(task.text("title"), style = MaterialTheme.typography.titleMedium, textDecoration = if (done) TextDecoration.LineThrough else null)
-                                val group = groups.find { it.text("id") == task.text("list") }
-                                val meta = listOf(taskDueLabel(task, today), if (task.text("myDay") == today) "我的一天" else "",
-                                    group?.text("name").orEmpty(),
-                                    if (task.text("sourceHwId").isNotBlank()) "班级作业" else "",
-                                    if (task.text("sourceNoticeId").isNotBlank()) "班级通知" else "",
-                                    task.strings("tags").joinToString(" ") { "#$it" },
-                                    if (task.number("remindAt") > 0) "有提醒" else "",
-                                    repeats[task.text("repeat").ifBlank { "-" }].orEmpty(),
-                                    if (task.objects("localFiles").isNotEmpty()) "附件 ${task.objects("localFiles").size}" else "").filter(String::isNotBlank)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    task.text("title"), style = MaterialTheme.typography.titleMedium,
+                                    color = if (done) colors.onSurfaceVariant else colors.onSurface,
+                                    textDecoration = if (done) TextDecoration.LineThrough else null,
+                                )
+                                val due = taskDueLabel(task, today)
+                                if (due.isNotBlank()) Text(
+                                    due, style = MaterialTheme.typography.labelMedium,
+                                    color = if (!done && taskPriority(task, today) == 0) colors.error else colors.onSurfaceVariant,
+                                )
+                                val meta = buildList {
+                                    if (task.text("myDay") == today) add("我的一天")
+                                    groups.find { it.text("id") == task.text("list") }?.let { add(it.text("name")) }
+                                    if (task.text("sourceHwId").isNotBlank()) add("班级作业")
+                                    if (task.text("sourceNoticeId").isNotBlank()) add("班级通知")
+                                    task.strings("tags").filterNot { it in this }.forEach { add("#$it") }
+                                    if (task.number("remindAt") > 0) add("有提醒")
+                                    repeats[task.text("repeat").ifBlank { "-" }]?.let { add(it) }
+                                    val files = task.objects("localFiles")
+                                    if (files.isNotEmpty()) add("附件 ${files.size}")
+                                }.filter(String::isNotBlank).distinct()
                                 if (meta.isNotEmpty()) Text(meta.joinToString(" · "), style = MaterialTheme.typography.bodySmall,
-                                    color = if (!done && taskPriority(task, today) == 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    color = colors.onSurfaceVariant)
                             }
-                            IconToggleButton(task.flag("starred"), { value -> repository.edit { list, time ->
+                            val starred = task.flag("starred")
+                            IconToggleButton(starred, { value -> repository.edit { list, time ->
                                 list.map { if (it.text("id") == id) it.withFields { put("starred", value); put("updatedAt", time) } else it }
-                            } }) { Text(if (task.flag("starred")) "★" else "☆", modifier = Modifier.semantics { contentDescription = "重要任务" }) }
-                            TextButton(onClick = { editing = id }) { Text("编辑") }
+                            } }) {
+                                Icon(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, "重要任务",
+                                    tint = if (starred) colors.primary else colors.onSurfaceVariant)
+                            }
+                            IconButton(onClick = { editing = id }) { Icon(Icons.Rounded.Edit, "编辑", tint = colors.onSurfaceVariant) }
                         }
                         val steps = task.objects("steps")
                         if (steps.isNotEmpty()) {

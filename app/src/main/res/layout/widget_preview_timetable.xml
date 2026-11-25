@@ -1,7 +1,8 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
     android:layout_height="match_parent" android:gravity="center_vertical" android:orientation="vertical"
     android:background="@drawable/timetable_widget_background" android:padding="12dp">
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/widget_accent" android:textSize="12sp" android:text="正在上课" />
+    <TextView android:drawableStart="@drawable/widget_icon_timetable" android:drawablePadding="6dp"
+        android:gravity="center_vertical" android:fontFamily="sans-serif-medium" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/widget_accent" android:textSize="12sp" android:text="正在上课" />
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/widget_ink" android:textSize="18sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" android:text="高等数学" />
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/widget_accent" android:textSize="13sp" android:maxLines="1" android:ellipsize="end" android:text="08:00–08:40 · 教学楼 302" />
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" android:ellipsize="end" android:textSize="12sp" android:textColor="@color/widget_accent" android:text="下一节   大学英语 · 08:50" />

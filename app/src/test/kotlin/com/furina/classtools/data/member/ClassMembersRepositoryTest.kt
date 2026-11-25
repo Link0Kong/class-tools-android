@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.furina.classtools.data.network.ApiResult
 
 class ClassMembersRepositoryTest {
 
@@ -33,6 +34,28 @@ class ClassMembersRepositoryTest {
         currentSid = { sid },
         clock = clock,
     )
+
+    @Test
+    fun confirmedSearchSendsTheEntireLiteralOnlyWithASessionAndDoesNotCache() = runTest {
+        val dir = createTempDir()
+        val transport = FakeTransport { ApiResponse(200, "[7,2,7,0,144]") }
+        val repo = repository(transport, dir)
+        assertEquals(ApiResult.Success(emptySet<Int>()), repo.searchSeats("  "))
+        assertTrue(repository(transport, sid = "").searchSeats("测试") is ApiResult.Failure)
+        assertTrue(transport.requests.isEmpty())
+
+        val query = " 完整%_输入 "
+        assertEquals(ApiResult.Success(setOf(2, 7)), repo.searchSeats(query))
+        val request = transport.lastRequest()
+        assertTrue(request.url.endsWith("rpc/class_roster_search"))
+        assertEquals("POST", request.method.wire)
+        assertEquals("test-token", request.headers["X-Class-Token"])
+        assertEquals("""{"p_query":" 完整%_输入 "}""", request.body)
+        assertTrue(dir.listFiles().isNullOrEmpty())
+
+        transport.responder = { ApiResponse(503, "") }
+        assertTrue(repo.searchSeats(query) is ApiResult.Failure)
+    }
 
     @Test
     fun `解析名单并按座号排序、过滤坏行`() {

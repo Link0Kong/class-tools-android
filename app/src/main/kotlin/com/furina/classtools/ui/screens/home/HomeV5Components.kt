@@ -261,14 +261,15 @@ internal fun HomeInfoCard(
                 Spacer(modifier = Modifier.width(CtSpace.sm))
                 Text(
                     text = title,
-                    style = CtTypeScale.sectionTitle,
-                    color = c.textSecondary,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = c.textPrimary,
                 )
                 if (!badge.isNullOrBlank()) {
                     Spacer(modifier = Modifier.width(CtSpace.xs))
                     CtTag(text = badge, color = accent)
                 }
-                Spacer(modifier = Modifier.weight(1f))
+                if (trailing != null) Spacer(modifier = Modifier.width(CtSpace.sm))
                 if (trailing != null) trailing()
             }
             content()

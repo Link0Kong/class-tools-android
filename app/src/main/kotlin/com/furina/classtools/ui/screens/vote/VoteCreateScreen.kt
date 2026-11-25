@@ -103,6 +103,8 @@ import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.furina.classtools.data.member.RosterMemberSource
+import com.furina.classtools.ui.components.RosterPickerSheet
 
 /** 截止时间类型。 */
 private enum class DeadlineType { QUICK, AT, NONE }
@@ -222,7 +224,7 @@ fun VoteCreateScreen(
     repository: VoteRepository,
     modifier: Modifier = Modifier,
     editingPollId: String? = null,
-    memberSource: VoteMemberSource? = null,
+    memberSource: RosterMemberSource? = null,
     onBack: () -> Unit = {},
     onFinished: (pollId: String, created: Boolean) -> Unit = { _, _ -> },
     nowMillis: Long = System.currentTimeMillis(),
@@ -502,7 +504,9 @@ fun VoteCreateScreen(
         if (source == null) {
             showMemberPicker = false
         } else {
-            VoteMemberPickerSheet(
+            RosterPickerSheet(
+                title = "选择可见成员",
+                allowEmpty = false,
                 source = source,
                 initialSeats = form.audienceSeats,
                 onDismiss = { showMemberPicker = false },

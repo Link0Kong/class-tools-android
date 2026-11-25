@@ -67,6 +67,8 @@ import com.furina.classtools.ui.theme.CtSpace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.furina.classtools.data.member.MemberCategoryBuilder
+import com.furina.classtools.data.member.RosterMemberSource
 
 @Composable
 fun DrawScreen(
@@ -85,6 +87,7 @@ fun DrawScreen(
     forcedErrorMessage: String? = null,
     skipRestore: Boolean = false,
     loadMembers: (suspend () -> List<ClassMember>)? = null,
+    memberSource: RosterMemberSource? = null,
     /** 扫码核验：打开「扫一扫」（抽签存证 / 电脑扫码登录同一入口）。 */
     onScan: (() -> Unit)? = null,
 ) {
@@ -320,8 +323,9 @@ fun DrawScreen(
     }
     if (showRoster && names.isNotEmpty()) {
         RosterPickerSheet(
-            members = names.mapValues { (seat, name) -> "$seat $name" },
-            selected = rosterSeats.toSet(),
+            source = memberSource,
+            fallbackMembers = MemberCategoryBuilder.all(roster),
+            initialSeats = rosterSeats.toSet(),
             onConfirm = { seats ->
                 selectedSeats = ArrayList(seats)
                 workflow = workflow.copy(

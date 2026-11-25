@@ -28,8 +28,8 @@ import com.furina.classtools.ui.screens.vote.VoteCreateScreen
 import com.furina.classtools.ui.screens.vote.VoteDetailScreen
 import com.furina.classtools.ui.screens.vote.VoteListScreen
 import com.furina.classtools.ui.screens.vote.VoteManageContent
-import com.furina.classtools.ui.screens.vote.VoteMemberSource
 import com.furina.classtools.ui.theme.ClassToolsTheme
+import com.furina.classtools.data.member.RosterMemberSource
 
 /** 预览固定时钟：2026-11-06 10:00 +08。 */
 private const val VOTE_PREVIEW_NOW: Long = 1_793_930_400_000L
@@ -300,7 +300,7 @@ private object PreviewVoteRepository : VoteRepository {
         VoteResult.Success(PollManageResult.Updated(previewVotingDetail))
 }
 
-private object PreviewVoteMemberSource : VoteMemberSource {
+private object PreviewRosterMemberSource : RosterMemberSource {
     private val members = listOf(
         MemberEntry(seat = 1, name = "陈同学", badge = "班长"),
         MemberEntry(seat = 2, name = "李四", badge = "团支书"),
@@ -474,7 +474,7 @@ private fun VoteCreateDefaultPreview() {
         VoteCreateScreen(
             repository = PreviewVoteRepository,
             initialDraft = previewCreateDraft,
-            memberSource = PreviewVoteMemberSource,
+            memberSource = PreviewRosterMemberSource,
             skipLoad = true,
             nowMillis = VOTE_PREVIEW_NOW,
         )
@@ -488,7 +488,7 @@ private fun VoteCreateMultiPreview() {
         VoteCreateScreen(
             repository = PreviewVoteRepository,
             initialDraft = previewCreateMultiDraft,
-            memberSource = PreviewVoteMemberSource,
+            memberSource = PreviewRosterMemberSource,
             skipLoad = true,
             nowMillis = VOTE_PREVIEW_NOW,
         )
@@ -503,7 +503,7 @@ private fun VoteCreateMemberPickerPreview() {
             VoteCreateScreen(
                 repository = PreviewVoteRepository,
                 initialDraft = previewCreateMultiDraft,
-                memberSource = PreviewVoteMemberSource,
+                memberSource = PreviewRosterMemberSource,
                 initialMemberPickerOpen = true,
                 skipLoad = true,
                 nowMillis = VOTE_PREVIEW_NOW,
@@ -519,7 +519,7 @@ private fun VoteCreateDarkPreview() {
         VoteCreateScreen(
             repository = PreviewVoteRepository,
             initialDraft = previewCreateDraft,
-            memberSource = PreviewVoteMemberSource,
+            memberSource = PreviewRosterMemberSource,
             skipLoad = true,
             nowMillis = VOTE_PREVIEW_NOW,
         )
@@ -533,7 +533,7 @@ private fun VoteCreateTabletPreview() {
         VoteCreateScreen(
             repository = PreviewVoteRepository,
             initialDraft = previewCreateMultiDraft,
-            memberSource = PreviewVoteMemberSource,
+            memberSource = PreviewRosterMemberSource,
             skipLoad = true,
             nowMillis = VOTE_PREVIEW_NOW,
         )
@@ -616,7 +616,7 @@ private fun VoteCreateLargeFontPreview() {
         VoteCreateScreen(
             repository = PreviewVoteRepository,
             initialDraft = previewCreateDraft,
-            memberSource = PreviewVoteMemberSource,
+            memberSource = PreviewRosterMemberSource,
             skipLoad = true,
             nowMillis = VOTE_PREVIEW_NOW,
         )

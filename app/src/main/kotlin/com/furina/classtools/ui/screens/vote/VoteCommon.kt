@@ -22,8 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,7 +33,6 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.StopCircle
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,7 +44,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -58,8 +54,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.furina.classtools.data.member.MemberCategory
-import com.furina.classtools.data.member.MemberEntry
 import com.furina.classtools.data.vote.PollCountdown
 import com.furina.classtools.data.vote.PollSettings
 import com.furina.classtools.data.vote.VoteError
@@ -69,13 +63,11 @@ import com.furina.classtools.data.vote.VoteLogic
 import com.furina.classtools.data.vote.VoteValidationError
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
-import com.furina.classtools.ui.components.expressive.CtBottomSheetFooter
 import com.furina.classtools.ui.components.expressive.CtBottomSheetHeader
 import com.furina.classtools.ui.components.expressive.CtSegmentOption
 import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.components.tool.CtToolChip
-import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolErrorState
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
@@ -479,175 +471,6 @@ internal fun VoteExtendDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
         shape = CtShapeTokens.dialog,
     )
-}
-
-/**
- * 指定成员选择器（可见范围=custom）：
- * 班委 / 团员 / 全班 三分类 + 姓名/座号搜索（**不显示学号**），座号多选。
- */
-@Composable
-internal fun VoteMemberPickerSheet(
-    source: VoteMemberSource,
-    initialSeats: Set<Int>,
-    onDismiss: () -> Unit,
-    onConfirm: (Set<Int>) -> Unit,
-) {
-    var category by remember { mutableStateOf(MemberCategory.ALL) }
-    var selected by remember { mutableStateOf(initialSeats) }
-    var query by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
-    var failed by remember { mutableStateOf(false) }
-    var retryToken by remember { mutableStateOf(0) }
-    val cache = remember { mutableStateMapOf<MemberCategory, List<MemberEntry>>() }
-    var members by remember { mutableStateOf<List<MemberEntry>>(emptyList()) }
-
-    LaunchedEffect(source, category, retryToken) {
-        val cached = cache[category]
-        if (cached != null) {
-            members = cached
-            loading = false
-            failed = false
-            return@LaunchedEffect
-        }
-        loading = true
-        failed = false
-        runCatching { source.load(category) }
-            .onSuccess { list ->
-                cache[category] = list
-                members = list
-                loading = false
-            }
-            .onFailure {
-                failed = true
-                loading = false
-            }
-    }
-
-    val filtered = remember(members, query) {
-        val q = query.trim()
-        if (q.isEmpty()) {
-            members
-        } else {
-            members.filter { member ->
-                member.name.contains(q, ignoreCase = true) || member.seat.toString().contains(q)
-            }
-        }
-    }
-
-    CtBottomSheet(onDismissRequest = onDismiss) {
-        CtBottomSheetHeader(
-            title = "选择可见成员",
-            subtitle = "已选 ${selected.size} 人 · 仅显示姓名与座号",
-        )
-        CtToolSegmented(
-            options = MemberCategory.entries.map { it.label },
-            selectedIndex = MemberCategory.entries.indexOf(category).coerceAtLeast(0),
-            onSelect = { index ->
-                MemberCategory.entries.getOrNull(index)?.let { category = it }
-            },
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        CtToolField(
-            label = "搜索",
-            value = query,
-            onValueChange = { query = it.take(20) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 8.dp),
-            placeholder = "搜索姓名 / 座号",
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val currentSelected = filtered.count { it.seat in selected }
-            Text(
-                text = "当前 ${filtered.size} 人 · 已选 $currentSelected",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = { selected = selected + filtered.map { it.seat } }) { Text("全选") }
-            TextButton(onClick = { selected = selected - filtered.map { it.seat }.toSet() }) { Text("清空") }
-        }
-        Box(modifier = Modifier.heightIn(min = 160.dp, max = 420.dp)) {
-            when {
-                loading -> Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    Text(
-                        text = "加载名单…",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                failed -> Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text("名单加载失败", style = MaterialTheme.typography.titleSmall)
-                    TextButton(onClick = { retryToken += 1 }) { Text("重试") }
-                }
-
-                filtered.isEmpty() -> Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = if (query.isBlank()) "名单为空" else "未找到 · 换个关键词",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                else -> LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                    items(items = filtered, key = { it.seat }) { member ->
-                        val checked = member.seat in selected
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 48.dp)
-                                .clickable {
-                                    selected = if (checked) selected - member.seat else selected + member.seat
-                                }
-                                .padding(horizontal = 24.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Checkbox(checked = checked, onCheckedChange = null)
-                            Text(
-                                text = "${member.seat}  ${member.name}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (member.badge.isNotBlank()) {
-                                CtPill(text = member.badge)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        CtBottomSheetFooter(
-            primaryText = "确定（${selected.size}）",
-            onPrimary = { onConfirm(selected) },
-            primaryEnabled = selected.isNotEmpty(),
-            secondaryText = "取消",
-            onSecondary = onDismiss,
-        )
-    }
 }
 
 /** 兼容旧字段：投票规则标签（详情/列表共用）。 */

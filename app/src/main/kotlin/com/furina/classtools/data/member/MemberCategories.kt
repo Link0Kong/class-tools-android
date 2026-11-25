@@ -17,7 +17,15 @@ data class MemberEntry(
     val name: String,
     /** 展示徽章：班委取 role/badge；团员可空。 */
     val badge: String = "",
-)
+    val membershipBadge: String = "",
+) {
+    fun matches(query: String): Boolean {
+        val fields = listOf(name, badge, membershipBadge)
+        return query.trim().split(Regex("\\s+")).all { term ->
+            term.isEmpty() || term.toIntOrNull() == seat || fields.any { it.contains(term, ignoreCase = true) }
+        }
+    }
+}
 
 /** 三分类计数（UI tab 徽标）。 */
 data class MemberCategoryCounts(
@@ -51,6 +59,7 @@ object MemberCategoryBuilder {
                     seat = member.seat,
                     name = member.name.trim(),
                     badge = member.role.trim().ifBlank { member.badge.trim() }.ifBlank { "班委" },
+                    membershipBadge = member.badge,
                 )
             }
             .filter { it.seat > 0 && it.name.isNotEmpty() }
@@ -75,6 +84,7 @@ object MemberCategoryBuilder {
                     seat = member.seat,
                     name = member.name.trim(),
                     badge = member.role.trim().ifBlank { member.badge.trim() },
+                    membershipBadge = member.badge,
                 )
             }
             .distinctBy { it.seat }
@@ -106,7 +116,7 @@ object MemberCategoryBuilder {
     fun search(entries: List<MemberEntry>, query: String): List<MemberEntry> {
         val q = query.trim()
         if (q.isEmpty()) return entries
-        return entries.filter { it.name.contains(q, ignoreCase = true) }
+        return entries.filter { it.matches(q) }
     }
 
     /** 方便 UI：按分类 + 搜索过滤。 */

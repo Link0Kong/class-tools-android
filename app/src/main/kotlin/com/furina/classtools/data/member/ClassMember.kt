@@ -2,6 +2,7 @@ package com.furina.classtools.data.member
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.furina.classtools.data.network.ApiResult
 
 /**
  * 班级名单一行（`POST rpc/class_members` → `[{seat,sid,name,role,badge,is_admin}]`）。
@@ -50,6 +51,8 @@ sealed interface ClassMembersResult {
 interface ClassMembersRepository {
     /** @param force true = 跳过 TTL 强制刷新（下拉刷新/手动同步）。 */
     suspend fun load(force: Boolean = false): ClassMembersResult
+
+    suspend fun searchSeats(query: String): ApiResult<Set<Int>>
 
     /** 只读本机内存/文件缓存，不发请求。 */
     suspend fun cached(): List<ClassMember>

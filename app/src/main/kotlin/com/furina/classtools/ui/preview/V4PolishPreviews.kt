@@ -143,9 +143,9 @@ private fun RosterPreview(
             onBack = {},
             session = v4Session,
             classMembersRepository = null,
-            userDataRepository = null,
+
             initialMembers = members,
-            initialRoster = v4RosterState(),
+
             initialCategory = category,
             initialLeagueMembers = league,
             skipLeagueLoad = true,
@@ -180,9 +180,9 @@ private fun RosterLeagueEmptyPreview() {
             onBack = {},
             session = v4Session,
             classMembersRepository = null,
-            userDataRepository = null,
+
             initialMembers = v4RosterMembers(),
-            initialRoster = v4RosterState(),
+
             initialCategory = MemberCategory.LEAGUE,
             initialLeagueMembers = emptyList(),
             skipLeagueLoad = true,
