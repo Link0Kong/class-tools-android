@@ -28,7 +28,7 @@ class OppoPushManager(
     private val config: OppoPushConfig,
     private val sdk: OppoPushSdk,
     private val store: OppoPushStore,
-    private val uploaderForSession: (Session) -> OppoTokenBinding,
+    private val uploaderForSession: (Session) -> PushTokenBinding,
     private val scope: CoroutineScope,
     private val sessionProvider: suspend () -> Session?,
     private val deviceLabel: () -> String,

@@ -3,11 +3,9 @@ package com.furina.classtools.ui.screens.tasks
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
-import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -182,57 +180,4 @@ private fun MoveRow(label: String, index: Int, count: Int, onEdit: (() -> Unit)?
         TextButton(enabled = index > 0, onClick = { onMove(-1) }) { Text("上移") }
         TextButton(enabled = index + 1 < count, onClick = { onMove(1) }) { Text("下移") }
     }
-}
-
-@Composable
-internal fun TaskDetail(task: JsonObject, repository: TaskRepository, groups: List<JsonObject>, onEdit: () -> Unit,
-    onClose: () -> Unit, onSource: (JsonObject) -> Unit, onShare: () -> Unit, onMove: (Int) -> Unit) {
-    val context = LocalContext.current
-    val id = task.text("id")
-    val due = taskDueLabel(task, LocalDate.now().toString())
-    val detail = listOf(groups.find { it.text("id") == task.text("list") }?.text("name") ?: "未分组",
-        if (task.flag("done")) "已完成" else "待办", due, repeats[task.text("repeat")].orEmpty(),
-        taskTimeText(task.number("remindAt")).takeIf(String::isNotBlank)?.let { "提醒 $it" }.orEmpty(),
-        task.strings("tags").joinToString(" ") { "#$it" }, task.text("notes"))
-    AlertDialog(onDismissRequest = onClose, title = { Text(task.text("title")) }, text = {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            detail.filter(String::isNotBlank).forEach { Text(it) }
-            FilterChip(task.flag("starred"), { repository.edit { items, now -> items.map {
-                if (it.text("id") == id) it.withFields { put("starred", !it.flag("starred")); put("updatedAt", now) } else it
-            } } }, { Text("重要") })
-            task.objects("steps").forEachIndexed { index, step ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(step.flag("done"), { done -> repository.edit { items, now -> items.map { current ->
-                        if (current.text("id") != id || current.objects("steps").getOrNull(index) != step) current
-                        else current.withFields { put("updatedAt", now); put("steps", JsonArray(current.objects("steps").mapIndexed { i, s ->
-                            if (i == index) s.withFields { put("done", done) } else s
-                        })) }
-                    } } })
-                    Column { Text(step.text("text")); if (step.text("note").isNotBlank()) Text(step.text("note"), style = MaterialTheme.typography.bodySmall) }
-                }
-            }
-            task.objects("localFiles").forEach { attachment -> TextButton(onClick = {
-                runCatching { TaskFiles.open(context, attachment) }.onFailure { Toast.makeText(context, "无法打开附件", Toast.LENGTH_SHORT).show() }
-            }) { Text("附件 · " + attachment.text("n")) } }
-            if (task.text("sourceHwId").isNotBlank() || task.text("sourceNoticeId").isNotBlank())
-                TextButton(onClick = { onSource(task) }) { Text("查看来源 · " + task.text("sourceTitle")) }
-            Text("创建 " + taskTimeText(task.number("createdAt")) + "\n更新 " + taskTimeText(task.number("updatedAt")),
-                style = MaterialTheme.typography.bodySmall)
-            Row(Modifier.horizontalScroll(rememberScrollState())) {
-                TextButton(onClick = onShare) { Text("分享") }
-                TextButton(onClick = {
-                    val group = groups.find { it.text("id") == task.text("list") }?.text("name").orEmpty()
-                    val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, TaskShareLink.create(task, group))
-                    context.startActivity(Intent.createChooser(intent, "分享可保存的任务链接"))
-                }) { Text("分享可保存链接") }
-                if (!task.flag("done")) {
-                    TextButton(onClick = { onMove(-1) }) { Text("上移") }
-                    TextButton(onClick = { onMove(1) }) { Text("下移") }
-                }
-                TextButton(onClick = { repository.edit { items, now -> changeCompletion(items, id, !task.flag("done"), now) } }) {
-                    Text(if (task.flag("done")) "标记未完成" else "标记完成")
-                }
-            }
-        }
-    }, confirmButton = { TextButton(onClick = onEdit) { Text("编辑") } }, dismissButton = { TextButton(onClick = onClose) { Text("关闭") } })
 }

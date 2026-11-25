@@ -2,9 +2,16 @@ package com.furina.classtools.data.push
 
 import android.content.Context
 
-/** vivo 推送本机状态存储（regId + 最后状态；不含学号/姓名/token）。 */
+/** A possible server binding, recorded before upload so an interrupted request can be cleaned up. */
+data class VivoBinding(val sid: String, val regId: String, val legacyOwnerUnknown: Boolean = false)
+
+/** Private device state. Former class login credentials are never stored here. */
 interface VivoPushStore {
     fun registrationId(): String?
+    fun binding(): VivoBinding?
+    fun rememberBinding(binding: VivoBinding?): Boolean
+    fun revokedId(): String?
+    fun markRevoked(regId: String): Boolean
 
     fun save(status: VivoPushStatus)
 }
@@ -17,6 +24,28 @@ class PrefsVivoPushStore(context: Context) : VivoPushStore {
 
     override fun registrationId(): String? =
         prefs.getString(KEY_REGISTRATION_ID, null)?.trim()?.takeIf { it.isNotEmpty() }
+
+    override fun binding(): VivoBinding? {
+        val sid = prefs.getString("binding_sid", null) ?: return null
+        val regId = prefs.getString("binding_reg_id", null) ?: return null
+        return VivoBinding(sid, regId, prefs.getBoolean("legacy_owner_unknown", false))
+    }
+
+    override fun rememberBinding(binding: VivoBinding?): Boolean = prefs.edit()
+        .putString("binding_sid", binding?.sid)
+        .putString("binding_reg_id", binding?.regId)
+        .putBoolean("legacy_owner_unknown", binding?.legacyOwnerUnknown == true)
+        .commit()
+
+    override fun revokedId(): String? = prefs.getString("revoked_reg_id", null)
+
+    override fun markRevoked(regId: String): Boolean = prefs.edit()
+        .putString("revoked_reg_id", regId)
+        .remove("binding_sid")
+        .remove("binding_reg_id")
+        .remove("legacy_owner_unknown")
+        .remove(KEY_REGISTRATION_ID)
+        .commit()
 
     override fun save(status: VivoPushStatus) {
         val editor = prefs.edit()

@@ -97,6 +97,8 @@ fun TaskScreen(
     onSource: (JsonObject) -> Unit = { onHomework() },
     onShare: (com.furina.classtools.features.export.ExportCardSpec) -> Unit = {},
     onReminderSettings: () -> Unit = {},
+    openTaskId: String? = null,
+    onTaskOpened: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val snapshot by repository.snapshot.collectAsState()
@@ -149,6 +151,12 @@ fun TaskScreen(
     var addGroup by rememberSaveable { mutableStateOf(false) }
     var groupName by rememberSaveable { mutableStateOf("") }
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(openTaskId, all) {
+        if (openTaskId != null && all.any { it.text("id") == openTaskId }) {
+            detail = openTaskId
+            onTaskOpened()
+        }
+    }
     val today = LocalDate.now().toString()
     fun draft(title: String, now: Long, list: List<JsonObject>): JsonObject {
         val date = quickDue.ifEmpty { if (view == "planned") today else "" }
@@ -362,9 +370,9 @@ fun TaskScreen(
         newDraft = shared.draft(System.currentTimeMillis(), firstOrder(all)).toString()
     }
     if (manage) TaskManagement(repository, snapshot, viewOrder) { manage = false }
-    all.find { it.text("id") == detail }?.let { task ->
-        TaskDetail(task, repository, groups, { editing = detail; detail = null }, { detail = null },
-            { detail = null; onSource(it) }, { onShare(taskShareCard(listOf(task), true)) }) { direction ->
+    all.find { it.text("id") == detail && editing == null }?.let { task ->
+        TaskDetail(task, repository, groups, { editing = detail }, { detail = null },
+            onSource, { onShare(taskShareCard(listOf(task), true)) }) { direction ->
             repository.edit { list, now ->
                 val ordered = list.filterNot { it.flag("done") }.sortedBy { it.text("order").toDoubleOrNull() ?: 0.0 }.toMutableList()
                 val i = ordered.indexOfFirst { it.text("id") == detail }
@@ -387,6 +395,7 @@ fun TaskScreen(
         TaskEditor(selected, groups, isNew = newDraft != null, sharedContext = sharedContext,
             onClose = { editing = null; newDraft = null; sharedContext = null }, onDelete = {
             repository.edit { list, _ -> list.filterNot { it.text("id") == selected.text("id") } }
+            if (detail == editing) detail = null
             editing = null
         }, onSave = { patch ->
             repository.edit { list, now ->

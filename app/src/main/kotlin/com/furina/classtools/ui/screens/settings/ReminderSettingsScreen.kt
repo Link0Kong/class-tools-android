@@ -87,6 +87,8 @@ fun ReminderSettingsScreen(
     modifier: Modifier = Modifier,
     onOpenPermissions: () -> Unit = {},
     onSettingsChanged: (ReminderSettings) -> Unit = {},
+    vivoStatus: PushProviderStatus? = null,
+    onRetryVivoPush: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -120,7 +122,7 @@ fun ReminderSettingsScreen(
             CtLightTopBar(
                 scrollPx = ctTopBarScroll.value.toFloat(),
                 title = "通知",
-                subtitle = "本机通知 · 不联网",
+                subtitle = "本机提醒与厂商推送",
                 onBack = onBack,
             )
 
@@ -148,10 +150,9 @@ fun ReminderSettingsScreen(
                 )
 
                 // 系统推送状态（应用关闭后能否收到）：OPPO / vivo 厂商通道的真实注册状态 + 错误码。
-                // 之前「收不到推送」时无法自查，这里把状态直接展示出来；只读本机状态、不上传 token。
                 NotifySection("系统推送（应用关闭后）")
                 NotifyGroup {
-                    PushStatusRow(snapshot = PushStatusDiag.snapshot(context))
+                    PushStatusRow(snapshot = PushStatusDiag.snapshot(context), vivoStatus = vivoStatus, onRetry = onRetryVivoPush)
                 }
 
                 NotifySection("作业提醒")
@@ -625,11 +626,11 @@ private fun LeadChips(
 /**
  * 系统推送状态行（OPPO / vivo 厂商通道）：
  * - 显示上次注册状态与错误码（如「注册失败（错误码 33）」），用于排查应用关闭后收不到推送；
- * - 只读本机 SharedPreferences，不含 token/学号；点「刷新状态」重新读取；
+ * - vivo 状态随云端绑定结果更新；点「刷新状态」主动重试。
  * - 非 ColorOS / vivo 设备显示「本机不支持」，这类机型应用被杀后收不到系统推送，只能靠本机提醒。
  */
 @Composable
-private fun PushStatusRow(snapshot: PushStatusSnapshot) {
+private fun PushStatusRow(snapshot: PushStatusSnapshot, vivoStatus: PushProviderStatus?, onRetry: () -> Unit) {
     val pushContext = androidx.compose.ui.platform.LocalContext.current
     var current by remember(snapshot) { mutableStateOf(snapshot) }
     Column(modifier = Modifier.padding(16.dp)) {
@@ -641,7 +642,7 @@ private fun PushStatusRow(snapshot: PushStatusSnapshot) {
         Spacer(Modifier.height(8.dp))
         PushStatusLine("OPPO 推送", current.oppo)
         Spacer(Modifier.height(4.dp))
-        PushStatusLine("vivo 推送", current.vivo)
+        PushStatusLine("vivo 推送", vivoStatus ?: current.vivo)
         Spacer(Modifier.height(8.dp))
         Text(
             "仅 ColorOS / vivo 设备支持应用关闭后接收；其他机型只有本机提醒（被系统清理后可能收不到）。" +
@@ -650,7 +651,7 @@ private fun PushStatusRow(snapshot: PushStatusSnapshot) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         TextButton(
-            onClick = { current = PushStatusDiag.snapshot(pushContext) },
+            onClick = { onRetry(); current = PushStatusDiag.snapshot(pushContext) },
             modifier = Modifier.heightIn(min = 48.dp),
         ) { Text("刷新状态") }
     }
@@ -658,7 +659,7 @@ private fun PushStatusRow(snapshot: PushStatusSnapshot) {
 
 @Composable
 private fun PushStatusLine(name: String, status: PushProviderStatus) {
-    val bad = status.state == "FAILED" || status.state == "UNSUPPORTED"
+    val bad = status.state == "FAILED" || status.state == "BIND_FAILED" || status.state == "UNSUPPORTED"
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             name,

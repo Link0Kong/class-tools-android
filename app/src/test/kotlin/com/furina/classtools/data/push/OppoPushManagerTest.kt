@@ -58,7 +58,7 @@ class OppoPushManagerTest {
         }
     }
 
-    private class FakeUploader : OppoTokenBinding {
+    private class FakeUploader : PushTokenBinding {
         val payloads: MutableList<PushTokenPayload> = mutableListOf()
         val releases = mutableListOf<Pair<String, String>>()
         var result: PushUploadResult = PushUploadResult.Uploaded
@@ -80,7 +80,7 @@ class OppoPushManagerTest {
         config: OppoPushConfig,
         sdk: OppoPushSdk,
         store: OppoPushStore,
-        uploader: OppoTokenBinding,
+        uploader: PushTokenBinding,
         scope: CoroutineScope,
         sessionProvider: () -> Session? = { session },
         debug: Boolean = false,
@@ -306,7 +306,7 @@ class OppoPushManagerTest {
         val resume = kotlinx.coroutines.CompletableDeferred<Unit>()
         var persisted: Session? = session
         val manager = OppoPushManager(configured, sdk, store, { owner ->
-            object : OppoTokenBinding {
+            object : PushTokenBinding {
                 override suspend fun upload(payload: PushTokenPayload): PushUploadResult {
                     if (owner.sid == session.sid) {
                         entered.complete(Unit)

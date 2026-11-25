@@ -88,4 +88,14 @@ class PushTokenUploaderTest {
         assertEquals("owner-token", removed.headers["X-Class-Token"])
         assertEquals(0, invalidations)
     }
+    @Test
+    fun `vivo release filters by provider owner and exact device`() = runTest {
+        val transport = FakeTransport { ApiResponse(204, "") }
+        val uploader = ApiPushTokenUploader(testApiClient(transport, token = "old-owner"), PushTokenPayload.PROVIDER_VIVO)
+        assertEquals(PushUploadResult.Uploaded, uploader.releaseOwn("9999", "id+&"))
+        val request = transport.lastRequest()
+        assertEquals(HttpMethod.DELETE, request.method)
+        assertTrue(request.url.endsWith("provider=eq.vivo&sid=eq.9999&token=eq.id%2B%26"))
+        assertEquals("old-owner", request.headers["X-Class-Token"])
+    }
 }

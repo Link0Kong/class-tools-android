@@ -31,16 +31,27 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.furina.classtools.data.homework.HomeworkAttachments
+import com.furina.classtools.data.homework.HomeworkAttachmentKind
+import com.furina.classtools.data.homework.briefTitle
+import com.furina.classtools.ui.screens.notices.AttachmentOpenRow
+import com.furina.classtools.ui.screens.tasks.TaskDetailPage
+import com.furina.classtools.ui.screens.tasks.DetailFact
+import com.furina.classtools.ui.screens.tasks.DetailSection
+import com.furina.classtools.ui.screens.tasks.taskTimeText
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Assignment
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Refresh
-import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -149,6 +160,8 @@ fun HomeworkScreen(
     initialFilter: HomeworkFilter = HomeworkFilter.ALL,
     onAddTask: ((HomeworkRow) -> Unit)? = null,
     initialDetailId: String? = null,
+    importedHomework: Set<String> = emptySet(),
+    reminderTimes: Map<String, List<Long>> = emptyMap(),
 ) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -166,7 +179,7 @@ fun HomeworkScreen(
     var fromCache by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     var reloadToken by remember { mutableIntStateOf(0) }
-    var detail by remember { mutableStateOf<HomeworkItem?>(null) }
+    var detailId by rememberSaveable(initialDetailId) { mutableStateOf(initialDetailId) }
 
     fun notify(message: String) {
         scope.launch { snackbar.showSnackbar(message) }
@@ -255,17 +268,18 @@ fun HomeworkScreen(
         }
     }
 
-    val nowMillis = remember(reloadToken) { System.currentTimeMillis() }
-    val allItems = remember(rows, marks, nowMillis) {
-        HomeworkDueCalculator.pruneExpired(
-            rows.map { row -> HomeworkDueCalculator.toItem(row, marks.isDone(MarkKind.HW, row.id), nowMillis) },
-        )
+    val nowMillis by produceState(System.currentTimeMillis(), reloadToken) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(60_000L)
+        }
     }
-    var pendingDetail by rememberSaveable(initialDetailId) { mutableStateOf(initialDetailId) }
-    LaunchedEffect(pendingDetail, allItems) {
-        val id = pendingDetail ?: return@LaunchedEffect
-        allItems.find { it.id == id }?.let { detail = it; pendingDetail = null }
+    val attachments = remember(rows) { rows.associate { it.id to HomeworkAttachments.parse(it.attachments) } }
+    val itemsById = remember(rows, marks, nowMillis) {
+        rows.associate { row -> row.id to HomeworkItem(row, marks.isDone(MarkKind.HW, row.id),
+            HomeworkDueCalculator.evaluate(row, nowMillis), attachments[row.id].orEmpty()) }
     }
+    val allItems = remember(itemsById) { HomeworkDueCalculator.pruneExpired(itemsById.values.toList()) }
     val unfinishedCount = allItems.count { !it.done }
     val doneCount = allItems.count { it.done }
     val filterPages = remember(allItems) {
@@ -345,7 +359,7 @@ fun HomeworkScreen(
                                     allEmpty = allItems.isEmpty(),
                                     nowMillis = nowMillis,
                                     onToggle = { item -> toggleDone(item) },
-                                    onOpen = { item -> detail = item },
+                                    onOpen = { item -> detailId = item.id },
                                     onRemind = onRemindHomework?.let { cb -> { item -> cb(item.row) } },
                                     onRefresh = { refresh() },
                                     onScrollPx = { px -> ctTopBarScrollPx = px },
@@ -402,14 +416,22 @@ fun HomeworkScreen(
         }
     }
 
-    detail?.let { selected -> allItems.find { it.id == selected.id } }?.let { item ->
-        HomeworkDetailDialog(
-            item = item,
-            onRemind = onRemindHomework?.let { cb -> { cb(item.row) } },
-            onToggle = { toggleDone(item) },
-            onAddTask = onAddTask?.let { add -> { add(item.row); detail = null } },
-            onDismiss = { detail = null },
+    val selected = detailId?.let(itemsById::get)
+    if (selected != null) {
+        HomeworkDetailPage(
+            item = selected,
+            onRemind = onRemindHomework?.takeIf { selected.due?.expired == false && !selected.done }?.let { cb -> { cb(selected.row) } },
+            reminderTimes = reminderTimes[selected.id].orEmpty().filter { it > nowMillis },
+            imported = selected.id in importedHomework,
+            onToggle = { toggleDone(selected) },
+            onAddTask = onAddTask?.let { add -> { add(selected.row) } },
+            onDismiss = { if (initialDetailId == selected.id) onBack() else detailId = null },
         )
+    } else if (detailId != null && phase == Phase.READY && !fromCache && errorMessage == null) {
+        LaunchedEffect(detailId) {
+            detailId = null
+            snackbar.showSnackbar("找不到这项班级作业，可能已归档")
+        }
     }
 }
 
@@ -668,109 +690,64 @@ private fun HomeworkErrorContent(message: String, onRetry: () -> Unit, modifier:
 }
 
 @Composable
-private fun HomeworkDetailDialog(
+private fun HomeworkDetailPage(
     item: HomeworkItem,
     onToggle: () -> Unit,
     onDismiss: () -> Unit,
-    onRemind: (() -> Unit)? = null,
-    onAddTask: (() -> Unit)? = null,
+    onRemind: (() -> Unit)?,
+    reminderTimes: List<Long>,
+    imported: Boolean,
+    onAddTask: (() -> Unit)?,
 ) {
-    CtLightAlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = item.title.ifBlank { "作业" },
-                style = MaterialTheme.typography.titleLarge,
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CtPill(text = if (item.done) "已完成" else "未完成")
-                    if (item.due != null) {
-                        Spacer(Modifier.width(8.dp))
-                        DuePill(text = item.due.label, tone = item.due.tone)
-                    }
+    val row = item.row
+    val firstLine = row.briefTitle()
+    val title = if (firstLine.length <= 70) firstLine else row.subject.trim().ifBlank { "班级作业" }
+    val fullText = row.content.trim()
+    val body = if (fullText.lineSequence().firstOrNull()?.trim() == title) {
+        fullText.lineSequence().drop(1).joinToString("\n").trim()
+    } else fullText
+    val exactDue = item.due?.atMillis?.let(::taskTimeText)
+    TaskDetailPage("班级作业详情", onDismiss, bottom = {
+        if (onAddTask != null) OutlinedButton(onClick = onAddTask, modifier = Modifier.weight(1f)) {
+            Text(if (imported) "查看个人任务" else "加入个人任务")
+        }
+        Button(onClick = onToggle, modifier = Modifier.weight(1f)) { Text(if (item.done) "标记未完成" else "标记完成") }
+    }) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                CtPill(text = if (item.done) "已完成" else "待完成")
+                if (!item.done && item.due != null) DuePill(item.due.label, item.due.tone)
+            }
+            Text(title, style = MaterialTheme.typography.headlineSmall)
+        }
+        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (row.subject.isNotBlank() && row.subject.trim() != title) DetailFact("科目", row.subject)
+                DetailFact("截止时间", exactDue ?: row.due.ifBlank { "未设置" })
+                if (exactDue != null && row.due.isNotBlank() && row.due.trim() !in listOf(exactDue, row.date, HomeworkDueCalculator.dueText(row))) {
+                    DetailFact("截止说明", row.due)
                 }
-                Text(
-                    text = item.row.content.ifBlank { "（无内容）" },
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                HorizontalDivider()
-                DetailRow("截止", HomeworkDueCalculator.dueText(item.row))
-                if (onAddTask != null) TextButton(onClick = onAddTask) { Text("加入我的任务") }
-                if (item.row.author.isNotBlank()) DetailRow("发布者", item.row.author)
-                if (item.row.ts > 0) DetailRow("发布时间", HomeworkDueCalculator.tsText(item.row.ts))
-                if (item.attachments.isNotEmpty()) {
-                    DetailRow("附件", "${item.attachments.size} 个")
-                    item.attachments.forEach { attachment ->
-                        AttachmentRow(attachment)
-                    }
+                if (reminderTimes.isNotEmpty()) DetailFact("单项提醒", reminderTimes.distinct().sorted().joinToString("\n", transform = ::taskTimeText))
+                if (onRemind != null) TextButton(onClick = onRemind) { Text(if (reminderTimes.isEmpty()) "设置提醒" else "添加提醒时间") }
+            }
+        }
+        if (body.isNotBlank()) DetailSection("作业要求") { Text(body) }
+        if (item.attachments.isNotEmpty()) DetailSection("附件 · ${item.attachments.size}") {
+            item.attachments.forEach { attachment ->
+                androidx.compose.runtime.key(item.id, attachment.index) {
+                    if (attachment.kind == HomeworkAttachmentKind.NONE) DetailFact(attachment.name, "无可用文件")
+                    else AttachmentOpenRow(
+                        title = attachment.name, detail = attachment.sizeText.takeUnless { it == "—" }.orEmpty(),
+                        source = "", fileName = attachment.name,
+                        resolve = { withContext(Dispatchers.Default) { HomeworkAttachments.dataOf(row.attachments, attachment.index) } },
+                    )
                 }
             }
-        },
-        confirmButton = {
-            Row {
-                if (onRemind != null) {
-                    TextButton(onClick = onRemind) { Text("提醒我") }
-                }
-                TextButton(onClick = onToggle) {
-                    Text(if (item.done) "取消完成" else "标记完成")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        },
-    )
-}
-
-@Composable
-private fun DetailRow(label: String, value: String) {
-    Row {
-        Text(
-            text = "$label ",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-@Composable
-private fun AttachmentRow(attachment: HomeworkAttachmentMeta) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Rounded.AttachFile,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = attachment.name,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = attachment.sizeText,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        }
+        if (row.author.isNotBlank() || row.ts > 0) DetailSection("发布信息") {
+            if (row.author.isNotBlank()) DetailFact("发布者", row.author)
+            if (row.ts > 0) DetailFact("发布时间", taskTimeText(row.ts))
+        }
     }
 }
 

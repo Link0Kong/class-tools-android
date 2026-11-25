@@ -38,6 +38,13 @@ import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import com.furina.classtools.data.tasks.importedHomeworkIds
+import com.furina.classtools.data.tasks.objects
+import com.furina.classtools.data.tasks.text
+import com.furina.classtools.data.reminder.OneShotTargetKind
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -673,12 +680,16 @@ fun MainNavHost(
                     var detailHomeworkId by androidx.compose.runtime.saveable.rememberSaveable(session.sid) {
                         mutableStateOf<String?>(null)
                     }
-                    if (!showHomework) {
+                    var openTaskId by androidx.compose.runtime.saveable.rememberSaveable(session.sid) { mutableStateOf<String?>(null) }
+                    var reminderRevision by remember(session.sid) { mutableIntStateOf(0) }
+                    val taskState = rememberSaveableStateHolder()
+                    if (!showHomework) taskState.SaveableStateProvider(session.sid) {
                         var revision by remember(session.sid) { mutableIntStateOf(0) }
                         val brief = com.furina.classtools.ui.screens.tasks.rememberHomeworkBrief(
                             container.homeworkRepository, container.marksRepository, tasks, session.sid, revision,
                         )
-                        TaskScreen(tasks, onBack = { popTool(toolId) }, onHomework = { showHomework = true },
+                        TaskScreen(tasks, openTaskId = openTaskId, onTaskOpened = { openTaskId = null },
+                            onBack = { popTool(toolId) }, onHomework = { showHomework = true },
                             onSource = { task ->
                                 val notice = (task["sourceNoticeId"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
                                 if (notice.isNotEmpty()) {
@@ -702,17 +713,34 @@ fun MainNavHost(
                                         toast(context, if (count > 0) "已加入 $count 项任务" else "作业已在个人任务中")
                                     })
                             }))
-                    } else HomeworkScreen(
-                        initialDetailId = detailHomeworkId,
-                        onBack = { detailHomeworkId = null; showHomework = false },
-                        onAddTask = { row ->
-                            toast(context, if (tasks.importHomework(row)) "已加入我的任务" else "这项作业已在任务中")
-                        },
-                        session = session,
-                        marksRepository = container.marksRepository,
-                        homeworkRepository = container.homeworkRepository,
-                        onRemindHomework = { row -> remindTarget = row },
-                    )
+                    } else {
+                        val taskSnapshot by tasks.snapshot.collectAsState()
+                        val reminderTimes by produceState(emptyMap<String, List<Long>>(), oneShotScheduler, reminderRevision) {
+                            val pending = oneShotScheduler?.listPending().orEmpty()
+                            value = pending.filter { it.key.targetKind == OneShotTargetKind.HOMEWORK }
+                                .groupBy({ it.key.targetId }, { it.fireAtMillis })
+                        }
+                        HomeworkScreen(
+                            initialDetailId = detailHomeworkId,
+                            onBack = { detailHomeworkId = null; showHomework = false },
+                            importedHomework = taskSnapshot.importedHomeworkIds(),
+                            reminderTimes = reminderTimes,
+                            onAddTask = { row ->
+                                val added = tasks.importHomework(row)
+                                val target = tasks.snapshot.value.objects("items").find { it.text("sourceHwId") == row.id }
+                                if (target != null) {
+                                    openTaskId = target.text("id")
+                                    detailHomeworkId = null
+                                    showHomework = false
+                                    if (added) toast(context, "已加入个人任务")
+                                }
+                            },
+                            session = session,
+                            marksRepository = container.marksRepository,
+                            homeworkRepository = container.homeworkRepository,
+                            onRemindHomework = { row -> remindTarget = row },
+                        )
+                    }
                     BackHandler(enabled = showHomework && remindTarget == null) { detailHomeworkId = null; showHomework = false }
                     remindTarget?.let { row ->
                         HomeworkReminderDialog(
@@ -736,10 +764,10 @@ fun MainNavHost(
                                                 targetAtMillis = planned.targetAtMillis,
                                             )
                                         ) {
-                                            is OneShotScheduleResult.Scheduled -> toast(
-                                                context,
-                                                "已设置提醒：" + formatReminderTime(result.fireAtMillis),
-                                            )
+                                            is OneShotScheduleResult.Scheduled -> {
+                                                reminderRevision++
+                                                toast(context, "已设置提醒：" + formatReminderTime(result.fireAtMillis))
+                                            }
                                             OneShotScheduleResult.PermissionMissing -> {
                                                 toast(context, "开启通知权限后，即可设置这项作业提醒")
                                                 navController.navigate(Routes.PERMISSIONS)
@@ -1036,7 +1064,13 @@ fun MainNavHost(
             val permissionController = remember {
                 com.furina.classtools.data.permission.AndroidPermissionController(context)
             }
+            val vivoStatus by container.vivoPushManager.status.collectAsStateWithLifecycle()
             ReminderSettingsScreen(
+                vivoStatus = com.furina.classtools.data.push.PushProviderStatus(
+                    provider = "vivo", state = vivoStatus.state.name, errorCode = vivoStatus.errorCode,
+                    registrationTail = vivoStatus.registrationId.takeLast(4),
+                ),
+                onRetryVivoPush = container.vivoPushManager::retry,
                 onBack = { navController.popBackStack() },
                 settingsStore = container.reminderSettingsStore,
                 permissionController = permissionController,

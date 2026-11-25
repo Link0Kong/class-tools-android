@@ -663,7 +663,7 @@ fun NoticeFileAttachmentRow(
  * @param source http(s) 签名 URL（外置）或 data URI（旧数据）
  */
 @Composable
-private fun AttachmentOpenRow(
+internal fun AttachmentOpenRow(
     title: String,
     detail: String,
     source: String,

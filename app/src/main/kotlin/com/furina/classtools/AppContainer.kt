@@ -70,6 +70,7 @@ import com.furina.classtools.data.push.OppoPushConfig
 import com.furina.classtools.data.push.OppoPushManager
 import com.furina.classtools.data.push.PrefsOppoPushStore
 import com.furina.classtools.data.push.PrefsVivoPushStore
+import com.furina.classtools.data.push.PushTokenPayload
 import com.furina.classtools.data.push.VivoPushConfig
 import com.furina.classtools.data.push.VivoPushManager
 import com.furina.classtools.data.push.VivoPushSdkImpl
@@ -178,7 +179,7 @@ class AppContainer(context: Context) {
         if (!session.debug) ReminderRuntime.runNow(appContext)
     }
 
-    internal fun updateActiveSession(session: Session?) {
+    internal fun updateActiveSession(session: Session?): kotlinx.coroutines.Job? {
         val previous = activeSession
         val previousSid = previous?.sid
         activeSession = session
@@ -193,19 +194,18 @@ class AppContainer(context: Context) {
         }
         // OPPO PUSH：登录 / 切换账号 / token 恢复后，用缓存 RegistrationID 重新上传到当前账号
         // （未登录时 manager 内部跳过，等下次 onSessionChanged；重复上传由幂等门跳过）。
-        if (previousSid != session?.sid || previous?.token != session?.token || previous?.debug != session?.debug) {
+        val credentialsChanged = previousSid != session?.sid || previous?.token != session?.token || previous?.debug != session?.debug
+        if (credentialsChanged) {
             runCatching { oppoPushManager.onSessionChanged() }
         }
         if (previousSid != session?.sid) {
-            if (session != null && !session.debug) {
-                runCatching { vivoPushManager.onSessionChanged() }
-            }
             // 云空间会话绑定班级身份；切号/退出时丢弃内存会话与游标，避免串号。
             if (cloudSpace.isInitialized()) cloudSpaceRepository.reset()
             // 账号绑定列表按学号区分：切号/退出时丢弃内存列表，避免显示上一个账号的绑定。
             if (oppoAccount.isInitialized()) oppoAccountManager.clearBindings()
             if (honorAccount.isInitialized()) honorAccountManager.clearBindings()
         }
+        return if (credentialsChanged || session == null) vivoPushManager.onSessionChanged(previous) else null
     }
 
     val apiClient: ApiClient = ApiClient(
@@ -215,7 +215,7 @@ class AppContainer(context: Context) {
         onTokenInvalid = {
             android.util.Log.w("ClassTools", "onTokenInvalid -> clear session")
             // 统一 401：清会话（不打印 token / 学号），UI 会随 SessionState 回到身份页。
-            activeSession = null
+            updateActiveSession(null)
             appScope.launch { sessionStore.clear() }
         },
     )
@@ -583,7 +583,10 @@ class AppContainer(context: Context) {
             ),
             sdk = VivoPushSdkImpl(),
             store = PrefsVivoPushStore(appContext),
-            uploader = ApiPushTokenUploader(apiClient),
+            uploaderForSession = { owner ->
+                val client = ApiClient(BuildConfig.REST_BASE_URL, BuildConfig.PUBLISHABLE_KEY, tokenProvider = { owner.token })
+                ApiPushTokenUploader(client, PushTokenPayload.PROVIDER_VIVO)
+            },
             scope = appScope,
             sessionProvider = { activeSession },
             deviceLabel = { deviceLabel() },
@@ -720,9 +723,10 @@ class AppContainer(context: Context) {
     /** 退出登录：清内存会话、名单缓存（本机业务数据按账号隔离，下次登录同账号仍可用）。 */
     suspend fun signOut() {
         synchronized(this) { backgroundNotices = null }
+        val unbind = updateActiveSession(null)
         sessionStore.clear()
-        updateActiveSession(null)
         classMembersRepository.clear()
+        unbind?.join()
     }
 
     /** 云同步开关（设置页）。 */
@@ -737,6 +741,7 @@ class AppContainer(context: Context) {
 
     /** 刷新主数据（回前台 / 进入主页调用）。失败静默，由页面展示缓存。 */
     suspend fun refreshCoreData(): Unit = coroutineScope {
+        vivoPushManager.retryIfPending()
         launch { classMembersRepository.load(force = false) }
         launch { marksRepository.refresh(force = false) }
         launch { userDataRepository.pull(force = false) }

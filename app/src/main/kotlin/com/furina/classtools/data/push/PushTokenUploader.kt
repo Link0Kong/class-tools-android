@@ -70,7 +70,7 @@ sealed interface PushUploadResult {
     /** 未登录 / 无 RegistrationID / 重复上传被幂等门跳过。 */
     data object Skipped : PushUploadResult
 
-    data class Failed(val message: String) : PushUploadResult
+    data class Failed(val message: String, val httpStatus: Int? = null) : PushUploadResult
 }
 
 /** token 上传器接口（单测注入假实现；真实实现走 [ApiClient]）。 */
@@ -78,17 +78,20 @@ interface PushTokenUploader {
     suspend fun upload(payload: PushTokenPayload): PushUploadResult
 }
 
-interface OppoTokenBinding : PushTokenUploader {
+interface PushTokenBinding : PushTokenUploader {
     suspend fun releaseOwn(sid: String, registrationId: String): PushUploadResult
 }
 
 /** ApiClient 实现：写请求不重试（ApiClient 语义），失败错误就地转文案。 */
-class ApiPushTokenUploader(private val api: ApiClient) : OppoTokenBinding {
+class ApiPushTokenUploader(
+    private val api: ApiClient,
+    private val provider: String = PushTokenPayload.PROVIDER_OPPO,
+) : PushTokenBinding {
 
     override suspend fun releaseOwn(sid: String, registrationId: String): PushUploadResult {
         if (sid.isBlank() || registrationId.isBlank()) return PushUploadResult.Skipped
         fun encoded(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
-        val path = "push_tokens?provider=eq.oppo&sid=eq.${encoded(sid)}&token=eq.${encoded(registrationId)}"
+        val path = "push_tokens?provider=eq.${encoded(provider)}&sid=eq.${encoded(sid)}&token=eq.${encoded(registrationId)}"
         return when (val result = api.delete(path)) {
             is ApiResult.Success -> PushUploadResult.Uploaded
             is ApiResult.Failure -> PushUploadResult.Failed(result.error.displayMessage)
@@ -96,7 +99,7 @@ class ApiPushTokenUploader(private val api: ApiClient) : OppoTokenBinding {
     }
 
     override suspend fun upload(payload: PushTokenPayload): PushUploadResult {
-        if (!payload.isValid) return PushUploadResult.Skipped
+        if (!payload.isValid || payload.provider != provider) return PushUploadResult.Skipped
         return when (
             val result = api.post(
                 path = PushTokenPayload.PATH,
@@ -109,6 +112,7 @@ class ApiPushTokenUploader(private val api: ApiClient) : OppoTokenBinding {
             is ApiResult.Success -> PushUploadResult.Uploaded
             is ApiResult.Failure -> PushUploadResult.Failed(
                 result.error.displayMessage.ifBlank { "上传失败" },
+                (result.error as? com.furina.classtools.data.network.ApiError.TokenInvalid)?.status,
             )
         }
     }

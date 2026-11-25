@@ -21,6 +21,9 @@ class VivoPushTest {
         var regId: String? = "vivo-reg-id-123456",
         var regFail: Int? = null,
     ) : VivoPushSdk {
+        var revoked = 0
+        var revokeCode = 0
+        var nextId = "replacement-reg"
         var initialized = 0
         var turnOn = 0
         var requests = 0
@@ -33,6 +36,12 @@ class VivoPushTest {
         override fun turnOnPush(context: Context, onState: (Int) -> Unit) {
             turnOn += 1
             onState(turnOnState)
+        }
+
+        override fun deleteRegId(context: Context, onState: (Int) -> Unit) {
+            revoked++
+            if (revokeCode == 0) regId = nextId
+            onState(revokeCode)
         }
 
         override fun requestRegId(
@@ -51,6 +60,12 @@ class VivoPushTest {
 
     private class FakeStore(var id: String? = null) : VivoPushStore {
         var saved: VivoPushStatus? = null
+        var owner: VivoBinding? = null
+        var retired: String? = null
+        override fun binding() = owner
+        override fun rememberBinding(binding: VivoBinding?): Boolean { owner = binding; return true }
+        override fun revokedId() = retired
+        override fun markRevoked(regId: String): Boolean { retired = regId; owner = null; id = null; return true }
         override fun registrationId(): String? = id
         override fun save(status: VivoPushStatus) {
             saved = status
@@ -58,7 +73,13 @@ class VivoPushTest {
         }
     }
 
-    private class FakeUploader : PushTokenUploader {
+    private class FakeUploader : PushTokenBinding {
+        val releases = mutableListOf<Pair<String, String>>()
+        var releaseResult: PushUploadResult = PushUploadResult.Uploaded
+        override suspend fun releaseOwn(sid: String, registrationId: String): PushUploadResult {
+            releases += sid to registrationId
+            return releaseResult
+        }
         val payloads = mutableListOf<PushTokenPayload>()
         var result: PushUploadResult = PushUploadResult.Uploaded
         override suspend fun upload(payload: PushTokenPayload): PushUploadResult {
@@ -73,14 +94,16 @@ class VivoPushTest {
         store: FakeStore = FakeStore(),
         uploader: FakeUploader = FakeUploader(),
         session: Session? = Session(sid = "3260799999", name = "测试账号", token = "t"),
+        active: () -> Session? = { session },
+        bindingFor: (Session) -> PushTokenBinding = { uploader },
     ): VivoPushManager = VivoPushManager(
         context = context,
         config = config,
         sdk = sdk,
         store = store,
-        uploader = uploader,
+        uploaderForSession = bindingFor,
         scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
-        sessionProvider = { session },
+        sessionProvider = active,
         deviceLabel = { "vivo V2309A" },
         appVersion = "1.0.0-beta16",
     )
@@ -116,7 +139,7 @@ class VivoPushTest {
         // 回调式注册后主动触发一次上传判定（生产由回调 scope.launch 执行）。
         mgr.uploadTokenNow()
 
-        assertEquals(VivoPushState.REGISTERED, mgr.status.value.state)
+        assertEquals(VivoPushState.BOUND, mgr.status.value.state)
         assertEquals("vivo-reg-abcdef", store.saved?.registrationId)
         assertEquals(1, uploader.payloads.size)
         assertEquals("vivo", uploader.payloads.single().provider)
@@ -154,7 +177,7 @@ class VivoPushTest {
     fun `label masks regId`() {
         val status = VivoPushText.fromRegId("abcdefgh1234")
         assertEquals(VivoPushState.REGISTERED, status.state)
-        assertEquals("已注册 · ****1234", VivoPushText.label(status))
+        assertEquals("设备已注册，待绑定 · ****1234", VivoPushText.label(status))
         assertEquals("未配置", VivoPushText.label(VivoPushStatus.NotConfigured))
         assertEquals("当前设备不支持", VivoPushText.label(VivoPushStatus.Unsupported))
     }
@@ -165,6 +188,119 @@ class VivoPushTest {
         assertTrue(VivoPushText.errorHint(10001).contains("Manifest"))
         assertTrue(VivoPushText.errorHint(10004).contains("api_key"))
         assertEquals("未返回 regId", VivoPushText.fromRegId("  ").errorMessage)
+    }
+
+    private val first = Session("3260799998", "测试甲", "first")
+    private val second = Session("3260799999", "测试乙", "second")
+
+    @Test
+    fun `cloud failure is visible and retry binds without a second subscription`() {
+        val sdk = FakeSdk()
+        val uploader = FakeUploader().apply { result = PushUploadResult.Failed("offline") }
+        val mgr = manager(sdk = sdk, uploader = uploader)
+        mgr.onSessionChanged()
+        assertEquals(VivoPushState.BIND_FAILED, mgr.status.value.state)
+        uploader.result = PushUploadResult.Uploaded
+        mgr.retry()
+        assertEquals(VivoPushState.BOUND, mgr.status.value.state)
+        assertEquals(1, sdk.turnOn)
+        assertEquals(2, uploader.payloads.size)
+    }
+
+    @Test
+    fun `switch and logout release only the recorded device with its own credentials`() {
+        var account: Session? = first
+        val a = FakeUploader()
+        val b = FakeUploader()
+        val store = FakeStore()
+        val sdk = FakeSdk(regId = "reg1")
+        val mgr = manager(sdk = sdk, store = store, active = { account },
+            bindingFor = { if (it.token == first.token) a else b })
+        mgr.onSessionChanged()
+        account = second
+        mgr.onSessionChanged(first)
+        assertEquals(listOf(first.sid to "reg1"), a.releases)
+        assertEquals(listOf("reg1"), b.payloads.map { it.token })
+        account = null
+        mgr.onSessionChanged(second)
+        assertEquals(listOf(second.sid to "reg1"), b.releases)
+        assertEquals(null, store.binding())
+        assertEquals(VivoPushState.SIGNED_OUT, mgr.status.value.state)
+        assertEquals(0, sdk.revoked)
+    }
+
+    @Test
+    fun `credential renewal and vendor rotation bind once to the active account`() {
+        var account = first
+        val a = FakeUploader()
+        val renewed = FakeUploader()
+        val mgr = manager(sdk = FakeSdk(regId = "reg1"), active = { account },
+            bindingFor = { if (it.token == first.token) a else renewed })
+        mgr.onSessionChanged()
+        account = account.copy(token = "new-credentials")
+        mgr.onSessionChanged(first)
+        assertEquals(1, a.payloads.size)
+        VivoPushBus.dispatchRegId("reg2")
+        VivoPushBus.dispatchRegId("reg2")
+        assertEquals(listOf("reg1", "reg2"), renewed.payloads.map { it.token })
+        assertEquals(listOf(first.sid to "reg1"), renewed.releases)
+    }
+
+    @Test
+    fun `restarted app invalidates former device id when old credentials are missing`() {
+        val store = FakeStore("old").apply { owner = VivoBinding(first.sid, "old") }
+        val sdk = FakeSdk(regId = "old")
+        val uploader = FakeUploader()
+        val mgr = manager(sdk = sdk, store = store, session = second, uploader = uploader)
+        mgr.onSessionChanged()
+        assertEquals(1, sdk.revoked)
+        assertTrue(uploader.releases.isEmpty())
+        assertEquals(listOf(sdk.nextId), uploader.payloads.map { it.token })
+        assertEquals(VivoBinding(second.sid, sdk.nextId), store.binding())
+        VivoPushBus.dispatchRegId("old")
+        assertEquals(1, uploader.payloads.size)
+        assertEquals(VivoPushState.BOUND, mgr.status.value.state)
+    }
+
+    @Test
+    fun `failed revocation never transfers the old registration to the new user`() {
+        val store = FakeStore("old").apply { owner = VivoBinding(first.sid, "old") }
+        val sdk = FakeSdk(regId = "old").apply { revokeCode = 1003 }
+        val uploader = FakeUploader()
+        val mgr = manager(sdk = sdk, store = store, session = second, uploader = uploader)
+        mgr.onSessionChanged()
+        assertEquals(VivoPushState.BIND_FAILED, mgr.status.value.state)
+        assertEquals(VivoBinding(first.sid, "old"), store.binding())
+        assertTrue(uploader.payloads.isEmpty())
+        sdk.revokeCode = 0
+        mgr.retry()
+        assertEquals(VivoPushState.BOUND, mgr.status.value.state)
+    }
+
+    @Test
+    fun `offline upgrade remembers an ambiguous legacy owner until a confirmed bind`() {
+        val store = FakeStore("legacy")
+        val sdk = FakeSdk(regId = "legacy")
+        val uploader = FakeUploader().apply { result = PushUploadResult.Failed("offline") }
+        manager(sdk = sdk, store = store, uploader = uploader, session = second).onSessionChanged()
+        assertEquals(true, store.binding()?.legacyOwnerUnknown)
+        val restarted = manager(sdk = sdk, store = store, uploader = uploader, session = second)
+        uploader.result = PushUploadResult.Failed("denied", 403)
+        restarted.onSessionChanged()
+        assertEquals(1, sdk.revoked)
+        assertEquals(sdk.nextId, store.binding()?.regId)
+        assertEquals(false, store.binding()?.legacyOwnerUnknown)
+        uploader.result = PushUploadResult.Uploaded
+        restarted.retry()
+        assertEquals(VivoPushState.BOUND, restarted.status.value.state)
+    }
+
+    @Test
+    fun `legacy registered status does not claim a cloud binding`() {
+        val local = PushProviderStatus("vivo", "REGISTERED")
+        assertFalse(local.isRegistered)
+        assertTrue(local.label.contains("等待绑定"))
+        assertTrue(PushProviderStatus("vivo", "BOUND").isRegistered)
     }
 
     @Test

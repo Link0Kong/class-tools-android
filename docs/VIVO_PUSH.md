@@ -30,7 +30,7 @@
   {"provider":"vivo","token":"<regId>","device":"<厂商 机型>","app_version":"<versionName>"}
   ```
   PostgREST `push_tokens?on_conflict=provider,token`（服务端已放开 provider 约束）。
-- 换账号/登录恢复：`updateActiveSession` 里 `onSessionChanged()` 补传；未登录/debug 会话跳过。
+- beta76 把本机注册与账号绑定分开显示。只有服务端确认后才显示绑定成功。换号、退出和标识轮换会解除本机旧绑定；网络恢复或手动刷新可重试。
 - 点击：服务端 `skipType=4` + `skipContent=intent://com.furina.classtools/notice#Intent;scheme=classtools;S.noticeId=<gid>;end`
   → 系统直接拉起 `MainActivity`（`singleTop`）→ 既有 `noticeIdFrom(intent)` 解析 → 进通知页定位。
   `onNotificationMessageClicked` 仅为兼容兜底（SDK 3.0+ 官方已改为系统直接拉起）。
@@ -44,27 +44,32 @@
 - 发送：`POST /message/send`（header `authToken`）：
   `notifyType=4`、`title ≤40`、`content ≤100`、`timeToLive=86400`、`skipType=4`、`skipContent=intent URI`、
   `category`（服务端配置，默认 `IM`）、`requestId`、`notifyId`、`pushMode=0`。
-- 增量：首轮只记录水位；新通知合并一条；`--notice` 强制补推；`--test <regId>` 单推测试。
+- 首轮记录现有通知。后续增量及 `--notice` 补推通过 `notice_push_targets` 查询每条通知的收件设备，受限通知使用通用预览。发送器按通知和设备记录厂商受理结果，中断或部分失败后只重试尚未受理的设备。
 - 无效设备：`10302/10311` 计入日志（不自动删云端行）。
 - **category 必须在 vivo 开放平台申请并通过**（即时消息 `IM`）；未通过会返回 `10096/10097`。
   运营消息仅 07:00–23:00 可发，`IM` 属系统消息不受限。
 - 凭证文件（部署机，不入库）：路径与内容见运维文档；字段为 app_id / app_key / app_secret / category / click 配置，
   **具体值见厂商后台配置**。
 
-## 4. 已验证 / 未验证（如实）
+## 4. 验证记录
 
-**已验证**
+**2026-11-20 接入时的验证**
 - vivo 服务端凭证有效：`python vivo_push.py --auth` → `鉴权成功`（真实 authToken）。
 - `--dry-run` 正常读取云端 `push_tokens?provider=eq.vivo`（当前 0 台）。
 - Android 单测：配置/状态/掩码/错误码/注册编排/上传 provider=vivo 共 8 组；全量 **1794/0（2 skipped）**。
 - Debug APK：Manifest 已合并 `app_id`/`api_key`/`VivoPushReceiver`/deeplink；dex 内含 `com.vivo.push.PushClient`。
 - 推送巡检定时任务 `ClasstoolsPushWatch` 已改指向 `push_tick_all.py`，实跑 harmony/oppo/vivo 三个脚本 exit=0。
 
-**未验证（阻塞项）**
+**2026-11-25 复核**
+
+- 新受众接口已在线验证管理员空查询和匿名拒绝。vivo 与 OPPO 发送器的 29 项回归通过，涵盖受众隔离、通用预览、局部失败及重试。
+- 现网鉴权使用新的厂商令牌验证通过。当日注册的 vivo 设备为 0 台。
+
+**真机验证**
 - **vivo 真机注册未联调**（本机无 vivo 设备）：`getRegId` 真实回调、通知到达、点击拉起。
 - vivo 开放平台需把 **包名 `com.furina.classtools`** 与 AppID/AppKey 绑定；签名不参与校验。
 - 消息分类 `category=IM` 需在平台申请；未通过前 `send` 会失败（代码已可配置）。
-- 云端当前没有 vivo token；需安装 beta18 后在 vivo 设备登录一次才会产生。
+- 云端当前没有 vivo token；需在 vivo 设备安装当前测试版，登录后在推送诊断中确认账号绑定状态。
 
 ## 5. 回滚
 

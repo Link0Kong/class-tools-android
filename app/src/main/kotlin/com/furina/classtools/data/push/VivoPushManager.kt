@@ -2,148 +2,210 @@ package com.furina.classtools.data.push
 
 import android.content.Context
 import com.furina.classtools.data.session.Session
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * vivo 推送客户端编排器（配置 / 初始化 / 注册 / 状态 / token 上传）。
- *
- * 与 OPPO PUSH 的差异：
- * - vivo 的初始化/开关/取 regId 都是回调式，且 `onReceiveRegId` 由独立 Receiver 回调（[VivoPushBus]）；
- * - **不在 Application.onCreate 初始化**：等用户完成身份核验（已同意隐私政策）后由
- *   [onSessionChanged] 首次启动，避免未同意隐私就初始化 SDK；
- * - AppSecret 只在服务端，客户端只有 AppID/AppKey（vivo 设计要求）。
- */
+/** 串行管理本机的厂商注册、按账号的云端绑定以及旧标识的注销。 */
 class VivoPushManager(
     private val context: Context,
     private val config: VivoPushConfig,
     private val sdk: VivoPushSdk,
     private val store: VivoPushStore,
-    private val uploader: PushTokenUploader,
+    private val uploaderForSession: (Session) -> PushTokenBinding,
     private val scope: CoroutineScope,
     private val sessionProvider: () -> Session?,
     private val deviceLabel: () -> String,
     private val appVersion: String,
-    private val gate: PushTokenUploadGate = PushTokenUploadGate(),
     private val ensureNotificationChannel: () -> Unit = {},
 ) {
-
-    private val _status = MutableStateFlow(initialStatus())
+    private val lock = Mutex()
+    private val _status = MutableStateFlow(if (config.isConfigured) VivoPushStatus.Registering else VivoPushStatus.NotConfigured)
     val status: StateFlow<VivoPushStatus> = _status.asStateFlow()
-
     val isConfigured: Boolean get() = config.isConfigured
-
-    @Volatile
-    private var started = false
-
-    @Volatile
-    var isDeviceSupported: Boolean = store.registrationId().isNullOrEmpty().not()
+    private var initialized = false
+    private var deviceRegId: String? = null
+    private var bindingOwner: Session? = null
+    private var confirmed: VivoBinding? = null
+    @Volatile var isDeviceSupported = false
         private set
 
-    private fun initialStatus(): VivoPushStatus {
-        if (!config.isConfigured) return VivoPushStatus.NotConfigured
-        val cached = store.registrationId().orEmpty()
-        return if (cached.isNotEmpty()) {
-            VivoPushStatus(VivoPushState.REGISTERED, registrationId = cached)
-        } else {
-            VivoPushStatus.Registering
-        }
+    private fun owner(): Session? = sessionProvider()?.takeIf {
+        !it.debug && it.sid.isNotBlank() && it.token.isNotBlank() && it.isLikelyValid()
     }
 
-    /** 登录 / 切换账号 / token 恢复后调用：首次初始化+注册，并把 regId 上传到当前账号。 */
-    fun onSessionChanged() {
-        ensureStarted()
-        scope.launch { runCatching { uploadTokenNow() } }
-    }
-
-    /** 失败重试 / 设置页手动重试。 */
-    fun retry() {
-        started = false
+    fun onSessionChanged(previous: Session? = null): Job {
         VivoPushBus.clear()
-        ensureStarted()
+        if (owner() == null) _status.value = VivoPushStatus(VivoPushState.SIGNED_OUT)
+        return scope.launch { synchronize(previous = previous) }
     }
 
-    /** 首次启动（幂等；只在已登录后调用，满足隐私合规）。 */
-    @Synchronized
-    private fun ensureStarted() {
-        if (!config.isConfigured) {
-            _status.value = VivoPushStatus.NotConfigured
-            return
-        }
-        if (!sdk.initialize(context, agreePrivacyStatement = true)) {
-            _status.value = VivoPushText.fromError(10000, "vivo SDK 初始化失败")
-            return
-        }
-        if (!sdk.isSupport(context)) {
-            _status.value = VivoPushStatus.Unsupported
-            return
-        }
-        if (started) return
-        started = true
-        isDeviceSupported = true
-        _status.value = VivoPushStatus.Registering
-        VivoPushBus.register { regId -> onRegId(regId) }
-        runCatching { ensureNotificationChannel() }
-        sdk.turnOnPush(context) { state ->
-            if (state == 0 || state == 1) {
-                requestRegId()
-            } else {
-                val next = VivoPushText.fromError(state)
-                _status.value = next
-                runCatching { store.save(next) }
-            }
+    fun retry() {
+        scope.launch { synchronize(force = true) }
+    }
+
+    fun retryIfPending() {
+        if (_status.value.state in setOf(VivoPushState.BIND_FAILED, VivoPushState.FAILED)) retry()
+    }
+
+    suspend fun uploadTokenNow(): PushUploadResult = synchronize()
+
+    private suspend fun synchronize(
+        previous: Session? = null,
+        force: Boolean = false,
+        changedId: String? = null,
+        callbackOwner: Session? = null,
+    ): PushUploadResult = lock.withLock {
+        try {
+            if (callbackOwner != null && callbackOwner != owner()) return@withLock PushUploadResult.Skipped
+            sync(previous, force, changedId)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            bindingFailed()
         }
     }
 
-    private fun requestRegId() {
-        sdk.requestRegId(
-            context = context,
-            onSuccess = { regId -> onRegId(regId) },
-            onFailure = { code ->
-                val next = VivoPushText.fromError(code)
-                _status.value = next
-                runCatching { store.save(next) }
-            },
-        )
-    }
-
-    private fun onRegId(regId: String) {
-        val next = VivoPushText.fromRegId(regId)
-        _status.value = next
-        isDeviceSupported = true
-        runCatching { store.save(next) }
-        scope.launch { runCatching { uploadTokenNow() } }
-    }
-
-    /** 立即上传判定（未登录/debug/无 regId/重复上传 → Skipped；失败释放幂等门）。 */
-    suspend fun uploadTokenNow(): PushUploadResult {
-        val session = sessionProvider() ?: return PushUploadResult.Skipped
-        if (session.debug || session.token.isBlank()) return PushUploadResult.Skipped
-        val registrationId = store.registrationId().orEmpty()
-            .ifBlank { _status.value.registrationId }
-            .trim()
-        val payload = PushTokenPayload.of(
-            registrationId = registrationId,
-            device = deviceLabel(),
-            appVersion = appVersion,
-            provider = PushTokenPayload.PROVIDER_VIVO,
-        ) ?: return PushUploadResult.Skipped
-        if (!gate.shouldUpload(session.sid, registrationId, appVersion)) {
+    private suspend fun sync(previous: Session?, force: Boolean, changedId: String?): PushUploadResult {
+        if (!isConfigured) {
+            publish(VivoPushStatus.NotConfigured)
             return PushUploadResult.Skipped
         }
-        val result = uploader.upload(payload)
-        if (result is PushUploadResult.Failed) {
-            gate.reset()
-            android.util.Log.w(TAG, "vivo token 上传失败：${result.message}")
+        val active = owner()
+        var old = store.binding()
+        // An installation upgraded while already signed in can still release its old-format registration.
+        if (old == null && previous != null && previous.sid != active?.sid && !previous.debug) {
+            old = store.registrationId()?.let { VivoBinding(previous.sid, it) }
+            if (old != null && !store.rememberBinding(old)) return bindingFailed()
+        }
+        if (old != null && old.sid != active?.sid) {
+            val prior = old
+            val credential = listOfNotNull(previous, bindingOwner).firstOrNull {
+                it.sid == prior.sid && it.isLikelyValid() && !it.debug && it.token.isNotBlank()
+            }
+            val released = credential?.let { uploaderForSession(it).releaseOwn(prior.sid, prior.regId) }
+            if (released == PushUploadResult.Uploaded && !prior.legacyOwnerUnknown) {
+                if (!store.rememberBinding(null)) return bindingFailed()
+            } else if (!revokeDeviceId(old.regId)) {
+                return bindingFailed()
+            }
+            confirmed = null
+            bindingOwner = null
+            old = null
+        }
+        if (owner() != active) return PushUploadResult.Skipped
+        if (active == null) {
+            VivoPushBus.clear()
+            deviceRegId = null
+            publish(VivoPushStatus(VivoPushState.SIGNED_OUT))
+            return PushUploadResult.Skipped
+        }
+        if (!initialize()) return PushUploadResult.Skipped
+        VivoPushBus.register { id -> scope.launch { synchronize(changedId = id, callbackOwner = active) } }
+        val cachedId = store.registrationId()
+        val id = changedId ?: deviceRegId?.takeUnless { force } ?: register() ?: return PushUploadResult.Skipped
+        if (owner() != active) return PushUploadResult.Skipped
+        if (id == store.revokedId()) {
+            // A delayed Receiver delivery may still carry an identifier that we already retired.
+            return if (changedId != null) PushUploadResult.Skipped else bindingFailed()
+        }
+        deviceRegId = id
+        val next = VivoBinding(active.sid, id)
+        if (old != null && old.regId != id) {
+            if (uploaderForSession(active).releaseOwn(old.sid, old.regId) != PushUploadResult.Uploaded) return bindingFailed()
+            if (!store.rememberBinding(null)) return bindingFailed()
+        }
+        if (owner() != active) return PushUploadResult.Skipped
+        if (!force && confirmed == next && bindingOwner?.token == active.token) {
+            publish(VivoPushStatus(VivoPushState.BOUND, id))
+            return PushUploadResult.Skipped
+        }
+        val legacy = (old?.legacyOwnerUnknown == true && old.regId == id) ||
+            (old == null && cachedId == id && store.revokedId() == null)
+        bindingOwner = active
+        confirmed = null
+        publish(VivoPushText.fromRegId(id))
+        if (!store.rememberBinding(next.copy(legacyOwnerUnknown = legacy))) return bindingFailed()
+        val payload = PushTokenPayload.of(id, deviceLabel(), appVersion, PushTokenPayload.PROVIDER_VIVO)
+            ?: return bindingFailed()
+        val result = uploaderForSession(active).upload(payload)
+        if (result == PushUploadResult.Uploaded) {
+            if (legacy && !store.rememberBinding(next)) return bindingFailed()
+            confirmed = next
+            if (owner() == active) publish(VivoPushStatus(VivoPushState.BOUND, id))
+        } else if (owner() == active) {
+            // Old versions stored a device id without its owner. Recover an RLS ownership conflict using the vendor.
+            if (legacy && result is PushUploadResult.Failed && result.httpStatus == 403 && revokeDeviceId(id)) {
+                return sync(null, true, null)
+            }
+            bindingFailed()
         }
         return result
     }
 
-    private companion object {
-        const val TAG = "VivoPush"
+    private fun publish(value: VivoPushStatus) {
+        _status.value = value
+        store.save(value)
+    }
+
+    private fun bindingFailed(): PushUploadResult.Failed {
+        publish(VivoPushStatus(VivoPushState.BIND_FAILED))
+        return PushUploadResult.Failed("设备与账号的云端绑定未完成")
+    }
+
+    private fun initialize(): Boolean {
+        if (!initialized) {
+            if (!sdk.initialize(context, agreePrivacyStatement = true)) {
+                publish(VivoPushText.fromError(10000))
+                return false
+            }
+            initialized = true
+        }
+        isDeviceSupported = sdk.isSupport(context)
+        if (!isDeviceSupported) {
+            publish(VivoPushStatus.Unsupported)
+            return false
+        }
+        ensureNotificationChannel()
+        return true
+    }
+
+    private suspend fun register(): String? {
+        publish(VivoPushStatus.Registering)
+        val state = if (deviceRegId == null) sdkResult<Int> { done -> sdk.turnOnPush(context, done) } else 0
+        if (state != 0 && state != 1) {
+            publish(VivoPushText.fromError(state ?: 1003))
+            return null
+        }
+        val result = sdkResult<VivoPushStatus> { done ->
+            sdk.requestRegId(context, { done(VivoPushText.fromRegId(it)) }, { done(VivoPushText.fromError(it)) })
+        } ?: VivoPushText.fromError(1003)
+        if (result.state == VivoPushState.FAILED) publish(result)
+        return result.registrationId.takeIf { it.isNotBlank() }
+    }
+
+    /** Without a usable old class session, invalidate this installation's vendor id before changing owner. */
+    private suspend fun revokeDeviceId(oldId: String): Boolean {
+        if (!initialize()) return false
+        val result = sdkResult<Int> { done -> sdk.deleteRegId(context, done) }
+        if (result != 0 || !store.markRevoked(oldId)) return false
+        deviceRegId = null
+        confirmed = null
+        bindingOwner = null
+        return true
+    }
+
+    private suspend fun <T> sdkResult(start: ((T) -> Unit) -> Unit): T? = withTimeoutOrNull(15_000) {
+        val result = CompletableDeferred<T>()
+        start { result.complete(it) }
+        result.await()
     }
 }
-

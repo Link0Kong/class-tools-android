@@ -22,10 +22,13 @@ data class VivoPushConfig(
 
 /** vivo 推送客户端状态（设置页展示 / 注册流程）。 */
 enum class VivoPushState {
+    SIGNED_OUT,
     NOT_CONFIGURED,
     UNSUPPORTED,
     REGISTERING,
     REGISTERED,
+    BOUND,
+    BIND_FAILED,
     FAILED,
 }
 
@@ -59,12 +62,15 @@ object VivoPushText {
     }
 
     fun label(status: VivoPushStatus): String = when (status.state) {
+        VivoPushState.SIGNED_OUT -> "登录后绑定"
+        VivoPushState.BOUND -> "已绑定当前账号 · ${maskRegistrationId(status.registrationId)}"
+        VivoPushState.BIND_FAILED -> "账号绑定未完成，请重试"
         VivoPushState.NOT_CONFIGURED -> "未配置"
         VivoPushState.UNSUPPORTED -> "当前设备不支持"
         VivoPushState.REGISTERING -> "注册中…"
         VivoPushState.REGISTERED -> {
             val masked = maskRegistrationId(status.registrationId)
-            if (masked.isBlank()) "已注册" else "已注册 · $masked"
+            if (masked.isBlank()) "设备已注册，待绑定" else "设备已注册，待绑定 · $masked"
         }
 
         VivoPushState.FAILED -> buildString {

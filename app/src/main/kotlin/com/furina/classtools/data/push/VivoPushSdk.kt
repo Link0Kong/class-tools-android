@@ -18,6 +18,9 @@ interface VivoPushSdk {
     /** 打开推送开关；[onState] 0=成功。 */
     fun turnOnPush(context: Context, onState: (Int) -> Unit)
 
+    /** 使旧设备标识失效，供原账号凭据已不可用时解除绑定。 */
+    fun deleteRegId(context: Context, onState: (Int) -> Unit)
+
     /** 获取 regId（需 turnOnPush 成功后调用）。 */
     fun requestRegId(
         context: Context,
@@ -45,6 +48,12 @@ class VivoPushSdkImpl : VivoPushSdk {
             PushClient.getInstance(context.applicationContext).turnOnPush(object : IPushActionListener {
                 override fun onStateChanged(state: Int) = onState(state)
             })
+        }.onFailure { onState(-2) }
+    }
+
+    override fun deleteRegId(context: Context, onState: (Int) -> Unit) {
+        runCatching {
+            PushClient.getInstance(context.applicationContext).deleteRegid { state -> onState(state) }
         }.onFailure { onState(-2) }
     }
 

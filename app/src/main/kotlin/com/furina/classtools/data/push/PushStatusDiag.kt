@@ -34,15 +34,18 @@ data class PushProviderStatus(
     /** RegistrationID 末尾 4 位（用于人工核对，不泄露完整 token）。 */
     val registrationTail: String = "",
 ) {
-    val isRegistered: Boolean get() = state == "REGISTERED"
+    val isRegistered: Boolean get() = if (provider == "vivo") state == "BOUND" else state == "REGISTERED"
 
     /** 设置页展示文案。 */
     val label: String
         get() = when (state) {
             "NOT_CONFIGURED" -> "未配置密钥"
-            "UNSUPPORTED" -> "本机不支持（非 ColorOS / 无推送服务）"
+            "UNSUPPORTED" -> "本机不支持此厂商推送"
+            "SIGNED_OUT" -> "登录后绑定"
+            "BOUND" -> "已绑定当前账号"
+            "BIND_FAILED" -> "账号绑定未完成，请刷新重试"
             "REGISTERING" -> "注册中…"
-            "REGISTERED" -> "已注册" + if (registrationTail.isNotBlank()) "（…$registrationTail）" else ""
+            "REGISTERED" -> (if (provider == "vivo") "设备已注册，等待绑定" else "已注册") + if (registrationTail.isNotBlank()) "（…$registrationTail）" else ""
             "FAILED" -> "注册失败" + if (errorCode != 0) "（错误码 $errorCode）" else ""
             else -> "未知"
         }
@@ -161,7 +164,7 @@ object PushStatusDiag {
 
     /** 诊断 code 里的 state 是否属于已知枚举（防脏数据）。 */
     fun isKnownState(state: String): Boolean = state in setOf(
-        "NOT_CONFIGURED", "UNSUPPORTED", "REGISTERING", "REGISTERED", "FAILED", "UNKNOWN",
+        "NOT_CONFIGURED", "UNSUPPORTED", "REGISTERING", "REGISTERED", "FAILED", "UNKNOWN", "BOUND", "BIND_FAILED", "SIGNED_OUT",
     )
 
     @Suppress("unused")
