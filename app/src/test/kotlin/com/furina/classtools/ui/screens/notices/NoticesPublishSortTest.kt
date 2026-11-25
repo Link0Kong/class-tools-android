@@ -142,7 +142,7 @@ class NoticesPublishSortTest {
     }
 
     @Test
-    fun `人工通知仍按 ts 参与最新发布`() {
+    fun `最新发布只显示网页简报中的采集通知`() {
         val auto = entry("auto", "自动通知", ts = at(2026, 11, 10, 9, 0))
         val manual = com.furina.classtools.data.notices.ManualNotice(
             row = NoticeRow(id = "m1", title = "人工通知", body = "正文", ts = at(2026, 11, 16, 8, 0)),
@@ -162,6 +162,6 @@ class NoticesPublishSortTest {
         )
         val latest = viewContentOf(items, cardFilter = NoticeCardFilter.LATEST, nowMillis = now)
         // 自动通知 key = rowId（auto_<gid>）；人工通知 key = 行 id。
-        assertEquals(listOf("m1", "auto_auto"), latest.latest.map { it.key })
+        assertEquals(listOf("auto_auto"), latest.latest.map { it.key })
     }
 }

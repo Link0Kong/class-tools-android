@@ -50,6 +50,9 @@ data class NoticeSegment(
 
 /** 延期记录：最后一次的 deadline 才是真实截止。 */
 @Serializable
+data class NoticeSignupWindow(val start: String = "", val end: String = "")
+
+@Serializable
 data class NoticeExtension(
     val deadline: String = "",
 )
@@ -128,12 +131,15 @@ data class NoticeGroupDto(
     val timeLabel: String = "",
     val signupStart: String = "",
     val signupEnd: String = "",
+    val signupWindows: List<NoticeSignupWindow> = emptyList(),
+    val expired: Boolean = false,
     val extensions: List<NoticeExtension> = emptyList(),
     val recurrence: NoticeRecurrenceDto? = null,
     val actionable: Boolean = true,
     val alert: Boolean = false,
     val ocr: Boolean = false,
     val updatedAt: String = "",
+    val ts: kotlinx.serialization.json.JsonPrimitive? = null,
     /**
      * 发布时间（契约 `web/通知三端_发布时间统一_契约_20261118.md` §1）：
      * 管线统一写入的 ISO 8601 带偏移字符串（如 `2026-11-16T22:15:00+08:00`），**所有组都有**。
@@ -219,6 +225,8 @@ sealed interface NoticeItemMeta {
         val approxBytes: Long,
         val url: String = "",
         val lazy: Boolean = false,
+        val rowId: String = "",
+        val imageOrdinal: Int = -1,
     ) : NoticeItemMeta
 
     /**
@@ -242,6 +250,8 @@ sealed interface NoticeItemMeta {
         val url: String = "",
         val archiveFiles: List<NoticeArchiveFile> = emptyList(),
         val lazy: Boolean = false,
+        val rowId: String = "",
+        val itemIndex: Int = -1,
     ) : NoticeItemMeta
 
     /** 收集表（腾讯文档类）。 */
@@ -252,6 +262,7 @@ sealed interface NoticeItemMeta {
         val closeText: String,
         val note: String,
         val hasUrl: Boolean,
+        val url: String = "",
     ) : NoticeItemMeta
 
     /** 链接/小程序/文章。 */
@@ -262,6 +273,7 @@ sealed interface NoticeItemMeta {
         val account: String,
         val host: String,
         val hasUrl: Boolean,
+        val url: String = "",
     ) : NoticeItemMeta
 
     /** 合并转发的聊天记录（最多保留 8 条文本）。 */
@@ -288,6 +300,7 @@ data class NoticeArchiveFile(
     val url: String = "",
     /** 旧数据内联 `data:` 内容（不保留原文，只标记存在）。 */
     val hasData: Boolean = false,
+    val sourceIndex: Int = -1,
     /** 服务端轻量化置空（`lazy=true`）→ 需按 id 拉单行完整 body。 */
     val lazy: Boolean = false,
 )
@@ -307,6 +320,7 @@ data class NoticeEntry(
     val items: List<NoticeItemMeta>,
     val hidden: Boolean,
     val edited: Boolean,
+    val boardPublishedMillis: Long = 0L,
 ) {
     val id: String get() = group.id.ifBlank { row.id.removePrefix("auto_") }
     val rowId: String get() = row.id

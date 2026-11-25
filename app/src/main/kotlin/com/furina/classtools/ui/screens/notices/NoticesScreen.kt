@@ -109,6 +109,7 @@ import androidx.compose.ui.zIndex
 import com.furina.classtools.data.marks.MarkKind
 import com.furina.classtools.data.marks.MarksRepository
 import com.furina.classtools.data.marks.MarksSnapshot
+import com.furina.classtools.data.notices.NoticeItemMeta
 import com.furina.classtools.data.notices.ManualNotice
 import com.furina.classtools.data.notices.NoticeEntry
 import com.furina.classtools.data.notices.NoticeGroupDto
@@ -146,6 +147,8 @@ enum class NoticeFilter(val label: String) {
     ALL("全部"),
     PENDING("未处理"),
     PINNED("置顶"),
+    EXPIRED("已截止"),
+    HIDDEN("已隐藏"),
 }
 
 // -----------------------------------------------------------------------------
@@ -361,7 +364,7 @@ fun NoticesScreen(
     onAddToCalendar: ((NoticeGroupDto) -> Unit)? = null,
     /** v3：单条通知提醒（Lead 弹出提醒时间选项并排程）。 */
     onRemindNotice: ((NoticeGroupDto) -> Unit)? = null,
-    onAddTask: ((String, String, String, Long?) -> Unit)? = null,
+    onAddTask: ((String, String, String, Long?, String) -> Unit)? = null,
     /** 分享通知（Lead 生成 5:4 分享卡并弹出分享层）。 */
     onShareNotice: ((NoticeGroupDto, Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -391,6 +394,11 @@ fun NoticesScreen(
     skipLoad: Boolean = false,
 ) {
     val spec = rememberCtAdaptiveSpec()
+    var managing by rememberSaveable(session?.sid) { mutableStateOf(false) }
+    if (managing && session?.isAdmin == true) {
+        NoticeManagementScreen(session, onBack = { managing = false })
+        return
+    }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val haptics = LocalHapticFeedback.current
@@ -407,7 +415,7 @@ fun NoticesScreen(
     val marksFlow = remember(marksRepository, initialMarks) { marksRepository?.marks ?: fallbackMarks }
     val marks: MarksSnapshot by marksFlow.collectAsStateWithLifecycle()
 
-    var data by remember { mutableStateOf(initialData) }
+    var data by remember(session, noticesRepository) { mutableStateOf(initialData) }
     var phase by remember {
         mutableStateOf(
             when {
@@ -429,7 +437,8 @@ fun NoticesScreen(
     var filterKey by rememberSaveable { mutableStateOf(initialFilter.name) }
     // 顶部 5 张可点数据卡的筛选口径（null = 未激活；与 chips 互斥，契约 §2.1）
     var cardFilterKey by rememberSaveable { mutableStateOf<String?>(null) }
-    val noticeFilterOptions = NoticeFilter.entries
+    val isAdmin = session?.isAdmin == true
+    val noticeFilterOptions = NoticeFilter.entries.filter { it != NoticeFilter.HIDDEN || isAdmin }
     // 左右滑动切筛选（跟手 + spring 吸附；reduceMotion 时禁用拖拽并直接用总开关的瞬时切换）
     val noticePagerState = rememberPagerState(
         initialPage = noticeFilterOptions.indexOf(initialFilter).coerceAtLeast(0),
@@ -478,7 +487,7 @@ fun NoticesScreen(
     var expiredExpanded by rememberSaveable { mutableStateOf(initialExpiredExpanded) }
     // 「资料 / 无时间」栏常驻显示、默认展开（可折叠，契约 §2.2）
     var materialExpanded by rememberSaveable { mutableStateOf(true) }
-    var selectedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedKey by rememberSaveable(session?.sid) { mutableStateOf<String?>(null) }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     fun notify(message: String) {
@@ -495,7 +504,8 @@ fun NoticesScreen(
 
             is NoticesLoadResult.Failure -> {
                 errorMessage = result.message
-                phase = if (data == null) Phase.FAILED else Phase.READY
+                data = null
+                phase = Phase.FAILED
             }
         }
     }
@@ -525,7 +535,7 @@ fun NoticesScreen(
         }
     }
 
-    LaunchedEffect(reloadToken) {
+    LaunchedEffect(noticesRepository, session, reloadToken) {
         if (skipLoad || initialLoading) return@LaunchedEffect
         if (session == null) {
             errorMessage = "请先完成身份验证后再查看通知"
@@ -571,11 +581,30 @@ fun NoticesScreen(
     }
 
     /** 标记已处理：普通通知 ref = 组 id；期次卡 ref = 期次 key（`<gid>@occ:<yyyyMMdd>`，§2.5）。 */
-    val addTaskFromNotice: ((NoticeUiItem) -> Unit)? = onAddTask?.let { add ->
+    val addTaskFromNotice: ((NoticeUiItem) -> Unit)? = onAddTask?.let { createTask ->
         { item ->
             val source = item.occurrenceKey ?: item.auto?.id ?: item.manual?.id.orEmpty()
-            val deadline = if (item.occurrenceKey != null) item.whenMillis else NoticeStatusMachine.parseTs(item.auto?.group?.deadline)
-            add(source, item.title, item.summary, deadline)
+            val group = item.auto?.group
+            val deadline = item.occurrenceMillis ?: group?.let {
+                listOf(it.deadline, it.eventAt, it.signupEnd, it.expireAt).firstNotNullOfOrNull { stamp -> NoticeStatusMachine.parseTs(stamp) }
+            }
+            val notes = buildList<String> {
+                group?.summary?.takeIf { it.isNotBlank() }?.let(::add)
+                group?.aiSummary?.takeIf { it.isNotBlank() }?.let { add("摘要：$it") }
+                item.manual?.row?.body?.let(::add)
+                item.auto?.items.orEmpty().forEach { part ->
+                    val text = when (part) {
+                        is NoticeItemMeta.Text -> part.text
+                        is NoticeItemMeta.File -> part.name
+                        is NoticeItemMeta.Form -> part.name
+                        is NoticeItemMeta.Link -> part.name
+                        is NoticeItemMeta.Merged -> part.name
+                        else -> ""
+                    }
+                    if (text.isNotBlank()) add(text)
+                }
+            }.joinToString("\n").take(5000)
+            createTask(source, item.title, notes, deadline, item.cat)
         }
     }
     fun toggleDone(item: NoticeUiItem) {
@@ -629,7 +658,7 @@ fun NoticesScreen(
         allItems.map { it.cat.trim() }.filter { it.isNotEmpty() }.distinct()
     }
 
-    val pinnedCount = allItems.count { it.pinned }
+    val pinnedCount = allItems.count { it.pinned && !it.hidden }
     // §2.4 统计口径（5 张数据卡 / 与工作台同口径）：复用数据层 statsOf（期次 / until / 资料无时间）
     val overview = remember(data, marks, nowMillis) { buildOverview(data, marks, nowMillis) }
     val pendingCount = overview.pending
@@ -648,7 +677,7 @@ fun NoticesScreen(
         val match = allItems.firstOrNull { item ->
             item.key == target ||
                 item.occurrenceKey == target ||
-                item.auto?.id == target ||
+                item.auto?.id == target.substringBefore("@occ:") ||
                 item.auto?.rowId == target ||
                 item.manual?.id == target
         }
@@ -665,24 +694,7 @@ fun NoticesScreen(
         }
     }
 
-    val detailRowId = selectedItem?.auto?.takeIf { it.hasLazyContent }?.rowId?.takeIf { it.isNotBlank() }
-    val needsDetail = detailRowId != null && noticesRepository != null
-    var detailAttempt by remember(selectedKey) { mutableIntStateOf(0) }
-    var detailLoading by remember(selectedKey, needsDetail) { mutableStateOf(needsDetail) }
-    var detailError by remember(selectedKey, needsDetail) { mutableStateOf<String?>(null) }
-    LaunchedEffect(selectedKey, detailRowId, noticesRepository, detailAttempt) {
-        if (!needsDetail) return@LaunchedEffect
-        detailLoading = true
-        detailError = null
-        try {
-            when (val result = noticesRepository.hydrateRow(detailRowId)) {
-                is NoticesLoadResult.Success -> data = result.data
-                is NoticesLoadResult.Failure -> detailError = result.message
-            }
-        } finally {
-            detailLoading = false
-        }
-    }
+    var adminAction by remember(selectedKey) { mutableStateOf<NoticeAdminAction?>(null) }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -692,6 +704,7 @@ fun NoticesScreen(
                     .statusBarsPadding(),
             ) {
                 NoticeMinimalHeader(
+                    onManage = if (isAdmin) ({ managing = true }) else null,
                     searchVisible = searchVisible,
                     filterActive = cardFilter != null || categoryKey != null,
                     onBack = onBack,
@@ -778,8 +791,10 @@ fun NoticesScreen(
                                     val cardChipKey = OUTSIDE_CARD_CHIP
                                     val categoryChipKey = OUTSIDE_CATEGORY_CHIP
                                     val pageChips = buildList {
-                                        add(NoticeChip(NoticeFilter.ALL.name, "全部 ${allItems.size}"))
+                                        add(NoticeChip(NoticeFilter.ALL.name, "全部 ${allItems.count { !it.hidden }}"))
                                         add(NoticeChip(NoticeFilter.PENDING.name, "未处理 $pendingCount"))
+                                        add(NoticeChip(NoticeFilter.EXPIRED.name, "已截止 ${overview.expired}"))
+                                        if (isAdmin) add(NoticeChip(NoticeFilter.HIDDEN.name, "已隐藏 ${data?.hiddenCount ?: 0}"))
                                         add(NoticeChip(NoticeFilter.PINNED.name, "置顶 $pinnedCount"))
                                         pageCardFilter?.let { add(NoticeChip(cardChipKey, "${it.label} ×")) }
                                         categoryKey?.let { add(NoticeChip(categoryChipKey, "$it ×")) }
@@ -907,7 +922,8 @@ fun NoticesScreen(
             filter = filter,
             categories = categories,
             categoryKey = categoryKey,
-            allCount = allItems.size,
+            allCount = allItems.count { !it.hidden },
+            isAdmin = isAdmin,
             pendingCount = pendingCount,
             pinnedCount = pinnedCount,
             hiddenCount = data?.hiddenCount ?: 0,
@@ -933,22 +949,38 @@ fun NoticesScreen(
     }
 
     selectedItem?.let { item ->
-        NoticeDetailSheet(
-            item = item,
-            rawAttachmentLoader = rawAttachmentLoader,
-            imageLoader = imageLoader,
-            onAddToCalendar = onAddToCalendar,
-            onRemindNotice = onRemindNotice,
-            onAddTask = addTaskFromNotice?.let { add -> { add(item) } },
-            onDismiss = { selectedKey = null },
-            onToggleDone = { toggleDone(item) },
-            onTogglePin = { togglePin(item) },
-            onShare = onShareNotice,
-            loading = detailLoading,
-            loadError = detailError,
-            onRetry = { detailAttempt++ },
-            nowMillis = nowMillis,
-        )
+        val action = adminAction
+        val repository = noticesRepository
+        val entry = item.auto
+        if (action != null && isAdmin && repository != null && entry != null) {
+            NoticeAdminDialog(entry, action, onDismiss = { adminAction = null }) { fields, hidden ->
+                when (val result = repository.updateNotice(entry, session.sid, fields, hidden)) {
+                    is NoticesLoadResult.Success -> {
+                        applyResult(result)
+                        adminAction = null
+                        if (hidden != null) selectedKey = null
+                        notify(if (hidden == null) "通知已保存" else if (hidden) "通知已隐藏" else "通知已恢复")
+                        null
+                    }
+                    is NoticesLoadResult.Failure -> result.message
+                }
+            }
+        } else {
+            NoticeDetailSheet(
+                item = item,
+                rawAttachmentLoader = remember(item.key, session) { rawAttachmentLoader?.forDetail() },
+                imageLoader = imageLoader,
+                onAddToCalendar = onAddToCalendar,
+                onRemindNotice = onRemindNotice,
+                onAddTask = addTaskFromNotice?.let { add -> { add(item) } },
+                onDismiss = { selectedKey = null },
+                onToggleDone = { toggleDone(item) },
+                onTogglePin = { togglePin(item) },
+                onShare = onShareNotice,
+                onAdminAction = if (isAdmin && entry != null && repository != null) ({ adminAction = it }) else null,
+                nowMillis = nowMillis,
+            )
+        }
     }
 }
 
@@ -982,6 +1014,7 @@ private const val OUTSIDE_CATEGORY_CHIP: String = "__category_filter"
 
 @Composable
 private fun NoticeMinimalHeader(
+    onManage: (() -> Unit)?,
     searchVisible: Boolean,
     filterActive: Boolean,
     onBack: () -> Unit,
@@ -992,6 +1025,7 @@ private fun NoticeMinimalHeader(
         title = "班级通知",
         onBack = onBack,
         actions = {
+            if (onManage != null) TextButton(onClick = onManage) { Text("管理") }
             NoticeHeaderIconButton(
                 icon = Icons.Rounded.Search,
                 description = if (searchVisible) "关闭搜索" else "搜索通知",
@@ -1036,6 +1070,7 @@ private fun NoticeFilterSheet(
     categories: List<String>,
     categoryKey: String?,
     allCount: Int,
+    isAdmin: Boolean,
     pendingCount: Int,
     pinnedCount: Int,
     hiddenCount: Int,
@@ -1087,11 +1122,13 @@ private fun NoticeFilterSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 NoticeFilterChips(
-                    chips = listOf(
-                        NoticeChip(NoticeFilter.ALL.name, "全部 $allCount"),
-                        NoticeChip(NoticeFilter.PENDING.name, "未处理 $pendingCount"),
-                        NoticeChip(NoticeFilter.PINNED.name, "置顶 $pinnedCount"),
-                    ),
+                    chips = buildList {
+                        add(NoticeChip(NoticeFilter.ALL.name, "全部 $allCount"))
+                        add(NoticeChip(NoticeFilter.PENDING.name, "未处理 $pendingCount"))
+                        add(NoticeChip(NoticeFilter.EXPIRED.name, "已截止"))
+                        if (isAdmin) add(NoticeChip(NoticeFilter.HIDDEN.name, "已隐藏 $hiddenCount"))
+                        add(NoticeChip(NoticeFilter.PINNED.name, "置顶 $pinnedCount"))
+                    },
                     selectedKey = if (activeCard != null) "" else filter.name,
                     onSelect = { key ->
                         NoticeFilter.entries.firstOrNull { it.name == key }?.let(onPickFilter)
@@ -1171,17 +1208,16 @@ private fun NoticeOverviewCards(
         NoticeCardFilter.LONGTERM to stats.longterm.toString(),
         NoticeCardFilter.LATEST to stats.latestPostedText.ifBlank { "—" },
     )
-    val order = if (stats.urgent > 0) values.sortedBy { if (it.first == NoticeCardFilter.URGENT) 0 else 1 } else values
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val tileWidth = ((maxWidth - CtSpace.sm * 2) / 3).coerceIn(98.dp, 148.dp) *
-            LocalDensity.current.fontScale.coerceIn(1f, 1.5f)
-        androidx.compose.foundation.lazy.LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(CtSpace.sm),
-        ) {
-            items(order.size, key = { order[it].first.name }) { index ->
-                val (filter, value) = order[index]
-                NoticeStatCard(filter, value, active == filter, { onPick(filter) },
-                    modifier = Modifier.width(tileWidth))
+        val tileMin = 88.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val columns = ((maxWidth + CtSpace.xs) / (tileMin + CtSpace.xs)).toInt().coerceIn(1, values.size)
+        Column(verticalArrangement = Arrangement.spacedBy(CtSpace.xs)) {
+            values.chunked(columns).forEach { tiles ->
+                Row(horizontalArrangement = Arrangement.spacedBy(CtSpace.xs)) {
+                    tiles.forEach { (filter, value) ->
+                        NoticeStatCard(filter, value, active == filter, { onPick(filter) }, Modifier.weight(1f))
+                    }
+                }
             }
         }
     }

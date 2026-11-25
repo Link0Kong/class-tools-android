@@ -101,6 +101,7 @@ internal fun buildUiItems(
         NoticeUiItem(
             key = notice.id,
             manual = notice,
+            hidden = notice.row.hidden,
             pinned = pinned,
             ts = notice.ts,
             title = NoticeStatusMachine.displayText(
@@ -109,7 +110,7 @@ internal fun buildUiItems(
                 nowMillis,
                 zone,
             ),
-            summary = NoticeStatusMachine.displayText(notice.row.body.trim(), anchor, nowMillis, zone),
+            summary = "",
             cat = "班级通知",
             tone = NoticeTone.GREY,
             postedText = formatPosted(notice.ts, nowMillis, zone),
@@ -161,10 +162,8 @@ private fun autoUiItem(
         else -> rawStatus
     }
     val anchor = NoticeStatusMachine.anchorOf(group, entry.items, zone)
-    val publishedMillis = publishedAtOf(entry, zone)
-    val summary = group.aiSummary.ifBlank {
-        group.summary.ifBlank { NoticeBodyParser.firstTextOf(entry.items) }
-    }
+    val publishedMillis = entry.boardPublishedMillis.takeIf { it > 0 } ?: publishedAtOf(entry, zone)
+    val summary = group.aiSummary.ifBlank { group.summary }
     val hasTimeAnchor = NoticeStatusMachine.hasTimeAnchor(group, zone)
     return NoticeUiItem(
         key = occurrence?.key ?: entry.rowId,
@@ -254,7 +253,9 @@ internal fun buildOverview(
             NoticeDigest(
                 group = entry.group,
                 done = marks.isDone(MarkKind.NT_DONE, entry.id),
-                ts = publishedAtOf(entry, zone),
+                ts = entry.boardPublishedMillis.takeIf { it > 0 }
+                    ?: maxOf(NoticeStatusMachine.latestBoardTime(entry.group, nowMillis, zone),
+                        NoticeStatusMachine.publishedTsOf(entry.group, entry.items, nowMillis, zone) ?: 0L),
                 publishedTs = NoticeStatusMachine.publishedTsOf(entry.group, entry.items, nowMillis, zone) ?: 0L,
             )
         }
@@ -263,7 +264,6 @@ internal fun buildOverview(
         nowMillis = nowMillis,
         zone = zone,
         doneRef = { ref -> marks.isDone(MarkKind.NT_DONE, ref) },
-        extraPostedMillis = data.manual.filterNot { it.row.hidden }.map { it.ts },
     )
 }
 
@@ -383,20 +383,22 @@ internal fun viewContentOf(
 ): NoticesViewContent {
     val keyword = query.trim()
     val activeCategory = category?.trim().orEmpty()
-    val base = if (activeCategory.isEmpty()) items else items.filter { it.cat == activeCategory }
+    val visible = items.filter { it.hidden == (chipFilter == NoticeFilter.HIDDEN) }
+    val base = if (activeCategory.isEmpty()) visible else visible.filter { it.cat == activeCategory }
     val matched = if (keyword.isEmpty()) {
         base
     } else {
         base.filter {
             it.title.contains(keyword, ignoreCase = true) ||
-                it.summary.contains(keyword, ignoreCase = true)
+                it.summary.contains(keyword, ignoreCase = true) ||
+                it.manual?.row?.body?.contains(keyword, ignoreCase = true) == true
         }
     }
     val searching = keyword.isNotEmpty()
 
     // 「最新发布」：全部（含已过期）按发布时间倒序
     if (cardFilter == NoticeCardFilter.LATEST) {
-        val latest = matched.sortedWith(noticePostedDescComparator)
+        val latest = matched.filter { it.isAuto }.sortedWith(noticePostedDescComparator)
         return NoticesViewContent(latest = latest, latestOnly = true, totalCount = latest.size)
     }
 
@@ -434,6 +436,12 @@ internal fun viewContentOf(
                 (cardFilter == null || cardFilter == NoticeCardFilter.PENDING),
             totalCount = scoped.size,
         )
+    }
+
+    if (chipFilter == NoticeFilter.EXPIRED || chipFilter == NoticeFilter.HIDDEN) {
+        val scoped = matched.filter { chipFilter == NoticeFilter.HIDDEN || it.expired }
+            .sortedWith(noticePostedDescComparator)
+        return NoticesViewContent(primary = scoped, totalCount = scoped.size)
     }
 
     // 「置顶」：仅置顶人工通知（沿用现有行为）

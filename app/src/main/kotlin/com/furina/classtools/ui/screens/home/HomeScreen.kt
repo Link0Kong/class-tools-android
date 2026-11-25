@@ -315,6 +315,7 @@ fun HomeScreen(
             }
 
             is NoticesLoadResult.Failure -> {
+                noticesData = repo.cached()
                 noticesFailedMessage = result.message
                 noticesState = if (noticesData != null) NoticeHomeState.OFFLINE else NoticeHomeState.ERROR
             }

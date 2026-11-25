@@ -127,6 +127,67 @@ class NoticesMetaTest {
         retryDelayMs = 1L,
     )
 
+    @Test
+    fun mixedSourceGroupsKeepTheirOwnAttachmentsAndIgnoreExpiredAnnouncements() {
+        val body = NOTICE_BODY_PREFIX + """{"id":"g","mergedSources":[{"source":"QQ"},{"group":"微信"},"历史"],
+            "expired":true,"publishedAt":"2026-11-20T15:00:00+08:00","signupWindows":[{"start":"2026-11-23T08:00:00+08:00","end":"2026-11-25T08:00:00+08:00"}],
+            "items":[{"kind":"text","text":"仅供原文查看"},{"kind":"file","lazy":true},{"kind":"img","lazy":true}]}"""
+        val entry = DefaultNoticesRepository.parseChunk(listOf(NoticeRow("auto_g", body = body)), false).auto.single()
+        assertEquals(listOf("QQ", "微信", "历史"), entry.group.mergedSources)
+        val file = entry.items.filterIsInstance<NoticeItemMeta.File>().single()
+        assertFalse(file.pending)
+        assertEquals(1, file.itemIndex)
+        assertEquals("auto_g", file.rowId)
+        val image = entry.items.filterIsInstance<NoticeItemMeta.Image>().single()
+        assertEquals(0, image.imageOrdinal)
+        val now = java.time.Instant.parse("2026-11-24T00:00:00Z").toEpochMilli()
+        assertTrue(NoticeStatusMachine.statusOf(entry.group, now).expired)
+        assertEquals("报名截止", NoticeStatusMachine.whenInfo(entry.group.copy(expired = false), now)?.action)
+    }
+
+    @Test
+    fun adminEditsRetainPriorOverridesAndRequireServerConfirmation() = runTest {
+        val fixture = Fixture(listOf(autoRow("auto_g", ts = 100L)))
+        val transport = transportOf(fixture)
+        val repo = DefaultNoticesRepository(testApiClient(transport), isAdmin = { true }, clock = { 123L })
+        val entry = (repo.load() as NoticesLoadResult.Success).data.auto.single()
+        transport.responder = { ApiResponse(200, """[{"id":"auto_g"}]""") }
+        val fields = kotlinx.serialization.json.buildJsonObject { put("title", kotlinx.serialization.json.JsonPrimitive("已更正")) }
+        val edited = (repo.updateNotice(entry, "3260799999", fields) as NoticesLoadResult.Success).data.auto.single()
+        assertEquals("已更正", edited.title)
+        assertEquals(123L, edited.row.editedAt)
+        val hidden = (repo.updateNotice(edited, "3260799999", hidden = true) as NoticesLoadResult.Success).data
+        assertEquals("已更正", hidden.auto.single().title)
+        assertEquals(1, hidden.hiddenCount)
+        assertTrue(transport.lastRequest().url.contains("edited_at=eq.123"))
+        transport.responder = { ApiResponse(200, "[]") }
+        assertTrue(repo.updateNotice(hidden.auto.single(), "3260799999", hidden = false) is NoticesLoadResult.Failure)
+        assertTrue(repo.cached()!!.auto.single().hidden)
+        val denied = repository(transport)
+        val prior = transport.requests.size
+        assertTrue(denied.updateNotice(edited, "3260799999", hidden = true) is NoticesLoadResult.Failure)
+        assertEquals(prior, transport.requests.size)
+    }
+
+    @Test
+    fun metaIntersectsTheCurrentAccountsVisibleSignature() = runTest {
+        val visible = autoRow("auto_visible", ts = 1)
+        val unavailable = autoRow("auto_outside", ts = 2)
+        var signedRows = listOf(visible)
+        var brokenMeta = false
+        val transport = FakeTransport { request ->
+            if (request.url.contains("select=id,ts,hidden,edited_at")) ApiResponse(200, liteOf(signedRows))
+            else ApiResponse(200, if (brokenMeta) "bad" else "[$visible,$unavailable]")
+        }
+        val repo = repository(transport)
+        val data = (repo.load() as NoticesLoadResult.Success).data
+        assertEquals(listOf("auto_visible"), data.auto.map { it.rowId })
+        signedRows = emptyList()
+        brokenMeta = true
+        assertTrue(repo.load(force = true) is NoticesLoadResult.Failure)
+        assertEquals(null, repo.cached())
+    }
+
     // ------------------------------------------------------------ meta 优先
 
     @Test
@@ -258,7 +319,7 @@ class NoticesMetaTest {
         val file = entry.items.filterIsInstance<NoticeItemMeta.File>().single()
         assertEquals("", file.url)
         assertTrue(file.lazy)
-        assertTrue(file.pending)
+        assertFalse("轻量条目的文件可按需获取", file.pending)
     }
 
     @Test

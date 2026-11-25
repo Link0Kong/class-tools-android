@@ -25,6 +25,7 @@ internal data class HomeworkBrief(
     val overdue: Int = 0,
     val dueSoon: Int = 0,
     val highlights: List<HomeworkItem> = emptyList(),
+    val pending: List<HomeworkRow> = emptyList(),
 )
 
 internal fun homeworkBrief(rows: List<HomeworkRow>, marks: MarksSnapshot, now: Long): HomeworkBrief {
@@ -38,7 +39,7 @@ internal fun homeworkBrief(rows: List<HomeworkRow>, marks: MarksSnapshot, now: L
     val highlights = if (late.isNotEmpty() && upcoming.firstOrNull()?.due != null)
         listOf(late.first(), upcoming.first()) else ordered.take(2)
     return HomeworkBrief(unfinished = ordered.size, overdue = late.size,
-        dueSoon = upcoming.count { it.due?.state == HomeworkDueState.HOURS_LEFT }, highlights = highlights)
+        dueSoon = upcoming.count { it.due?.state == HomeworkDueState.HOURS_LEFT }, highlights = highlights, pending = ordered.map { it.row })
 }
 
 @Composable
@@ -70,7 +71,7 @@ internal fun rememberHomeworkBrief(
 
 @Composable
 internal fun ClassHomeworkOverview(brief: HomeworkBrief, onOpen: (String?) -> Unit,
-    onRemind: (HomeworkRow) -> Unit, onSettings: () -> Unit, onRetry: () -> Unit) {
+    onRemind: (HomeworkRow) -> Unit, onSettings: () -> Unit, onRetry: () -> Unit, onImport: (List<HomeworkRow>) -> Unit) {
     val colors = MaterialTheme.colorScheme
     Card(colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerHigh)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -92,6 +93,7 @@ internal fun ClassHomeworkOverview(brief: HomeworkBrief, onOpen: (String?) -> Un
             Text(summary, style = MaterialTheme.typography.bodyMedium, color =
                 if (brief.overdue > 0 || brief.dueSoon > 0) colors.error else colors.onSurfaceVariant)
             if (brief.failed) TextButton(onClick = onRetry) { Text("重试") }
+            if (brief.pending.isNotEmpty()) TextButton(onClick = { onImport(brief.pending) }) { Text("全部加入个人任务") }
             if (brief.cached) Text("上次同步", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             brief.highlights.forEach { item ->
                 HorizontalDivider(Modifier.padding(top = 8.dp))
@@ -111,6 +113,7 @@ internal fun ClassHomeworkOverview(brief: HomeworkBrief, onOpen: (String?) -> Un
                     if (item.due != null && !item.due.expired) {
                         TextButton(onClick = { onRemind(item.row) }) { Text("提醒我") }
                     }
+                    TextButton(onClick = { onImport(listOf(item.row)) }) { Text("加入任务") }
                 }
             }
         }

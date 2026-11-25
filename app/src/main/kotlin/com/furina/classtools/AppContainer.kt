@@ -272,6 +272,7 @@ class AppContainer(context: Context) {
         val store = appContext.getSharedPreferences("tasks_" + (if (session.debug) "debug_" else "") + session.sid, Context.MODE_PRIVATE)
         val repository = TaskRepository(session.sid, TaskPreferences(store), apiClient, appScope,
             onChanged = { before, after ->
+                com.furina.classtools.data.tasks.TaskFiles.prune(appContext, before, after)
                 if (!session.debug) scheduleTaskReminders(appContext, session.sid, before, after)
                 if (com.furina.classtools.widget.DesktopWidgets.feedKinds(appContext).isNotEmpty())
                     com.furina.classtools.widget.DesktopWidgets.refresh(appContext)
@@ -283,10 +284,15 @@ class AppContainer(context: Context) {
         return repository
     }
 
-    val noticesRepository: NoticesRepository = DefaultNoticesRepository(
-        api = apiClient,
-        isAdmin = { activeSession?.isAdmin == true },
-    )
+    private var noticeSession: Pair<Session?, NoticesRepository>? = null
+    val noticesRepository: NoticesRepository
+        @Synchronized get() {
+            val session = activeSession
+            return noticeSession?.takeIf { it.first == session }?.second ?: DefaultNoticesRepository(
+                api = apiClient,
+                isAdmin = { activeSession == session && session?.isAdmin == true },
+            ).also { noticeSession = session to it }
+        }
 
     /** 个人课表存储：userdata v6 `tt.ttLocal`（课表登录产物，跨端同步）。 */
     val timetablePersonalStore: TimetablePersonalStore = UserDataTimetablePersonalStore(

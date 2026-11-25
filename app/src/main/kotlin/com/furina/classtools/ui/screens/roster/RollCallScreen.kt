@@ -63,6 +63,7 @@ import com.furina.classtools.features.roster.RosterMember
 import com.furina.classtools.features.roster.RosterState
 import com.furina.classtools.ui.components.CtLoading
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.RosterPickerSheet
 import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.EmptyState
 import com.furina.classtools.ui.components.ExpressiveBackground
@@ -133,6 +134,7 @@ fun RollCallScreen(
     var filter by remember { mutableStateOf(RollFilter.ALL) }
     var showResetConfirm by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
+    var editingRoster by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
     fun notify(message: String) {
         scope.launch { snackbar.showSnackbar(message) }
@@ -235,6 +237,11 @@ fun RollCallScreen(
                                     verticalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
                                 ) {
                                     CtToolChip(
+                                        text = "编辑点名名单",
+                                        selected = false,
+                                        onClick = { editingRoster = true },
+                                    )
+                                    CtToolChip(
                                         text = "沿用抽签名单",
                                         selected = false,
                                         onClick = {
@@ -307,7 +314,7 @@ fun RollCallScreen(
                                             EmptyState(
                                                 icon = Icons.Rounded.HowToReg,
                                                 title = "还没有点名名单",
-                                                message = "可在名册页勾选成员，或沿用抽签名单",
+                                                message = "点击「编辑点名名单」选择成员，或沿用抽签名单",
                                             )
                                         }
 
@@ -391,6 +398,23 @@ fun RollCallScreen(
             )
             }
         }
+    }
+
+    if (editingRoster && members.isNotEmpty()) {
+        RosterPickerSheet(
+            title = "编辑点名名单",
+            members = members.associate { it.seat to "${it.seat} ${it.name}" },
+            selected = rosterState.rollSel.toSet(),
+            onConfirm = { seats ->
+                editingRoster = false
+                if (seats.isEmpty() && rosterState.rollSel.isNotEmpty()) {
+                    showClearConfirm = true
+                } else {
+                    writeRoster(RosterLogic.withRollSel(rosterState, seats, members))
+                }
+            },
+            onDismiss = { editingRoster = false },
+        )
     }
 
     if (showResetConfirm) {

@@ -76,6 +76,7 @@ class TaskScreenTest {
             find("任务列表") { SemanticsActions.ScrollToIndex in it.config }.config[SemanticsActions.ScrollToIndex].action!!.invoke(1)
             if (animationScale == 0f) {
                 click("模拟任务")
+                click("编辑")
                 val field = find("添加步骤") {
                     SemanticsActions.SetText in it.config && it.config.getOrNull(SemanticsProperties.Text)?.any { label -> label.text == "添加步骤" } == true
                 }

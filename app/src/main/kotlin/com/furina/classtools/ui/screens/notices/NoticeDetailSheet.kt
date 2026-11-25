@@ -40,6 +40,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.content.Intent
+import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +56,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.furina.classtools.data.notices.NoticeAttachmentSource
 import com.furina.classtools.data.notices.MergedMessage
 import com.furina.classtools.data.notices.NoticeGroupDto
 import com.furina.classtools.data.notices.NoticeItemMeta
@@ -90,6 +96,7 @@ internal fun NoticeDetailSheet(
     onTogglePin: () -> Unit,
     /** 分享这条通知（生成 5:4 分享卡；标题/分类/状态/摘要/要点/时间地点/来源）。 */
     onShare: ((NoticeGroupDto, Int) -> Unit)? = null,
+    onAdminAction: ((NoticeAdminAction) -> Unit)? = null,
     loading: Boolean = false,
     loadError: String? = null,
     onRetry: () -> Unit = {},
@@ -107,6 +114,7 @@ internal fun NoticeDetailSheet(
             onToggleDone = onToggleDone,
             onTogglePin = onTogglePin,
             onShare = onShare,
+            onAdminAction = onAdminAction,
             loading = loading,
             loadError = loadError,
             onRetry = onRetry,
@@ -133,6 +141,7 @@ internal fun NoticeDetailSheetContent(
     onTogglePin: () -> Unit = {},
     /** 分享这条通知（详情底栏「分享」）。 */
     onShare: ((NoticeGroupDto, Int) -> Unit)? = null,
+    onAdminAction: ((NoticeAdminAction) -> Unit)? = null,
     loading: Boolean = false,
     loadError: String? = null,
     onRetry: () -> Unit = {},
@@ -213,7 +222,15 @@ internal fun NoticeDetailSheetContent(
                 onTogglePin = onTogglePin,
                 onShare = onShare,
             )
-            if (onAddTask != null) TextButton(onClick = onAddTask) { Text("加入我的任务") }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(CtSpace.sm)) {
+                if (onAddTask != null) TextButton(onClick = onAddTask) { Text("加入我的任务") }
+                if (onAdminAction != null) {
+                    TextButton(onClick = { onAdminAction(NoticeAdminAction.EDIT) }) { Text("编辑通知") }
+                    TextButton(onClick = { onAdminAction(NoticeAdminAction.VISIBILITY) }) {
+                        Text(if (item.hidden) "恢复通知" else "隐藏通知")
+                    }
+                }
+            }
         }
     }
 }
@@ -376,7 +393,7 @@ private fun AutoNoticeDetail(
     segments.forEach { segment -> DetailSegmentRow(segment = segment, anchorMillis = anchor, nowMillis = nowMillis) }
 
     val images = entry.items.filterIsInstance<NoticeItemMeta.Image>()
-    val others = entry.items.filterNot { it is NoticeItemMeta.Image }
+    val others = entry.items.filterNot { it is NoticeItemMeta.Image || it is NoticeItemMeta.Text || it is NoticeItemMeta.Merged }
     if (images.isNotEmpty()) {
         DetailImageGrid(
             images = images,
@@ -396,7 +413,8 @@ private fun AutoNoticeDetail(
         )
     }
 
-    if (!hasAi && segments.isEmpty() && images.isEmpty() && others.isEmpty()) {
+    NoticeRawMessagesButton(item, nowMillis)
+    if (!hasAi && segments.isEmpty() && entry.items.isEmpty()) {
         Text(
             text = "暂无更多内容",
             style = MaterialTheme.typography.bodyMedium,
@@ -444,8 +462,8 @@ private fun DetailImageGrid(
     if (images.size == 1) {
         NoticeAttachmentThumb(
             loader = rawAttachmentLoader,
-            rowId = rowId,
-            ordinal = 0,
+            rowId = images[0].rowId.ifBlank { rowId },
+            ordinal = images[0].imageOrdinal.takeIf { it >= 0 } ?: 0,
             manual = false,
             title = images[0].caption.ifBlank { "图片" },
             caption = images[0].caption,
@@ -468,8 +486,8 @@ private fun DetailImageGrid(
                     Box(modifier = Modifier.weight(1f)) {
                         NoticeAttachmentThumb(
                             loader = rawAttachmentLoader,
-                            rowId = rowId,
-                            ordinal = ordinal,
+                            rowId = image.rowId.ifBlank { rowId },
+                            ordinal = image.imageOrdinal.takeIf { it >= 0 } ?: ordinal,
                             manual = false,
                             title = image.caption.ifBlank { "图片 ${ordinal + 1}" },
                             caption = image.caption,
@@ -499,18 +517,19 @@ private fun DetailItemRow(
     when (meta) {
         is NoticeItemMeta.Text -> DetailTextItem(meta = meta, anchorMillis = anchorMillis, nowMillis = nowMillis)
 
-        is NoticeItemMeta.File -> NoticeFileAttachmentRow(meta = meta)
+        is NoticeItemMeta.File -> NoticeFileAttachmentRow(meta = meta, loader = rawAttachmentLoader)
 
         is NoticeItemMeta.Form -> DetailInfoRow(
             iconText = "表",
             title = detailText(meta.name, anchorMillis, nowMillis),
             detail = detailText(
-                listOf(meta.statusText, meta.note, "请在网页/微信中打开")
+                listOf(meta.statusText, meta.note)
                     .filter { it.isNotBlank() }
                     .joinToString(" · "),
                 anchorMillis,
                 nowMillis,
             ),
+            url = meta.url,
         )
 
         is NoticeItemMeta.Link -> DetailInfoRow(
@@ -521,12 +540,13 @@ private fun DetailItemRow(
             },
             title = detailText(meta.name.ifBlank { meta.title }, anchorMillis, nowMillis),
             detail = detailText(
-                listOf(meta.host, meta.account, "无法在 App 内打开")
+                listOf(meta.host, meta.account)
                     .filter { it.isNotBlank() }
                     .joinToString(" · "),
                 anchorMillis,
                 nowMillis,
             ),
+            url = meta.url,
         )
 
         is NoticeItemMeta.Merged -> DetailMergedBlock(
@@ -550,6 +570,38 @@ private fun DetailItemRow(
             iconText = "附",
             title = "附件",
             detail = "暂不支持预览",
+        )
+    }
+}
+
+@Composable
+internal fun NoticeRawMessagesButton(item: NoticeUiItem, nowMillis: Long = System.currentTimeMillis()) {
+    val entry = item.auto
+    val raw = entry?.items.orEmpty().filter { it is NoticeItemMeta.Text || it is NoticeItemMeta.Merged }
+    val body = item.manual?.row?.body.orEmpty()
+    if (raw.isEmpty() && body.isBlank()) return
+    var expanded by remember(item.key) { mutableStateOf(false) }
+    TextButton(onClick = { expanded = true }) { Text("原始消息") }
+    if (expanded) {
+        val anchor = entry?.let { NoticeStatusMachine.anchorOf(it.group, it.items) } ?: item.ts
+        AlertDialog(
+            onDismissRequest = { expanded = false },
+            title = { Text("原始消息") },
+            text = {
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (body.isNotBlank()) Text(body)
+                        raw.forEach { meta ->
+                            when (meta) {
+                                is NoticeItemMeta.Text -> DetailTextItem(meta, anchor, nowMillis)
+                                is NoticeItemMeta.Merged -> DetailMergedBlock(meta, anchor, nowMillis)
+                                else -> Unit
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { expanded = false }) { Text("关闭") } },
         )
     }
 }
@@ -610,6 +662,7 @@ private fun DetailInfoRow(
     iconText: String,
     title: String,
     detail: String,
+    url: String = "",
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -645,6 +698,22 @@ private fun DetailInfoRow(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+        if (url.isNotBlank()) {
+            val context = LocalContext.current
+            val clipboard = LocalClipboardManager.current
+            Column {
+                if (NoticeAttachmentSource.isHttpUrl(url)) {
+                    TextButton(onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                        if (runCatching { context.startActivity(intent) }.isFailure) {
+                            clipboard.setText(AnnotatedString(url))
+                            android.widget.Toast.makeText(context, "链接已复制", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }) { Text("打开") }
+                }
+                TextButton(onClick = { clipboard.setText(AnnotatedString(url)) }) { Text("复制链接") }
             }
         }
     }
@@ -716,15 +785,7 @@ private fun ManualNoticeDetail(
     nowMillis: Long,
 ) {
     val notice = item.manual ?: return
-    Text(
-        text = detailText(
-            notice.row.body.ifBlank { "（无正文）" },
-            notice.ts.takeIf { it > 0L },
-            nowMillis,
-        ),
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
+    NoticeRawMessagesButton(item, nowMillis)
     if (notice.attachments.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             notice.attachments.forEach { attachment ->
@@ -758,7 +819,7 @@ private fun ManualAttachmentRow(
             url = url,
             imageLoader = imageLoader,
         )
-    } else if (url.isNotBlank()) {
+    } else if (url.isNotBlank() || (attachment.hasData && rawAttachmentLoader != null)) {
         // 新数据：人工通知附件也可能是外置签名 URL（图片以外走「下载 → 系统打开」）
         NoticeUrlAttachmentRow(
             title = attachment.name,
@@ -767,6 +828,7 @@ private fun ManualAttachmentRow(
                 .joinToString(" · "),
             source = url,
             fileName = attachment.name,
+            resolve = { rawAttachmentLoader?.load(rowId, attachment.index, manual = true) },
         )
     } else {
         DetailInfoRow(
@@ -849,7 +911,7 @@ private fun DetailActions(
                 }
             }
             // 期次卡：本期单独已处理（marks ref = 期次 key，§2.3）；长期安排定义卡/已结束无 done
-            val showDone = item.occurrenceKey != null || item.recurrence == null
+            val showDone = item.occurrenceKey != null || (!item.expired && item.recurrence == null)
             if (showDone) {
                 Button(
                     onClick = onToggleDone,
@@ -864,7 +926,7 @@ private fun DetailActions(
                     Spacer(Modifier.width(6.dp))
                     Text(
                         when {
-                            item.occurrenceKey != null && item.done -> "本期已恢复未处理"
+                            item.occurrenceKey != null && item.done -> "恢复本期未处理"
                             item.occurrenceKey != null -> "本次已处理"
                             item.done -> "恢复未处理"
                             else -> "标记已处理"

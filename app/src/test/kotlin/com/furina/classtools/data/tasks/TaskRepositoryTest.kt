@@ -108,4 +108,60 @@ class TaskRepositoryTest {
         assertEquals(0L, taskReminderTime(task.withFields { put("done", true) }))
         assertEquals(0L, taskReminderTime(task.withFields { put("snoozeUntil", 0) }))
     }
+
+    @Test fun taskFilesStayLocalAcrossPushPullAndConcurrentWebEdit() = runTest {
+        val base = newTask("有附件的任务", 1, 0.0)
+        var remote = row(2, doc(base))
+        val api = testApiClient(FakeTransport { request ->
+            if (request.method == HttpMethod.PATCH) {
+                assertFalse(request.body!!.contains("private-file-token"))
+                remote = Json.parseToJsonElement(request.body!!).jsonObject
+            }
+            ApiResponse(200, JsonArray(listOf(remote)).toString())
+        })
+        val repository = TaskRepository(sid, MemoryStorage(), api, backgroundScope) { true }
+        repository.sync()
+        val files = buildJsonArray { add(buildJsonObject { put("id", "private-file-token"); put("n", "记录.pdf") }) }
+        repository.edit { items, now -> items.map { it.withFields { put("localFiles", files); put("updatedAt", now) } } }
+        remote = row(3, doc(base.withFields { put("notes", "来自网页") }))
+        repository.sync()
+        repository.sync()
+        val task = repository.snapshot.value.objects("items").single()
+        assertEquals(files, task["localFiles"])
+        assertEquals("来自网页", task.text("notes"))
+        assertEquals("已同步", repository.syncStatus.value)
+    }
+
+    @Test fun changesToGroupsAndSidebarMergeWithOtherClient() {
+        val group = buildJsonObject { put("id", "g1"); put("name", "实验"); put("color", "cy"); put("order", 0) }
+        val base = doc().withFields { put("lists", JsonArray(listOf(group))) }
+        val local = base.withFields {
+            put("lists", JsonArray(listOf(group.withFields { put("name", "作业") })))
+            put("prefs", buildJsonObject { put("sidebarOrder", buildJsonArray { add("all") }); put("sidebarOrderAt", 3); put("defaultRemind", "5") })
+        }
+        val remote = base.withFields {
+            put("lists", JsonArray(listOf(group.withFields { put("color", "rose") })))
+            put("prefs", buildJsonObject { put("sidebarOrder", buildJsonArray { add("myday") }); put("sidebarOrderAt", 5) })
+        }
+        val merged = mergeTasks(base, local, remote)
+        assertEquals("作业", merged.objects("lists").single().text("name"))
+        assertEquals("rose", merged.objects("lists").single().text("color"))
+        assertEquals(listOf("myday"), merged.prefs().strings("sidebarOrder"))
+        assertEquals("5", merged.prefs().text("defaultRemind"))
+        assertTrue(mergeTasks(base, local.withFields { put("lists", JsonArray(emptyList())) }, remote).objects("lists").isEmpty())
+    }
+
+    @Test fun webBackupRestoresIdempotentlyAndCalendarIncludesAllDayEndAndAlarm() {
+        val task = newTask("报告,第一稿", 1, 0.0).withFields {
+            put("due", "2026-11-26"); put("remindAt", 3_600_000); put("notes", "准备\n提交")
+            put("localFiles", buildJsonArray { add(buildJsonObject { put("id", "untrusted-file") }) })
+        }
+        val restored = restoreTaskBackup(emptyTasks, doc(task))
+        assertNull(restored.objects("items").single()["localFiles"])
+        assertEquals(restored, restoreTaskBackup(restored, taskBackup(restored)))
+        val ics = taskCalendar(restored)
+        assertTrue(ics.contains("DTSTART;VALUE=DATE:20261126\r\nDTEND;VALUE=DATE:20261127"))
+        assertTrue(ics.contains("BEGIN:VALARM"))
+        assertTrue(ics.contains("SUMMARY:报告\\,第一稿"))
+    }
 }

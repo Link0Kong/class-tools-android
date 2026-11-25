@@ -250,8 +250,8 @@ class NoticesBoardModelTest {
         val items = sampleItems()
         val content = viewContentOf(items, NoticeFilter.ALL, NoticeCardFilter.LATEST, "", now)
         assertTrue(content.latestOnly)
-        // 9 条全部（含人工 / 资料 / 长期 / 已过期）
-        assertEquals(9, content.latest.size)
+        // 网页简报使用采集通知组，含资料、长期及已过期通知。
+        assertEquals(8, content.latest.size)
         val tsList = content.latest.map { it.ts }
         assertEquals(tsList.sortedDescending(), tsList)
         // 过期卡仍按过期样式（mode EXPIRED）；长期定义卡不显示本次已处理
@@ -345,7 +345,7 @@ class NoticesBoardModelTest {
             now,
             category = "班级通知",
         )
-        assertEquals(listOf("m1"), latest.latest.map { it.key })
+        assertTrue(latest.latest.isEmpty())
     }
 
     @Test
@@ -365,8 +365,8 @@ class NoticesBoardModelTest {
         assertEquals(2, stats.urgent)
         assertEquals(1, stats.expired)
         assertEquals(2, stats.longterm) // def + occ
-        // 最新发布取未隐藏通知（人工 m1 9500）
-        assertEquals(9500L, stats.latestPostedMillis)
+        // 人工行和数据库写入时间均不进入网页简报的最新发布时间。
+        assertEquals(0L, stats.latestPostedMillis)
         assertTrue(stats.latestPostedText.isNotBlank())
     }
 

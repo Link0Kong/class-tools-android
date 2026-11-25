@@ -4,6 +4,8 @@ import com.furina.classtools.data.network.NetJson
 import java.net.URI
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -28,9 +30,25 @@ object NoticeBodyParser {
         val raw = body.trimStart().removePrefix(NOTICE_BODY_PREFIX).trim()
         if (raw.isEmpty()) return null
         return try {
-            json.decodeFromString(NoticeGroupDto.serializer(), raw)
+            json.decodeFromString(groupSerializer, raw)
         } catch (_: Throwable) {
             null
+        }
+    }
+
+    // The collector now emits { source, group, kind, ... } entries. Older snapshots use strings.
+    private val groupSerializer = object : JsonTransformingSerializer<NoticeGroupDto>(NoticeGroupDto.serializer()) {
+        override fun transformDeserialize(element: JsonElement): JsonElement {
+            val group = element as? JsonObject ?: return element
+            val sources = group["mergedSources"] as? JsonArray ?: return element
+            val labels = sources.mapNotNull { source ->
+                when (source) {
+                    is JsonObject -> source.str("source").ifBlank { source.str("group") }.takeIf { it.isNotBlank() }
+                    is JsonPrimitive -> source.contentOrNull
+                    else -> null
+                }?.let(::JsonPrimitive)
+            }
+            return JsonObject(group + ("mergedSources" to JsonArray(labels)))
         }
     }
 
@@ -39,9 +57,10 @@ object NoticeBodyParser {
      *
      * 注意：不返回原 [JsonObject]（其中可能含 MB 级 base64），文本条目只保留可展示文本。
      */
-    fun parseItems(items: List<JsonObject>): List<NoticeItemMeta> {
+    fun parseItems(items: List<JsonObject>, rowId: String = ""): List<NoticeItemMeta> {
         val out = ArrayList<NoticeItemMeta>(items.size)
         var textPos = 0
+        var imageOrdinal = 0
         items.forEachIndexed { index, item ->
             val kind = item.str("kind").ifBlank { "text" }
             when (kind) {
@@ -70,6 +89,8 @@ object NoticeBodyParser {
                         NoticeItemMeta.Image(
                             kind = kind,
                             caption = item.str("caption"),
+                            rowId = rowId,
+                            imageOrdinal = imageOrdinal++,
                             ocr = item.bool("ocr") || item.bool("isOcr"),
                             hasData = NoticeAttachmentSource.inlineOf(src) != null,
                             approxBytes = estimateDataUriBytes(src),
@@ -100,7 +121,9 @@ object NoticeBodyParser {
                             note = item.str("note"),
                             hasContent = hasContent,
                             // 「待获取」= 无内容且压缩包无文件清单（archive 只有摘要不算有内容）
-                            pending = !hasContent && archive.files.isEmpty(),
+                            pending = !hasContent && !item.bool("lazy") && archive.files.isEmpty(),
+                            rowId = rowId,
+                            itemIndex = index,
                             archiveOk = archive.files.isNotEmpty(),
                             archiveCount = archive.count,
                             archiveSummary = archive.summary,
@@ -114,7 +137,7 @@ object NoticeBodyParser {
                 "form" -> {
                     val name = item.str("realTitle").ifBlank { item.str("name").ifBlank { "收集表" } }
                     val close = item.str("close")
-                    val hasUrl = item.str("realUrl").ifBlank { item.str("url") }.isNotBlank()
+                    val url = item.str("realUrl").ifBlank { item.str("url") }.ifBlank { item.str("src") }
                     out.add(
                         NoticeItemMeta.Form(
                             kind = kind,
@@ -122,14 +145,15 @@ object NoticeBodyParser {
                             statusText = if (close.isBlank()) "进行中" else "$close 截止",
                             closeText = close,
                             note = item.str("note"),
-                            hasUrl = hasUrl,
+                            hasUrl = url.isNotBlank(),
+                            url = NoticeAttachmentSource.urlOf(url),
                         ),
                     )
                 }
 
                 "link", "mini", "article" -> {
                     val name = item.str("name").ifBlank { item.str("title").ifBlank { "链接" } }
-                    val url = item.str("url").ifBlank { item.str("realUrl") }
+                    val url = item.str("realUrl").ifBlank { item.str("url") }.ifBlank { item.str("src") }
                     out.add(
                         NoticeItemMeta.Link(
                             kind = kind,
@@ -138,6 +162,7 @@ object NoticeBodyParser {
                             account = item.str("account").ifBlank { item.str("nickname") },
                             host = hostOf(url),
                             hasUrl = url.isNotBlank(),
+                            url = url.take(NoticeAttachmentSource.MAX_URL_LENGTH),
                         ),
                     )
                 }
@@ -252,15 +277,16 @@ object NoticeBodyParser {
         val summary = archive.str("summary")
         val array = archive.arr("files") ?: JsonArray(emptyList())
         val files = ArrayList<NoticeArchiveFile>(minOf(array.size, MAX_ARCHIVE_FILES))
-        for (element in array) {
+        for ((index, element) in array.withIndex()) {
             if (files.size >= MAX_ARCHIVE_FILES) break
             val obj = element as? JsonObject ?: continue
             val rawName = obj.str("name").ifBlank { obj.str("path").substringAfterLast('/') }
-            val source = obj.str("url")
+            val source = obj.str("url").ifBlank { obj.str("src") }
             files.add(
                 NoticeArchiveFile(
                     name = rawName.ifBlank { "文件 ${files.size + 1}" },
                     kind = obj.str("kind"),
+                    sourceIndex = index,
                     sizeText = obj.str("size"),
                     url = NoticeAttachmentSource.urlOf(source),
                     hasData = NoticeAttachmentSource.inlineOf(source) != null,

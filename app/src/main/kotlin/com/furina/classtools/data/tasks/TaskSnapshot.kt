@@ -12,6 +12,8 @@ internal fun JsonObject.text(key: String) = (get(key) as? JsonPrimitive)?.conten
 internal fun JsonObject.flag(key: String) = (get(key) as? JsonPrimitive)?.booleanOrNull == true
 internal fun JsonObject.number(key: String) = (get(key) as? JsonPrimitive)?.longOrNull ?: 0L
 internal fun JsonObject.objects(key: String) = (get(key) as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
+internal fun JsonObject.strings(key: String) = (get(key) as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+internal fun JsonObject.prefs() = get("prefs") as? JsonObject ?: JsonObject(emptyMap())
 internal fun JsonObject.withFields(fields: JsonObjectBuilder.() -> Unit) = JsonObject(this + buildJsonObject(fields))
 
 internal val emptyTasks = buildJsonObject {
@@ -153,10 +155,36 @@ internal fun mergeTasks(base: JsonObject, local: JsonObject, remote: JsonObject)
         source.isBlank() || task.text("fromId").isNotBlank() || seenSources.add(source) ||
             before.containsKey(task.text("id")) || task.text("id") in remoteIds
     }
-    val knownGroups = (base.objects("lists") + remote.objects("lists")).mapTo(mutableSetOf()) { it.text("id") }
-    val addedGroups = local.objects("lists").filter { it.text("id") !in knownGroups }
+    val oldGroups = base.objects("lists").associateBy { it.text("id") }
+    val localGroups = local.objects("lists").associateBy { it.text("id") }
+    val groups = remote.objects("lists").associateBy { it.text("id") }.toMutableMap()
+    for (id in oldGroups.keys - localGroups.keys) groups.remove(id)
+    for ((id, group) in localGroups) {
+        val old = oldGroups[id]
+        if (group != old && (old == null || id in groups))
+            groups[id] = JsonObject(groups[id].orEmpty() + group.filter { old?.get(it.key) != it.value })
+    }
+    val prefChanges = local.prefs().filter { (key, value) -> value != base.prefs()[key] &&
+        (key !in setOf("sidebarOrder", "sidebarOrderAt") || local.prefs().number("sidebarOrderAt") >= remote.prefs().number("sidebarOrderAt")) }
     return remote.withFields {
-        if (addedGroups.isNotEmpty()) put("lists", JsonArray(remote.objects("lists") + addedGroups))
-        put("items", JsonArray(merged.map { it.withFields { put("attachments", "") } }))
+        put("lists", JsonArray(groups.values.sortedBy { it.number("order") }))
+        if (prefChanges.isNotEmpty()) put("prefs", JsonObject(remote.prefs() + prefChanges))
+        put("items", JsonArray(merged.map { task ->
+            if (task.text("list").isNotBlank() && task.text("list") !in groups) task.withFields { put("list", "") } else task
+        }))
+    }
+}
+
+internal fun JsonObject.taskCloudView() = withFields {
+    put("items", JsonArray(objects("items").map { JsonObject(it - "localFiles").withFields { put("attachments", "") } }))
+}
+
+internal fun JsonObject.withLocalFiles(local: JsonObject): JsonObject {
+    val files = local.objects("items").associate { it.text("id") to it.objects("localFiles") }
+    return withFields {
+        put("items", JsonArray(objects("items").map { task ->
+            val owned = files[task.text("id")].orEmpty()
+            if (owned.isEmpty()) JsonObject(task - "localFiles") else task.withFields { put("localFiles", JsonArray(owned)) }
+        }))
     }
 }

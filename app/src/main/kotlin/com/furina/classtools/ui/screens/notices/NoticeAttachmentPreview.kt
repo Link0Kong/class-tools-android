@@ -1,6 +1,11 @@
 package com.furina.classtools.ui.screens.notices
 
+import android.app.Activity
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
@@ -69,6 +74,8 @@ import java.io.File
 import java.net.URLEncoder
 import java.util.Base64
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -99,6 +106,8 @@ fun interface NoticeRawAttachmentLoader {
      * @return `data:image/...;base64,...` 或普通 URL；无内容返回 null
      */
     suspend fun load(rowId: String, ordinal: Int, manual: Boolean): String?
+    suspend fun file(rowId: String, itemIndex: Int, archiveIndex: Int? = null): String? = null
+    fun forDetail(): NoticeRawAttachmentLoader = this
 }
 
 /** 网络实现：按需拉单行原始 body/attachments（不缓存，用完即弃）。 */
@@ -107,20 +116,51 @@ class ApiNoticeRawAttachmentLoader(
     private val json: Json = NetJson,
 ) : NoticeRawAttachmentLoader {
 
-    override suspend fun load(rowId: String, ordinal: Int, manual: Boolean): String? {
-        if (rowId.isBlank() || ordinal < 0) return null
-        val encodedId = runCatching { URLEncoder.encode(rowId, "UTF-8") }.getOrElse { return null }
-        val path = "notices?select=id,body,attachments&id=eq.$encodedId"
-        val raw = when (val result = api.get(path)) {
-            is ApiResult.Success -> result.value
-            is ApiResult.Failure -> return null
+    private val rows = mutableMapOf<String, NoticeRowMedia>()
+    private val mutex = Mutex()
+
+    override fun forDetail() = ApiNoticeRawAttachmentLoader(api, json)
+
+    private suspend fun media(rowId: String): NoticeRowMedia? = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            rows[rowId]?.let { return@withLock it }
+            if (rowId.isBlank()) return@withLock null
+            val encoded = URLEncoder.encode(rowId, "UTF-8").replace("+", "%20")
+            val response = api.get("notices?select=id,body,attachments&id=eq.$encoded")
+            val raw = (response as? ApiResult.Success)?.value ?: return@withLock null
+            val row = NoticeAttachmentParser.parseRow(raw, json) ?: return@withLock null
+            NoticeRowMedia(row, json).also { rows[rowId] = it }
         }
-        val row = NoticeAttachmentParser.parseRow(raw, json) ?: return null
-        return if (manual) {
-            NoticeAttachmentParser.extractManualData(row.attachments, ordinal, json)
-        } else {
-            NoticeAttachmentParser.extractAutoImageData(row.body, ordinal, json)
-        }
+    }
+
+    override suspend fun load(rowId: String, ordinal: Int, manual: Boolean): String? =
+        media(rowId)?.image(ordinal, manual)
+
+    override suspend fun file(rowId: String, itemIndex: Int, archiveIndex: Int?): String? =
+        media(rowId)?.file(itemIndex, archiveIndex)
+
+}
+
+/** Kept only while a detail sheet is open. Concurrent thumbnails share this row fetch and parse. */
+internal class NoticeRowMedia(row: NoticeAttachmentParser.RawRow, json: Json = NetJson) {
+    private val items = (parseJsonOrNull(json, row.body.orEmpty().trimStart()
+        .removePrefix(NoticeAttachmentParser.BODY_PREFIX)) as? JsonObject)?.get("items") as? JsonArray
+    private val images = items.orEmpty().filterIsInstance<JsonObject>().filter { it["kind"] == JsonPrimitive("img") }
+    private val manualItems = parseJsonOrNull(json, row.attachments.orEmpty()) as? JsonArray
+
+    private fun source(item: JsonObject?, vararg keys: String): String? = keys.firstNotNullOfOrNull { key ->
+        (item?.get(key) as? JsonPrimitive)?.content?.takeIf { NoticeAttachmentSource.hasContent(it) }
+    }
+
+    fun image(ordinal: Int, manual: Boolean): String? =
+        if (manual) source(manualItems?.getOrNull(ordinal) as? JsonObject, "d", "url", "u")
+        else source(images.getOrNull(ordinal), "src", "url")
+
+    fun file(index: Int, archiveIndex: Int?): String? {
+        val item = items?.getOrNull(index) as? JsonObject ?: return null
+        if (archiveIndex == null) return source(item, "url", "src")
+        val files = (item["archive"] as? JsonObject)?.get("files") as? JsonArray
+        return source(files?.getOrNull(archiveIndex) as? JsonObject, "url", "src")
     }
 }
 
@@ -154,26 +194,11 @@ object NoticeAttachmentParser {
 
     /** 自动通知：第 [ordinal] 张 `img` 的 data URI / URL；无则 null。 */
     fun extractAutoImageData(body: String?, ordinal: Int, json: Json = NetJson): String? {
-        if (body.isNullOrBlank() || ordinal < 0) return null
-        val text = body.trimStart().removePrefix(BODY_PREFIX).trim()
-        if (text.isEmpty()) return null
-        val group = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return null
-        val items = group["items"] as? JsonArray ?: return null
-        val images = items.mapNotNull { item -> item as? JsonObject }
-            .filter { (it["kind"] as? JsonPrimitive)?.content == "img" }
-        val item = images.getOrNull(ordinal) ?: return null
-        return item["src"].plainString()?.takeIf { it.isNotBlank() }
-            ?: item["url"].plainString()?.takeIf { it.isNotBlank() }
+        return NoticeRowMedia(RawRow(body, null), json).image(ordinal, manual = false)
     }
 
-    /** 人工通知：`attachments[index].d`（data URI / URL）；无则 null。 */
-    fun extractManualData(attachments: String?, ordinal: Int, json: Json = NetJson): String? {
-        if (attachments.isNullOrBlank() || ordinal < 0) return null
-        val array = parseJsonOrNull(json, attachments) as? JsonArray ?: return null
-        val item = array.getOrNull(ordinal) as? JsonObject ?: return null
-        return item["d"].plainString()?.takeIf { it.isNotBlank() }
-            ?: item["url"].plainString()?.takeIf { it.isNotBlank() }
-    }
+    fun extractManualData(attachments: String?, ordinal: Int, json: Json = NetJson): String? =
+        NoticeRowMedia(RawRow(null, attachments), json).image(ordinal, manual = true)
 
     /** 是否内联图片 data URI（`data:image/...;base64,`）。 */
     fun isImageDataUri(value: String?): Boolean {
@@ -289,27 +314,25 @@ fun NoticeAttachmentThumb(
     var state by remember(rowId, ordinal, manual, loader, url, imageLoader) {
         mutableStateOf<ThumbState>(if (loader == null && url.isBlank()) ThumbState.Failed else ThumbState.Loading)
     }
-    var showFull by remember { mutableStateOf(false) }
+    var showFull by remember(rowId, ordinal) { mutableStateOf(false) }
+    var retry by remember(rowId, ordinal) { mutableStateOf(0) }
     if (loader != null || url.isNotBlank()) {
-        LaunchedEffect(loader, rowId, ordinal, manual, url, imageLoader) {
+        LaunchedEffect(loader, rowId, ordinal, manual, url, imageLoader, retry) {
             state = ThumbState.Loading
-            if (url.isNotBlank()) {
-                val network = imageLoader ?: NoticeNetworkImageLoader.shared
-                val remote = runCatching {
-                    network.load(url, PptImageLoader.THUMB_TARGET_WIDTH)
-                }.getOrNull()
-                state = if (remote == null) ThumbState.Failed else ThumbState.Ready(remote, url)
-                return@LaunchedEffect
+            val network = imageLoader ?: NoticeNetworkImageLoader.shared
+            suspend fun decode(value: String?): ThumbState.Ready? {
+                if (value.isNullOrBlank()) return null
+                val image = if (NoticeAttachmentSource.isHttpUrl(value)) {
+                    network.load(value, PptImageLoader.THUMB_TARGET_WIDTH)
+                } else {
+                    withContext(Dispatchers.Default) {
+                        NoticeImageDecoder.decodeSampled(value, NoticeImageDecoder.THUMB_MAX_DIMENSION)
+                    }
+                }
+                return image?.let { ThumbState.Ready(it, value) }
             }
-            val value = runCatching { loader?.load(rowId, ordinal, manual) }.getOrNull()
-            if (!NoticeAttachmentParser.isImageDataUri(value)) {
-                state = ThumbState.Failed
-                return@LaunchedEffect
-            }
-            val image = withContext(Dispatchers.IO) {
-                NoticeImageDecoder.decodeSampled(value, NoticeImageDecoder.THUMB_MAX_DIMENSION)
-            }
-            state = if (image == null) ThumbState.Failed else ThumbState.Ready(image, value.orEmpty())
+            state = decode(url) ?: loader?.load(rowId, ordinal, manual)?.takeUnless { it == url }?.let { decode(it) }
+                ?: ThumbState.Failed
         }
     }
 
@@ -335,8 +358,8 @@ fun NoticeAttachmentThumb(
 
         ThumbState.Failed -> AttachmentFallback(
             title = title,
-            detail = listOf(caption, "图片加载失败").filter { it.isNotBlank() }.joinToString(" · "),
-            modifier = modifier,
+            detail = listOf(caption, "图片加载失败 · 点击重试").filter { it.isNotBlank() }.joinToString(" · "),
+            modifier = modifier.clickable { retry++ },
         )
 
         is ThumbState.Ready -> Column(modifier = modifier.fillMaxWidth()) {
@@ -540,6 +563,7 @@ fun NoticeImageFullDialog(
 private sealed interface AttachmentOpenState {
     data object Idle : AttachmentOpenState
     data object Preparing : AttachmentOpenState
+    data object Saved : AttachmentOpenState
     data class Opened(val file: File) : AttachmentOpenState
     data class Error(val message: String) : AttachmentOpenState
 }
@@ -556,12 +580,14 @@ fun NoticeUrlAttachmentRow(
     source: String,
     fileName: String,
     modifier: Modifier = Modifier,
+    resolve: (suspend () -> String?)? = null,
 ) {
     AttachmentOpenRow(
         title = title,
         detail = detail,
         source = source,
         fileName = fileName,
+        resolve = resolve,
         modifier = modifier,
     )
 }
@@ -576,13 +602,15 @@ fun NoticeUrlAttachmentRow(
 fun NoticeFileAttachmentRow(
     meta: NoticeItemMeta.File,
     modifier: Modifier = Modifier,
+    loader: NoticeRawAttachmentLoader? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (meta.url.isNotBlank()) {
+        if (meta.url.isNotBlank() || (loader != null && (meta.hasContent || meta.lazy))) {
             AttachmentOpenRow(
                 title = meta.name,
                 detail = fileDetailText(meta),
                 source = meta.url,
+                resolve = { loader?.file(meta.rowId, meta.itemIndex) },
                 fileName = meta.name,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -603,12 +631,13 @@ fun NoticeFileAttachmentRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp),
             )
-            meta.archiveFiles.forEach { file ->
-                if (file.url.isNotBlank()) {
+            meta.archiveFiles.forEachIndexed { index, file ->
+                if (file.url.isNotBlank() || (loader != null && (file.hasData || file.lazy))) {
                     AttachmentOpenRow(
                         title = file.name,
                         detail = archiveFileDetailText(file),
                         source = file.url,
+                        resolve = { loader?.file(meta.rowId, meta.itemIndex, file.sourceIndex.takeIf { it >= 0 } ?: index) },
                         fileName = file.name,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -640,20 +669,56 @@ private fun AttachmentOpenRow(
     source: String,
     fileName: String,
     modifier: Modifier = Modifier,
+    resolve: (suspend () -> String?)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember(source) { mutableStateOf<AttachmentOpenState>(AttachmentOpenState.Idle) }
     val preparing = state is AttachmentOpenState.Preparing
+    var pendingSave by rememberSaveable(source, fileName) { mutableStateOf<String?>(null) }
+    val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val path = pendingSave
+        pendingSave = null
+        val uri = result.data?.data
+        if (result.resultCode != Activity.RESULT_OK || uri == null || path == null) {
+            state = AttachmentOpenState.Idle
+        } else scope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                runCatching {
+                    val output = context.contentResolver.openOutputStream(uri) ?: return@runCatching false
+                    output.use { out -> File(path).inputStream().use { it.copyTo(out) } }
+                    true
+                }.getOrDefault(false)
+            }
+            state = if (saved) AttachmentOpenState.Saved else AttachmentOpenState.Error("保存失败，点击重试")
+        }
+    }
 
-    fun startOpen() {
+    fun startOpen(save: Boolean = false) {
         if (preparing) return
         state = AttachmentOpenState.Preparing
         scope.launch {
-            val result = NoticeAttachmentOpen.prepare(context, source, fileName)
+            suspend fun prepare(value: String?) = withContext(Dispatchers.IO) {
+                NoticeAttachmentOpen.prepare(context, value, fileName)
+            }
+            var result = prepare(source)
+            if (result !is NoticeAttachmentFileResult.Ok && result !is NoticeAttachmentFileResult.TooLarge && resolve != null) {
+                val fresh = resolve()
+                if (!fresh.isNullOrBlank() && fresh != source) result = prepare(fresh)
+                else if (source.isBlank()) result = NoticeAttachmentFileResult.Failed("文件加载失败，点击重试")
+            }
             state = when (result) {
                 is NoticeAttachmentFileResult.Ok -> {
-                    if (NoticeAttachmentOpen.open(context, result.file, result.mime)) {
+                    if (save) {
+                        pendingSave = result.file.absolutePath
+                        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = result.mime
+                            putExtra(Intent.EXTRA_TITLE, fileName)
+                        }
+                        if (runCatching { saveFile.launch(intent) }.isSuccess) AttachmentOpenState.Preparing
+                        else AttachmentOpenState.Error("无法打开文件保存位置")
+                    } else if (NoticeAttachmentOpen.open(context, result.file, result.mime)) {
                         AttachmentOpenState.Opened(result.file)
                     } else {
                         AttachmentOpenState.Error("没有可打开该附件的应用")
@@ -691,7 +756,8 @@ private fun AttachmentOpenRow(
             )
             val stateText = when (val current = state) {
                 AttachmentOpenState.Idle -> ""
-                AttachmentOpenState.Preparing -> "下载中…"
+                AttachmentOpenState.Preparing -> "正在准备…"
+                AttachmentOpenState.Saved -> "已保存"
                 is AttachmentOpenState.Opened -> "已打开"
                 is AttachmentOpenState.Error -> current.message
             }
@@ -713,11 +779,12 @@ private fun AttachmentOpenRow(
             text = when (state) {
                 AttachmentOpenState.Preparing -> "下载中…"
                 is AttachmentOpenState.Opened -> "重新打开"
-                else -> "打开"
+                else -> "预览"
             },
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
         )
+        TextButton(onClick = { startOpen(save = true) }, enabled = !preparing) { Text("保存") }
     }
 }
 
@@ -726,7 +793,7 @@ private fun fileDetailText(meta: NoticeItemMeta.File): String = buildList {
     add(meta.sizeText)
     if (meta.pending) add("待获取")
     if (meta.note.isNotBlank()) add(meta.note)
-    if (meta.url.isBlank() && meta.archiveFiles.isEmpty()) add("暂不支持预览")
+    if (meta.pending && meta.note.isBlank()) add("请向发布者获取文件")
 }.filter { it.isNotBlank() }.joinToString(" · ")
 
 private fun archiveFileDetailText(file: NoticeArchiveFile): String = listOf(

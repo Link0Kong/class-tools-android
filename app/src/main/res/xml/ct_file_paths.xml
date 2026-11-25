@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="task_attachments" path="task_attachments/" />
     <cache-path name="exports" path="exports/" />
     <!-- 分享卡片（5:4 分享图 → FileProvider content Uri 交给系统分享面板；只在本机、用户主动分享） -->
     <cache-path name="share" path="share/" />

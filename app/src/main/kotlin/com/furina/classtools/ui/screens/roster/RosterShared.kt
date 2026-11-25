@@ -44,8 +44,9 @@ import com.furina.classtools.ui.components.tool.CtToolErrorState
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.theme.CtRadius
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
@@ -67,9 +68,8 @@ internal enum class RosterPhase { LOADING, READY, ERROR }
  * `userdata.roster` 的内存态 + 写回句柄（名单页 / 点名页共用）。
  *
  * 语义与拆分前 [`RosterScreen`] 内部实现完全一致：
- * - 内存态优先；仅当本机为空（且 `rollNames` 也为空）时才用云端 `roster` section 回填；
- * - 写回时以最新 `currentSections` 为底，只覆盖 `roster` 一个 section
- *   （`rollSel`/`rollSt`/`rollNames` 的生成与容错仍由 [RosterCodec] 负责）。
+ * - 操作即时显示，已拉取的名单和出勤在本机写入完成后反映到页面；
+ * - 顺序保存修改的字段，并保留其它工具在同一 section 中的选择。
  */
 internal data class RosterSync(
     val state: RosterState,
@@ -87,21 +87,35 @@ internal fun rememberRosterSync(
     var rosterState by remember(initialRoster) {
         mutableStateOf(initialRoster ?: RosterCodec.fromJson(sections["roster"]))
     }
-    LaunchedEffect(sections) {
-        val remote = RosterCodec.fromJson(sections["roster"])
-        val emptyLocal = rosterState == RosterState() && rosterState.rollNamesText.isBlank()
-        if (emptyLocal && remote != RosterState()) rosterState = remote
+    var pending by remember { mutableIntStateOf(0) }
+    val writes = remember { Mutex() }
+    LaunchedEffect(sections["roster"], pending) {
+        if (userDataRepository != null && pending == 0 && sections["roster"] != null) {
+            rosterState = RosterCodec.fromJson(userDataRepository.currentSections.value["roster"])
+        }
     }
     val scope = rememberCoroutineScope()
     val write: (RosterState) -> Unit = { next ->
+        val previous = RosterCodec.toJson(rosterState)
+        val changes = RosterCodec.toJson(next).filter { (key, value) -> previous[key] != value }
         rosterState = next
+        pending++
         scope.launch {
-            runCatching {
-                val repository = userDataRepository ?: return@runCatching
-                val current = repository.currentSections.first()
-                val sectionsNext = LinkedHashMap<String, JsonElement>(current)
-                sectionsNext["roster"] = RosterCodec.toJson(next)
-                repository.updateCurrent(JsonObject(sectionsNext))
+            try {
+                writes.withLock {
+                    val repository = userDataRepository ?: return@withLock
+                    if (changes.isEmpty()) return@withLock
+                    val current = repository.currentSections.value
+                    val sectionsNext = LinkedHashMap<String, JsonElement>(current)
+                    val existing = current["roster"] as? JsonObject ?: JsonObject(emptyMap())
+                    sectionsNext["roster"] = JsonObject(existing + changes)
+                    repository.updateCurrent(JsonObject(sectionsNext))
+                }
+            } catch (error: java.io.IOException) {
+                // Keep the last persisted roster visible if local storage was unavailable.
+                userDataRepository?.let { rosterState = RosterCodec.fromJson(it.currentSections.value["roster"]) }
+            } finally {
+                pending--
             }
         }
     }

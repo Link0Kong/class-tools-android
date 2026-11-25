@@ -171,7 +171,14 @@ object NoticeStatusMachine {
         zone: ZoneId = ZoneId.systemDefault(),
     ): Long? {
         parseTs(group.publishedAt, zone)?.takeIf { it > 0L }?.let { return it }
-        var best = parseTs(group.updatedAt, zone)?.takeIf { it > 0L } ?: 0L
+        return latestBoardTime(group, nowMillis, zone).takeIf { it > 0L }
+    }
+
+    /** The web board ranks the most recent release, source update or dated message. */
+    fun latestBoardTime(group: NoticeGroupDto, nowMillis: Long, zone: ZoneId): Long {
+        val timestamp = group.ts?.contentOrNull
+        var best = maxOf(parseTs(group.publishedAt, zone) ?: 0L, parseTs(group.updatedAt, zone) ?: 0L,
+            timestamp?.toLongOrNull() ?: parseTs(timestamp, zone) ?: 0L)
         for (item in group.items) {
             val time = (item["time"] as? JsonPrimitive)?.contentOrNull
             parseRelAnchor(time, nowMillis, zone)?.let { if (it > best) best = it }
@@ -182,7 +189,7 @@ object NoticeStatusMachine {
                 parseRelAnchor(msgTime, nowMillis, zone)?.let { if (it > best) best = it }
             }
         }
-        return best.takeIf { it > 0L }
+        return best
     }
 
     /**
@@ -292,7 +299,7 @@ object NoticeStatusMachine {
         deadlineOf(group, zone) != null ||
             parseTs(group.eventAt, zone) != null ||
             parseTs(group.signupStart, zone) != null ||
-            parseTs(group.signupEnd, zone) != null
+            parseTs(group.signupEnd, zone) != null || group.signupWindows.isNotEmpty()
 
     // ------------------------------------------------------------ 主显示时间 / 状态
 
@@ -301,6 +308,11 @@ object NoticeStatusMachine {
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
     ): NoticeWhen? {
+        val windows = group.signupWindows.map { SignupWindow(parseTs(it.start, zone), parseTs(it.end, zone)) }
+        val window = windows.firstOrNull { (it.start == null || nowMillis >= it.start) && (it.end == null || nowMillis <= it.end) }
+            ?: windows.filter { it.start != null && it.start > nowMillis }.minByOrNull { it.start!! }
+        window?.start?.takeIf { nowMillis < it }?.let { return NoticeWhen(it, "报名开始") }
+        window?.end?.takeIf { nowMillis < it }?.let { return NoticeWhen(it, "报名截止") }
         val signup = signupOf(group, zone)
         val start = signup.start
         val end = signup.end
@@ -351,65 +363,29 @@ object NoticeStatusMachine {
         val event = eventAtOf(group, zone)
         val archive = archiveAtOf(group, zone)
 
-        if (real != null && nowMillis > real && group.alert) {
-            return NoticeStatus("alert", "已截止 · 有新名单", "alert", false, NoticeBucket.ALERT)
+        val signupEnd = signupOf(group, zone).end
+        val deadlineAction = conciseAction(group.deadlineAction.ifBlank { "截止" })
+        val eventAction = conciseAction(group.eventAction.ifBlank { "开始" })
+        val expiredLabel = when {
+            group.expired -> "已过期"
+            signupEnd != null && nowMillis >= signupEnd -> "${fmtWhen(signupEnd, nowMillis, zone)} 报名截止"
+            real != null && nowMillis > real -> "${fmtWhen(real, nowMillis, zone)} $deadlineAction"
+            event != null && nowMillis > (archive ?: event) -> "${fmtWhen(event, nowMillis, zone)} $eventAction"
+            else -> null
         }
-
-        val signup = signupOf(group, zone)
-        val start = signup.start
-        val end = signup.end
-        if (start != null || end != null) {
-            if (start != null && nowMillis < start) {
-                return bucketStatus(start, "报名开始", nowMillis, extension = false)
-            }
-            if (end != null) {
-                if (nowMillis > end) {
-                    return NoticeStatus(
-                        key = "expired",
-                        label = "${fmtWhen(end, nowMillis, zone)} 报名截止",
-                        cls = "expired",
-                        expired = true,
-                        bucket = NoticeBucket.EXPIRED,
-                    )
-                }
-                return bucketStatus(end, "报名截止", nowMillis, extension = false)
-            }
+        if (expiredLabel != null) {
+            if (group.alert) return NoticeStatus("alert", "已截止 · 有新名单", "alert", false, NoticeBucket.ALERT)
+            return NoticeStatus(if (hasExtension(group)) "extended_past" else "expired", expiredLabel,
+                "expired", true, NoticeBucket.EXPIRED)
         }
-
-        if (real != null) {
-            val action = conciseAction(group.deadlineAction.ifBlank { "截止" })
-            val extension = hasExtension(group)
-            if (nowMillis > real) {
-                return NoticeStatus(
-                    key = if (extension) "extended_past" else "expired",
-                    label = "${fmtWhen(real, nowMillis, zone)} $action",
-                    cls = "expired",
-                    expired = true,
-                    bucket = NoticeBucket.EXPIRED,
-                )
+        val whenInfo = whenInfo(group, nowMillis, zone)
+        if (whenInfo != null) {
+            if (whenInfo.atMillis == event && whenInfo.action == eventAction) {
+                return NoticeStatus("active", "${fmtWhen(event, nowMillis, zone)} $eventAction",
+                    "active", false, NoticeBucket.ACTIVE)
             }
-            return bucketStatus(real, action, nowMillis, extension)
-        }
-
-        if (event != null) {
-            val action = conciseAction(group.eventAction.ifBlank { "开始" })
-            val endAt = archive ?: event
-            if (nowMillis > endAt) {
-                return NoticeStatus(
-                    key = "expired",
-                    label = "${fmtWhen(event, nowMillis, zone)} $action",
-                    cls = "expired",
-                    expired = true,
-                    bucket = NoticeBucket.EXPIRED,
-                )
-            }
-            return NoticeStatus(
-                key = "active",
-                label = "${fmtWhen(event, nowMillis, zone)} $action",
-                cls = "active",
-                expired = false,
-                bucket = NoticeBucket.ACTIVE,
-            )
+            return bucketStatus(whenInfo.atMillis, whenInfo.action, nowMillis,
+                extension = hasExtension(group) && whenInfo.atMillis == real, zone = zone)
         }
 
         // 2026-11-18 契约 §2：无任何时间锚点、非长期安排、未过期 → 以发布时间为卡片时间，动作「发布」。

@@ -680,13 +680,29 @@ fun MainNavHost(
                             container.homeworkRepository, container.marksRepository, session.sid, revision,
                         )
                         TaskScreen(tasks, onBack = { popTool(toolId) }, onHomework = { showHomework = true },
+                            onSource = { task ->
+                                val notice = (task["sourceNoticeId"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
+                                if (notice.isNotEmpty()) {
+                                    pendingFocusNoticeId = notice
+                                    navController.navigate(Routes.tool("nt"))
+                                } else {
+                                    detailHomeworkId = (task["sourceHwId"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                                    showHomework = true
+                                }
+                            },
+                            onShare = { launchExport(it, com.furina.classtools.features.share.ShareKind.HOMEWORK) },
+                            onReminderSettings = { navController.navigate(Routes.REMINDER_SETTINGS) },
                             onRefreshHomework = { revision++ },
                             homeworkOverview = {
                                 com.furina.classtools.ui.screens.tasks.ClassHomeworkOverview(brief,
                                     onOpen = { id -> detailHomeworkId = id; showHomework = true },
                                     onRemind = { remindTarget = it },
                                     onSettings = { navController.navigate(Routes.REMINDER_SETTINGS) },
-                                    onRetry = { revision++ })
+                                    onRetry = { revision++ },
+                                    onImport = { rows ->
+                                        val count = rows.count { tasks.importHomework(it) }
+                                        toast(context, if (count > 0) "已加入 $count 项任务" else "作业已在个人任务中")
+                                    })
                             })
                     } else HomeworkScreen(
                         initialDetailId = detailHomeworkId,
@@ -774,8 +790,8 @@ fun MainNavHost(
                             }
                         },
                         onRemindNotice = { group -> remindTarget = group },
-                        onAddTask = { id, title, summary, deadline ->
-                            val added = container.tasksFor(session).importNotice(id, title, summary, deadline)
+                        onAddTask = { id, title, summary, deadline, category ->
+                            val added = container.tasksFor(session).importNotice(id, title, summary, deadline, category)
                             toast(context, if (added) "已加入我的任务" else "这条通知已在任务中")
                         },
                         onShareNotice = { group, attachmentCount ->

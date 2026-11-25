@@ -32,6 +32,19 @@ class NoticeAttachmentParserTest {
          {"n":"文档.pdf","t":"application/pdf","s":2048,"d":""}]
     """.trimIndent()
 
+    @Test
+    fun resolvesMixedMediaByOriginalItemAndArchiveIndex() {
+        val body = NOTICE_BODY_PREFIX + """{"items":[{"kind":"text","text":"开头"},
+            {"kind":"file","src":"data:application/pdf;base64,QQ==","archive":{"files":[{"name":"目录"},{"src":"https://example.org/b.pdf"}]}},
+            {"kind":"img","url":"https://example.org/p.png"}]}"""
+        val media = NoticeRowMedia(NoticeAttachmentParser.RawRow(body, """[{"u":"https://example.org/manual.pdf"}]"""))
+        assertEquals("https://example.org/p.png", media.image(0, manual = false))
+        assertEquals("data:application/pdf;base64,QQ==", media.file(1, null))
+        assertNull(media.file(1, 0))
+        assertEquals("https://example.org/b.pdf", media.file(1, 1))
+        assertEquals("https://example.org/manual.pdf", media.image(0, manual = true))
+    }
+
     // ---- 行解析 -------------------------------------------------------------
 
     @Test

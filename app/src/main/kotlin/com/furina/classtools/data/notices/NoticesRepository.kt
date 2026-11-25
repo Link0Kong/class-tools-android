@@ -15,6 +15,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * 通知签名（两级拉取的第一级，约 2KB）：
@@ -64,6 +67,8 @@ interface NoticesRepository {
      * - 失败返回 [NoticesLoadResult.Failure]（调用方保留已加载内容并展示重试）。
      */
     suspend fun loadMore(): NoticesLoadResult
+
+    suspend fun updateNotice(entry: NoticeEntry, editor: String, fields: JsonObject? = null, hidden: Boolean? = null): NoticesLoadResult
 
     suspend fun cached(): NoticesData?
 
@@ -130,6 +135,38 @@ class DefaultNoticesRepository(
 
     override suspend fun cached(): NoticesData? = mutex.withLock { cache }
 
+    override suspend fun updateNotice(entry: NoticeEntry, editor: String, fields: JsonObject?, hidden: Boolean?): NoticesLoadResult =
+        mutex.withLock {
+            if (!isAdmin() || editor.isBlank()) return@withLock NoticesLoadResult.Failure("仅管理员可更改班级通知")
+            val existing = autoAccum.indexOfFirst { it.rowId == entry.rowId }
+            if (existing < 0) return@withLock NoticesLoadResult.Failure("通知已更新，请刷新后重试")
+            val now = clock()
+            val overrides = fields?.let {
+                JsonObject(NoticeOverride.parse(entry.row.overrideJson).orEmpty() + it.filterKeys { field -> field in NoticeOverride.WHITELIST })
+            }
+            val body = buildJsonObject {
+                put("edited_at", now)
+                put("edited_by", editor)
+                overrides?.let { put("override_json", it.toString()) }
+                hidden?.let { put("hidden", it) }
+            }
+            val previous = if (entry.row.editedAt == 0L) "or=(edited_at.is.null,edited_at.eq.0)" else "edited_at=eq.${entry.row.editedAt}"
+            val path = "notices?id=eq.${encodeQueryValue(entry.rowId)}&$previous&select=id"
+            when (val response = api.patch(path, body.toString(), prefer = "return=representation")) {
+                is ApiResult.Failure -> return@withLock NoticesLoadResult.Failure(networkMessage(response.error))
+                is ApiResult.Success -> if ((parseJsonOrNull(json, response.value) as? JsonArray).isNullOrEmpty()) {
+                    return@withLock NoticesLoadResult.Failure("通知已被更改或权限失效，请刷新后重试")
+                }
+            }
+            val row = entry.row.copy(overrideJson = overrides?.toString() ?: entry.row.overrideJson,
+                hidden = hidden ?: entry.hidden, editedAt = now, editedBy = editor)
+            autoAccum[existing] = entry.copy(row = row, group = NoticeOverride.apply(entry.group, overrides),
+                hidden = row.hidden, edited = true)
+            hiddenCountAccum = autoAccum.count { it.hidden }
+            cachedSignature = null
+            publish(now, fromCache = false)
+        }
+
     override suspend fun loadRow(rowId: String): NoticeRow? = mutex.withLock { fetchRow(rowId) }
 
     override suspend fun hydrateRow(rowId: String): NoticesLoadResult = withContext(Dispatchers.Default) {
@@ -157,14 +194,22 @@ class DefaultNoticesRepository(
             return NoticesLoadResult.Success(cache!!.copy(fromCache = true, fetchedAt = now))
         }
 
+        val visibleIds = liteRows.mapTo(HashSet()) { it.id }
+        val readableIds = liteRows.filter { isAdmin() || !it.hidden }.mapTo(HashSet()) { it.id }
+        if (autoAccum.any { it.rowId !in readableIds } || manualAccum.any { it.id !in readableIds }) {
+            cache = null
+            resetPages()
+        }
+
         // 第二级（2026-11-19 P0 收口）：优先 light meta（整表 ~0.3MB，一次拿全量、可懒加载附件）。
         if (metaEnabled && (metaAvailable != false || force)) {
             when (val meta = fetchMeta()) {
                 is MetaResult.Rows -> {
                     resetPages()
                     cachedSignature = signature
-                    totalRawCount = meta.rows.size
-                    appendPage(meta.rows)
+                    val visibleRows = meta.rows.filter { it.id in visibleIds }
+                    totalRawCount = visibleRows.size
+                    appendPage(visibleRows, canonicalGroups = true)
                     metaAvailable = true
                     return publish(now = clock(), fromCache = false)
                 }
@@ -340,10 +385,17 @@ class DefaultNoticesRepository(
         loadedRawCount = 0
     }
 
-    private fun appendPage(rows: List<NoticeRow>) {
+    private fun appendPage(rows: List<NoticeRow>, canonicalGroups: Boolean = false) {
         val chunk = parseChunk(rows, admin = isAdmin())
         // 跨页去重：旧页与新页合并后统一去重（不拆散已合并条目）
-        val dedupedAuto = NoticeDedupe.dedupeAuto(autoAccum + chunk.auto).entries
+        val dedupedAuto = if (canonicalGroups) {
+            // Modern collector IDs are shared with web marks and task links. Only legacy
+            // snapshots lacking publication metadata require matching related messages by title.
+            val (current, legacy) = chunk.auto.partition { !it.group.publishedAt.isNullOrBlank() }
+            (current + NoticeDedupe.dedupeAuto(legacy).entries).groupBy { it.id }.values.map { group ->
+                group.reduce(NoticeDedupe::merge)
+            }
+        } else NoticeDedupe.dedupeAuto(autoAccum + chunk.auto).entries
         val dedupedManual = NoticeDedupe.dedupeManual(manualAccum + chunk.manual).entries
         autoAccum.clear()
         autoAccum.addAll(dedupedAuto.sortedByDescending { it.ts })
@@ -578,7 +630,7 @@ class DefaultNoticesRepository(
                     }
                     val override = NoticeOverride.parse(row.overrideJson)
                     val applied = NoticeOverride.apply(group, override)
-                    val items = NoticeBodyParser.parseItems(group.items)
+                    val items = NoticeBodyParser.parseItems(group.items, row.id)
                     auto.add(
                         NoticeEntry(
                             // 清掉 body / items 原文，避免大 base64 常驻（渲染只用 items 元信息）
@@ -587,9 +639,11 @@ class DefaultNoticesRepository(
                             items = items,
                             hidden = row.hidden,
                             edited = row.editedAt > 0,
+                            boardPublishedMillis = NoticeStatusMachine.latestBoardTime(group, System.currentTimeMillis(), java.time.ZoneId.systemDefault()),
                         ),
                     )
                 } else {
+                    if (row.hidden && !admin) continue
                     val attachments = NoticeBodyParser.parseManualAttachments(row.attachments)
                     manual.add(
                         ManualNotice(

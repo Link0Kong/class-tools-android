@@ -451,6 +451,8 @@ private fun NoticeCard(
                 ) {
                     Text(
                         text = item.summary,
+                        maxLines = 3,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.padding(CtSpace.sm),
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -474,7 +476,7 @@ private fun NoticeCard(
                     )
 
                     // 普通通知（含已过期普通通知）：沿用既有「标记已处理」
-                    item.isAuto && item.recurrence == null -> DonePill(
+                    item.isAuto && !item.expired && item.recurrence == null -> DonePill(
                         done = item.done,
                         reduceMotion = reduceMotion,
                         onClick = onToggleDone,
@@ -485,6 +487,7 @@ private fun NoticeCard(
 
                     else -> PinPill(pinned = item.pinned, reduceMotion = reduceMotion, onClick = onTogglePin)
                 }
+                NoticeRawMessagesButton(item)
                 if (onAddTask != null) TextButton(onClick = onAddTask) { Text("加入任务") }
 
             }
