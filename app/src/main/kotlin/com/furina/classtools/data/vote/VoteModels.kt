@@ -173,7 +173,17 @@ data class PollDetail(
     val mine: Boolean = false,
     val canManage: Boolean = false,
     val voters: List<PollVoter> = emptyList(),
-)
+    /** Elapsed realtime at receipt of serverNow. Cached reads keep the original sample. */
+    val receivedAtElapsedMillis: Long? = null,
+) {
+    fun currentTime(wallNow: Long, elapsedNow: Long): Long {
+        val received = receivedAtElapsedMillis ?: return wallNow
+        return if (serverNow > 0L) serverNow + (elapsedNow - received).coerceAtLeast(0L) else wallNow
+    }
+
+    fun localCountdownDeadline(wallNow: Long, elapsedNow: Long): Long =
+        wallNow + (poll.deadline - currentTime(wallNow, elapsedNow))
+}
 
 /** 发起/编辑草稿（客户端 → RPC；不含 sid）。 */
 data class PollOptionDraft(

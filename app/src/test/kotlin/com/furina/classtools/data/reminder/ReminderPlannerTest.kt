@@ -411,7 +411,8 @@ class ReminderPlannerTest {
         assertTrue(event.title.contains("高等数学"))
         assertEquals("上课提醒 · 高等数学", event.title)
         assertTrue(event.body.contains("01104"))
-        assertTrue(event.body.contains("还有 60 分钟"))
+        assertFalse(event.body.contains("还有"))
+        assertEquals(start, event.course?.startAt)
         assertEquals("tt", event.toolId)
         assertEquals("class:$start", event.key)
     }
@@ -424,7 +425,7 @@ class ReminderPlannerTest {
             defaultSettings(),
             zone,
         )
-        assertEquals(now + ReminderPlanner.IMMEDIATE_DELAY_MS, events.single().triggerAtMillis)
+        assertEquals(now, events.single().triggerAtMillis)
     }
 
     @Test

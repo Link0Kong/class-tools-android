@@ -148,6 +148,11 @@ class ApiClient(
 
     // ------------------------------------------------------------ JSON 便捷助手
 
+    suspend fun delete(path: String): ApiResult<String> = execute(
+        method = HttpMethod.DELETE, path = path, body = null, prefer = "return=minimal",
+        authenticated = true, extraHeaders = emptyMap(), retryNetworkFailure = false, notifyTokenInvalid = false,
+    )
+
     suspend fun getJson(
         pathAndQuery: String,
         authenticated: Boolean = true,

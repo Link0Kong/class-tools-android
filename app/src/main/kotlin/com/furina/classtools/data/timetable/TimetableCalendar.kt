@@ -101,6 +101,7 @@ object TtCalendar {
         nowMillis: Long,
         zone: ZoneId = ZoneId.systemDefault(),
         focusOnBell: Boolean = false,
+        upcomingBell: Boolean = false,
     ): List<SessionInfo> {
         val week = weekOf(termStart, date)
         val di = dayIndex(date)
@@ -113,7 +114,10 @@ object TtCalendar {
             val endPeriod = TtPeriods.PERIODS.getOrNull(course.end - 1) ?: continue
             val clock = now.atZone(zone)
             val focus = if (focusOnBell && date == clock.toLocalDate() && clock.toLocalTime() >= LocalTime.parse(startPeriod.first))
-                (course.start..course.end).firstOrNull { clock.toLocalTime() < LocalTime.parse(TtPeriods.endText(it)) }
+                (course.start..course.end).firstOrNull {
+                    val boundary = if (upcomingBell) TtPeriods.startText(it) else TtPeriods.endText(it)
+                    clock.toLocalTime() < LocalTime.parse(boundary)
+                }
             else null
             val activeSlot = focus?.let { TtPeriods.PERIODS[it - 1] }
             val startTime = parseTime(activeSlot?.first ?: startPeriod.first) ?: continue
@@ -158,7 +162,7 @@ object TtCalendar {
         for (off in 0 until lookAheadDays) {
             val date = today.plusDays(off.toLong())
             if (weekOf(termStart, date) == null) continue
-            val candidate = sessionsOn(courses, termStart, date, nowMillis, zone, focusOnBell = true)
+            val candidate = sessionsOn(courses, termStart, date, nowMillis, zone, focusOnBell = true, upcomingBell = true)
                 .firstOrNull { it.startAt > now.toEpochMilli() }
                 ?: continue
             val dayText = when (off) {

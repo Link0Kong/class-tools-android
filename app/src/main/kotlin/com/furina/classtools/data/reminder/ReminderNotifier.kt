@@ -8,8 +8,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.furina.classtools.ClassToolsApp
 import androidx.core.content.ContextCompat
+import com.furina.classtools.ClassToolsApp
+import com.furina.classtools.R
+import com.furina.classtools.data.notify.buildLiveUpdate
+import com.furina.classtools.data.timetable.TimetableLink
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * 本机提醒通知发送（接口化：Worker 用 Android 实现，单测用假实现，绝不在单测真发通知）。
@@ -25,6 +31,9 @@ interface ReminderNotifier {
 
     /** 发送一条提醒；返回是否真正发出（无权限/无 Launcher Activity 时 false）。 */
     fun notify(event: ReminderEvent): Boolean
+
+    /** Refresh a visible course card or withdraw it if the timetable or clock moved out of its window. */
+    fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long): List<String> = emptyList()
 }
 
 /** 通知分组口径（纯常量/文案，可单测）。 */
@@ -107,15 +116,36 @@ class AndroidReminderNotifier(
             }
     }
 
+    override fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long): List<String> {
+        if (Build.VERSION.SDK_INT < 36 || !colorOs) return emptyList()
+        val manager = appContext.getSystemService(NotificationManager::class.java) ?: return emptyList()
+        val active = runCatching { manager.activeNotifications }.getOrElse { return emptyList() }
+        val withdrawn = mutableListOf<String>()
+        for (card in active) {
+            val shown = card.notification
+            if (!card.isOngoing || shown.channelId != ReminderKind.COURSE_SOON.channelId) continue
+            val key = "class:${shown.`when`}"
+            if (card.id != key.hashCode()) continue
+            if (due != null && shown.`when` == due.courseStartAtMillis) {
+                notify(due)
+            } else {
+                manager.cancel(card.id)
+                if (shown.`when` > nowMillis) withdrawn.add(key)
+            }
+        }
+        return withdrawn
+    }
+
     override fun notify(event: ReminderEvent): Boolean {
         if (!canNotify()) return false
         val pendingIntent = ReminderIntentFactory.pendingIntent(appContext, event) ?: return false
         viewEvent(event)
-        val startAt = event.key.takeIf { event.kind == ReminderKind.COURSE_SOON }
-            ?.removePrefix("class:")?.toLongOrNull()
-        val remaining = (startAt ?: 0L) - System.currentTimeMillis()
-        val liveCourse = startAt != null && remaining > 0 && Build.VERSION.SDK_INT >= 36 && colorOs
-        val body = if (liveCourse) event.body.substringBeforeLast(" · 还有 ") else event.body
+        val startAt = event.courseStartAtMillis
+        val now = System.currentTimeMillis()
+        if (event.kind == ReminderKind.COURSE_SOON &&
+            (startAt == null || startAt <= now || event.triggerAtMillis > now)) return false
+        val liveCourse = startAt != null && Build.VERSION.SDK_INT >= 36 && colorOs
+        val body = if (event.kind == ReminderKind.COURSE_SOON) event.body.substringBeforeLast(" · 还有 ") else event.body
         val groupKey = ReminderGrouping.groupKey(event.kind)
         val builder = NotificationCompat.Builder(appContext, event.kind.channelId)
             .setSmallIcon(smallIcon)
@@ -133,19 +163,23 @@ class AndroidReminderNotifier(
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
-        if (liveCourse && startAt != null) {
+        if (startAt != null) {
             builder.setWhen(startAt)
+                .setShowWhen(true)
                 .setUsesChronometer(true)
                 .setChronometerCountDown(true)
-                .setOngoing(true)
-                .setTimeoutAfter(remaining)
-                .setShortCriticalText("即将上课")
+                .setTimeoutAfter(startAt - now)
+        }
+        if (liveCourse) {
+            builder.setLiveCourseContent(appContext, event, body)
+            builder.setOngoing(true)
                 .setRequestPromotedOngoing(true)
         } else {
             builder.setGroup(groupKey).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
         }
         val childOk = runCatching {
-            NotificationManagerCompat.from(appContext).notify(event.notificationId, builder.build())
+            val notification = if (liveCourse) builder.buildLiveUpdate() else builder.build()
+            NotificationManagerCompat.from(appContext).notify(event.notificationId, notification)
             true
         }.getOrDefault(false)
         if (childOk && !liveCourse) {
@@ -202,4 +236,32 @@ class AndroidReminderNotifier(
         @Suppress("UNUSED_VARIABLE")
         val ignored = event.key
     }
+}
+
+private val courseClock = DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA).withZone(TimetableLink.CHINA_ZONE)
+
+/** Use the platform's expandable template so System UI can also render the promoted chip. */
+internal fun NotificationCompat.Builder.setLiveCourseContent(context: Context, event: ReminderEvent, fallback: String) {
+    setSmallIcon(R.drawable.ic_live_course)
+    setColor(context.getColor(R.color.live_course_accent))
+    setSubText("即将上课")
+    val course = event.course
+    if (course == null) {
+        setContentTitle(event.title.removePrefix("上课提醒 · ").ifBlank { "上课提醒" })
+        setContentText(fallback)
+        setStyle(NotificationCompat.BigTextStyle().bigText(fallback))
+        return
+    }
+    val start = courseClock.format(Instant.ofEpochMilli(course.startAt))
+    val time = if (course.endAt > course.startAt) {
+        "$start–${courseClock.format(Instant.ofEpochMilli(course.endAt))}"
+    } else start
+    val room = course.room.trim()
+    val details = buildString {
+        append("时间  ").append(time)
+        if (room.isNotEmpty()) append("\n教室  ").append(room)
+    }
+    setContentTitle(course.name.ifBlank { "上课提醒" })
+    setContentText(if (room.isEmpty()) time else "$time · $room")
+    setStyle(NotificationCompat.BigTextStyle().bigText(details))
 }

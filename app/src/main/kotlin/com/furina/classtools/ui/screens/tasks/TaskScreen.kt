@@ -14,7 +14,12 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -55,6 +60,33 @@ import androidx.compose.material.icons.rounded.StarBorder
 
 internal val repeats = mapOf("" to "不重复", "daily" to "每天", "weekday" to "工作日", "weekly" to "每周", "monthly" to "每月", "yearly" to "每年")
 
+private fun tasksForView(
+    all: List<JsonObject>,
+    view: String,
+    query: String,
+    sort: String,
+    today: String,
+): List<JsonObject> {
+    return all.filter { t ->
+        val matches = when (view) {
+            "important" -> t.flag("starred")
+            "myday" -> t.text("myDay") == today
+            "planned" -> t.text("due").isNotEmpty()
+            else -> !view.startsWith("group-") || t.text("list") == view.removePrefix("group-")
+        }
+        (view == "done") == t.flag("done") && matches &&
+            listOf(t.text("title"), t.text("notes"), t.strings("tags").joinToString(" "), t.text("sourceTitle")).any { it.contains(query.trim(), true) }
+    }.sortedWith(if (view == "done") compareByDescending { it.number("doneAt") }
+        else when (sort) {
+            "created" -> compareByDescending { it.number("createdAt") }
+            "important" -> compareByDescending { it.flag("starred") }
+            "due" -> compareBy { taskDeadline(it) ?: Long.MAX_VALUE }
+            "priority" -> if (view == "all") taskPriorityOrder(today) else if (view == "planned") compareBy { taskDeadline(it) ?: Long.MAX_VALUE }
+                else compareBy { it.text("order").toDoubleOrNull() ?: 0.0 }
+            else -> compareBy { it.text("order").toDoubleOrNull() ?: 0.0 }
+        })
+}
+
 @Composable
 fun TaskScreen(
     repository: TaskRepository,
@@ -76,7 +108,30 @@ fun TaskScreen(
     val viewOrder = (snapshot.prefs().strings("sidebarOrder").filter { it in taskViews } + taskViews.keys).distinct()
     val filters = viewOrder.map { it to taskViews.getValue(it) } +
         groups.map { "group-" + it.text("id") to it.text("name") }
-    var view by rememberSaveable { mutableStateOf("all") }
+    val pageKeys = filters.map { it.first }
+    var savedView by rememberSaveable { mutableStateOf("all") }
+    val allPage = pageKeys.indexOf("all")
+    val pager = rememberPagerState(initialPage = pageKeys.indexOf(savedView).takeIf { it >= 0 } ?: allPage) { pageKeys.size }
+    val view = pageKeys.getOrNull(pager.currentPage) ?: "all"
+    val tabStrip = rememberLazyListState()
+    fun selectPage(index: Int) {
+        scope.launch {
+            if (reduceMotion) pager.scrollToPage(index) else pager.animateScrollToPage(index)
+        }
+    }
+    LaunchedEffect(pageKeys) {
+        val target = pageKeys.indexOf(savedView).takeIf { it >= 0 } ?: allPage
+        pager.scrollToPage(target)
+        snapshotFlow { pager.settledPage }.collect { index -> pageKeys.getOrNull(index)?.let { savedView = it } }
+    }
+    LaunchedEffect(view, pageKeys, reduceMotion) {
+        val index = pageKeys.indexOf(view)
+        val layout = tabStrip.layoutInfo
+        val tab = layout.visibleItemsInfo.find { it.index == index }
+        if (tab == null || tab.offset < layout.viewportStartOffset || tab.offset + tab.size > layout.viewportEndOffset) {
+            if (reduceMotion) tabStrip.scrollToItem(index) else tabStrip.animateScrollToItem(index)
+        }
+    }
     var query by rememberSaveable { mutableStateOf("") }
     var searching by rememberSaveable { mutableStateOf(false) }
     var quick by rememberSaveable { mutableStateOf("") }
@@ -95,26 +150,6 @@ fun TaskScreen(
     var groupName by rememberSaveable { mutableStateOf("") }
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     val today = LocalDate.now().toString()
-    val visible = remember(all, view, query, sort, today) {
-        all.filter { t ->
-            val matches = when (view) {
-                "important" -> t.flag("starred")
-                "myday" -> t.text("myDay") == today
-                "planned" -> t.text("due").isNotEmpty()
-                else -> !view.startsWith("group-") || t.text("list") == view.removePrefix("group-")
-            }
-            (view == "done") == t.flag("done") && matches &&
-                listOf(t.text("title"), t.text("notes"), t.strings("tags").joinToString(" "), t.text("sourceTitle")).any { it.contains(query.trim(), true) }
-        }.sortedWith(if (view == "done") compareByDescending { it.number("doneAt") }
-            else when (sort) {
-                "created" -> compareByDescending { it.number("createdAt") }
-                "important" -> compareByDescending { it.flag("starred") }
-                "due" -> compareBy { taskDeadline(it) ?: Long.MAX_VALUE }
-                "priority" -> if (view == "all") taskPriorityOrder(today) else if (view == "planned") compareBy { taskDeadline(it) ?: Long.MAX_VALUE }
-                    else compareBy { it.text("order").toDoubleOrNull() ?: 0.0 }
-                else -> compareBy { it.text("order").toDoubleOrNull() ?: 0.0 }
-            })
-    }
     fun draft(title: String, now: Long, list: List<JsonObject>): JsonObject {
         val date = quickDue.ifEmpty { if (view == "planned") today else "" }
         val task = newTask(title, now, firstOrder(list)).withFields {
@@ -127,7 +162,7 @@ fun TaskScreen(
     }
     fun resetQuick() {
         quick = ""; quickDue = ""; quickTime = ""; quickStar = false; quickGroup = null; query = ""
-        if (view == "done") view = "all"
+        if (view == "done") selectPage(allPage)
     }
     fun create() {
         val title = quick.trim()
@@ -135,7 +170,6 @@ fun TaskScreen(
         repository.edit { list, time -> list + draft(title, time, list) }
         resetQuick()
     }
-    LaunchedEffect(groups) { if (filters.none { it.first == view }) view = "all" }
     var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle, repository) {
@@ -171,103 +205,124 @@ fun TaskScreen(
                     }
                 }
             }
-            LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (homeworkOverview != null && view == "all" && !searching) {
-                    item("class-homework") { homeworkOverview() }
-                    item("personal-heading") { Text("个人任务", style = MaterialTheme.typography.titleMedium) }
+            LazyRow(
+                state = tabStrip,
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                itemsIndexed(filters, key = { _, item -> item.first }) { index, item ->
+                    FilterChip(view == item.first, { selectPage(index) }, { Text(item.second) })
                 }
-                item("controls") {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            filters.forEach { (key, name) -> FilterChip(view == key, { view = key }, { Text(name) }) }
-                            if (groups.size < 30) TextButton(onClick = { groupName = ""; addGroup = true }) { Text("新建分组") }
-                        }
-                        if (searching) OutlinedTextField(query, { query = it },
-                            Modifier.fillMaxWidth(), singleLine = true, label = { Text("搜索标题、备注或标签") })
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Choice("排序", sort, listOf("priority" to "智能", "manual" to "手动", "due" to "截止时间",
-                                "created" to "创建时间", "important" to "重要性")) { sort = it }
-                            TaskMenu(repository, snapshot, { newDraft = draft(quick, System.currentTimeMillis(), all).toString() },
-                                { manage = true }, { onShare(taskShareCard(visible, false)) }, onReminderSettings, { importLink = true })
+                if (groups.size < 30) item {
+                    TextButton(onClick = { groupName = ""; addGroup = true }) { Text("新建分组") }
+                }
+            }
+            if (searching) OutlinedTextField(query, { query = it },
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp), singleLine = true,
+                label = { Text("搜索标题、备注或标签") })
+            HorizontalPager(
+                state = pager,
+                modifier = Modifier.weight(1f),
+                key = { pageKeys[it] },
+                verticalAlignment = Alignment.Top,
+            ) { page ->
+                val pageView = pageKeys[page]
+                val visible = remember(all, pageView, query, sort, today) {
+                    tasksForView(all, pageView, query, sort, today)
+                }
+                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (homeworkOverview != null && pageView == "all" && !searching) {
+                        item("class-homework") { homeworkOverview() }
+                        item("personal-heading") { Text("个人任务", style = MaterialTheme.typography.titleMedium) }
+                    }
+                    item("controls") {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Choice("排序", sort, listOf("priority" to "智能", "manual" to "手动", "due" to "截止时间",
+                                    "created" to "创建时间", "important" to "重要性")) { sort = it }
+                                TaskMenu(repository, snapshot, { newDraft = draft(quick, System.currentTimeMillis(), all).toString() },
+                                    { manage = true }, { onShare(taskShareCard(visible, false)) }, onReminderSettings, { importLink = true })
+                            }
                         }
                     }
-                }
-                if (visible.isEmpty()) item("empty") {
-                    Text(if (query.isNotBlank()) "没有匹配的任务" else if (view == "done") "暂无已完成任务" else "暂无待办任务",
-                        Modifier.padding(vertical = 18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                items(visible, key = { "item-" + it.text("id") }) { task ->
-                    val id = task.text("id")
-                    val done = task.flag("done")
-                    val colors = MaterialTheme.colorScheme
-                    Card(
-                        modifier = if (reduceMotion) Modifier else Modifier.animateItem(),
-                        colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().clickable { detail = id }.padding(horizontal = 4.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                    if (visible.isEmpty()) item("empty") {
+                        Text(if (query.isNotBlank()) "没有匹配的任务" else if (pageView == "done") "暂无已完成任务" else "暂无待办任务",
+                            Modifier.padding(vertical = 18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    items(visible, key = { "item-" + it.text("id") }) { task ->
+                        val id = task.text("id")
+                        val done = task.flag("done")
+                        val colors = MaterialTheme.colorScheme
+                        Card(
+                            modifier = if (reduceMotion) Modifier else Modifier.animateItem(),
+                            colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
                         ) {
-                            Checkbox(done, { value -> repository.edit { list, time -> changeCompletion(list, id, value, time) } },
-                                modifier = Modifier.semantics { contentDescription = if (done) "标记未完成" else "标记完成" })
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    task.text("title"), style = MaterialTheme.typography.titleMedium,
-                                    color = if (done) colors.onSurfaceVariant else colors.onSurface,
-                                    textDecoration = if (done) TextDecoration.LineThrough else null,
-                                )
-                                val due = taskDueLabel(task, today)
-                                if (due.isNotBlank()) Text(
-                                    due, style = MaterialTheme.typography.labelMedium,
-                                    color = if (!done && taskPriority(task, today) == 0) colors.error else colors.onSurfaceVariant,
-                                )
-                                val meta = buildList {
-                                    if (task.text("myDay") == today) add("我的一天")
-                                    groups.find { it.text("id") == task.text("list") }?.let { add(it.text("name")) }
-                                    if (task.text("sourceHwId").isNotBlank()) add("班级作业")
-                                    if (task.text("sourceNoticeId").isNotBlank()) add("班级通知")
-                                    task.strings("tags").filterNot { it in this }.forEach { add("#$it") }
-                                    if (task.number("remindAt") > 0) add("有提醒")
-                                    repeats[task.text("repeat").ifBlank { "-" }]?.let { add(it) }
-                                    val files = task.objects("localFiles")
-                                    if (files.isNotEmpty()) add("附件 ${files.size}")
-                                }.filter(String::isNotBlank).distinct()
-                                if (meta.isNotEmpty()) Text(meta.joinToString(" · "), style = MaterialTheme.typography.bodySmall,
-                                    color = colors.onSurfaceVariant)
+                            Row(
+                                Modifier.fillMaxWidth().clickable { detail = id }.padding(horizontal = 4.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(done, { value -> repository.edit { list, time -> changeCompletion(list, id, value, time) } },
+                                    modifier = Modifier.semantics { contentDescription = if (done) "标记未完成" else "标记完成" })
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        task.text("title"), style = MaterialTheme.typography.titleMedium,
+                                        color = if (done) colors.onSurfaceVariant else colors.onSurface,
+                                        textDecoration = if (done) TextDecoration.LineThrough else null,
+                                    )
+                                    val due = taskDueLabel(task, today)
+                                    if (due.isNotBlank()) Text(
+                                        due, style = MaterialTheme.typography.labelMedium,
+                                        color = if (!done && taskPriority(task, today) == 0) colors.error else colors.onSurfaceVariant,
+                                    )
+                                    val meta = buildList {
+                                        if (task.text("myDay") == today) add("我的一天")
+                                        groups.find { it.text("id") == task.text("list") }?.let { add(it.text("name")) }
+                                        if (task.text("sourceHwId").isNotBlank()) add("班级作业")
+                                        if (task.text("sourceNoticeId").isNotBlank()) add("班级通知")
+                                        task.strings("tags").filterNot { it in this }.forEach { add("#$it") }
+                                        if (task.number("remindAt") > 0) add("有提醒")
+                                        repeats[task.text("repeat").ifBlank { "-" }]?.let { add(it) }
+                                        val files = task.objects("localFiles")
+                                        if (files.isNotEmpty()) add("附件 ${files.size}")
+                                    }.filter(String::isNotBlank).distinct()
+                                    if (meta.isNotEmpty()) Text(meta.joinToString(" · "), style = MaterialTheme.typography.bodySmall,
+                                        color = colors.onSurfaceVariant)
+                                }
+                                val starred = task.flag("starred")
+                                IconToggleButton(starred, { value -> repository.edit { list, time ->
+                                    list.map { if (it.text("id") == id) it.withFields { put("starred", value); put("updatedAt", time) } else it }
+                                } }) {
+                                    Icon(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, "重要任务",
+                                        tint = if (starred) colors.primary else colors.onSurfaceVariant)
+                                }
+                                IconButton(onClick = { editing = id }) { Icon(Icons.Rounded.Edit, "编辑", tint = colors.onSurfaceVariant) }
                             }
-                            val starred = task.flag("starred")
-                            IconToggleButton(starred, { value -> repository.edit { list, time ->
-                                list.map { if (it.text("id") == id) it.withFields { put("starred", value); put("updatedAt", time) } else it }
-                            } }) {
-                                Icon(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, "重要任务",
-                                    tint = if (starred) colors.primary else colors.onSurfaceVariant)
-                            }
-                            IconButton(onClick = { editing = id }) { Icon(Icons.Rounded.Edit, "编辑", tint = colors.onSurfaceVariant) }
-                        }
-                        val steps = task.objects("steps")
-                        if (steps.isNotEmpty()) {
-                            TextButton(onClick = { expanded = if (expanded == id) null else id }) {
-                                Text((if (expanded == id) "收起步骤" else "展开步骤") + "  " + steps.count { it.flag("done") } + "/" + steps.size)
-                            }
-                            AnimatedVisibility(expanded == id,
-                                enter = if (reduceMotion) EnterTransition.None else expandVertically(),
-                                exit = if (reduceMotion) ExitTransition.None else shrinkVertically()) {
-                                Column(Modifier.padding(start = 12.dp, bottom = 6.dp)) {
-                                    steps.forEachIndexed { index, step ->
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Checkbox(step.flag("done"), { value -> repository.edit { list, now ->
-                                                list.map { old ->
-                                                    if (old.text("id") != id || old.objects("steps").getOrNull(index) != step) old
-                                                    else old.withFields {
-                                                        put("updatedAt", now)
-                                                        put("steps", JsonArray(old.objects("steps").mapIndexed { i, s ->
-                                                            if (i == index) s.withFields { put("done", value) } else s
-                                                        }))
+                            val steps = task.objects("steps")
+                            if (steps.isNotEmpty()) {
+                                TextButton(onClick = { expanded = if (expanded == id) null else id }) {
+                                    Text((if (expanded == id) "收起步骤" else "展开步骤") + "  " + steps.count { it.flag("done") } + "/" + steps.size)
+                                }
+                                AnimatedVisibility(expanded == id,
+                                    enter = if (reduceMotion) EnterTransition.None else expandVertically(),
+                                    exit = if (reduceMotion) ExitTransition.None else shrinkVertically()) {
+                                    Column(Modifier.padding(start = 12.dp, bottom = 6.dp)) {
+                                        steps.forEachIndexed { index, step ->
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Checkbox(step.flag("done"), { value -> repository.edit { list, now ->
+                                                    list.map { old ->
+                                                        if (old.text("id") != id || old.objects("steps").getOrNull(index) != step) old
+                                                        else old.withFields {
+                                                            put("updatedAt", now)
+                                                            put("steps", JsonArray(old.objects("steps").mapIndexed { i, s ->
+                                                                if (i == index) s.withFields { put("done", value) } else s
+                                                            }))
+                                                        }
                                                     }
-                                                }
-                                            } }, modifier = Modifier.semantics { contentDescription = "步骤 · " + step.text("text") })
-                                            Column { Text(step.text("text")); if (step.text("note").isNotBlank()) Text(step.text("note"), style = MaterialTheme.typography.bodySmall) }
+                                                } }, modifier = Modifier.semantics { contentDescription = "步骤 · " + step.text("text") })
+                                                Column { Text(step.text("text")); if (step.text("note").isNotBlank()) Text(step.text("note"), style = MaterialTheme.typography.bodySmall) }
+                                            }
                                         }
                                     }
                                 }
@@ -325,7 +380,7 @@ fun TaskScreen(
     if (addGroup) AlertDialog(onDismissRequest = { addGroup = false }, title = { Text("新建分组") },
         text = { OutlinedTextField(groupName, { groupName = it.take(20) }, label = { Text("分组名称") }, singleLine = true) },
         confirmButton = { TextButton(enabled = groupName.isNotBlank(), onClick = {
-            repository.addGroup(groupName)?.let { view = "group-" + it }
+            repository.addGroup(groupName)?.let { savedView = "group-" + it }
             addGroup = false
         }) { Text("创建") } }, dismissButton = { TextButton(onClick = { addGroup = false }) { Text("取消") } })
     if (selected != null) key(selected.text("id")) {

@@ -181,9 +181,8 @@ object ReminderPlanner {
         if (next.startAt <= nowMillis) return emptyList()
         val leadMillis = settings.classLeadMillis
         val rawTrigger = next.startAt - leadMillis
-        val trigger = if (rawTrigger <= nowMillis) nowMillis + IMMEDIATE_DELAY_MS else rawTrigger
+        val trigger = maxOf(rawTrigger, nowMillis)
         if (settings.isQuiet(trigger, zone)) return emptyList()
-        val minutesLeft = ((next.startAt - nowMillis) / 60_000L).coerceAtLeast(1)
         return listOf(
             ReminderEvent(
                 kind = ReminderKind.COURSE_SOON,
@@ -202,11 +201,9 @@ object ReminderPlanner {
                         append(" · ")
                         append(next.room)
                     }
-                    append(" · 还有 ")
-                    append(minutesLeft)
-                    append(" 分钟")
                 },
                 toolId = ReminderKind.COURSE_SOON.toolId,
+                course = CourseReminderInfo(next.name, next.fullRoom.ifBlank { next.room }, next.startAt, next.endAt),
             ),
         )
     }
@@ -291,25 +288,35 @@ object ReminderPlanner {
     ): List<ReminderEvent> {
         if (!settings.enabled || !settings.noticeNewEnabled) return emptyList()
         if (!snapshot.initialized) return emptyList()
-        val entries = notices?.auto ?: return emptyList()
-        val seen = snapshot.ntIds.toHashSet()
+        if (notices == null) return emptyList()
         val trigger = nowMillis + IMMEDIATE_DELAY_MS
         if (settings.isQuiet(trigger, zone)) return emptyList()
-        return entries.mapNotNull { entry ->
-            if (entry.hidden) return@mapNotNull null
-            val id = entry.id.trim()
-            if (id.isEmpty() || id in handledIds || id in seen) return@mapNotNull null
-            val group = entry.group
-            val who = group.senderName.trim()
-            ReminderEvent(
+        val seen = (snapshot.ntIds + snapshot.manualNoticeIds.orEmpty() + handledIds).toMutableSet()
+        val events = mutableListOf<ReminderEvent>()
+        fun addNotice(rawId: String, sender: String, title: String) {
+            val id = rawId.trim()
+            if (id.isEmpty() || !seen.add(id)) return
+            val name = title.trim().ifBlank { "班级通知" }
+            events += ReminderEvent(
                 kind = ReminderKind.NOTICE_NEW,
                 key = "nt-new:$id",
                 triggerAtMillis = trigger,
                 title = "新通知",
-                body = (if (who.isNotEmpty()) "$who · " else "") + group.title.ifBlank { entry.title },
+                body = listOf(sender.trim(), name).filter(String::isNotEmpty).joinToString(" · "),
                 toolId = ReminderKind.NOTICE_NEW.toolId,
             )
         }
+        notices.auto.forEach { entry ->
+            if (!entry.hidden) addNotice(entry.id, entry.group.senderName, entry.title)
+        }
+        if (snapshot.manualNoticeIds != null) {
+            notices.manual.forEach { notice ->
+                if (!notice.row.hidden && !notice.row.archived) {
+                    addNotice(notice.id, notice.row.author, notice.row.title)
+                }
+            }
+        }
+        return events
     }
 
     /** 活动开抢提醒（报名开始前 5 分钟）。 */
@@ -581,6 +588,10 @@ object ReminderPlanner {
                 previous.ntIds,
                 notices?.auto.orEmpty().mapNotNull { it.id.trim().takeIf { id -> id.isNotEmpty() } },
             ),
+            manualNoticeIds = notices?.let { data ->
+                val ids = data.manual.asReversed().map { it.id.trim() }.filter(String::isNotEmpty)
+                mergeIds(previous.manualNoticeIds.orEmpty(), ids)
+            } ?: previous.manualNoticeIds,
             pollIds = mergeIds(previous.pollIds, polls.mapNotNull { it.id.trim().takeIf { id -> id.isNotEmpty() } }),
             closedPollIds = mergeIds(
                 previous.closedPollIds,
@@ -612,7 +623,11 @@ object ReminderPlanner {
         horizonMillis: Long = ReminderPlan.DEFAULT_HORIZON_MS,
         graceMillis: Long = ReminderPlan.DEFAULT_GRACE_MS,
     ): List<ReminderEvent> = events.filter { event ->
-        event.triggerAtMillis in (nowMillis - graceMillis)..(nowMillis + horizonMillis)
+        if (event.kind == ReminderKind.COURSE_SOON) {
+            event.triggerAtMillis <= nowMillis && (event.courseStartAtMillis ?: 0L) > nowMillis
+        } else {
+            event.triggerAtMillis in (nowMillis - graceMillis)..(nowMillis + horizonMillis)
+        }
     }
 
     /** 汇总覆盖窗口结束：汇总日 + 2 天（后天）的 23:59:59.999。 */

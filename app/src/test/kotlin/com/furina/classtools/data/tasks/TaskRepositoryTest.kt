@@ -134,6 +134,14 @@ class TaskRepositoryTest {
         assertEquals(2, changeCompletion(listOf(done.first(), next.withFields { put("updatedAt", now + 1) }), parent.text("id"), false, now + 2).size)
     }
 
+    @Test fun recentlySyncedTaskRemindersCatchUpOnceTheyAreDiscovered() {
+        val now = 1_800_000_000_000L
+        assertEquals(120_000L, taskReminderDelay(now + 120_000, now))
+        assertEquals(0L, taskReminderDelay(now - 15 * 60_000, now))
+        assertEquals(null, taskReminderDelay(now - 24 * 60 * 60_000L, now))
+        assertEquals(null, taskReminderDelay(0, now))
+    }
+
     @Test fun reminderRespectsSnoozeCompletionAndPriorDelivery() {
         val task = buildJsonObject { put("remindAt", 1000); put("snoozeUntil", 2000); put("lastNotifyAt", 1000) }
         assertEquals(2000L, taskReminderTime(task))

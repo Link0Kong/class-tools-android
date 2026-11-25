@@ -79,10 +79,10 @@ class InMemoryReminderDedupeStore(
 }
 
 /** SharedPreferences 实现（进程重启保留，避免重复通知）。 */
-class SharedPrefsReminderDedupeStore(context: Context) : ReminderDedupeStore {
+class SharedPrefsReminderDedupeStore(context: Context, owner: String = "") : ReminderDedupeStore {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getSharedPreferences(if (owner.isEmpty()) PREFS_NAME else "${PREFS_NAME}_$owner", Context.MODE_PRIVATE)
 
     override suspend fun lastSent(key: String): Long? =
         prefs.getLong(keyPrefix(key), 0L).takeIf { it > 0L }

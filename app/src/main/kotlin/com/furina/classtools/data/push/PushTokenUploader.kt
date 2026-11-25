@@ -78,8 +78,22 @@ interface PushTokenUploader {
     suspend fun upload(payload: PushTokenPayload): PushUploadResult
 }
 
+interface OppoTokenBinding : PushTokenUploader {
+    suspend fun releaseOwn(sid: String, registrationId: String): PushUploadResult
+}
+
 /** ApiClient 实现：写请求不重试（ApiClient 语义），失败错误就地转文案。 */
-class ApiPushTokenUploader(private val api: ApiClient) : PushTokenUploader {
+class ApiPushTokenUploader(private val api: ApiClient) : OppoTokenBinding {
+
+    override suspend fun releaseOwn(sid: String, registrationId: String): PushUploadResult {
+        if (sid.isBlank() || registrationId.isBlank()) return PushUploadResult.Skipped
+        fun encoded(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
+        val path = "push_tokens?provider=eq.oppo&sid=eq.${encoded(sid)}&token=eq.${encoded(registrationId)}"
+        return when (val result = api.delete(path)) {
+            is ApiResult.Success -> PushUploadResult.Uploaded
+            is ApiResult.Failure -> PushUploadResult.Failed(result.error.displayMessage)
+        }
+    }
 
     override suspend fun upload(payload: PushTokenPayload): PushUploadResult {
         if (!payload.isValid) return PushUploadResult.Skipped
@@ -89,6 +103,7 @@ class ApiPushTokenUploader(private val api: ApiClient) : PushTokenUploader {
                 body = payload.toJson(),
                 prefer = PushTokenPayload.PREFER,
                 authenticated = true,
+                notifyTokenInvalid = false,
             )
         ) {
             is ApiResult.Success -> PushUploadResult.Uploaded

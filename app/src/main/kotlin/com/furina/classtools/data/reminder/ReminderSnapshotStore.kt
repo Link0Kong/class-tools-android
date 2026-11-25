@@ -54,10 +54,10 @@ class InMemoryReminderSnapshotStore(
 }
 
 /** SharedPreferences 实现（设备级，进程重启保留；随 App 卸载清除）。 */
-class SharedPrefsReminderSnapshotStore(context: Context) : ReminderSnapshotStore {
+class SharedPrefsReminderSnapshotStore(context: Context, owner: String = "") : ReminderSnapshotStore {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getSharedPreferences(if (owner.isEmpty()) PREFS_NAME else "${PREFS_NAME}_$owner", Context.MODE_PRIVATE)
 
     override suspend fun load(): ReminderSnapshot =
         ReminderSnapshotCodec.decode(prefs.getString(KEY_SNAPSHOT, null))

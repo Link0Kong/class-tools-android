@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * OPPO PUSH 客户端编排器（启用条件 / 注册 / 状态 / token 上传）。
@@ -26,18 +28,20 @@ class OppoPushManager(
     private val config: OppoPushConfig,
     private val sdk: OppoPushSdk,
     private val store: OppoPushStore,
-    private val uploader: PushTokenUploader,
+    private val uploaderForSession: (Session) -> OppoTokenBinding,
     private val scope: CoroutineScope,
-    private val sessionProvider: () -> Session?,
+    private val sessionProvider: suspend () -> Session?,
     private val deviceLabel: () -> String,
     private val appVersion: String,
     private val debug: Boolean,
-    private val gate: PushTokenUploadGate = PushTokenUploadGate(),
     private val ensureNotificationChannel: () -> Unit = {},
 ) {
 
     private val _status = MutableStateFlow(initialStatus())
     val status: StateFlow<OppoPushStatus> = _status.asStateFlow()
+    private val bindingLock = Mutex()
+    private data class Binding(val owner: Session, val registrationId: String)
+    private var bound: Binding? = null
 
     /** 是否已配置密钥（未配置时设置页点击只提示，不触发注册）。 */
     val isConfigured: Boolean get() = config.isConfigured
@@ -104,23 +108,41 @@ class OppoPushManager(
      * 跳过条件：未登录 / debug 预览会话 / token 为空 / 无 RegistrationID / 同一会话重复上传。
      * 上传失败时释放幂等门，让下次登录或重试可以补传。
      */
-    suspend fun uploadTokenNow(): PushUploadResult {
-        val session = sessionProvider() ?: return PushUploadResult.Skipped
-        if (session.debug || session.token.isBlank()) return PushUploadResult.Skipped
+    suspend fun uploadTokenNow(): PushUploadResult = bindingLock.withLock {
+        if (!config.isConfigured) return@withLock PushUploadResult.Skipped
+        var owner = currentOwner()
         val registrationId = store.registrationId().orEmpty()
             .ifBlank { _status.value.registrationId }
             .trim()
-        val payload = PushTokenPayload.of(registrationId, deviceLabel(), appVersion)
-            ?: return PushUploadResult.Skipped
-        if (!gate.shouldUpload(session.sid, registrationId, appVersion)) {
-            return PushUploadResult.Skipped
+        val previous = bound
+        if (previous != null && previous.owner.sid != owner?.sid) {
+            // Only revoke the exact device/owner pair this process successfully bound.
+            if (previous.registrationId == registrationId && previous.owner.isLikelyValid()) {
+                val released = uploaderForSession(previous.owner).releaseOwn(previous.owner.sid, previous.registrationId)
+                if (released is PushUploadResult.Failed) return@withLock released
+            }
+            bound = null
+            // The user may have switched again while the old owner was being released.
+            owner = currentOwner()
         }
-        val result = uploader.upload(payload)
-        if (result is PushUploadResult.Failed) {
-            gate.reset()
-            android.util.Log.w(TAG, "推送 token 上传失败：${result.message}")
+        if (owner == null || registrationId.isBlank()) return@withLock PushUploadResult.Skipped
+        val active = bound
+        if (active?.owner?.sid == owner.sid && active.registrationId == registrationId) {
+            bound = Binding(owner, registrationId)
+            return@withLock PushUploadResult.Skipped
         }
-        return result
+        val payload = PushTokenPayload.of(registrationId, deviceLabel(), appVersion) ?: return@withLock PushUploadResult.Skipped
+        val result = uploaderForSession(owner).upload(payload)
+        if (result == PushUploadResult.Uploaded) {
+            bound = Binding(owner, registrationId)
+            val current = sessionProvider()
+            if (current?.sid != owner.sid || current.token != owner.token || current.debug) onSessionChanged()
+        }
+        result
+    }
+
+    private suspend fun currentOwner(): Session? = sessionProvider()?.takeIf {
+        !it.debug && it.sid.isNotBlank() && it.token.isNotBlank() && it.isLikelyValid()
     }
 
     // ------------------------------------------------------------ 内部

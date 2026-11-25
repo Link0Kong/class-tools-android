@@ -36,7 +36,7 @@ class TaskRepository(
     private val api: ApiClient,
     private val scope: CoroutineScope,
     private val onChanged: (JsonObject, JsonObject) -> Unit = { _, _ -> },
-    private val canSync: () -> Boolean,
+    private val canSync: suspend () -> Boolean,
 ) {
     private fun read(key: String) = storage.read(key)?.let {
         runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull()

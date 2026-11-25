@@ -40,10 +40,10 @@ class InMemoryReminderRunStateStore(
     }
 }
 
-class SharedPrefsReminderRunStateStore(context: Context) : ReminderRunStateStore {
+class SharedPrefsReminderRunStateStore(context: Context, owner: String = "") : ReminderRunStateStore {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getSharedPreferences(if (owner.isEmpty()) PREFS_NAME else "${PREFS_NAME}_$owner", Context.MODE_PRIVATE)
 
     override suspend fun lastRunAt(): Long? =
         prefs.getLong(KEY_LAST_RUN, 0L).takeIf { it > 0L }

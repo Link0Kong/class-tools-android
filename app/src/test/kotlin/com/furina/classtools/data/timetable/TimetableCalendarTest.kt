@@ -16,6 +16,16 @@ import org.junit.Test
  */
 class TimetableCalendarTest {
 
+    @Test
+    fun nextBellInsideDoublePeriodIsAvailableBeforeTheBreak() {
+        val morning = ZonedDateTime.of(2026, 11, 6, 8, 45, 0, 0, TimetableLink.CHINA_ZONE)
+        val result = TtCalendar.nextSession(listOf(course("连堂", day = 4, start = 1, end = 2)),
+            termStart, morning.toInstant().toEpochMilli(), TimetableLink.CHINA_ZONE)
+        assertEquals("09:00", result?.startText)
+        assertEquals("09:40", result?.endText)
+        assertEquals(morning.withHour(9).withMinute(0).toInstant().toEpochMilli(), result?.startAt)
+    }
+
     private val zone: ZoneId = ZoneId.of("Asia/Shanghai")
     // 2026-11-06（周五）10:00 —— 周五有 14:30 的课，便于测试「下一节/今日状态」。
     private val now: Long = ZonedDateTime.of(2026, 11, 6, 10, 0, 0, 0, zone).toInstant().toEpochMilli()

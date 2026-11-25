@@ -96,10 +96,12 @@ import com.furina.classtools.widget.DesktopWidgets
 import com.furina.classtools.widget.WidgetFeedStore
 import com.furina.classtools.data.timetable.XiaobuCourseSync
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collect
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionStore
+import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.data.settings.AppSettingsStore
 import com.furina.classtools.data.sync.DefaultUserDataRepository
 import com.furina.classtools.data.sync.FileUserDataLocalStore
@@ -173,10 +175,12 @@ class AppContainer(context: Context) {
         userDataRepository.hydrateFromLocal()
         preparedSession = session
         warmReminderCaches()
+        if (!session.debug) ReminderRuntime.runNow(appContext)
     }
 
     internal fun updateActiveSession(session: Session?) {
-        val previousSid = activeSession?.sid
+        val previous = activeSession
+        val previousSid = previous?.sid
         activeSession = session
         // 启动/登录后在线时补报本机待发的崩溃/诊断队列（契约 §2：启动后补报）。
         if (session != null && !session.debug && previousSid != session.sid) {
@@ -189,9 +193,11 @@ class AppContainer(context: Context) {
         }
         // OPPO PUSH：登录 / 切换账号 / token 恢复后，用缓存 RegistrationID 重新上传到当前账号
         // （未登录时 manager 内部跳过，等下次 onSessionChanged；重复上传由幂等门跳过）。
+        if (previousSid != session?.sid || previous?.token != session?.token || previous?.debug != session?.debug) {
+            runCatching { oppoPushManager.onSessionChanged() }
+        }
         if (previousSid != session?.sid) {
             if (session != null && !session.debug) {
-                runCatching { oppoPushManager.onSessionChanged() }
                 runCatching { vivoPushManager.onSessionChanged() }
             }
             // 云空间会话绑定班级身份；切号/退出时丢弃内存会话与游标，避免串号。
@@ -270,14 +276,18 @@ class AppContainer(context: Context) {
     fun tasksFor(session: Session): TaskRepository {
         if (taskOwner == session) tasks?.let { return it }
         val store = appContext.getSharedPreferences("tasks_" + (if (session.debug) "debug_" else "") + session.sid, Context.MODE_PRIVATE)
-        val repository = TaskRepository(session.sid, TaskPreferences(store), apiClient, appScope,
+        val taskApi = ApiClient(BuildConfig.REST_BASE_URL, BuildConfig.PUBLISHABLE_KEY, tokenProvider = { session.token })
+        val repository = TaskRepository(session.sid, TaskPreferences(store), taskApi, appScope,
             onChanged = { before, after ->
                 com.furina.classtools.data.tasks.TaskFiles.prune(appContext, before, after)
                 if (!session.debug) scheduleTaskReminders(appContext, session.sid, before, after)
                 if (com.furina.classtools.widget.DesktopWidgets.feedKinds(appContext).isNotEmpty())
                     com.furina.classtools.widget.DesktopWidgets.refresh(appContext)
             },
-            canSync = { !session.debug && activeSession?.sid == session.sid && activeSession?.token == session.token },
+            canSync = {
+                !session.debug && session.isLikelyValid() &&
+                    (sessionStore.state.first() as? com.furina.classtools.data.session.SessionState.SignedIn)?.session == session
+            },
         )
         tasks = repository
         taskOwner = session
@@ -285,6 +295,14 @@ class AppContainer(context: Context) {
     }
 
     private var noticeSession: Pair<Session?, NoticesRepository>? = null
+    private var backgroundNotices: Pair<Session, DefaultNoticesRepository>? = null
+
+    /** Reuse the signature and metadata between scans in this process. Pin its HTTP client to this account. */
+    @Synchronized
+    internal fun backgroundNoticesFor(session: Session, api: ApiClient): DefaultNoticesRepository =
+        backgroundNotices?.takeIf { it.first == session }?.second
+            ?: DefaultNoticesRepository(api).also { backgroundNotices = session to it }
+
     val noticesRepository: NoticesRepository
         @Synchronized get() {
             val session = activeSession
@@ -538,9 +556,11 @@ class AppContainer(context: Context) {
             ),
             sdk = HeytapOppoPushSdk(appContext),
             store = PrefsOppoPushStore(appContext),
-            uploader = ApiPushTokenUploader(apiClient),
+            uploaderForSession = { owner ->
+                ApiPushTokenUploader(ApiClient(BuildConfig.REST_BASE_URL, BuildConfig.PUBLISHABLE_KEY, tokenProvider = { owner.token }))
+            },
             scope = appScope,
-            sessionProvider = { activeSession },
+            sessionProvider = { (sessionStore.state.first() as? SessionState.SignedIn)?.session },
             deviceLabel = { deviceLabel() },
             appVersion = BuildConfig.VERSION_NAME,
             debug = BuildConfig.DEBUG,
@@ -699,8 +719,9 @@ class AppContainer(context: Context) {
 
     /** 退出登录：清内存会话、名单缓存（本机业务数据按账号隔离，下次登录同账号仍可用）。 */
     suspend fun signOut() {
-        updateActiveSession(null)
+        synchronized(this) { backgroundNotices = null }
         sessionStore.clear()
+        updateActiveSession(null)
         classMembersRepository.clear()
     }
 

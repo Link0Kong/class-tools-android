@@ -104,7 +104,10 @@ class TaskScreenTest {
             assertTrue(input.config[SemanticsActions.SetText].action!!.invoke(AnnotatedString("模拟任务")))
             click("保存任务")
             assertEquals("模拟任务", repository.snapshot.value.objects("items").single().text("title"))
-            find("任务列表") { SemanticsActions.ScrollToIndex in it.config }.config[SemanticsActions.ScrollToIndex].action!!.invoke(1)
+            val taskList = find("任务列表") {
+                SemanticsProperties.VerticalScrollAxisRange in it.config && SemanticsActions.ScrollToIndex in it.config
+            }
+            assertTrue(taskList.config[SemanticsActions.ScrollToIndex].action!!.invoke(1))
             if (animationScale == 0f) {
                 click("模拟任务")
                 click("分享可保存链接")

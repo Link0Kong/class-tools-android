@@ -91,6 +91,7 @@ class ReminderEngineTest {
 
     private class FakeNotifier(var succeed: Boolean = true) : ReminderNotifier {
         val events = mutableListOf<ReminderEvent>()
+        var withdrawn: List<String> = emptyList()
         var channelsEnsured = 0
         override fun ensureChannels() {
             channelsEnsured += 1
@@ -100,6 +101,9 @@ class ReminderEngineTest {
             events += event
             return succeed
         }
+
+        override fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long): List<String> =
+            withdrawn.also { withdrawn = emptyList() }
     }
 
     private class FakeDataProvider(
@@ -109,6 +113,7 @@ class ReminderEngineTest {
         var handledIds: Set<String> = emptySet(),
         var polls: List<PollSummary> = emptyList(),
         var water: WaterWatch? = null,
+        override var availableFeeds: Set<String>? = null,
     ) : ReminderDataProvider {
         override suspend fun homeworkRows(): List<HomeworkRow> = rows
         override suspend fun homeworkDoneIds(): Set<String> = emptySet()
@@ -117,6 +122,33 @@ class ReminderEngineTest {
         override suspend fun handledNoticeIds(): Set<String> = handledIds
         override suspend fun votePolls(): List<PollSummary> = polls
         override suspend fun watchedWaterRoom(): WaterWatch? = water
+    }
+
+    @Test
+    fun offlineScanThenFirstReadEstablishesBaselineAndNewBackgroundPostIsDeliveredOnce() = runTest {
+        val data = FakeDataProvider(availableFeeds = emptySet())
+        val notifier = FakeNotifier()
+        val reminder = engine(data = data, notifier = notifier)
+        reminder.runNow()
+        data.availableFeeds = setOf("hw")
+        data.rows = listOf(HomeworkRow(id = "old", subject = "历史作业"))
+        reminder.runNow()
+        assertTrue(notifier.events.isEmpty())
+        data.rows = data.rows + HomeworkRow(id = "new", subject = "新增作业")
+        reminder.runNow()
+        reminder.runNow()
+        assertEquals(listOf("hw-new:new"), notifier.events.map { it.key })
+    }
+
+    @Test
+    fun accountChangeBeforeNotificationSuppressesThePreviousAccountsContent() = runTest {
+        val data = FakeDataProvider(availableFeeds = setOf("hw"))
+        val notifier = FakeNotifier()
+        val reminder = engine(data = data, notifier = notifier)
+        reminder.runNow()
+        data.rows = listOf(HomeworkRow(id = "new", subject = "新增作业"))
+        reminder.runNow { false }
+        assertTrue(notifier.events.isEmpty())
     }
 
     private fun engine(
@@ -128,6 +160,7 @@ class ReminderEngineTest {
         pendingStore: ReminderPendingEventStore = InMemoryReminderPendingEventStore(),
         snapshotStore: ReminderSnapshotStore = InMemoryReminderSnapshotStore(),
         clock: () -> Long = { now },
+        scheduleCourseAt: (Long) -> Unit = {},
     ): ReminderEngine = ReminderEngine(
         settingsStore = FakeSettingsStore(settings),
         dedupeStore = InMemoryReminderDedupeStore(),
@@ -139,7 +172,48 @@ class ReminderEngineTest {
         snapshotStore = snapshotStore,
         clock = clock,
         zone = zone,
+        scheduleCourseAt = scheduleCourseAt,
     )
+
+    @Test
+    fun courseIsScheduledAtTheLeadTimeAndLateWakeupsCannotReplayAnOldClass() = runTest {
+        val start = now + 22 * 60_000L
+        val notifier = FakeNotifier()
+        val wakeups = mutableListOf<Long>()
+        var wallClock = now
+        val data = FakeDataProvider(ttPlan = coursePlan(start))
+        val legacy = ReminderEvent(ReminderKind.COURSE_SOON, "class:${now - 1}", now - 60_000L, "旧课表", "还有 10 分钟")
+        val pending = InMemoryReminderPendingEventStore(listOf(legacy))
+        val engine = engine(notifier = notifier, data = data, pendingStore = pending,
+            clock = { wallClock }, scheduleCourseAt = { wakeups.add(it) })
+
+        assertEquals(0, engine.runNow().sent)
+        assertEquals(listOf(start - 10 * 60_000L), wakeups)
+        wallClock = start - 1
+        assertEquals(1, engine.runNow().sent)
+        assertEquals(start, notifier.events.single().courseStartAtMillis)
+        wallClock = start
+        pending.save(listOf(legacy, notifier.events.single()))
+        assertEquals(0, engine.runNow().sent)
+    }
+
+    @Test
+    fun movingClockBackWithdrawsAnEarlyCardAndRestoresItsNextReminder() = runTest {
+        val start = now + 10 * 60_000L
+        var current = now
+        val notifier = FakeNotifier()
+        val wakeups = mutableListOf<Long>()
+        val engine = engine(notifier = notifier, data = FakeDataProvider(ttPlan = coursePlan(start)),
+            clock = { current }, scheduleCourseAt = { wakeups.add(it) })
+        assertEquals(1, engine.runNow().sent)
+        current -= 5 * 60_000L
+        notifier.withdrawn = listOf("class:$start")
+        assertEquals(0, engine.runNow().sent)
+        assertEquals(listOf(now), wakeups)
+        current = now
+        assertEquals(1, engine.runNow().sent)
+        assertEquals(0, engine.runNow().sent)
+    }
 
     // ------------------------------------------------------------ 运行结果/诊断字段
 

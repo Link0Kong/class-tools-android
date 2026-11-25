@@ -317,6 +317,7 @@ class DefaultVoteRepository(
     private val clock: () -> Long = System::currentTimeMillis,
     private val json: Json = NetJson,
     private val listTtlMs: Long = DEFAULT_TTL_MS,
+    private val elapsedClock: () -> Long = android.os.SystemClock::elapsedRealtime,
 ) : VoteRepository {
 
     private var cacheSid: String? = null
@@ -359,9 +360,7 @@ class DefaultVoteRepository(
         return when (val result = post(DETAIL_PATH, VoteRpcBody.detailBody(id))) {
             is VoteResult.Failure -> fallbackDetail(id, result.error)
             is VoteResult.Success -> {
-                val parsed = VoteParser.parseDetail(result.value)
-                detailCache[id] = parsed to now
-                VoteResult.Success(parsed)
+                VoteResult.Success(receiveDetail(result.value))
             }
         }
     }
@@ -378,9 +377,7 @@ class DefaultVoteRepository(
         return when (val result = post(CREATE_PATH, VoteRpcBody.createBody(prepared))) {
             is VoteResult.Failure -> VoteResult.Failure(result.error)
             is VoteResult.Success -> {
-                val parsed = VoteParser.parseDetail(result.value)
-                cacheDetail(parsed)
-                VoteResult.Success(parsed)
+                VoteResult.Success(receiveDetail(result.value))
             }
         }
     }
@@ -399,9 +396,7 @@ class DefaultVoteRepository(
         return when (val result = post(SUBMIT_PATH, VoteRpcBody.submitBody(id, choices))) {
             is VoteResult.Failure -> VoteResult.Failure(result.error)
             is VoteResult.Success -> {
-                val parsed = VoteParser.parseDetail(result.value)
-                cacheDetail(parsed)
-                VoteResult.Success(parsed)
+                VoteResult.Success(receiveDetail(result.value))
             }
         }
     }
@@ -418,9 +413,7 @@ class DefaultVoteRepository(
                     detailCache.remove(id)
                     VoteResult.Success(PollManageResult.Deleted(id))
                 } else {
-                    val parsed = VoteParser.parseDetail(result.value)
-                    cacheDetail(parsed)
-                    VoteResult.Success(PollManageResult.Updated(parsed))
+                    VoteResult.Success(PollManageResult.Updated(receiveDetail(result.value)))
                 }
             }
         }
@@ -439,10 +432,12 @@ class DefaultVoteRepository(
         }
     }
 
-    private fun cacheDetail(detail: PollDetail) {
+    private fun receiveDetail(body: JsonObject): PollDetail {
+        val detail = VoteParser.parseDetail(body).copy(receivedAtElapsedMillis = elapsedClock())
         if (detail.poll.id.isNotBlank()) {
             detailCache[detail.poll.id] = detail to clock()
         }
+        return detail
     }
 
     private fun fallbackList(error: VoteError): VoteResult<PollList> {

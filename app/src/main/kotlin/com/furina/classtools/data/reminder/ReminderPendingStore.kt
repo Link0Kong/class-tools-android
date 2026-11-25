@@ -42,10 +42,10 @@ class InMemoryReminderPendingEventStore(
     }
 }
 
-class SharedPrefsReminderPendingEventStore(context: Context) : ReminderPendingEventStore {
+class SharedPrefsReminderPendingEventStore(context: Context, owner: String = "") : ReminderPendingEventStore {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getSharedPreferences(if (owner.isEmpty()) PREFS_NAME else "${PREFS_NAME}_$owner", Context.MODE_PRIVATE)
 
     override suspend fun load(): List<ReminderEvent> =
         ReminderPendingCodec.decode(prefs.getString(KEY_EVENTS, null))
@@ -120,6 +120,8 @@ object ReminderPendingCatchUp {
         nowMillis: Long,
         maxEvents: Int = MAX_PENDING_EVENTS,
     ): List<ReminderEvent> = events
+        // A course's start, room or enablement may change. Re-plan it from the current timetable at delivery.
+        .filterNot { it.kind == ReminderKind.COURSE_SOON }
         .filter { it.triggerAtMillis > nowMillis }
         .sortedBy { it.triggerAtMillis }
         .distinctBy { it.key }
@@ -135,6 +137,7 @@ object ReminderPendingCatchUp {
         lookbackMillis: Long,
         keysAlreadyPlanned: Set<String> = emptySet(),
     ): List<ReminderEvent> = pending
+        .filterNot { it.kind == ReminderKind.COURSE_SOON }
         .filter { it.triggerAtMillis in (nowMillis - lookbackMillis)..nowMillis }
         .filterNot { it.key in keysAlreadyPlanned }
         .sortedBy { it.triggerAtMillis }

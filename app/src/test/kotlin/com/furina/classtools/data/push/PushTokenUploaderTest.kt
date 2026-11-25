@@ -72,4 +72,20 @@ class PushTokenUploaderTest {
         assertEquals(PushUploadResult.Skipped, result)
         assertTrue(transport.requests.isEmpty())
     }
+
+    @Test
+    fun forbiddenBindingDoesNotClearTheSessionAndCleanupTargetsOnlyThatDevice() = runTest {
+        var invalidations = 0
+        val transport = FakeTransport { ApiResponse(403, "{}") }
+        val api = com.furina.classtools.data.network.ApiClient("https://example.invalid/", "test-key",
+            tokenProvider = { "owner-token" }, transport = transport, onTokenInvalid = { invalidations++ })
+        val uploader = ApiPushTokenUploader(api)
+        assertTrue(uploader.upload(PushTokenPayload("reg-1", "OPPO", "test")) is PushUploadResult.Failed)
+        assertTrue(uploader.releaseOwn("9999", "reg&other") is PushUploadResult.Failed)
+        val removed = transport.lastRequest()
+        assertEquals(HttpMethod.DELETE, removed.method)
+        assertEquals("https://example.invalid/push_tokens?provider=eq.oppo&sid=eq.9999&token=eq.reg%26other", removed.url)
+        assertEquals("owner-token", removed.headers["X-Class-Token"])
+        assertEquals(0, invalidations)
+    }
 }

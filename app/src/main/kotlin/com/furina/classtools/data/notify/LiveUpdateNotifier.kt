@@ -10,14 +10,13 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.furina.classtools.MainActivity
+import com.furina.classtools.R
 import com.furina.classtools.data.ppt.PptUploadPhase
 import com.furina.classtools.data.ppt.PptUploadProgress
 import com.furina.classtools.data.reminder.ReminderIntentFactory
-import com.furina.classtools.data.reminder.ReminderSmallIcon
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.furina.classtools.data.vote.VoteLogic
 
 /**
  * 系统级「实时活动」通知（Android 16 Live Updates / 状态栏胶囊）。
@@ -28,7 +27,7 @@ import java.util.Locale
  *
  * 规则（Google 规范）：
  * - `POST_PROMOTED_NOTIFICATIONS` 非运行时权限（manifest 声明）；
- * - 通知必须 ongoing、有 contentTitle、不得使用 customContentView / 群摘要 / colorized；
+ * - 使用 ongoing 和 contentTitle，交给系统绘制展开模板；Android 16 各修订版的配色兼容见 [buildLiveUpdate]；
  * - 样式为 Standard / BigText / Progress / Call / Metric；
  * - 通过 `setRequestPromotedOngoing(true)` 请求系统升级。
  */
@@ -76,10 +75,6 @@ object LiveUpdateNotifier {
             .getOrDefault(false)
     }
 
-    private fun smallIcon(context: Context): Int = ReminderSmallIcon.resolve { name ->
-        context.resources.getIdentifier(name, "drawable", context.packageName).takeIf { it != 0 }
-    }
-
     private fun openToolIntent(context: Context, toolId: String): PendingIntent? = runCatching {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -102,36 +97,47 @@ object LiveUpdateNotifier {
         if (!canNotify(context)) return
         ensureChannel(context)
         val uploading = progress.phase == PptUploadPhase.UPLOADING
+        val percent = progress.percent.coerceIn(0, PROGRESS_MAX)
         val phaseText = when (progress.phase) {
-            PptUploadPhase.CREATING -> "正在创建上传任务"
-            PptUploadPhase.UPLOADING -> "已上传 ${progress.percent}%"
-            PptUploadPhase.SUBMITTING -> "正在提交转换"
+            PptUploadPhase.CREATING -> "正在准备文件"
+            PptUploadPhase.UPLOADING -> "已上传 $percent%"
+            PptUploadPhase.SUBMITTING -> "上传完成，正在提交转换"
             else -> progress.message.ifBlank { "处理中" }
         }
-        val percent = progress.percent.coerceIn(0, PROGRESS_MAX)
+        val accent = context.getColor(R.color.live_upload_accent)
         val style = NotificationCompat.ProgressStyle()
             .setProgressSegments(
                 listOf(
-                    NotificationCompat.ProgressStyle.Segment(PROGRESS_MAX)
-                        .setColor(0xFF4E9082.toInt()),
+                    NotificationCompat.ProgressStyle.Segment(PROGRESS_MAX).setColor(accent),
                 ),
             )
+            .setProgress(percent)
             .setProgressIndeterminate(!uploading)
             .setStyledByProgress(true)
+        if (uploading) {
+            style.setProgressTrackerIcon(IconCompat.createWithResource(context, R.drawable.ic_live_upload).setTint(accent))
+        }
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(smallIcon(context))
-            .setContentTitle("演示上传中")
+            .setSmallIcon(R.drawable.ic_live_upload)
+            .setColor(accent)
+            .setContentTitle(progress.title.ifBlank { "上传演示文稿" })
+            .setSubText("演示上传")
             .setContentText(phaseText)
+            .setShowWhen(false)
             .setStyle(style)
             .setProgress(PROGRESS_MAX, percent, !uploading)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setRequestPromotedOngoing(true)
-            .setShortCriticalText(if (uploading) "上传 $percent%" else "演示处理中")
+            .setShortCriticalText(when (progress.phase) {
+                PptUploadPhase.UPLOADING -> "$percent%"
+                PptUploadPhase.CREATING -> "准备中"
+                else -> "提交中"
+            })
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setContentIntent(openToolIntent(context, "ppt"))
         runCatching {
-            NotificationManagerCompat.from(context).notify(PPT_NOTIFICATION_ID, builder.build())
+            NotificationManagerCompat.from(context).notify(PPT_NOTIFICATION_ID, builder.buildLiveUpdate())
         }
     }
 
@@ -140,7 +146,8 @@ object LiveUpdateNotifier {
         if (!canNotify(context)) return
         ensureChannel(context)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(smallIcon(context))
+            .setSmallIcon(R.drawable.ic_live_upload)
+            .setColor(context.getColor(R.color.live_upload_accent))
             .setContentTitle(if (success) "演示上传完成" else "演示上传失败")
             .setContentText(message.ifBlank { if (success) "已提交转换，可在演示列表查看进度" else "请稍后重试" })
             .setStyle(NotificationCompat.BigTextStyle().bigText(message.ifBlank { if (success) "已提交转换，可在演示列表查看进度" else "请稍后重试" }))
@@ -160,31 +167,35 @@ object LiveUpdateNotifier {
     // ---------------------------------------------------------------- 限时投票
 
     /** 限时投票倒计时：常驻 + 系统倒计时（无需应用逐秒刷新）。 */
-    fun postVoteDeadline(context: Context, pollTitle: String, deadlineMillis: Long) {
-        if (deadlineMillis <= System.currentTimeMillis()) return
+    fun postVoteDeadline(context: Context, pollTitle: String, deadlineMillis: Long, countdownDeadlineMillis: Long = deadlineMillis) {
+        val remaining = countdownDeadlineMillis - System.currentTimeMillis()
+        if (remaining <= 0L) {
+            cancelVote(context)
+            return
+        }
         if (!canNotify(context)) return
         ensureChannel(context)
-        val deadlineText = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(deadlineMillis))
+        val deadlineText = "截止 ${VoteLogic.formatAt(deadlineMillis)}"
+        val title = pollTitle.ifBlank { "班级投票" }
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(smallIcon(context))
-            .setContentTitle("限时投票进行中")
-            .setContentText(pollTitle.ifBlank { "点击查看投票" })
-            .setStyle(
-                NotificationCompat.BigTextStyle().bigText(
-                    "${pollTitle.ifBlank { "投票" }} · 截止 $deadlineText",
-                ),
-            )
+            .setSmallIcon(R.drawable.ic_live_vote)
+            .setColor(context.getColor(R.color.live_vote_accent))
+            .setSubText("限时投票")
+            .setContentTitle(title)
+            .setContentText(deadlineText)
+            .setStyle(NotificationCompat.BigTextStyle().setBigContentTitle(deadlineText).bigText(title))
             .setUsesChronometer(true)
             .setChronometerCountDown(true)
-            .setWhen(deadlineMillis)
+            .setShowWhen(true)
+            .setWhen(countdownDeadlineMillis)
+            .setTimeoutAfter(remaining)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setRequestPromotedOngoing(true)
-            .setShortCriticalText("限时投票")
             .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setContentIntent(openToolIntent(context, "vote"))
         runCatching {
-            NotificationManagerCompat.from(context).notify(VOTE_NOTIFICATION_ID, builder.build())
+            NotificationManagerCompat.from(context).notify(VOTE_NOTIFICATION_ID, builder.buildLiveUpdate())
         }
     }
 
@@ -196,26 +207,30 @@ object LiveUpdateNotifier {
 
     /** Debug 构建「实时活动测试」：60 秒倒计时，验证系统是否升级为实时活动/流体云。 */
     fun postDebugCountdown(context: Context, seconds: Int = 60) {
+        if (seconds <= 0) {
+            cancelDebug(context)
+            return
+        }
         if (!canNotify(context)) return
         ensureChannel(context)
         val deadline = System.currentTimeMillis() + seconds * 1000L
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(smallIcon(context))
+            .setSmallIcon(R.drawable.ic_live_timer)
             .setContentTitle("实时活动测试")
-            .setContentText("$seconds 秒倒计时（常驻，可在通知中移除）")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$seconds 秒倒计时 · 用于验证实时活动/流体云/胶囊展示"))
+            .setContentText("正在验证系统倒计时")
             .setUsesChronometer(true)
             .setChronometerCountDown(true)
             .setWhen(deadline)
+            .setShowWhen(true)
+            .setTimeoutAfter(seconds * 1_000L)
             .setOngoing(true)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
             .setRequestPromotedOngoing(true)
-            .setShortCriticalText("测试 $seconds 秒")
             .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setContentIntent(openToolIntent(context, "vote"))
         runCatching {
-            NotificationManagerCompat.from(context).notify(DEBUG_NOTIFICATION_ID, builder.build())
+            NotificationManagerCompat.from(context).notify(DEBUG_NOTIFICATION_ID, builder.buildLiveUpdate())
         }
     }
 

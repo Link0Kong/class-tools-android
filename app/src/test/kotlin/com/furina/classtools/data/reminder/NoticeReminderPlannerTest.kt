@@ -67,6 +67,32 @@ class NoticeReminderPlannerTest {
 
     private fun defaultSettings() = ReminderSettings.DEFAULT
 
+    @Test
+    fun `manual notices establish a baseline after installation or upgrade before announcing new rows`() {
+        fun manual(id: String, title: String = id, hidden: Boolean = false, archived: Boolean = false) =
+            ManualNotice(NoticeRow(id, title, author = "班委", hidden = hidden, archived = archived), emptyList())
+
+        val old = manual("old")
+        val first = notices(manual = listOf(old))
+        val upgraded = ReminderSnapshotCodec.decode("""{"initialized":true,"ntIds":["auto-old"]}""")
+        for (starting in listOf(ReminderSnapshot(), upgraded)) {
+            val offline = ReminderPlanner.nextSnapshot(previous = starting)
+            assertNull(offline.manualNoticeIds)
+            assertTrue(ReminderPlanner.planNoticesNew(first, nowMillis = now, snapshot = offline, zone = zone).isEmpty())
+            val baseline = ReminderPlanner.nextSnapshot(notices = first, previous = offline)
+            assertEquals(listOf("old"), baseline.manualNoticeIds)
+            val fresh = manual("fresh", "讲座改到周五")
+            val next = notices(manual = listOf(fresh, old, manual("hidden", hidden = true),
+                manual("archived", archived = true), manual("handled"), fresh))
+            val newEvents = ReminderPlanner.planNoticesNew(next, setOf("handled"), now, snapshot = baseline, zone = zone)
+            assertEquals(listOf("nt-new:fresh"), newEvents.map { it.key })
+            assertEquals("班委 · 讲座改到周五", newEvents.single().body)
+            val updated = ReminderPlanner.nextSnapshot(notices = next, previous = baseline)
+            val roundtrip = ReminderSnapshotCodec.decode(ReminderSnapshotCodec.encode(updated))
+            assertTrue(ReminderPlanner.planNoticesNew(next, nowMillis = now, snapshot = roundtrip, zone = zone).isEmpty())
+        }
+    }
+
     // ------------------------------------------------------------ event/deadline 选择
 
     @Test

@@ -58,9 +58,15 @@ class OppoPushManagerTest {
         }
     }
 
-    private class FakeUploader : PushTokenUploader {
+    private class FakeUploader : OppoTokenBinding {
         val payloads: MutableList<PushTokenPayload> = mutableListOf()
+        val releases = mutableListOf<Pair<String, String>>()
         var result: PushUploadResult = PushUploadResult.Uploaded
+
+        override suspend fun releaseOwn(sid: String, registrationId: String): PushUploadResult {
+            releases += sid to registrationId
+            return PushUploadResult.Uploaded
+        }
 
         override suspend fun upload(payload: PushTokenPayload): PushUploadResult {
             payloads += payload
@@ -74,7 +80,7 @@ class OppoPushManagerTest {
         config: OppoPushConfig,
         sdk: OppoPushSdk,
         store: OppoPushStore,
-        uploader: PushTokenUploader,
+        uploader: OppoTokenBinding,
         scope: CoroutineScope,
         sessionProvider: () -> Session? = { session },
         debug: Boolean = false,
@@ -83,7 +89,7 @@ class OppoPushManagerTest {
         config = config,
         sdk = sdk,
         store = store,
-        uploader = uploader,
+        uploaderForSession = { uploader },
         scope = scope,
         sessionProvider = sessionProvider,
         deviceLabel = { "OPPO PGZ110" },
@@ -288,6 +294,49 @@ class OppoPushManagerTest {
         push.onSessionChanged()
         advanceUntilIdle()
         assertEquals(2, uploader.payloads.size)
+        assertEquals(listOf(session.sid to "reg-1"), uploader.releases)
+    }
+
+    @Test
+    fun coldBackgroundBindingPinsTheRequestToTheRestoredOwnerEvenWhenAccountsSwitch() = runTest {
+        val sdk = FakeSdk()
+        val store = FakeStore()
+        val sent = mutableListOf<String>()
+        val entered = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val resume = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var persisted: Session? = session
+        val manager = OppoPushManager(configured, sdk, store, { owner ->
+            object : OppoTokenBinding {
+                override suspend fun upload(payload: PushTokenPayload): PushUploadResult {
+                    if (owner.sid == session.sid) {
+                        entered.complete(Unit)
+                        resume.await()
+                    }
+                    sent += "bind:${owner.token}"
+                    return PushUploadResult.Uploaded
+                }
+                override suspend fun releaseOwn(sid: String, registrationId: String): PushUploadResult {
+                    assertEquals(owner.sid, sid)
+                    assertEquals("reg-test", registrationId)
+                    sent += "release:${owner.token}"
+                    return PushUploadResult.Uploaded
+                }
+            }
+        }, this, { persisted }, { "OPPO Test" }, "test", false)
+        manager.onAppCreated()
+        sdk.callback!!.onRegisterSucceeded("reg-test")
+        entered.await()
+        persisted = session.copy(sid = "9999", token = "second-test-token")
+        manager.onSessionChanged()
+        resume.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf("bind:test-token", "release:test-token", "bind:second-test-token"), sent)
+        assertEquals(PushUploadResult.Skipped, manager.uploadTokenNow())
+        persisted = session.copy(expiresAt = 1)
+        manager.onSessionChanged()
+        advanceUntilIdle()
+        assertEquals("release:second-test-token", sent.last())
+        assertEquals(4, sent.size)
     }
 
     @Test

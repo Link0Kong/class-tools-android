@@ -23,6 +23,7 @@ class VoteRepositoryTest {
         api = testApiClient(transport),
         currentSid = { sid },
         clock = { now },
+        elapsedClock = { 0L },
     )
 
     private val listJson = """
@@ -113,6 +114,29 @@ class VoteRepositoryTest {
     }
 
     // ------------------------------------------------------------ detail
+
+    @Test
+    fun cachedVoteUsesElapsedTimeAcrossClockChangesAndNetworkFailures() = runTest {
+        var elapsed = 5_000L
+        var wall = now + 60 * 60_000L
+        var offline = false
+        val transport = FakeTransport {
+            if (offline) throw IOException("offline")
+            ApiResponse(200, detailJson.replace("\"deadline\":0", "\"deadline\":${now + 120_000L}"))
+        }
+        val repository = DefaultVoteRepository(testApiClient(transport), { "9999" },
+            clock = { wall }, elapsedClock = { elapsed })
+        val fresh = (repository.detail("pabc123") as VoteResult.Success).value
+        assertEquals(wall + 120_000L, fresh.localCountdownDeadline(wall, elapsed))
+        offline = true
+        elapsed += 85_000L
+        wall -= 10 * 60_000L
+        val cached = (repository.detail("pabc123", force = true) as VoteResult.Success).value
+        assertEquals(5_000L, cached.receivedAtElapsedMillis)
+        assertEquals(wall + 35_000L, cached.localCountdownDeadline(wall, elapsed))
+        elapsed += 35_000L
+        assertEquals(wall, cached.localCountdownDeadline(wall, elapsed))
+    }
 
     @Test
     fun `detail 解析选项 设置 座号 投票人`() = runTest {

@@ -43,6 +43,7 @@ data class PptUploadProgress(
     val percent: Int = 0,
     val phase: PptUploadPhase = PptUploadPhase.IDLE,
     val message: String = "",
+    val title: String = "",
 )
 
 /**
@@ -217,7 +218,7 @@ class DefaultPptRepository(
             deckId = newDeckId
 
             // §4.1 建行
-            _uploadProgress.value = PptUploadProgress(deckId = newDeckId, percent = 0, phase = PptUploadPhase.CREATING)
+            _uploadProgress.value = PptUploadProgress(deckId = newDeckId, phase = PptUploadPhase.CREATING, title = title)
             when (val created = createDeck(newDeckId, title, session, fileName, sourceSize, chunks.size, now)) {
                 is ApiResult.Failure -> {
                     throw PptUploadFailure(created.error.displayMessage, created.error is ApiError.TokenInvalid)
@@ -227,7 +228,7 @@ class DefaultPptRepository(
             }
 
             // §4.2 分片
-            _uploadProgress.value = PptUploadProgress(deckId = newDeckId, percent = 0, phase = PptUploadPhase.UPLOADING)
+            _uploadProgress.value = PptUploadProgress(deckId = newDeckId, phase = PptUploadPhase.UPLOADING, title = title)
             val total = chunks.size
             coroutineScope {
                 val semaphore = Semaphore(concurrency.coerceAtLeast(1))
@@ -243,6 +244,7 @@ class DefaultPptRepository(
                                 deckId = newDeckId,
                                 percent = percent,
                                 phase = PptUploadPhase.UPLOADING,
+                                title = title,
                             )
                         }
                     }
@@ -250,7 +252,7 @@ class DefaultPptRepository(
             }
 
             // §4.3 提交转换
-            _uploadProgress.value = PptUploadProgress(deckId = newDeckId, percent = 100, phase = PptUploadPhase.SUBMITTING)
+            _uploadProgress.value = PptUploadProgress(deckId = newDeckId, percent = 100, phase = PptUploadPhase.SUBMITTING, title = title)
             val submit = submitForConversion(newDeckId, chunks.size, sourceSize)
             if (submit is ApiResult.Failure) {
                 throw PptUploadFailure(submit.error.displayMessage, submit.error is ApiError.TokenInvalid)

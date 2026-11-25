@@ -90,6 +90,20 @@ data class ReminderSettings(
     val anySectionEnabled: Boolean
         get() = enabled && anyModuleEnabled
 
+    internal fun allows(kind: ReminderKind): Boolean = enabled && when (kind) {
+        ReminderKind.HOMEWORK_NEW -> homeworkNewEnabled
+        ReminderKind.HOMEWORK_DUE -> homeworkDueEnabled
+        ReminderKind.HOMEWORK_DIGEST, ReminderKind.NOTICE_DIGEST -> digestEnabled
+        ReminderKind.NOTICE_NEW -> noticeNewEnabled
+        ReminderKind.NOTICE_DUE -> noticeDeadlineEnabled
+        ReminderKind.NOTICE_SIGNUP -> noticeSignupEnabled
+        ReminderKind.VOTE_NEW -> voteNewEnabled
+        ReminderKind.VOTE_RESULT -> voteResultEnabled
+        ReminderKind.COURSE_SOON -> classRemindEnabled
+        ReminderKind.WATER_DEDUCT -> waterDeductEnabled
+        ReminderKind.PERSONAL_TASK, ReminderKind.SYSTEM_TEST -> true
+    }
+
     /** 已开启模块数（设置页/我的页展示「已开启 N 项」）。 */
     fun enabledCount(): Int = listOf(
         homeworkNewEnabled,
@@ -180,6 +194,13 @@ enum class ReminderKind(
     SYSTEM_TEST("", "ct_test", "通知测试", "验证系统通知权限与通知样式", highPriority = true),
 }
 
+data class CourseReminderInfo(
+    val name: String,
+    val room: String,
+    val startAt: Long,
+    val endAt: Long,
+)
+
 /** 一条待发的本机提醒。 */
 data class ReminderEvent(
     val kind: ReminderKind,
@@ -190,9 +211,14 @@ data class ReminderEvent(
     val body: String,
     /** 点击跳转工具 id（与 `Routes.tool(id)` 一致：hw/tt/nt/vote/water）。 */
     val toolId: String = kind.toolId,
+    val course: CourseReminderInfo? = null,
 ) {
     /** 稳定的通知 id（同一 key 覆盖而非堆叠）。 */
     val notificationId: Int get() = key.hashCode()
+
+    val courseStartAtMillis: Long? get() = if (kind == ReminderKind.COURSE_SOON) {
+        course?.startAt ?: key.takeIf { it.startsWith("class:") }?.substringAfter(':')?.toLongOrNull()
+    } else null
 }
 
 /** 一次规划结果（已按触发时间升序、key 去重）。 */
@@ -206,9 +232,7 @@ data class ReminderPlan(
         nowMillis: Long,
         horizonMillis: Long = DEFAULT_HORIZON_MS,
         graceMillis: Long = DEFAULT_GRACE_MS,
-    ): List<ReminderEvent> = events.filter { event ->
-        event.triggerAtMillis in (nowMillis - graceMillis)..(nowMillis + horizonMillis)
-    }
+    ): List<ReminderEvent> = ReminderPlanner.filterDue(events, nowMillis, horizonMillis, graceMillis)
 
     companion object {
         const val DEFAULT_HORIZON_MS: Long = 20L * 60 * 1000
@@ -233,6 +257,10 @@ data class ReminderSnapshot(
     val closedPollIds: List<String> = emptyList(),
     /** 上一次水费提醒指纹：`<roomverify>|<month>|<reading>`。 */
     val waterKey: String = "",
+    /** Data sources that have completed at least one authenticated background read for this account. */
+    val readyFeeds: Set<String> = emptySet(),
+    /** null 表示手动发布的通知还没有基线，也适用于升级前保存的快照。 */
+    val manualNoticeIds: List<String>? = null,
 ) {
     companion object {
         const val MAX_IDS: Int = 300

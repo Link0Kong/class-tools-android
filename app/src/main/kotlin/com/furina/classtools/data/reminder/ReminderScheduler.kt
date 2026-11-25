@@ -14,6 +14,15 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.furina.classtools.AppContainer
 import com.furina.classtools.ClassToolsApp
+import com.furina.classtools.BuildConfig
+import com.furina.classtools.data.network.ApiClient
+import com.furina.classtools.data.session.SessionState
+import com.furina.classtools.data.tasks.scheduleTaskReminders
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonObject
 import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.data.notices.NoticesData
 import com.furina.classtools.data.permission.AndroidPermissionController
@@ -21,6 +30,7 @@ import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.permission.PermissionState
 import com.furina.classtools.data.permission.PermissionType
 import com.furina.classtools.data.timetable.TtCalendar
+import com.furina.classtools.data.timetable.TimetableLink
 import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.data.vote.PollSummary
 import com.furina.classtools.features.water.WaterCodec
@@ -111,11 +121,34 @@ object ReminderRuntime {
         val appContext = context.applicationContext
         WorkManagerReminderScheduler(context).cancelAll()
         runCatching { WorkManager.getInstance(appContext).cancelUniqueWork(IMMEDIATE_WORK_NAME) }
+        WorkManager.getInstance(appContext).cancelAllWorkByTag(COURSE_WORK_TAG)
+    }
+
+    private const val COURSE_WORK_TAG = "ct_reminder_course"
+    const val COURSE_BOUNDARY = "ct_course_boundary"
+
+    fun onClockChanged(context: Context) {
+        WorkManager.getInstance(context).cancelAllWorkByTag(COURSE_WORK_TAG)
+        scheduleCourseAt(context, System.currentTimeMillis())
+    }
+
+    /** Each wakeup re-reads the timetable/settings. It never replays a stored course notification. */
+    fun scheduleCourseAt(context: Context, atMillis: Long) {
+        val delay = (atMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+        val request = OneTimeWorkRequestBuilder<ReminderWorker>()
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setInputData(androidx.work.workDataOf(COURSE_BOUNDARY to true))
+            .addTag(COURSE_WORK_TAG)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork("${COURSE_WORK_TAG}_$atMillis", ExistingWorkPolicy.KEEP, request)
     }
 }
 
 /** 供 Worker/UI 读取「提醒所需数据」的窄接口（可注入测试；默认从 AppContainer 本机缓存读，不额外联网）。 */
 interface ReminderDataProvider {
+    /** Null for providers that have a complete local snapshot. */
+    val availableFeeds: Set<String>? get() = null
+    fun canReplay(event: ReminderEvent): Boolean = true
     suspend fun homeworkRows(): List<HomeworkRow>
 
     suspend fun homeworkDoneIds(): Set<String>
@@ -186,19 +219,17 @@ class ContainerReminderDataProvider(context: Context) : ReminderDataProvider {
      * 2) 未选关注宿舍时退回第一条有记录的宿舍（与鸿蒙端一致，避免漏提醒）。
      */
     override suspend fun watchedWaterRoom(): WaterWatch? = runCatching {
-        val sections = container()?.userDataRepository?.cachedBlob() ?: return@runCatching null
-        val state = WaterCodec.fromJson(sections["water"])
-        if (state.rooms.isEmpty()) return@runCatching null
-        val sel = ((sections["power"] as? kotlinx.serialization.json.JsonObject)
-            ?.get("sel") as? kotlinx.serialization.json.JsonPrimitive)
-            ?.content
-            ?.trim()
-            .orEmpty()
-        val key = sel.takeIf { state.rooms.containsKey(it) }
-            ?: state.rooms.keys.firstOrNull().orEmpty()
-        val room = state.rooms[key] ?: return@runCatching null
-        WaterWatch(roomKey = key, room = room)
+        waterWatchFrom(container()?.userDataRepository?.cachedBlob())
     }.getOrNull()
+}
+
+internal fun waterWatchFrom(sections: JsonObject?): WaterWatch? {
+    if (sections == null) return null
+    val rooms = WaterCodec.fromJson(sections["water"]).rooms
+    val selected = ((sections["power"] as? JsonObject)?.get("sel") as? kotlinx.serialization.json.JsonPrimitive)
+        ?.content?.trim()
+    val key = selected?.takeIf(rooms::containsKey) ?: rooms.keys.firstOrNull() ?: return null
+    return WaterWatch(key, rooms.getValue(key))
 }
 
 /**
@@ -223,24 +254,30 @@ class ReminderEngine(
     private val clock: () -> Long = System::currentTimeMillis,
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val catchUpMaxMillis: Long = ReminderCatchUp.MAX_LOOKBACK_MS,
+    private val scheduleCourseAt: (Long) -> Unit = {},
 ) {
 
-    constructor(context: Context) : this(
+    constructor(
+        context: Context,
+        provider: ReminderDataProvider = ContainerReminderDataProvider(context),
+        owner: String = (context.applicationContext as? ClassToolsApp)?.container?.currentSession?.sid.orEmpty(),
+    ) : this(
         settingsStore = DataStoreReminderSettingsStore(context),
-        dedupeStore = SharedPrefsReminderDedupeStore(context),
+        dedupeStore = SharedPrefsReminderDedupeStore(context, owner),
         notifier = AndroidReminderNotifier(context),
         permissionController = AndroidPermissionController(context),
-        dataProvider = ContainerReminderDataProvider(context),
-        runStateStore = SharedPrefsReminderRunStateStore(context),
-        pendingStore = SharedPrefsReminderPendingEventStore(context),
-        snapshotStore = SharedPrefsReminderSnapshotStore(context),
+        dataProvider = provider,
+        runStateStore = SharedPrefsReminderRunStateStore(context, owner),
+        pendingStore = SharedPrefsReminderPendingEventStore(context, owner),
+        snapshotStore = SharedPrefsReminderSnapshotStore(context, owner),
+        scheduleCourseAt = { ReminderRuntime.scheduleCourseAt(context.applicationContext, it) },
     )
 
     /** 兼容旧名（v3 起语义等价于 [runNow]）。 */
     suspend fun runOnce(): ReminderRunResult = runNow()
 
     /** 立即执行一次提醒扫描（Worker / 设置变更触发 / 诊断用）。 */
-    suspend fun runNow(): ReminderRunResult {
+    suspend fun runNow(stillSignedIn: suspend () -> Boolean = { true }): ReminderRunResult {
         val now = clock()
         val permission = runCatching {
             permissionController.state(PermissionType.NOTIFICATIONS)
@@ -248,12 +285,14 @@ class ReminderEngine(
         val settings = runCatching { settingsStore.current() }.getOrDefault(ReminderSettings.DEFAULT)
         val rows = runCatching { dataProvider.homeworkRows() }.getOrDefault(emptyList())
         val doneIds = runCatching { dataProvider.homeworkDoneIds() }.getOrDefault(emptySet())
-        val ttPlan = runCatching { dataProvider.timetablePlan(now, zone) }.getOrNull()
+        val ttPlan = runCatching { dataProvider.timetablePlan(now, TimetableLink.CHINA_ZONE) }.getOrNull()
         val notices = runCatching { dataProvider.noticesData() }.getOrNull()
         val handledNoticeIds = runCatching { dataProvider.handledNoticeIds() }.getOrDefault(emptySet())
         val polls = runCatching { dataProvider.votePolls() }.getOrDefault(emptyList())
         val water = runCatching { dataProvider.watchedWaterRoom() }.getOrNull()
         val snapshot = runCatching { snapshotStore.load() }.getOrDefault(ReminderSnapshot())
+        val available = dataProvider.availableFeeds
+        val firstReads = available.orEmpty() - snapshot.readyFeeds
         val cacheSummary = buildString {
             append("作业 ").append(rows.size).append(" 条")
             append(" · 课表").append(if (ttPlan?.hasData == true) "可用" else "无")
@@ -273,7 +312,7 @@ class ReminderEngine(
                         waterRoomKey = water?.roomKey.orEmpty(),
                         waterRoom = water?.room,
                         previous = snapshot,
-                    ),
+                    ).copy(readyFeeds = snapshot.readyFeeds + available.orEmpty()),
                 )
             }
         }
@@ -301,7 +340,7 @@ class ReminderEngine(
             return finish(ReminderRunResult(disabledReason = "通知权限未开启", reason = "通知权限未开启"))
         }
 
-        val plan = ReminderPlanner.plan(
+        val planned = ReminderPlanner.plan(
             rows = rows,
             doneIds = doneIds,
             plan = ttPlan,
@@ -315,6 +354,14 @@ class ReminderEngine(
             waterRoomKey = water?.roomKey.orEmpty(),
             waterRoom = water?.room,
         )
+        // A first successful fetch establishes just that feed's baseline, including after an offline install.
+        val plan = ReminderPlan(planned.events.filterNot { event ->
+            event.toolId in firstReads && event.kind in setOf(
+                ReminderKind.HOMEWORK_NEW, ReminderKind.NOTICE_NEW, ReminderKind.VOTE_NEW, ReminderKind.VOTE_RESULT)
+        })
+
+        plan.events.firstOrNull { it.kind == ReminderKind.COURSE_SOON && it.triggerAtMillis > now }
+            ?.let { scheduleCourseAt(it.triggerAtMillis) }
 
         // Doze/省电延迟补偿：
         // 1) 从上次运行时间回看（10min..6h），补发上次规划留下、但已过点的事件；
@@ -326,12 +373,23 @@ class ReminderEngine(
             lastRunAtMillis = lastRunAt,
             maxLookbackMillis = catchUpMaxMillis,
         )
-        val pending = runCatching { pendingStore.load() }.getOrDefault(emptyList())
+        val pending = runCatching { pendingStore.load() }.getOrDefault(emptyList()).filter { settings.allows(it.kind) }
+        val missing = if (available == null) emptySet() else settings.requestedFeeds() - available
+        val deferred = pending.filter { it.toolId in missing && it.triggerAtMillis >= now - catchUpMaxMillis }
+        suspend fun savePending(failed: List<ReminderEvent> = emptyList()) {
+            val future = ReminderPendingCatchUp.pendingForNextRun(plan.events, now)
+            pendingStore.save((failed + deferred + future).distinctBy { it.key }
+                .sortedBy { it.triggerAtMillis }.take(ReminderPendingCatchUp.MAX_PENDING_EVENTS))
+        }
         val due = ReminderPlanner.filterDue(plan.events, now, graceMillis = lookback)
+        if (!stillSignedIn()) return ReminderRunResult(reason = "登录状态已变更")
+        val liveCourse = due.firstOrNull { it.kind == ReminderKind.COURSE_SOON }
+        notifier.reconcileLiveCourse(liveCourse, now).forEach { key -> dedupeStore.markSent(key, 0L) }
         val catchUpPending = ReminderPendingCatchUp.dueCatchUp(
-            pending = pending,
+            pending = pending.filter(dataProvider::canReplay),
             nowMillis = now,
-            lookbackMillis = lookback,
+            // Course-only or offline scans update lastRunAt without checking a queued remote event.
+            lookbackMillis = if (available == null) lookback else catchUpMaxMillis,
             keysAlreadyPlanned = plan.events.map { it.key }.toSet(),
         )
         val selected = (catchUpPending + due)
@@ -339,7 +397,7 @@ class ReminderEngine(
             .distinctBy { it.key }
         if (selected.isEmpty()) {
             runCatching {
-                pendingStore.save(ReminderPendingCatchUp.pendingForNextRun(plan.events, now))
+                savePending()
             }
             saveSnapshot()
             return finish(
@@ -355,7 +413,9 @@ class ReminderEngine(
         var sent = 0
         var skipped = 0
         var catchUpSent = 0
+        val failed = mutableListOf<ReminderEvent>()
         selected.forEach { event ->
+            if (!stillSignedIn()) return ReminderRunResult(reason = "登录状态已变更")
             val last = dedupeStore.lastSent(event.key)
             if (!ReminderDedupe.shouldNotify(event.key, last, now, zone)) {
                 skipped += 1
@@ -365,11 +425,13 @@ class ReminderEngine(
                 dedupeStore.markSent(event.key, now)
                 sent += 1
                 if (event.key in catchUpKeys) catchUpSent += 1
+            } else {
+                failed += event
             }
         }
         dedupeStore.prune(now - ReminderDedupe.RETENTION_MS)
         runCatching {
-            pendingStore.save(ReminderPendingCatchUp.pendingForNextRun(plan.events, now))
+            savePending(failed)
         }
         saveSnapshot()
         val reason = when {
@@ -397,7 +459,7 @@ class ReminderEngine(
         }.getOrDefault(PermissionState.REQUESTABLE)
         val settings = runCatching { settingsStore.current() }.getOrDefault(ReminderSettings.DEFAULT)
         val rows = runCatching { dataProvider.homeworkRows() }.getOrDefault(emptyList())
-        val ttPlan = runCatching { dataProvider.timetablePlan(now, zone) }.getOrNull()
+        val ttPlan = runCatching { dataProvider.timetablePlan(now, TimetableLink.CHINA_ZONE) }.getOrNull()
         val notices = runCatching { dataProvider.noticesData() }.getOrNull()
         val polls = runCatching { dataProvider.votePolls() }.getOrDefault(emptyList())
         val water = runCatching { dataProvider.watchedWaterRoom() }.getOrNull()
@@ -453,15 +515,40 @@ class ReminderWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        (applicationContext as? ClassToolsApp)?.container?.xiaobuCourseSync?.refresh()
-        val result = runCatching { ReminderEngine(applicationContext).runNow() }.getOrNull()
-        if (result != null) {
-            Log.i(ReminderLog.TAG, ReminderLog.summary(result))
-        } else {
-            Log.i(ReminderLog.TAG, "[CT_REMINDER] run failed (exception swallowed)")
+        val app = (applicationContext as? ClassToolsApp)?.container ?: return Result.failure()
+        suspend fun signedIn() = (app.sessionStore.state.first() as? SessionState.SignedIn)?.session
+            ?.takeIf { !it.debug && it.isLikelyValid() }
+        val owner = signedIn() ?: return Result.success()
+        val settings = app.reminderSettingsStore.current()
+        if (!settings.anySectionEnabled) return Result.success()
+        val boundary = inputData.getBoolean(ReminderRuntime.COURSE_BOUNDARY, false)
+        val requested = if (boundary) emptySet() else settings.requestedFeeds()
+        return try {
+            val api = ApiClient(BuildConfig.REST_BASE_URL, BuildConfig.PUBLISHABLE_KEY, tokenProvider = { owner.token })
+            val feeds = loadReminderFeeds(api, owner.sid, requested, app.backgroundNoticesFor(owner, api))
+            scanLock.withLock {
+                if (signedIn() != owner) return Result.success()
+                val provider = BackgroundReminderData(applicationContext, owner, feeds)
+                val result = ReminderEngine(applicationContext, provider, owner.sid).runNow { signedIn() == owner }
+                Log.i(ReminderLog.TAG, ReminderLog.summary(result))
+            }
+            if (!boundary && signedIn() == owner) {
+                val tasks = app.tasksFor(owner)
+                scheduleTaskReminders(applicationContext, owner.sid, null, tasks.snapshot.value)
+                tasks.sync()
+                app.oppoPushManager.uploadTokenNow()
+            }
+            app.xiaobuCourseSync.refresh()
+            if (!feeds.available.containsAll(requested) && runAttemptCount < 3) Result.retry() else Result.success()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w(ReminderLog.TAG, "Background reminder scan failed: " + error.javaClass.simpleName)
+            if (runAttemptCount < 3) Result.retry() else Result.failure()
         }
-        return Result.success()
     }
+
+    private companion object { val scanLock = Mutex() }
 }
 
 /**
@@ -487,6 +574,7 @@ class ReminderBootReceiver : BroadcastReceiver() {
             Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_LOCKED_BOOT_COMPLETED,
             -> WorkManagerReminderScheduler(context).ensureScheduled()
+            Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> ReminderRuntime.onClockChanged(context)
             else -> Unit
         }
     }

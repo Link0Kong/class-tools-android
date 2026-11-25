@@ -51,7 +51,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -145,7 +144,6 @@ fun VoteDetailScreen(
     var managing by remember { mutableStateOf(false) }
     var reloadToken by remember { mutableStateOf(0) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var localAtFetch by remember { mutableLongStateOf(nowMillis) }
     var showManageSheet by remember { mutableStateOf(initialManageSheetOpen) }
     var confirmClose by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -153,7 +151,7 @@ fun VoteDetailScreen(
 
     // Live Updates：限时投票在系统实时活动/流体云中显示倒计时，离开详情页即撤销。
     val liveUpdateContext = LocalContext.current
-    LaunchedEffect(detail?.poll?.id, detail?.poll?.deadline, detail?.closed, skipLoad) {
+    LaunchedEffect(detail, skipLoad) {
         if (skipLoad) return@LaunchedEffect
         val current = detail
         if (current != null && current.poll.deadline > 0L && !current.closed) {
@@ -161,6 +159,7 @@ fun VoteDetailScreen(
                 context = liveUpdateContext,
                 pollTitle = current.poll.title,
                 deadlineMillis = current.poll.deadline,
+                countdownDeadlineMillis = current.localCountdownDeadline(System.currentTimeMillis(), android.os.SystemClock.elapsedRealtime()),
             )
         } else {
             LiveUpdateNotifier.cancelVote(liveUpdateContext)
@@ -170,14 +169,13 @@ fun VoteDetailScreen(
         onDispose { LiveUpdateNotifier.cancelVote(liveUpdateContext) }
     }
 
-    val nowTick = rememberNowTick(enabled = !skipLoad)
-    val effectiveNow = remember(detail, localAtFetch, nowTick) {
-        voteEffectiveNow(detail?.serverNow ?: 0L, localAtFetch, nowTick)
+    val nowTick = if (skipLoad) nowMillis else rememberNowTick()
+    val effectiveNow = remember(detail, nowTick) {
+        detail?.currentTime(nowTick, android.os.SystemClock.elapsedRealtime()) ?: nowTick
     }
 
     fun applyDetail(next: PollDetail) {
         detail = next
-        localAtFetch = System.currentTimeMillis()
         error = null
         loading = false
         if (next.hasVoted) {

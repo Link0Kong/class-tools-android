@@ -26,6 +26,7 @@ enum class HttpMethod(val wire: String) {
     GET("GET"),
     POST("POST"),
     PATCH("PATCH"),
+    DELETE("DELETE"),
 }
 
 /** 一次 HTTP 调用的最小描述（纯数据，方便单测注入假实现）。 */
@@ -69,6 +70,7 @@ class OkHttpTransport(
         val mediaType = "application/json; charset=utf-8".toMediaType()
         when (request.method) {
             HttpMethod.GET -> builder.get()
+            HttpMethod.DELETE -> builder.delete()
             HttpMethod.POST -> builder.post(
                 request.body?.toRequestBody(mediaType) ?: EMPTY_REQUEST_BODY,
             )
