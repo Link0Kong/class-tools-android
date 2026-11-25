@@ -31,13 +31,16 @@ cd <项目根>
 .\gradlew.bat :app:testDebugUnitTest --console=plain
 ```
 
-### 2.1 自动上传更新渠道（2026-11-19 起，硬性）
+### 2.1 累积修复后发布测试版
 
-`assembleRelease` 完成后会由 `publishUpdateChannel` finalizer **自动上传** APK + `latest.json` 到 ECS + OSS，并回读校验 sha256；同版本同 sha 幂等跳过。
+日常修复完成后运行单测、按需构建本地 APK 并提交。待上一个测试版以来积攒了足够多的已验证修复，再统一提升版本号，汇总这一批的更新说明，推送源码后执行发布命令。
 
-- 发布说明：`-Pct.updateNotes="1. 改动一；2. 改动二"`
-- 渠道：`-Pct.updateChannel=beta`
-- 只编译不发版：`-Pct.skipUpdateChannel=true`
+```powershell
+.\gradlew.bat :app:assembleRelease --project-prop "ct.updateChannel=beta" --project-prop "ct.updateNotes=本批次修复摘要"
+```
+
+普通 `assembleRelease` 用于本地构建。上述命令显式指定更新渠道，构建成功后将 APK 和 `latest.json` 自动上传到 ECS 与 OSS，并回读校验 SHA-256。已有脚本仍可用 `--project-prop "ct.skipUpdateChannel=true"` 跳过上传。
+
 - 上传脚本：`web/deploy/android_release.py`（凭据仍只在 `web/deploy/creds.env` / 环境变量，不入库）
 - 发布后核对：`https://tool.furina.fun/android/latest.json`、`.../android/classtools-<version>.apk`、OSS `android/latest.json`
   （release 不再依赖明文 IP；`latest.json` 里的 `apkUrl` 必须是 https 正式域名）

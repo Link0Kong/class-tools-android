@@ -360,24 +360,19 @@ kotlin {
 }
 
 // ----------------------------------------------------------------------------
-// 2026-11-19 用户要求：安卓所有版本发布都要自动上传更新渠道。
-//
-// `assembleRelease` 完成后自动执行本任务：调用 web/deploy/android_release.py，
-// 上传 APK + latest.json 到 ECS + OSS，并回读校验 sha256。默认开启；本地只想编译
-// 不发版时加 `-Pct.skipUpdateChannel=true`。发布说明可用 `-Pct.updateNotes=...`。
-// 脚本不存在（例如只 checkout 了 Android 仓库）时跳过并打印提示，不阻断编译。
+// 日常 assembleRelease 用于本地验证。多项修复合并发版时，在命令行显式传入
+// ct.updateChannel 和该批次的 ct.updateNotes，签名包构建成功后再上传。
 // ----------------------------------------------------------------------------
 val publishUpdateChannel = tasks.register<Exec>("publishUpdateChannel") {
     group = "release"
     description = "上传 release APK + latest.json 到安卓更新渠道（ECS + OSS）"
+    dependsOn("assembleRelease")
     notCompatibleWithConfigurationCache("发布任务会调用外部 Python 脚本并读取工作区路径")
     val scriptFile = rootProject.projectDir.parentFile.resolve("web/deploy/android_release.py")
     val apkFile = layout.buildDirectory.file("outputs/apk/release/app-release.apk")
     val versionNameValue = android.defaultConfig.versionName ?: "unknown"
     val versionCodeValue = android.defaultConfig.versionCode ?: 0
-    val updateNotes = providers.gradleProperty("ct.updateNotes")
-        .orElse("${versionNameValue}（测试版本）\n1. UI/动效向鸿蒙端对齐\n2. 隐私政策 / 用户协议全文\n3. 通知轻量 meta + 按需详情\n4. 网络与更新渠道优化")
-        .get()
+    val updateNotes = providers.gradleProperty("ct.updateNotes").orElse(versionNameValue).get()
     val updateChannel = providers.gradleProperty("ct.updateChannel").orElse("beta").get()
     val pythonExe = providers.gradleProperty("ct.python").orElse("python").get()
     val skipUpdate = providers.gradleProperty("ct.skipUpdateChannel").orNull?.toBoolean() ?: false
@@ -399,9 +394,11 @@ val publishUpdateChannel = tasks.register<Exec>("publishUpdateChannel") {
     }
 }
 
-// assembleRelease 由 AGP 在配置后段创建，不能在这里直接 tasks.named；用 matching 延迟绑定。
-tasks.matching { it.name == "assembleRelease" }.configureEach {
-    finalizedBy(publishUpdateChannel)
+// 只认本次命令行显式指定的渠道，避免机器或仓库的 Gradle 默认属性触发上传。
+if (!gradle.startParameter.projectProperties["ct.updateChannel"].isNullOrBlank()) {
+    tasks.matching { it.name == "assembleRelease" }.configureEach {
+        finalizedBy(publishUpdateChannel)
+    }
 }
 
 // ----------------------------------------------------------------------------
