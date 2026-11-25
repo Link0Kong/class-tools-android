@@ -132,6 +132,9 @@ internal fun taskDueLabel(task: JsonObject, today: String): String {
 internal fun JsonObject.pendingTasks() = objects("items").filterNot { it.flag("done") }
     .sortedBy { it.text("order").toDoubleOrNull() ?: 0.0 }
 
+internal fun JsonObject.importedHomeworkIds(): Set<String> = objects("items")
+    .mapNotNullTo(mutableSetOf()) { it.text("sourceHwId").takeIf(String::isNotBlank) }
+
 // Replay only local changes against the latest snapshot. Fields owned by other clients survive.
 internal fun mergeTasks(base: JsonObject, local: JsonObject, remote: JsonObject): JsonObject {
     fun byId(doc: JsonObject) = doc.objects("items").associateBy { it.text("id") }

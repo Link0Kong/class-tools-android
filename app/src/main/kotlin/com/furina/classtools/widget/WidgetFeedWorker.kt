@@ -45,7 +45,7 @@ private fun taskList(doc: JsonObject, version: Long, now: Long): WidgetList {
         ).joinToString(" · ")
         WidgetLine(task.text("title").take(150), detail, priority = taskPriority(task, today), homeworkId = task.text("sourceHwId"))
     }
-    return WidgetList(items.size, rows, now, version)
+    return WidgetList(items.size, rows, now, version, doc.importedHomeworkIds())
 }
 
 internal object WidgetFeedStore {

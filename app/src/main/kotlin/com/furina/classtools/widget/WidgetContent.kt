@@ -14,7 +14,13 @@ internal enum class WidgetKind(val label: String, val destination: String) {
 internal data class WidgetLine(val title: String, val detail: String = "", val destination: String = "", val priority: Int = 5, val homeworkId: String = "")
 
 @Serializable
-internal data class WidgetList(val count: Int, val rows: List<WidgetLine>, val fetchedAt: Long, val taskVersion: Long? = null)
+internal data class WidgetList(
+    val count: Int,
+    val rows: List<WidgetLine>,
+    val fetchedAt: Long,
+    val taskVersion: Long? = null,
+    val importedHomeworkIds: Set<String> = rows.mapNotNullTo(mutableSetOf()) { it.homeworkId.takeIf(String::isNotBlank) },
+)
 
 @Serializable
 internal data class WidgetFeed(val tasks: WidgetList? = null, val notices: WidgetList? = null,
@@ -23,8 +29,8 @@ internal data class WidgetFeed(val tasks: WidgetList? = null, val notices: Widge
 /** Only pending titles and deadlines are persisted for the current account. */
 @Serializable
 internal data class WidgetHomework(val rows: List<HomeworkRow>, val fetchedAt: Long) {
-    fun current(now: Long): WidgetList {
-        val items = HomeworkDueCalculator.sort(HomeworkDueCalculator.pruneExpired(rows.map {
+    fun current(now: Long, importedIds: Set<String> = emptySet()): WidgetList {
+        val items = HomeworkDueCalculator.sort(HomeworkDueCalculator.pruneExpired(rows.filterNot { it.id in importedIds }.map {
             HomeworkItem(it, false, HomeworkDueCalculator.evaluate(it, now), emptyList())
         }))
         val lines = items.take(8).map { item ->
@@ -85,9 +91,9 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
             val notices = feed.notices
             val overview = listOf(tasks?.let { "${it.count} 待办" } ?: "任务待同步",
                 notices?.let { "${it.count} 通知" } ?: "通知待同步")
-            val assignments = feed.homework?.current(now)
+            val assignments = feed.homework?.current(now, tasks?.importedHomeworkIds.orEmpty())
             val sections = buildList {
-                assignments?.rows?.firstOrNull { row -> tasks?.rows.orEmpty().none { it.homeworkId == row.homeworkId } }?.let { add(it) }
+                assignments?.rows?.firstOrNull()?.let { add(it) }
                 tasks?.rows?.take(2)?.forEach { task -> add(task.copy(title = "待办 · " + task.title, destination = "hw")) }
                 notices?.rows?.take(2)?.forEach { notice -> add(notice.copy(title = "通知 · " + notice.title, destination = "nt")) }
                 if (course != null) add(courseLine.copy(title = courseLabel + " · " + courseLine.title,
@@ -99,19 +105,18 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
         }
         WidgetKind.NOTICES, WidgetKind.TASKS -> {
             val tasks = kind == WidgetKind.TASKS
-            val assignments = if (tasks) feed.homework?.current(now) else null
             val list = if (tasks) feed.tasks else feed.latestNotices
+            val assignments = if (tasks) feed.homework?.current(now, list?.importedHomeworkIds.orEmpty()) else null
             val personal = list?.rows.orEmpty()
             val rows = if (assignments == null) personal else {
-                val imported = personal.mapNotNull { it.homeworkId.takeIf(String::isNotBlank) }.toSet()
-                (assignments.rows.filterNot { it.homeworkId in imported } + personal).sortedBy { it.priority }
+                (assignments.rows + personal).sortedBy { it.priority }
             }
             val empty = when {
                 list == null -> "等待同步"
                 tasks -> "暂无待办任务"
                 else -> "暂无班级通知"
             }
-            val summary = if (tasks && assignments != null) listOf(
+            val summary = if (assignments != null && assignments.count > 0) listOf(
                 list?.let { "${it.count} 待办" } ?: "待办待同步", "${assignments.count} 作业",
                 ).joinToString(" · ") + if (now - assignments.fetchedAt >= 60 * 60_000L) " · 上次同步" else ""
                 else if (list != null && now - list.fetchedAt >= 60 * 60_000L) "上次同步"

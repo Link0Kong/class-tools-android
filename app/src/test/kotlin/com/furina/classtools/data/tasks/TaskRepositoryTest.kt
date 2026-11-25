@@ -24,6 +24,38 @@ class TaskRepositoryTest {
     private fun row(ts: Long, data: JsonObject) = buildJsonObject { put("id", sid); put("ts", ts); put("blob", data.toString()) }
     private fun doc(vararg items: JsonObject) = emptyTasks.withFields { put("items", JsonArray(items.toList())) }
 
+    @Test fun homeworkVisibilityTracksLocalRestartCompletionAndRemoteRemoval() = runTest {
+        val store = MemoryStorage()
+        val homework = HomeworkRow("hw1", subject = "实验报告")
+        var remote = doc(newTask("实验报告", 1, 0.0).withFields { put("sourceNoticeId", homework.id) })
+        var version = 1L
+        val api = testApiClient(FakeTransport { request ->
+            if (request.method == HttpMethod.PATCH) {
+                val body = Json.parseToJsonElement(request.body!!).jsonObject
+                remote = Json.parseToJsonElement(body.text("blob")).jsonObject
+                version = body.number("ts")
+            }
+            ApiResponse(200, JsonArray(listOf(row(version, remote))).toString())
+        })
+        val offline = TaskRepository(sid, store, api, backgroundScope) { false }
+        assertTrue(offline.importHomework(homework))
+        assertEquals(setOf(homework.id), offline.snapshot.value.importedHomeworkIds())
+        offline.edit { tasks, now -> changeCompletion(tasks, tasks.single().text("id"), true, now) }
+        assertEquals(setOf(homework.id), offline.snapshot.value.importedHomeworkIds())
+        val online = TaskRepository(sid, store, api, backgroundScope) { true }
+        assertEquals(setOf(homework.id), online.snapshot.value.importedHomeworkIds())
+        online.sync()
+        assertEquals(2, online.snapshot.value.objects("items").size)
+        assertEquals(setOf(homework.id), online.snapshot.value.importedHomeworkIds())
+        remote = doc(*remote.objects("items").filterNot { it.text("sourceHwId") == homework.id }.toTypedArray())
+        version++
+        online.sync()
+        assertTrue(online.snapshot.value.importedHomeworkIds().isEmpty())
+        assertTrue(online.importHomework(homework))
+        online.edit { tasks, _ -> tasks.filterNot { it.text("sourceHwId") == homework.id } }
+        assertTrue(online.snapshot.value.importedHomeworkIds().isEmpty())
+    }
+
     @Test fun offlineImportSurvivesRestartAndMergesWithRemote() = runTest {
         val store = MemoryStorage()
         var existing = row(7, doc(newTask("另一台设备", 5, 0.0)).withFields { put("prefs", buildJsonObject { put("sound", false) }) })

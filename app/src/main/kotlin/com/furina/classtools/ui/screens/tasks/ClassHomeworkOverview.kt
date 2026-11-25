@@ -13,23 +13,22 @@ import com.furina.classtools.data.marks.MarkKind
 import com.furina.classtools.data.marks.MarksRepository
 import com.furina.classtools.data.marks.MarksSnapshot
 import com.furina.classtools.data.network.ApiResult
+import com.furina.classtools.data.tasks.TaskRepository
+import com.furina.classtools.data.tasks.importedHomeworkIds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.isActive
 
 internal data class HomeworkBrief(
-    val loading: Boolean = false,
-    val failed: Boolean = false,
     val cached: Boolean = false,
-    val unfinished: Int = 0,
     val overdue: Int = 0,
     val dueSoon: Int = 0,
     val highlights: List<HomeworkItem> = emptyList(),
     val pending: List<HomeworkRow> = emptyList(),
 )
 
-internal fun homeworkBrief(rows: List<HomeworkRow>, marks: MarksSnapshot, now: Long): HomeworkBrief {
-    val pending = rows.asSequence().filterNot { it.archived || marks.isDone(MarkKind.HW, it.id) }
+internal fun homeworkBrief(rows: List<HomeworkRow>, marks: MarksSnapshot, now: Long, importedIds: Set<String>): HomeworkBrief {
+    val pending = rows.asSequence().filterNot { it.archived || it.id in importedIds || marks.isDone(MarkKind.HW, it.id) }
         .map { HomeworkItem(it, false, HomeworkDueCalculator.evaluate(it, now), emptyList()) }
         .filterNot { it.due?.prunable == true }.toList()
     val ordered = HomeworkDueCalculator.sort(pending)
@@ -38,17 +37,19 @@ internal fun homeworkBrief(rows: List<HomeworkRow>, marks: MarksSnapshot, now: L
     // Keep the nearest actionable deadline visible even when more than one assignment is overdue.
     val highlights = if (late.isNotEmpty() && upcoming.firstOrNull()?.due != null)
         listOf(late.first(), upcoming.first()) else ordered.take(2)
-    return HomeworkBrief(unfinished = ordered.size, overdue = late.size,
+    return HomeworkBrief(overdue = late.size,
         dueSoon = upcoming.count { it.due?.state == HomeworkDueState.HOURS_LEFT }, highlights = highlights, pending = ordered.map { it.row })
 }
 
 @Composable
 internal fun rememberHomeworkBrief(
-    homework: HomeworkRepository, markRepository: MarksRepository, account: String, revision: Int,
+    homework: HomeworkRepository, markRepository: MarksRepository, tasks: TaskRepository, account: String, revision: Int,
 ): HomeworkBrief {
     var result by remember(account, homework) { mutableStateOf<HomeworkLoadResult?>(null) }
     var marksCached by remember(account) { mutableStateOf(false) }
     val marks by markRepository.marks.collectAsState()
+    val personal by tasks.snapshot.collectAsState()
+    val importedIds = remember(personal) { personal.importedHomeworkIds() }
     LaunchedEffect(account, homework, markRepository, revision) {
         val assignments = async { homework.load(force = revision > 0) }
         marksCached = markRepository.refresh(force = revision > 0) is ApiResult.Failure
@@ -60,18 +61,15 @@ internal fun rememberHomeworkBrief(
             delay(60_000L)
         }
     }
-    return remember(result, marks, now, marksCached) {
-        when (val feed = result) {
-            null -> HomeworkBrief(loading = true)
-            is HomeworkLoadResult.Failure -> HomeworkBrief(failed = true)
-            is HomeworkLoadResult.Success -> homeworkBrief(feed.rows, marks, now).copy(cached = feed.fromCache || marksCached)
-        }
+    return remember(result, marks, now, marksCached, importedIds) {
+        val feed = result as? HomeworkLoadResult.Success ?: return@remember HomeworkBrief()
+        homeworkBrief(feed.rows, marks, now, importedIds).copy(cached = feed.fromCache || marksCached)
     }
 }
 
 @Composable
 internal fun ClassHomeworkOverview(brief: HomeworkBrief, onOpen: (String?) -> Unit,
-    onRemind: (HomeworkRow) -> Unit, onSettings: () -> Unit, onRetry: () -> Unit, onImport: (List<HomeworkRow>) -> Unit) {
+    onRemind: (HomeworkRow) -> Unit, onSettings: () -> Unit, onImport: (List<HomeworkRow>) -> Unit) {
     val colors = MaterialTheme.colorScheme
     Card(colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerHigh)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -80,20 +78,14 @@ internal fun ClassHomeworkOverview(brief: HomeworkBrief, onOpen: (String?) -> Un
                 TextButton(onClick = onSettings) { Text("提醒设置") }
                 TextButton(onClick = { onOpen(null) }) { Text("全部作业") }
             }
-            val summary = when {
-                brief.loading -> "正在读取班级作业…"
-                brief.failed -> "暂时无法读取班级作业"
-                brief.unfinished == 0 -> "当前没有未完成的班级作业"
-                else -> listOfNotNull(
-                    "${brief.unfinished} 项未完成",
-                    "${brief.overdue} 项逾期".takeIf { brief.overdue > 0 },
-                    "${brief.dueSoon} 项 24 小时内截止".takeIf { brief.dueSoon > 0 },
-                ).joinToString(" · ")
-            }
+            val summary = listOfNotNull(
+                "${brief.pending.size} 项可加入",
+                "${brief.overdue} 项逾期".takeIf { brief.overdue > 0 },
+                "${brief.dueSoon} 项 24 小时内截止".takeIf { brief.dueSoon > 0 },
+            ).joinToString(" · ")
             Text(summary, style = MaterialTheme.typography.bodyMedium, color =
                 if (brief.overdue > 0 || brief.dueSoon > 0) colors.error else colors.onSurfaceVariant)
-            if (brief.failed) TextButton(onClick = onRetry) { Text("重试") }
-            if (brief.pending.isNotEmpty()) TextButton(onClick = { onImport(brief.pending) }) { Text("全部加入个人任务") }
+            TextButton(onClick = { onImport(brief.pending) }) { Text("全部加入个人任务") }
             if (brief.cached) Text("上次同步", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             brief.highlights.forEach { item ->
                 HorizontalDivider(Modifier.padding(top = 8.dp))

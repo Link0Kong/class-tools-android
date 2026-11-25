@@ -677,7 +677,7 @@ fun MainNavHost(
                     if (!showHomework) {
                         var revision by remember(session.sid) { mutableIntStateOf(0) }
                         val brief = com.furina.classtools.ui.screens.tasks.rememberHomeworkBrief(
-                            container.homeworkRepository, container.marksRepository, session.sid, revision,
+                            container.homeworkRepository, container.marksRepository, tasks, session.sid, revision,
                         )
                         TaskScreen(tasks, onBack = { popTool(toolId) }, onHomework = { showHomework = true },
                             onSource = { task ->
@@ -693,17 +693,16 @@ fun MainNavHost(
                             onShare = { launchExport(it, com.furina.classtools.features.share.ShareKind.HOMEWORK) },
                             onReminderSettings = { navController.navigate(Routes.REMINDER_SETTINGS) },
                             onRefreshHomework = { revision++ },
-                            homeworkOverview = {
+                            homeworkOverview = if (brief.pending.isEmpty()) null else ({
                                 com.furina.classtools.ui.screens.tasks.ClassHomeworkOverview(brief,
                                     onOpen = { id -> detailHomeworkId = id; showHomework = true },
                                     onRemind = { remindTarget = it },
                                     onSettings = { navController.navigate(Routes.REMINDER_SETTINGS) },
-                                    onRetry = { revision++ },
                                     onImport = { rows ->
                                         val count = rows.count { tasks.importHomework(it) }
                                         toast(context, if (count > 0) "已加入 $count 项任务" else "作业已在个人任务中")
                                     })
-                            })
+                            }))
                     } else HomeworkScreen(
                         initialDetailId = detailHomeworkId,
                         onBack = { detailHomeworkId = null; showHomework = false },

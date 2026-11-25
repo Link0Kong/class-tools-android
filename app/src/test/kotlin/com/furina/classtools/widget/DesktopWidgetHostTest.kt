@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.RemoteViews
 import android.widget.TextView
 import com.furina.classtools.R
+import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.data.reminder.ReminderIntentFactory
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionStore
@@ -86,6 +87,33 @@ class DesktopWidgetHostTest {
         val tasks = WidgetFeedStore.read(app, sid).tasks!!
         assertEquals(1, tasks.count)
         assertEquals("实验", tasks.rows.single().title)
+    }
+
+    @Test fun taskAndWorkbenchWidgetsFilterAllImportedSourcesBeforeLimitingRows() {
+        val sid = "3260799999"
+        val now = 1000L
+        val assignments = (1..10).map { HomeworkRow("h$it", subject = "作业 $it", ts = it.toLong()) }
+        val tasks = (1..9).joinToString(",") {
+            """{"id":"t$it","title":"我的任务 $it","sourceHwId":"h$it","order":$it,"done":${it == 1}}"""
+        }
+        val prefs = app.getSharedPreferences("tasks_" + sid, 0)
+        prefs.edit().putString("local", """{"updatedAt":5,"items":[$tasks,{"id":"ranked-first","title":"自建","order":0}]}""").commit()
+        WidgetFeedStore.save(app, sid, feed.copy(homework = WidgetHomework(assignments, now)))
+        val data = WidgetFeedStore.read(app, sid)
+        val personal = requireNotNull(data.tasks)
+        assertEquals(8, personal.rows.size)
+        assertFalse(personal.rows.any { it.homeworkId == "h1" || it.homeworkId == "h9" })
+        fun homeworkLines(kind: WidgetKind, source: WidgetFeed): List<String> {
+            val content = widgetContent(kind, true, null, source, now)
+            return (listOf(content.first) + content.more).filter { it.destination == "class-homework" }.map { it.homeworkId }
+        }
+        for (kind in listOf(WidgetKind.TASKS, WidgetKind.WORKBENCH)) {
+            assertEquals(listOf("h10"), homeworkLines(kind, data))
+            val allImported = data.copy(homework = WidgetHomework(assignments.take(9), now))
+            assertTrue(homeworkLines(kind, allImported).isEmpty())
+            assertFalse(widgetContent(kind, true, null, allImported, now).summary.contains("作业"))
+        }
+        assertEquals("9 待办 · 1 作业", widgetContent(WidgetKind.TASKS, true, null, data, now).summary)
     }
 
     private fun parcelled(views: RemoteViews): RemoteViews = Parcel.obtain().let { parcel ->
