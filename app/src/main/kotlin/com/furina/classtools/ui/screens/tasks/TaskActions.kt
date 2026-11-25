@@ -3,6 +3,7 @@ package com.furina.classtools.ui.screens.tasks
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -63,7 +64,7 @@ internal fun taskShareCard(items: List<JsonObject>, single: Boolean): ExportCard
 
 @Composable
 internal fun TaskMenu(repository: TaskRepository, snapshot: JsonObject, onNew: () -> Unit, onManage: () -> Unit,
-    onShare: () -> Unit, onReminderSettings: () -> Unit) {
+    onShare: () -> Unit, onReminderSettings: () -> Unit, onImportShared: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
@@ -96,7 +97,7 @@ internal fun TaskMenu(repository: TaskRepository, snapshot: JsonObject, onNew: (
     Box {
         TextButton(onClick = { menu = true }) { Text("更多") }
         DropdownMenu(menu, { menu = false }) {
-            val options: List<Pair<String, () -> Unit>> = listOf("新建任务" to onNew, "管理视图与分组" to onManage,
+            val options: List<Pair<String, () -> Unit>> = listOf("新建任务" to onNew, "从分享链接添加" to onImportShared, "管理视图与分组" to onManage,
                 "分享任务图片" to onShare, "提醒设置" to onReminderSettings,
                 "导出日历" to { if (taskCalendar(snapshot).isBlank()) feedback("没有可导出的日程") else exportIcs.launch("个人任务.ics") },
                 "备份任务" to { exportJson.launch("个人任务.json") },
@@ -108,6 +109,22 @@ internal fun TaskMenu(repository: TaskRepository, snapshot: JsonObject, onNew: (
     if (clear) AlertDialog(onDismissRequest = { clear = false }, title = { Text("清除已完成的 ${snapshot.objects("items").count { it.flag("done") }} 项任务？") },
         confirmButton = { TextButton(onClick = { repository.edit { items, _ -> items.filterNot { it.flag("done") } }; clear = false }) { Text("清除") } },
         dismissButton = { TextButton(onClick = { clear = false }) { Text("取消") } })
+}
+
+@Composable
+internal fun ImportSharedTask(onClose: () -> Unit, onPreview: (SharedTask) -> Unit) {
+    var link by rememberSaveable { mutableStateOf("") }
+    var invalid by rememberSaveable { mutableStateOf(false) }
+    AlertDialog(onDismissRequest = onClose, title = { Text("从分享链接添加") }, text = {
+        OutlinedTextField(link, {
+            link = it.take(TaskShareLink.MAX_INPUT + 1)
+            invalid = false
+        }, label = { Text("任务分享链接或小程序路径") }, maxLines = 6, isError = invalid,
+            supportingText = if (invalid) ({ Text("无法读取任务，请粘贴完整的任务分享链接或小程序分享参数。") }) else null)
+    }, confirmButton = { TextButton(enabled = link.isNotBlank(), onClick = {
+        val shared = TaskShareLink.parse(link)
+        if (shared == null) invalid = true else onPreview(shared)
+    }) { Text("预览任务") } }, dismissButton = { TextButton(onClick = onClose) { Text("取消") } })
 }
 
 @Composable
@@ -203,6 +220,11 @@ internal fun TaskDetail(task: JsonObject, repository: TaskRepository, groups: Li
                 style = MaterialTheme.typography.bodySmall)
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 TextButton(onClick = onShare) { Text("分享") }
+                TextButton(onClick = {
+                    val group = groups.find { it.text("id") == task.text("list") }?.text("name").orEmpty()
+                    val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, TaskShareLink.create(task, group))
+                    context.startActivity(Intent.createChooser(intent, "分享可保存的任务链接"))
+                }) { Text("分享可保存链接") }
                 if (!task.flag("done")) {
                     TextButton(onClick = { onMove(-1) }) { Text("上移") }
                     TextButton(onClick = { onMove(1) }) { Text("下移") }

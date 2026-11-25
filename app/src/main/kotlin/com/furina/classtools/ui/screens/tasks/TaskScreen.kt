@@ -85,6 +85,8 @@ fun TaskScreen(
     var manage by rememberSaveable { mutableStateOf(false) }
     var detail by rememberSaveable { mutableStateOf<String?>(null) }
     var newDraft by rememberSaveable { mutableStateOf<String?>(null) }
+    var importLink by rememberSaveable { mutableStateOf(false) }
+    var sharedContext by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var addGroup by rememberSaveable { mutableStateOf(false) }
     var groupName by rememberSaveable { mutableStateOf("") }
@@ -184,7 +186,7 @@ fun TaskScreen(
                             Choice("排序", sort, listOf("priority" to "智能", "manual" to "手动", "due" to "截止时间",
                                 "created" to "创建时间", "important" to "重要性")) { sort = it }
                             TaskMenu(repository, snapshot, { newDraft = draft(quick, System.currentTimeMillis(), all).toString() },
-                                { manage = true }, { onShare(taskShareCard(visible, false)) }, onReminderSettings)
+                                { manage = true }, { onShare(taskShareCard(visible, false)) }, onReminderSettings, { importLink = true })
                         }
                     }
                 }
@@ -274,6 +276,11 @@ fun TaskScreen(
         }
     }
     val selected = newDraft?.let { Json.parseToJsonElement(it).jsonObject } ?: all.find { it.text("id") == editing }
+    if (importLink) ImportSharedTask({ importLink = false }) { shared ->
+        importLink = false
+        sharedContext = listOf(shared.groupLabel, shared.dueLabel).filter(String::isNotBlank).joinToString(" · ")
+        newDraft = shared.draft(System.currentTimeMillis(), firstOrder(all)).toString()
+    }
     if (manage) TaskManagement(repository, snapshot, viewOrder) { manage = false }
     all.find { it.text("id") == detail }?.let { task ->
         TaskDetail(task, repository, groups, { editing = detail; detail = null }, { detail = null },
@@ -297,7 +304,8 @@ fun TaskScreen(
             addGroup = false
         }) { Text("创建") } }, dismissButton = { TextButton(onClick = { addGroup = false }) { Text("取消") } })
     if (selected != null) key(selected.text("id")) {
-        TaskEditor(selected, groups, isNew = newDraft != null, onClose = { editing = null; newDraft = null }, onDelete = {
+        TaskEditor(selected, groups, isNew = newDraft != null, sharedContext = sharedContext,
+            onClose = { editing = null; newDraft = null; sharedContext = null }, onDelete = {
             repository.edit { list, _ -> list.filterNot { it.text("id") == selected.text("id") } }
             editing = null
         }, onSave = { patch ->
@@ -320,13 +328,15 @@ fun TaskScreen(
             }
             if (newDraft != null) resetQuick()
             newDraft = null
+            sharedContext = null
             editing = null
         })
     }
 }
 
 @Composable
-private fun TaskEditor(task: JsonObject, groups: List<JsonObject>, isNew: Boolean, onClose: () -> Unit, onDelete: () -> Unit, onSave: (JsonObject) -> Unit) {
+private fun TaskEditor(task: JsonObject, groups: List<JsonObject>, isNew: Boolean, sharedContext: String?,
+    onClose: () -> Unit, onDelete: () -> Unit, onSave: (JsonObject) -> Unit) {
     val opened = rememberSaveable { task.toString() }
     val initial = remember(opened) { Json.parseToJsonElement(opened).jsonObject }
     val context = LocalContext.current
@@ -377,8 +387,9 @@ private fun TaskEditor(task: JsonObject, groups: List<JsonObject>, isNew: Boolea
     fun updateStep(index: Int, field: String, value: String) {
         stepData = JsonArray(draftSteps.mapIndexed { i, s -> if (i == index) s.withFields { put(field, value) } else s }).toString()
     }
-    AlertDialog(onDismissRequest = ::close, title = { Text(if (isNew) "新建任务" else "编辑任务") }, text = {
+    AlertDialog(onDismissRequest = ::close, title = { Text(if (sharedContext != null) "保存为我的任务" else if (isNew) "新建任务" else "编辑任务") }, text = {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (!sharedContext.isNullOrEmpty()) Text("原任务 · $sharedContext", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(title, { title = it.take(200) }, label = { Text("标题") }, singleLine = true)
             OutlinedTextField(notes, { notes = it.take(5000) }, label = { Text("备注") }, maxLines = 5)
             OutlinedTextField(tags, { tags = it.take(120) }, label = { Text("标签（逗号分隔）") }, singleLine = true)

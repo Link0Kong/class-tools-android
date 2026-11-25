@@ -12,11 +12,13 @@ import androidx.compose.ui.text.AnnotatedString
 import com.furina.classtools.FakeTransport
 import com.furina.classtools.testApiClient
 import com.furina.classtools.ui.screens.tasks.TaskScreen
+import com.furina.classtools.ui.screens.tasks.ImportSharedTask
 import java.time.Duration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,15 +32,21 @@ import org.robolectric.annotation.Config
 class TaskScreenTest {
     @Test fun quickAddCompleteReopenAndOpenHomework() = exerciseTaskScreen(1f)
     @Test fun quickAddCompleteReopenWithReducedMotion() = exerciseTaskScreen(0f)
+    @Test fun sharedLinkDialogAcceptsValidInputOnlyOnPreview() = exerciseTaskScreen(1f, testSharedImport = true)
 
-    private fun exerciseTaskScreen(animationScale: Float) {
+    private fun exerciseTaskScreen(animationScale: Float, testSharedImport: Boolean = false) {
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         android.provider.Settings.Global.putFloat(activity.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, animationScale)
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         val store = TaskPreferences(activity.getSharedPreferences("tasks_test_3260799999", 0))
         val repository = TaskRepository("3260799999", store, testApiClient(FakeTransport { error("offline") }), scope) { false }
         var opened = false
-        activity.setContent { TaskScreen(repository, onBack = {}, onHomework = { opened = true }) }
+        var preview: SharedTask? = null
+        var canceled = false
+        activity.setContent {
+            if (testSharedImport) ImportSharedTask({ canceled = true }, { preview = it })
+            else TaskScreen(repository, onBack = {}, onHomework = { opened = true })
+        }
         val decor = activity.window.decorView
         fun frame() {
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(400))
@@ -57,7 +65,7 @@ class TaskScreenTest {
             var tree = emptyList<SemanticsNode>()
             repeat(6) {
                 frame()
-                tree = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { roots(it) }
+                tree = android.view.inspector.WindowInspector.getGlobalWindowViews().asReversed().flatMap { roots(it) }
                     .flatMap { nodes(it.semanticsOwner.rootSemanticsNode) }
                 tree.firstOrNull(predicate)?.let { return it }
             }
@@ -69,6 +77,29 @@ class TaskScreenTest {
             assertTrue(node.config[SemanticsActions.OnClick].action!!.invoke())
         }
         try {
+            if (testSharedImport) {
+                val source = newTask("分享任务", 1, 0.0).withFields {
+                    put("steps", buildJsonArray { add(buildJsonObject { put("text", "画图"); put("done", true) }) })
+                }
+                val link = TaskShareLink.create(source, "学习")
+                fun enter(value: String) {
+                    val field = find("分享链接输入") { SemanticsActions.SetText in it.config }
+                    assertTrue(field.config[SemanticsActions.SetText].action!!.invoke(AnnotatedString(value)))
+                }
+                enter("https://example.com")
+                click("预览任务")
+                assertNull(preview)
+                enter(link)
+                click("取消")
+                assertTrue(canceled)
+                assertNull(preview)
+                click("预览任务")
+                assertTrue(repository.snapshot.value.objects("items").isEmpty())
+                assertEquals("分享任务", preview?.title)
+                assertEquals("学习", preview?.groupLabel)
+                assertEquals(listOf("画图"), preview?.steps)
+                return
+            }
             val input = find("任务输入框") { SemanticsActions.SetText in it.config }
             assertTrue(input.config[SemanticsActions.SetText].action!!.invoke(AnnotatedString("模拟任务")))
             click("保存任务")
@@ -76,6 +107,14 @@ class TaskScreenTest {
             find("任务列表") { SemanticsActions.ScrollToIndex in it.config }.config[SemanticsActions.ScrollToIndex].action!!.invoke(1)
             if (animationScale == 0f) {
                 click("模拟任务")
+                click("分享可保存链接")
+                val chooser = shadowOf(activity).nextStartedActivity
+                assertEquals(android.content.Intent.ACTION_CHOOSER, chooser.action)
+                val send = chooser.getParcelableExtra(android.content.Intent.EXTRA_INTENT, android.content.Intent::class.java)
+                assertEquals(android.content.Intent.ACTION_SEND, send?.action)
+                val shared = TaskShareLink.parse(send?.getStringExtra(android.content.Intent.EXTRA_TEXT).orEmpty())
+                assertEquals("模拟任务", shared?.title)
+                click("关闭")
                 click("编辑")
                 val field = find("添加步骤") {
                     SemanticsActions.SetText in it.config && it.config.getOrNull(SemanticsProperties.Text)?.any { label -> label.text == "添加步骤" } == true
