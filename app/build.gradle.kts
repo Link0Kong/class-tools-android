@@ -165,8 +165,8 @@ android {
         applicationId = "com.furina.classtools"
         minSdk = 26
         targetSdk = 37
-        versionCode = 156
-        versionName = "1.0.0-beta73"
+        versionCode = 157
+        versionName = "1.0.0-beta74"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -360,8 +360,7 @@ kotlin {
 }
 
 // ----------------------------------------------------------------------------
-// 日常 assembleRelease 用于本地验证。多项修复合并发版时，在命令行显式传入
-// ct.updateChannel 和该批次的 ct.updateNotes，签名包构建成功后再上传。
+// 任务完成时，显式指定 ct.updateChannel 和 ct.updateNotes，发布合并后的签名包。
 // ----------------------------------------------------------------------------
 val publishUpdateChannel = tasks.register<Exec>("publishUpdateChannel") {
     group = "release"
