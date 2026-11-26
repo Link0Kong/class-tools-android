@@ -13,7 +13,7 @@ import com.furina.classtools.features.draw.KeyValueDrawLastResultStore
  */
 class SharedPreferencesDrawLastResultStore(
     context: Context,
-    key: String = KEY_LAST_DRAW,
+    key: String,
 ) : DrawLastResultStore {
 
     private val prefs = context.applicationContext
@@ -33,7 +33,5 @@ class SharedPreferencesDrawLastResultStore(
         /** 私有偏好文件名（设备级，禁止改名，否则旧用户的最近抽签会丢）。 */
         const val PREFS_NAME: String = "ct_draw_last"
 
-        /** 最近一次抽签结果键（v1）。 */
-        const val KEY_LAST_DRAW: String = "last_v1"
     }
 }

@@ -26,6 +26,24 @@ class DrawLastResultStoreTest {
     )
 
     @Test
+    fun deviceSnapshotRequiresAnOwnerAcrossLoginsAndProcessRestart() {
+        val old = DrawLastResultCodec.encode(sample().copy(result = listOf(99)))
+        val prefs = mutableMapOf("last_v1" to old)
+        fun store(sid: String) = KeyValueDrawLastResultStore(drawResultKey(sid, false)!!,
+            { prefs[it] }, { key, value -> prefs[key] = value })
+        assertNull(drawResultKey(null, false))
+        assertNull(drawResultKey("A", true))
+        assertNull(store("A").load())
+        store("A").save(sample())
+        assertNull(store("B").load())
+        val next = sample().copy(result = listOf(8))
+        store("B").save(next)
+        assertEquals(sample(), store("A").load())
+        assertEquals(next, store("B").load())
+        assertEquals(old, prefs["last_v1"])
+    }
+
+    @Test
     fun `codec round trip 保留序号 参数快照与时间`() {
         val value = sample()
         val encoded = DrawLastResultCodec.encode(value)

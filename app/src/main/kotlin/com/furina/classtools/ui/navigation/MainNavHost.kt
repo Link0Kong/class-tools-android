@@ -194,6 +194,7 @@ fun MainNavHost(
     onCloseStandaloneTool: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    val lastResultStore = remember(container, session.sid, session.debug) { container.drawLastResultStore(session) }
     val memberSource = remember(container, session.sid) {
         ClassRosterSource(container.classMembersRepository, container.classLeagueRepository)
     }
@@ -572,22 +573,24 @@ fun MainNavHost(
                             }
                         }
                     }
-                    DrawScreen(
-                        memberSource = memberSource,
-                        publishProof = if (session.debug) null else { result -> container.submitDrawRecord(session, result) },
-                        onBack = { popTool(toolId) },
-                        session = session,
-                        userDataRepository = container.userDataRepository,
-                        onExport = { payload ->
-                            val publicRecords = android.net.Uri.parse(com.furina.classtools.BuildConfig.REST_BASE_URL).path
-                                ?.trimEnd('/') == "/v1/rdb/rest"
-                            val share = if (publicRecords) payload else payload.copy(receipt = null)
-                            launchExport(share.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW)
-                        },
-                        lastResultStore = container.drawLastResultStore,
-                        loadMembers = loadMembers,
-                        onScan = { navController.navigate(Routes.SCAN) },
-                    )
+                    androidx.compose.runtime.key(session.sid, session.debug) {
+                        DrawScreen(
+                            memberSource = memberSource,
+                            publishProof = if (session.debug) null else { result -> container.submitDrawRecord(session, result) },
+                            onBack = { popTool(toolId) },
+                            session = session,
+                            userDataRepository = container.userDataRepository,
+                            onExport = { payload ->
+                                val publicRecords = android.net.Uri.parse(com.furina.classtools.BuildConfig.REST_BASE_URL).path
+                                    ?.trimEnd('/') == "/v1/rdb/rest"
+                                val share = if (publicRecords) payload else payload.copy(receipt = null)
+                                launchExport(share.toCardSpec(), com.furina.classtools.features.share.ShareKind.DRAW)
+                            },
+                            lastResultStore = lastResultStore,
+                            loadMembers = loadMembers,
+                            onScan = { navController.navigate(Routes.SCAN) },
+                        )
+                    }
                 }
 
                 "group" -> {
@@ -604,15 +607,17 @@ fun MainNavHost(
                             .filter { it.seat > 0 }
                             .map { GroupMember(seat = it.seat, name = it.name) }
                     }
-                    GroupScreen(
-                        memberSource = memberSource,
-                        onBack = { popTool(toolId) },
-                        session = session,
-                        userDataRepository = container.userDataRepository,
-                        rosterMembers = roster,
-                        lastResultStore = container.drawLastResultStore,
-                        onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.GROUP) },
-                    )
+                    androidx.compose.runtime.key(session.sid, session.debug) {
+                        GroupScreen(
+                            memberSource = memberSource,
+                            onBack = { popTool(toolId) },
+                            session = session,
+                            userDataRepository = container.userDataRepository,
+                            rosterMembers = roster,
+                            lastResultStore = lastResultStore,
+                            onExport = { payload -> launchExport(payload.toCardSpec(), com.furina.classtools.features.share.ShareKind.GROUP) },
+                        )
+                    }
                 }
 
                 "map" -> CampusMapScreen(

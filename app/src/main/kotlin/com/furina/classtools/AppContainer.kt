@@ -146,7 +146,10 @@ class AppContainer(context: Context) {
     val sessionStore: SessionStore = SessionStore(appContext)
     internal val xiaobuCourseSync by lazy { XiaobuCourseSync(appContext, this) }
     val backgroundStore: BackgroundStore by lazy { BackgroundStore(appContext) }
-    val drawLastResultStore by lazy { SharedPreferencesDrawLastResultStore(appContext) }
+    fun drawLastResultStore(account: Session) =
+        com.furina.classtools.features.draw.drawResultKey(account.sid, account.debug)?.let {
+            SharedPreferencesDrawLastResultStore(appContext, it)
+        }
 
     private val sessionPreparation = Mutex()
     @Volatile

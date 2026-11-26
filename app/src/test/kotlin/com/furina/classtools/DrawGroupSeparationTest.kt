@@ -44,7 +44,7 @@ class DrawGroupSeparationTest {
         assertFalse(nav.contains("drawGroupMembers"))
         assertFalse(nav.contains("onGroup ="))
         assertFalse("抽签页不应再 navigate 到分组", nav.contains("""Routes.tool("group")"""))
-        assertTrue("分组页应接本机最近抽签存储", nav.contains("lastResultStore = container.drawLastResultStore"))
+        assertTrue("分组页应接本机最近抽签存储", nav.contains("container.drawLastResultStore(session)") && nav.contains("lastResultStore = lastResultStore"))
         assertTrue("分组页应接班级名单", nav.contains("rosterMembers = roster"))
     }
 

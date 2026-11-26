@@ -150,6 +150,10 @@ object DrawLastResultCodec {
             .orEmpty()
 }
 
+/** The old last_v1 has no verifiable owner. Keep it intact and read only the signed-in account's key. */
+fun drawResultKey(sid: String?, debug: Boolean): String? =
+    sid?.takeIf { it.isNotBlank() && !debug }?.let { "last_v2_$it" }
+
 /** 抽签成功后的「最近一次结果」读写接口（生产实现是 SharedPreferences；测试用内存/键值实现）。 */
 interface DrawLastResultStore {
     fun load(): DrawLastResult?
