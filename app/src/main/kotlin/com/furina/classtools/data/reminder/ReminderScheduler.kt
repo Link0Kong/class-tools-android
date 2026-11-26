@@ -127,6 +127,15 @@ object ReminderRuntime {
 
     private const val COURSE_WORK_TAG = "ct_reminder_course"
     const val COURSE_BOUNDARY = "ct_course_boundary"
+    const val SIGNUP_BOUNDARY = "ct_signup_boundary"
+
+    fun scheduleSignupAt(context: Context, at: Long) {
+        val delay = (at - System.currentTimeMillis()).coerceAtLeast(0L)
+        val request = OneTimeWorkRequestBuilder<ReminderWorker>()
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setInputData(androidx.work.workDataOf(SIGNUP_BOUNDARY to true)).build()
+        WorkManager.getInstance(context).enqueueUniqueWork("signup-scan:$at", ExistingWorkPolicy.KEEP, request)
+    }
 
     fun onClockChanged(context: Context) {
         WorkManager.getInstance(context).cancelAllWorkByTag(COURSE_WORK_TAG)
@@ -256,6 +265,7 @@ class ReminderEngine(
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val catchUpMaxMillis: Long = ReminderCatchUp.MAX_LOOKBACK_MS,
     private val scheduleCourseAt: (Long) -> Unit = {},
+    private val scheduleSignupAt: (Long) -> Unit = {},
 ) {
 
     constructor(
@@ -272,6 +282,7 @@ class ReminderEngine(
         pendingStore = SharedPrefsReminderPendingEventStore(context, owner),
         snapshotStore = SharedPrefsReminderSnapshotStore(context, owner),
         scheduleCourseAt = { ReminderRuntime.scheduleCourseAt(context.applicationContext, it) },
+        scheduleSignupAt = { ReminderRuntime.scheduleSignupAt(context.applicationContext, it) },
     )
 
     /** 兼容旧名（v3 起语义等价于 [runNow]）。 */
@@ -361,6 +372,8 @@ class ReminderEngine(
                 ReminderKind.HOMEWORK_NEW, ReminderKind.NOTICE_NEW, ReminderKind.VOTE_NEW, ReminderKind.VOTE_RESULT)
         })
 
+        plan.events.firstOrNull { it.kind == ReminderKind.NOTICE_SIGNUP && it.triggerAtMillis > now }
+            ?.let { scheduleSignupAt(it.triggerAtMillis) }
         plan.events.firstOrNull { it.kind == ReminderKind.COURSE_SOON }?.let { course ->
             // At the bell, compute the next reminder even if the periodic scan is still far away.
             val boundary = if (course.triggerAtMillis > now) course.triggerAtMillis else course.courseStartAtMillis
@@ -377,7 +390,7 @@ class ReminderEngine(
             lastRunAtMillis = lastRunAt,
             maxLookbackMillis = catchUpMaxMillis,
         )
-        val pending = runCatching { pendingStore.load() }.getOrDefault(emptyList()).filter { settings.allows(it.kind) }
+        val pending = runCatching { pendingStore.load() }.getOrDefault(emptyList()).filter { settings.allows(it.kind) && it.kind != ReminderKind.NOTICE_SIGNUP }
         val missing = if (available == null) emptySet() else settings.requestedFeeds() - available
         val deferred = pending.filter { it.toolId in missing && it.triggerAtMillis >= now - catchUpMaxMillis }
         suspend fun savePending(failed: List<ReminderEvent> = emptyList()) {
@@ -530,17 +543,23 @@ class ReminderWorker(
         val settings = app.reminderSettingsStore.current()
         if (!settings.anySectionEnabled) return Result.success()
         val boundary = inputData.getBoolean(ReminderRuntime.COURSE_BOUNDARY, false)
-        val requested = if (boundary) emptySet() else settings.requestedFeeds()
+        val signupBoundary = inputData.getBoolean(ReminderRuntime.SIGNUP_BOUNDARY, false)
+        val requested = when {
+            boundary -> emptySet()
+            signupBoundary -> setOf("nt").intersect(settings.requestedFeeds())
+            else -> settings.requestedFeeds()
+        }
         return try {
             val api = ApiClient(BuildConfig.REST_BASE_URL, BuildConfig.PUBLISHABLE_KEY, tokenProvider = { owner.token })
             val feeds = loadReminderFeeds(api, owner.sid, requested, app.backgroundNoticesFor(owner, api))
             scanLock.withLock {
                 if (signedIn() != owner) return Result.success()
+                feeds.notices?.let { com.furina.classtools.data.notify.SignupCountdowns.refresh(applicationContext, owner.sid, it) }
                 val provider = BackgroundReminderData(applicationContext, owner, feeds)
                 val result = ReminderEngine(applicationContext, provider, owner.sid).runNow { signedIn() == owner }
                 Log.i(ReminderLog.TAG, ReminderLog.summary(result))
             }
-            if (!boundary && signedIn() == owner) {
+            if (!boundary && !signupBoundary && signedIn() == owner) {
                 val tasks = app.tasksFor(owner)
                 scheduleTaskReminders(applicationContext, owner.sid, null, tasks.snapshot.value)
                 tasks.sync()
@@ -577,6 +596,11 @@ class ReminderWorker(
 class ReminderBootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
+        if (intent?.action in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
+                Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED,
+                android.app.AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED)) {
+            UserReminderAlarms.restore(context)
+        }
         when (intent?.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,

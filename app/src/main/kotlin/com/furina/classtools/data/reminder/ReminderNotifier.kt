@@ -141,7 +141,8 @@ class AndroidReminderNotifier(
     override fun notify(event: ReminderEvent): Boolean = post(event, silent = false)
 
     private fun post(event: ReminderEvent, silent: Boolean): Boolean {
-        if (!canNotify()) return false
+        if (!canNotify() || appContext.getSystemService(NotificationManager::class.java)
+                .getNotificationChannel(event.kind.channelId)?.importance == NotificationManager.IMPORTANCE_NONE) return false
         val pendingIntent = ReminderIntentFactory.pendingIntent(appContext, event)
         viewEvent(event)
         val startAt = event.courseStartAtMillis
@@ -174,6 +175,8 @@ class AndroidReminderNotifier(
                 .setChronometerCountDown(true)
                 .setTimeoutAfter(startAt - now)
         }
+        val userReminder = event.kind == ReminderKind.PERSONAL_TASK || event.key.startsWith("oneshot:")
+        if (userReminder) builder.setWhen(event.triggerAtMillis)
         if (liveCourse) {
             builder.setLiveCourseContent(appContext, event, body)
             builder.setAutoCancel(false)
@@ -181,7 +184,7 @@ class AndroidReminderNotifier(
                 .setSilent(silent)
                 .setOngoing(true)
                 .setRequestPromotedOngoing(true)
-        } else {
+        } else if (!userReminder) {
             builder.setGroup(groupKey).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
         }
         val childOk = runCatching {
@@ -190,7 +193,7 @@ class AndroidReminderNotifier(
             if (liveCourse) CourseLiveService.attach(appContext, event.notificationId, notification)
             true
         }.getOrDefault(false)
-        if (childOk && !liveCourse) {
+        if (childOk && !liveCourse && !userReminder) {
             postGroupSummary(event, groupKey, pendingIntent)
         }
         return childOk

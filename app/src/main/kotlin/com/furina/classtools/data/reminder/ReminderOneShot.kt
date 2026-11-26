@@ -1,7 +1,7 @@
 package com.furina.classtools.data.reminder
 
 import android.content.Context
-import android.util.Log
+import android.net.Uri
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -15,7 +15,8 @@ import com.furina.classtools.data.network.asStringOrNull
 import com.furina.classtools.data.network.parseJsonOrNull
 import com.furina.classtools.data.notices.NoticeGroupDto
 import com.furina.classtools.data.notices.NoticeStatusMachine
-import com.furina.classtools.data.permission.AndroidPermissionController
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import com.furina.classtools.data.permission.PermissionController
 import com.furina.classtools.data.permission.PermissionState
 import com.furina.classtools.data.permission.PermissionType
@@ -33,22 +34,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
-/**
- * 单条提醒（v3，OneTime WorkManager）。
- *
- * 与 mp「用户选择提醒时间」对齐：作业可选 截止前 1 天 / 1 小时 / 截止时刻；
- * 通知可选 活动前 1 小时 + 截止前 1 天 / 1 小时 / 截止时刻。
- *
- * 取舍（WorkManager vs AlarmManager）：
- * - 本实现用 **WorkManager OneTime**（近似）：无需 `SCHEDULE_EXACT_ALARM` 特殊权限，符合当前 Manifest；
- *   精度受 Doze/省电影响（分钟级偏差），与周期提醒一致；
- * - AlarmManager 精确闹钟可做到秒级，但 Android 12+ 需申请特殊权限且商店审核成本高，v3 不采用；
- * - WorkManager 自带持久化（进程重启/重启后保留）；排程元数据同时写本机 SharedPreferences
- *   （`ct_oneshot_pending`）供 [ReminderOneShotScheduler.listPending]/取消；Worker 执行后移除该条。
- *
- * 上限：每类（作业/通知）最多 [ReminderOneShot.MAX_PER_CATEGORY] 条；权限缺失/时间已过/超限
- * 返回**明确错误**（不静默）。
- */
+/** 用户手动设置的本机提醒，由系统闹钟触发，WorkManager 持久化补发。 */
 enum class OneShotTargetKind(val toolId: String, val label: String) {
     HOMEWORK("hw", "作业"),
     NOTICE("nt", "通知"),
@@ -60,6 +46,10 @@ enum class OneShotReminderOption(val label: String, val leadMillis: Long) {
     BEFORE_1_HOUR("截止前 1 小时", 60L * 60 * 1000),
     AT_DEADLINE("截止时刻", 0L),
     BEFORE_EVENT_1_HOUR("活动前 1 小时", 60L * 60 * 1000),
+    BEFORE_SIGNUP_5_MIN("报名开始前 5 分钟", 300_000L),
+    BEFORE_SIGNUP_1_MIN("报名开始前 1 分钟", 60_000L),
+    AT_SIGNUP("报名开始时", 0L),
+    CUSTOM("自定义提醒", 0L),
 }
 
 /** UI 可选的一项提醒时间（含实际触发时刻）。 */
@@ -107,15 +97,13 @@ data class OneShotPending(
     val key: OneShotKey,
     val label: String,
     val fireAtMillis: Long,
+    val targetAtMillis: Long = fireAtMillis,
 )
 
 /** 单条提醒纯逻辑（可单测）：时间计算、key、上限、校验、通知事件。 */
 object ReminderOneShot {
 
     const val MAX_PER_CATEGORY: Int = 20
-
-    /** 距现在小于该值视为“太晚”（避免刚排就立刻触发，UI 应选更晚时间）。 */
-    const val MIN_LEAD_MILLIS: Long = 60L * 1000
 
     private val HH_MM = DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.CHINA)
 
@@ -137,7 +125,7 @@ object ReminderOneShot {
                 fireAtMillis = triggerAt(dueAt, option),
                 targetAtMillis = dueAt,
             )
-        }.filter { it.fireAtMillis > nowMillis + MIN_LEAD_MILLIS / 2 }
+        }.filter { it.fireAtMillis > nowMillis }
     }
 
     /** 通知可选时间：活动前 1 小时；截止前 1 天/1 小时/截止时刻（过滤已过去的选项）。 */
@@ -147,6 +135,12 @@ object ReminderOneShot {
         zone: ZoneId = ZoneId.systemDefault(),
     ): List<OneShotPlannedTime> {
         val out = mutableListOf<OneShotPlannedTime>()
+        NoticeStatusMachine.nextSignup(group, nowMillis, zone)?.start?.let { start ->
+            for (option in listOf(OneShotReminderOption.BEFORE_SIGNUP_5_MIN,
+                    OneShotReminderOption.BEFORE_SIGNUP_1_MIN, OneShotReminderOption.AT_SIGNUP)) {
+                out += OneShotPlannedTime(option, labelOf(option, start, zone), triggerAt(start, option), start)
+            }
+        }
         val eventAt = NoticeStatusMachine.eventAtOf(group, zone)?.takeIf { it > nowMillis }
         if (eventAt != null) {
             out += OneShotPlannedTime(
@@ -171,7 +165,7 @@ object ReminderOneShot {
                 )
             }
         }
-        return out.filter { it.fireAtMillis > nowMillis + MIN_LEAD_MILLIS / 2 }
+        return out.filter { it.fireAtMillis > nowMillis }
     }
 
     fun triggerAt(targetAtMillis: Long, option: OneShotReminderOption): Long =
@@ -207,7 +201,7 @@ object ReminderOneShot {
     ): OneShotScheduleResult? {
         if (targetId.isBlank()) return OneShotScheduleResult.EmptyTarget
         if (permission != PermissionState.GRANTED) return OneShotScheduleResult.PermissionMissing
-        if (fireAtMillis <= nowMillis + MIN_LEAD_MILLIS) {
+        if (fireAtMillis <= nowMillis) {
             return OneShotScheduleResult.TooLate(targetAtMillis)
         }
         if (pendingOfCategory >= MAX_PER_CATEGORY) {
@@ -281,6 +275,7 @@ object OneShotPendingCodec {
                     put("id", JsonPrimitive(item.key.targetId))
                     put("label", JsonPrimitive(item.label))
                     put("fireAt", JsonPrimitive(item.fireAtMillis))
+                    put("targetAt", JsonPrimitive(item.targetAtMillis))
                 },
             )
         }
@@ -303,16 +298,17 @@ object OneShotPendingCodec {
                 key = OneShotKey(kind, id, fireAt),
                 label = obj["label"].asStringOrNull().orEmpty(),
                 fireAtMillis = fireAt,
+                targetAtMillis = (obj["targetAt"] as? JsonPrimitive)?.longOrNull ?: fireAt,
             )
         }
         return out
     }
 }
 
-class SharedPrefsOneShotPendingStore(context: Context) : OneShotPendingStore {
+class SharedPrefsOneShotPendingStore(context: Context, owner: String = "") : OneShotPendingStore {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getSharedPreferences(if (owner.isEmpty()) PREFS_NAME else "${PREFS_NAME}_$owner", Context.MODE_PRIVATE)
 
     override suspend fun load(): List<OneShotPending> =
         OneShotPendingCodec.decode(prefs.getString(KEY_ITEMS, null))
@@ -327,17 +323,16 @@ class SharedPrefsOneShotPendingStore(context: Context) : OneShotPendingStore {
     }
 
     override suspend fun clear() {
-        prefs.edit().remove(KEY_ITEMS).apply()
+        prefs.edit().remove(KEY_ITEMS).commit()
     }
 
     private fun write(items: List<OneShotPending>) {
-        prefs.edit().putString(KEY_ITEMS, OneShotPendingCodec.encode(items.take(MAX_ITEMS))).apply()
+        prefs.edit().putString(KEY_ITEMS, OneShotPendingCodec.encode(items)).commit()
     }
 
     private companion object {
         const val PREFS_NAME = "ct_oneshot_pending"
         const val KEY_ITEMS = "items"
-        const val MAX_ITEMS = 100
     }
 }
 
@@ -366,143 +361,140 @@ interface ReminderOneShotScheduler {
     suspend fun listPending(): List<OneShotPending>
 }
 
-/**
- * WorkManager 实现：OneTimeWorkRequest + unique work（同名 REPLACE → 同一目标同时间重复点击幂等）。
- * 持久化：WorkManager 保留任务；元数据另存 SharedPreferences（[OneShotPendingStore]），Worker 执行后移除。
- */
-class WorkManagerOneShotScheduler(
-    context: Context,
-    private val permissionController: PermissionController,
-    private val pendingStore: OneShotPendingStore = SharedPrefsOneShotPendingStore(context),
-    private val clock: () -> Long = System::currentTimeMillis,
-) : ReminderOneShotScheduler {
+private val oneShotLock = Mutex()
 
-    private val appContext: Context = context.applicationContext
-    private val workManager: WorkManager by lazy { WorkManager.getInstance(appContext) }
-
-    override suspend fun scheduleHomeworkReminder(
-        rowId: String,
-        fireAtMillis: Long,
-        label: String,
-        targetAtMillis: Long,
-    ): OneShotScheduleResult = schedule(OneShotTargetKind.HOMEWORK, rowId, fireAtMillis, label, targetAtMillis)
-
-    override suspend fun scheduleNoticeReminder(
-        groupId: String,
-        fireAtMillis: Long,
-        label: String,
-        targetAtMillis: Long,
-    ): OneShotScheduleResult = schedule(OneShotTargetKind.NOTICE, groupId, fireAtMillis, label, targetAtMillis)
-
-    private suspend fun schedule(
-        kind: OneShotTargetKind,
-        targetId: String,
-        fireAtMillis: Long,
-        label: String,
-        targetAtMillis: Long,
-    ): OneShotScheduleResult {
-        val now = clock()
-        val pending = runCatching { pendingStore.load() }.getOrDefault(emptyList())
-        ReminderOneShot.validate(
-            targetKind = kind,
-            targetId = targetId,
-            fireAtMillis = fireAtMillis,
-            nowMillis = now,
-            permission = permissionController.state(PermissionType.NOTIFICATIONS),
-            pendingOfCategory = pending.count { it.key.targetKind == kind },
-            targetAtMillis = targetAtMillis,
-        )?.let { return it }
-
-        val key = ReminderOneShot.key(kind, targetId, fireAtMillis)
-        val input = Data.Builder()
-            .putString(KEY_KIND, kind.name)
-            .putString(KEY_TARGET_ID, targetId)
-            .putString(KEY_LABEL, label.ifBlank { "班级提醒" }.take(120))
-            .putLong(KEY_TARGET_AT, targetAtMillis)
-            .putLong(KEY_FIRE_AT, fireAtMillis)
-            .build()
-        val request = OneTimeWorkRequestBuilder<ReminderOneShotWorker>()
-            .setInitialDelay((fireAtMillis - now).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
-            .setInputData(input)
-            .addTag(TAG)
-            .addTag(tagOf(kind))
-            .build()
-        return runCatching {
-            workManager.enqueueUniqueWork(key.workName, ExistingWorkPolicy.REPLACE, request)
-            pendingStore.add(OneShotPending(key, label, fireAtMillis))
-            OneShotScheduleResult.Scheduled(key, fireAtMillis)
-        }.getOrElse { error ->
-            OneShotScheduleResult.Failed("排程失败：${error.message ?: "未知错误"}")
-        }
+/** Bind pre-upgrade entries to the signed-in account once. The old worker can still wake them. */
+private suspend fun pendingFor(context: Context, owner: String): OneShotPendingStore {
+    val store = SharedPrefsOneShotPendingStore(context, owner)
+    val legacy = SharedPrefsOneShotPendingStore(context)
+    val items = legacy.load()
+    if (items.isNotEmpty()) {
+        val existing = store.load().map { it.key }.toSet()
+        for (item in items) if (item.key !in existing) store.add(item)
+        legacy.clear()
     }
+    return store
+}
 
-    override suspend fun cancel(key: OneShotKey) {
-        runCatching { workManager.cancelUniqueWork(key.workName) }
-        runCatching { pendingStore.remove(key) }
-    }
+private fun OneShotKey.backupName(owner: String) = "ct_manual:$owner:$targetKind:${Uri.encode(targetId)}:$fireAtMillis"
 
-    override suspend fun cancelAll() {
-        runCatching { workManager.cancelAllWorkByTag(TAG) }
-        runCatching { pendingStore.clear() }
-    }
+private fun armOneShot(context: Context, owner: String, item: OneShotPending, replace: Boolean) {
+    val key = item.key
+    val delay = (key.fireAtMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+    val input = Data.Builder().putString("owner", owner).putString("kind", key.targetKind.name)
+        .putString("targetId", key.targetId).putLong("fireAt", key.fireAtMillis).build()
+    val request = OneTimeWorkRequestBuilder<ReminderOneShotWorker>()
+        .setInitialDelay(delay, TimeUnit.MILLISECONDS).setInputData(input).addTag(WorkManagerOneShotScheduler.TAG).build()
+    WorkManager.getInstance(context).enqueueUniqueWork(key.backupName(owner),
+        if (replace) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP, request)
+    if (delay > 0) UserReminderAlarms.set(context, key.targetKind.name, owner, key.targetId,
+        key.fireAtMillis.toString(), key.fireAtMillis)
+}
 
-    override suspend fun listPending(): List<OneShotPending> = withContext(Dispatchers.IO) {
-        val now = clock()
-        runCatching {
-            pendingStore.load()
-                .filter { it.fireAtMillis > now - STALE_WINDOW_MS }
-                .sortedBy { it.fireAtMillis }
-        }.getOrDefault(emptyList())
-    }
-
-    companion object {
-        const val TAG: String = "ct_oneshot_reminder"
-
-        /** 列表保留窗口：过期超过 1 天的排程元数据视为脏数据。 */
-        const val STALE_WINDOW_MS: Long = 24L * 60 * 60 * 1000
-
-        internal const val KEY_KIND: String = "kind"
-        internal const val KEY_TARGET_ID: String = "targetId"
-        internal const val KEY_LABEL: String = "label"
-        internal const val KEY_TARGET_AT: String = "targetAt"
-        internal const val KEY_FIRE_AT: String = "fireAt"
-
-        private fun tagOf(kind: OneShotTargetKind): String = "$TAG.${kind.name.lowercase()}"
+internal suspend fun restoreOneShotAlarms(context: Context, owner: String) = oneShotLock.withLock {
+    val store = pendingFor(context, owner)
+    val oldest = System.currentTimeMillis() - ReminderCatchUp.MAX_LOOKBACK_MS
+    for (item in store.load()) {
+        if (item.fireAtMillis < oldest) store.remove(item.key) else armOneShot(context, owner, item, false)
     }
 }
 
-/** 单条提醒 Worker：权限缺失静默成功（UI 已在排程时拦截并提示），否则发通知并清理排程元数据。 */
-class ReminderOneShotWorker(
-    appContext: Context,
-    params: WorkerParameters,
-) : CoroutineWorker(appContext, params) {
+class WorkManagerOneShotScheduler(
+    context: Context,
+    private val permissionController: PermissionController,
+    private val clock: () -> Long = System::currentTimeMillis,
+) : ReminderOneShotScheduler {
+    private val appContext = context.applicationContext
 
-    override suspend fun doWork(): Result {
-        val kind = runCatching {
-            OneShotTargetKind.valueOf(inputData.getString(WorkManagerOneShotScheduler.KEY_KIND).orEmpty())
-        }.getOrNull() ?: return Result.success()
-        val targetId = inputData.getString(WorkManagerOneShotScheduler.KEY_TARGET_ID).orEmpty()
-        if (targetId.isBlank()) return Result.success()
-        val label = inputData.getString(WorkManagerOneShotScheduler.KEY_LABEL).orEmpty()
-        val targetAt = inputData.getLong(WorkManagerOneShotScheduler.KEY_TARGET_AT, 0L)
-            .takeIf { it > 0L } ?: System.currentTimeMillis()
-        val fireAt = inputData.getLong(WorkManagerOneShotScheduler.KEY_FIRE_AT, 0L)
-        val key = if (fireAt > 0L) OneShotKey(kind, targetId, fireAt) else null
+    override suspend fun scheduleHomeworkReminder(rowId: String, fireAtMillis: Long, label: String, targetAtMillis: Long) =
+        schedule(OneShotTargetKind.HOMEWORK, rowId, fireAtMillis, label, targetAtMillis)
 
-        val permission = AndroidPermissionController(applicationContext)
-            .state(PermissionType.NOTIFICATIONS)
-        if (!permission.isGranted) {
-            key?.let { runCatching { SharedPrefsOneShotPendingStore(applicationContext).remove(it) } }
-            Log.i(ReminderLog.TAG, "[CT_REMINDER] oneshot skipped: permission")
-            return Result.success()
+    override suspend fun scheduleNoticeReminder(groupId: String, fireAtMillis: Long, label: String, targetAtMillis: Long) =
+        schedule(OneShotTargetKind.NOTICE, groupId, fireAtMillis, label, targetAtMillis)
+
+    private suspend fun schedule(kind: OneShotTargetKind, id: String, at: Long, label: String, target: Long): OneShotScheduleResult =
+        withContext(Dispatchers.IO) {
+            val owner = reminderSession(appContext)?.reminderOwner ?: return@withContext OneShotScheduleResult.Failed("请先登录")
+            oneShotLock.withLock {
+                val store = pendingFor(appContext, owner)
+                val now = clock()
+                val key = ReminderOneShot.key(kind, id, at)
+                ReminderOneShot.validate(kind, id, at, now, permissionController.state(PermissionType.NOTIFICATIONS),
+                    store.load().count { it.key != key && it.key.targetKind == kind && it.fireAtMillis > now }, target)
+                    ?.let { return@withLock it }
+                val item = OneShotPending(key, label.ifBlank { kind.label }.take(160), at, target)
+                try {
+                    store.add(item)
+                    armOneShot(appContext, owner, item, true)
+                    OneShotScheduleResult.Scheduled(key, at)
+                } catch (e: Exception) {
+                    store.remove(key)
+                    OneShotScheduleResult.Failed(e.localizedMessage ?: "无法设置系统提醒")
+                }
+            }
         }
-        val notifier = AndroidReminderNotifier(applicationContext)
-        notifier.ensureChannels()
-        val event = ReminderOneShot.eventFor(kind, targetId, label, targetAt)
-        val sent = notifier.notify(event)
-        key?.let { runCatching { SharedPrefsOneShotPendingStore(applicationContext).remove(it) } }
-        Log.i(ReminderLog.TAG, "[CT_REMINDER] oneshot sent=$sent kind=${kind.name} fireAt=$fireAt")
-        return Result.success()
+
+    private suspend fun remove(store: OneShotPendingStore, owner: String, key: OneShotKey) {
+        store.remove(key)
+        UserReminderAlarms.cancel(appContext, key.targetKind.name, owner, key.targetId, key.fireAtMillis.toString())
+        WorkManager.getInstance(appContext).cancelUniqueWork(key.backupName(owner))
+        com.furina.classtools.data.calendar.ReminderCalendar.remove(appContext, key.calendarKey(owner))
+    }
+
+    override suspend fun cancel(key: OneShotKey) = withContext(Dispatchers.IO) {
+        val owner = reminderSession(appContext)?.reminderOwner ?: return@withContext
+        oneShotLock.withLock { remove(pendingFor(appContext, owner), owner, key) }
+    }
+
+    override suspend fun cancelAll() = withContext(Dispatchers.IO) {
+        val owner = reminderSession(appContext)?.reminderOwner ?: return@withContext
+        oneShotLock.withLock {
+            val store = pendingFor(appContext, owner)
+            for (item in store.load()) remove(store, owner, item.key)
+        }
+    }
+
+    override suspend fun listPending(): List<OneShotPending> = withContext(Dispatchers.IO) {
+        val owner = reminderSession(appContext)?.reminderOwner ?: return@withContext emptyList()
+        oneShotLock.withLock { pendingFor(appContext, owner).load().filter { it.fireAtMillis > clock() }.sortedBy { it.fireAtMillis } }
+    }
+
+    companion object { const val TAG = "ct_oneshot_reminder" }
+}
+
+internal fun OneShotKey.calendarKey(owner: String) = "reminder:$owner:$targetKind:${Uri.encode(targetId)}:$fireAtMillis"
+
+internal suspend fun deliverOneShot(context: Context, key: OneShotKey, expectedOwner: String?,
+    legacyTargetAt: Long = 0L): Boolean = oneShotLock.withLock {
+    val owner = reminderSession(context)?.reminderOwner ?: return true
+    if (expectedOwner != null && owner != expectedOwner) return true
+    val store = pendingFor(context, owner)
+    val item = store.load().find { it.key == key } ?: return true
+    val now = System.currentTimeMillis()
+    if (key.fireAtMillis > now) {
+        UserReminderAlarms.set(context, key.targetKind.name, owner, key.targetId, key.fireAtMillis.toString(), key.fireAtMillis)
+        return true
+    }
+    if (now - key.fireAtMillis > ReminderCatchUp.MAX_LOOKBACK_MS) {
+        store.remove(key)
+        return true
+    }
+    val notifier = AndroidReminderNotifier(context)
+    notifier.ensureChannels()
+    val event = ReminderOneShot.eventFor(key.targetKind, key.targetId, item.label,
+        legacyTargetAt.takeIf { it > 0 } ?: item.targetAtMillis)
+    val sent = notifier.notify(event.copy(triggerAtMillis = key.fireAtMillis))
+    if (sent) store.remove(key)
+    sent
+}
+
+class ReminderOneShotWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val kind = OneShotTargetKind.entries.find { it.name == inputData.getString("kind") } ?: return Result.success()
+        val id = inputData.getString("targetId") ?: return Result.success()
+        val key = OneShotKey(kind, id, inputData.getLong("fireAt", 0L))
+        val sent = deliverOneShot(applicationContext, key, inputData.getString("owner"), inputData.getLong("targetAt", 0L))
+        return if (sent || runAttemptCount >= 3) Result.success() else Result.retry()
     }
 }
 

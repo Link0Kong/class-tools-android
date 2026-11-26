@@ -180,9 +180,9 @@ fun PermissionSettingsScreen(
                             )
                             Text(
                                 if (showColorOsLiveUpdates) {
-                                    "上传进度 · 投票倒计时（流体云）"
+                                    "报名倒计时 · 投票 · 上传进度（流体云）"
                                 } else {
-                                    "上传进度 · 投票倒计时"
+                                    "报名倒计时 · 投票 · 上传进度"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

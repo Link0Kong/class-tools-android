@@ -104,6 +104,10 @@ class AndroidCalendarWriter(
             runCatching {
                 val calendarId = resolver.findWritableCalendarId()
                     ?: return@withContext CalendarWriteResult.NoCalendarAccount
+                if (event.sourceKey.startsWith("reminder:")) {
+                    val eventId = checkNotNull(ReminderCalendar.save(appContext, event, calendarId))
+                    return@withContext CalendarWriteResult.Success(eventId, event.sourceKey)
+                }
                 val eventId = resolver.insertEvent(calendarId, event)
                 if (event.reminderMinutes > 0) {
                     // 提醒失败不影响事件本身；下次写日历时会由用户重新生成
@@ -116,8 +120,6 @@ class AndroidCalendarWriter(
         }
     }
 
-    @Suppress("unused")
-    private val unusedContext = appContext
 }
 
 /** `ACTION_INSERT` 系统兜底：无权限/无日历账号时拉起系统日历新建界面，由用户确认保存。 */

@@ -98,6 +98,7 @@ fun TaskScreen(
     onSource: (JsonObject) -> Unit = { onHomework() },
     onShare: (com.furina.classtools.features.export.ExportCardSpec) -> Unit = {},
     onReminderSettings: () -> Unit = {},
+    onReminderCalendar: ((JsonObject) -> Unit)? = null,
     openTaskId: String? = null,
     onTaskOpened: () -> Unit = {},
     onCloseFocused: (() -> Unit)? = null,
@@ -394,7 +395,7 @@ fun TaskScreen(
             openedFromCard = null
             detail = null
         },
-            onSource, { onShare(taskShareCard(listOf(task), true)) }) { direction ->
+            onSource, { onShare(taskShareCard(listOf(task), true)) }, onReminderCalendar) { direction ->
             repository.edit { list, now ->
                 val ordered = list.filterNot { it.flag("done") }.sortedBy { it.text("order").toDoubleOrNull() ?: 0.0 }.toMutableList()
                 val i = ordered.indexOfFirst { it.text("id") == detail }

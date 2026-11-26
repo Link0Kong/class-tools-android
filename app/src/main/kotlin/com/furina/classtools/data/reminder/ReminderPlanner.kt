@@ -225,7 +225,6 @@ object ReminderPlanner {
         val action: String,
         val source: String,
         /** 报名开始时间（0 = 无）。 */
-        val signupStartMillis: Long = 0L,
         val senderName: String = "",
     ) {
         val displayName: String get() = title.ifBlank { "班级通知" }
@@ -271,7 +270,6 @@ object ReminderPlanner {
                 type = type,
                 action = action,
                 source = group.source,
-                signupStartMillis = NoticeStatusMachine.signupOf(group, zone).start ?: 0L,
                 senderName = group.senderName.trim(),
             )
         }
@@ -328,20 +326,19 @@ object ReminderPlanner {
         zone: ZoneId = ZoneId.systemDefault(),
     ): List<ReminderEvent> {
         if (!settings.enabled || !settings.noticeSignupEnabled) return emptyList()
-        val targets = noticeTargets(notices, handledIds, nowMillis, zone)
-        return targets.mapNotNull { target ->
-            val start = target.signupStartMillis
-            if (start <= nowMillis + 60_000L) return@mapNotNull null
+        return notices?.auto.orEmpty().mapNotNull { entry ->
+            val id = entry.id
+            if (id.isBlank() || entry.hidden || id in handledIds) return@mapNotNull null
+            val start = NoticeStatusMachine.nextSignup(entry.group, nowMillis, zone)?.start ?: return@mapNotNull null
             if (start - nowMillis > PLANNING_HORIZON_MS) return@mapNotNull null
-            val trigger = maxOf(nowMillis + IMMEDIATE_DELAY_MS, start - SIGNUP_LEAD_MS)
+            val trigger = maxOf(nowMillis, start - SIGNUP_LEAD_MS)
             if (settings.isQuiet(trigger, zone)) return@mapNotNull null
             ReminderEvent(
                 kind = ReminderKind.NOTICE_SIGNUP,
-                key = "nt-signup:${target.id}",
+                key = "nt-signup:$start:$id",
                 triggerAtMillis = trigger,
                 title = "活动开抢提醒",
-                body = target.displayName + " · " + formatAt(start, zone) + " 开始报名",
-                toolId = ReminderKind.NOTICE_SIGNUP.toolId,
+                body = entry.title + " · " + formatAt(start, zone) + " 开始报名",
             )
         }
     }
@@ -625,6 +622,8 @@ object ReminderPlanner {
     ): List<ReminderEvent> = events.filter { event ->
         if (event.kind == ReminderKind.COURSE_SOON) {
             event.triggerAtMillis <= nowMillis && (event.courseStartAtMillis ?: 0L) > nowMillis
+        } else if (event.kind == ReminderKind.NOTICE_SIGNUP) {
+            event.triggerAtMillis <= nowMillis
         } else {
             event.triggerAtMillis in (nowMillis - graceMillis)..(nowMillis + horizonMillis)
         }

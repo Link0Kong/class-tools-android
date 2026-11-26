@@ -271,6 +271,15 @@ object NoticeStatusMachine {
             end = parseTs(group.signupEnd, zone),
         )
 
+    /** Multiple registration rounds are authoritative; older notices carry a single flat window. */
+    fun nextSignup(group: NoticeGroupDto, now: Long, zone: ZoneId = ZoneId.systemDefault()): SignupWindow? {
+        if (group.expired) return null
+        val rounds = group.signupWindows.map { SignupWindow(parseTs(it.start, zone), parseTs(it.end, zone)) }
+        val windows = rounds.filter { it.start != null }.ifEmpty { listOf(signupOf(group, zone)) }
+        return windows.filter { it.start != null && it.start > now && (it.end == null || it.end > it.start) }
+            .minByOrNull { it.start!! }
+    }
+
     /** 真实截止：extensions 最后一次延期的 deadline 优先，其次 deadline。 */
     fun deadlineOf(group: NoticeGroupDto, zone: ZoneId = ZoneId.systemDefault()): Long? {
         val lastExtension = group.extensions.lastOrNull()

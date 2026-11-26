@@ -6,10 +6,11 @@ import com.furina.classtools.data.reminder.AndroidReminderNotifier
 import com.furina.classtools.data.reminder.ReminderCatchUp
 import com.furina.classtools.data.reminder.ReminderEvent
 import com.furina.classtools.data.reminder.ReminderKind
-import com.furina.classtools.data.session.SessionState
-import com.furina.classtools.data.session.SessionStore
+import com.furina.classtools.data.reminder.UserReminderAlarms
+import com.furina.classtools.data.reminder.reminderSession
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.*
 
 internal fun taskReminderTime(task: JsonObject): Long {
@@ -28,16 +29,18 @@ internal fun scheduleTaskReminders(context: Context, sid: String, before: JsonOb
     val next = times(after)
     val now = System.currentTimeMillis()
     val prefs = context.getSharedPreferences("tasks_" + sid, Context.MODE_PRIVATE)
+    val work = WorkManager.getInstance(context)
     for (id in old.keys + next.keys) {
         val time = next[id] ?: 0L
         if (time == (old[id] ?: 0L) || (time > 0 && prefs.getLong("notified:$id", 0L) == time)) continue
-        val work = WorkManager.getInstance(context)
         val key = "personal-task:$sid:$id"
         val delay = taskReminderDelay(time, now)
         if (delay == null) {
+            UserReminderAlarms.cancel(context, UserReminderAlarms.TASK, sid, id, "due")
             if ((old[id] ?: 0L) > 0) work.cancelUniqueWork(key)
             continue
         }
+        if (delay > 0) UserReminderAlarms.set(context, UserReminderAlarms.TASK, sid, id, "due", time)
         val request = OneTimeWorkRequestBuilder<TaskReminderWorker>()
             .setInputData(workDataOf("owner" to sid, "id" to id, "time" to time))
             .setInitialDelay(delay, TimeUnit.MILLISECONDS)
@@ -46,23 +49,60 @@ internal fun scheduleTaskReminders(context: Context, sid: String, before: JsonOb
     }
 }
 
+private fun localTasks(context: Context, sid: String): JsonObject? {
+    val prefs = context.getSharedPreferences("tasks_" + sid, Context.MODE_PRIVATE)
+    return TaskPreferences(prefs).read("local")?.let {
+        runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull()
+    }
+}
+
+internal fun restoreTaskReminders(context: Context, sid: String) {
+    localTasks(context, sid)?.let { scheduleTaskReminders(context, sid, null, it) }
+}
+
+internal fun updateTaskCalendarCopies(context: Context, owner: String, before: JsonObject, after: JsonObject) {
+    fun byId(snapshot: JsonObject) = snapshot.objects("items").associateBy { it.text("id") }
+    val previous = byId(before)
+    val next = byId(after)
+    synchronized(taskCalendarLock) {
+        val current = localTasks(context, owner)?.let(::byId) ?: return
+        for (id in previous.keys + next.keys) {
+            if (previous[id] != next[id]) runCatching {
+                com.furina.classtools.data.calendar.ReminderCalendar.syncTask(context, owner, id, current[id])
+            }
+        }
+    }
+}
+
+private val taskCalendarLock = Any()
+private val taskDelivery = Mutex()
+
+internal suspend fun deliverTaskReminder(context: Context, sid: String, id: String, time: Long): Boolean =
+    taskDelivery.withLock {
+        val session = reminderSession(context)
+        if (session?.sid != sid || session.debug) return true
+        val task = localTasks(context, sid)?.objects("items")?.find { it.text("id") == id } ?: return true
+        if (time <= 0 || taskReminderTime(task) != time) return true
+        val now = System.currentTimeMillis()
+        if (time > now) {
+            UserReminderAlarms.set(context, UserReminderAlarms.TASK, sid, id, "due", time)
+            return true
+        }
+        if (taskReminderDelay(time, now) == null) return true
+        val prefs = context.getSharedPreferences("tasks_" + sid, Context.MODE_PRIVATE)
+        if (prefs.getLong("notified:$id", 0L) == time) return true
+        val notifier = AndroidReminderNotifier(context)
+        notifier.ensureChannels()
+        val posted = notifier.notify(ReminderEvent(ReminderKind.PERSONAL_TASK, "task:$id", time, "任务提醒", task.text("title")))
+        if (posted) prefs.edit().putLong("notified:$id", time).commit()
+        posted
+    }
+
 class TaskReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val sid = inputData.getString("owner") ?: return Result.success()
         val id = inputData.getString("id") ?: return Result.success()
-        val time = inputData.getLong("time", 0L)
-        val session = (SessionStore(applicationContext).state.first() as? SessionState.SignedIn)?.session
-        if (session?.sid != sid || session.debug || !session.isLikelyValid()) return Result.success()
-        val prefs = applicationContext.getSharedPreferences("tasks_" + sid, Context.MODE_PRIVATE)
-        if (prefs.getLong("notified:$id", 0L) == time) return Result.success()
-        val local = TaskPreferences(prefs).read("local")
-        val snapshot = local?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
-        val task = snapshot?.objects("items")?.find { it.text("id") == id } ?: return Result.success()
-        if (time <= 0 || taskReminderTime(task) != time) return Result.success()
-        val notifier = AndroidReminderNotifier(applicationContext)
-        notifier.ensureChannels()
-        val posted = notifier.notify(ReminderEvent(ReminderKind.PERSONAL_TASK, "task:$id", time, "任务提醒", task.text("title")))
-        if (posted) prefs.edit().putLong("notified:$id", time).apply()
+        val posted = deliverTaskReminder(applicationContext, sid, id, inputData.getLong("time", 0L))
         return if (posted || runAttemptCount >= 3) Result.success() else Result.retry()
     }
 }

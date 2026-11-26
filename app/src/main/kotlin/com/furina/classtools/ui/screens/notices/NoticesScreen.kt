@@ -57,6 +57,8 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Button
+import androidx.compose.ui.platform.LocalContext
+import com.furina.classtools.data.reminder.reminderOwner
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -411,6 +413,13 @@ fun NoticesScreen(
     val marks: MarksSnapshot by marksFlow.collectAsStateWithLifecycle()
 
     var data by remember(session, noticesRepository) { mutableStateOf(initialData) }
+    val countdownContext = LocalContext.current.applicationContext
+    LaunchedEffect(session, data) {
+        val owner = session?.reminderOwner ?: return@LaunchedEffect
+        data?.let { snapshot -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.furina.classtools.data.notify.SignupCountdowns.refresh(countdownContext, owner, snapshot)
+        } }
+    }
     var phase by remember {
         mutableStateOf(
             when {
@@ -960,6 +969,7 @@ fun NoticesScreen(
                 imageLoader = imageLoader,
                 onAddToCalendar = onAddToCalendar,
                 onRemindNotice = onRemindNotice,
+                countdownOwner = session?.reminderOwner,
                 onAddTask = addTaskFromNotice?.let { add -> { add(item) } },
                 onDismiss = { if (focusedKey == selectedKey) onCloseFocused?.invoke(); focusedKey = null; selectedKey = null },
                 onToggleDone = { toggleDone(item) },

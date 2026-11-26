@@ -121,7 +121,7 @@ object ReminderPendingCatchUp {
         maxEvents: Int = MAX_PENDING_EVENTS,
     ): List<ReminderEvent> = events
         // A course's start, room or enablement may change. Re-plan it from the current timetable at delivery.
-        .filterNot { it.kind == ReminderKind.COURSE_SOON }
+        .filterNot { it.kind == ReminderKind.COURSE_SOON || it.kind == ReminderKind.NOTICE_SIGNUP }
         .filter { it.triggerAtMillis > nowMillis }
         .sortedBy { it.triggerAtMillis }
         .distinctBy { it.key }
@@ -137,7 +137,7 @@ object ReminderPendingCatchUp {
         lookbackMillis: Long,
         keysAlreadyPlanned: Set<String> = emptySet(),
     ): List<ReminderEvent> = pending
-        .filterNot { it.kind == ReminderKind.COURSE_SOON }
+        .filterNot { it.kind == ReminderKind.COURSE_SOON || it.kind == ReminderKind.NOTICE_SIGNUP }
         .filter { it.triggerAtMillis in (nowMillis - lookbackMillis)..nowMillis }
         .filterNot { it.key in keysAlreadyPlanned }
         .sortedBy { it.triggerAtMillis }

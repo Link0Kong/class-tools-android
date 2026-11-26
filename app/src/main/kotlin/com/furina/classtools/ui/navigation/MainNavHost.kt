@@ -74,6 +74,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.furina.classtools.AppContainer
 import com.furina.classtools.data.calendar.CalendarEvent
+import com.furina.classtools.data.calendar.ReminderCalendar
+import com.furina.classtools.data.reminder.reminderOwner
+import com.furina.classtools.data.reminder.calendarKey
+import com.furina.classtools.ui.screens.settings.UserReminderDialog
 import com.furina.classtools.data.calendar.CalendarIntentFactory
 import com.furina.classtools.data.calendar.CalendarWriteResult
 import com.furina.classtools.data.calendar.CourseCalendarMapper
@@ -84,8 +88,6 @@ import com.furina.classtools.data.member.ClassMember
 import com.furina.classtools.data.member.ClassMembersResult
 import com.furina.classtools.data.permission.PermissionType
 import com.furina.classtools.data.privacy.LocalDataStats
-import com.furina.classtools.data.reminder.OneShotPlannedTime
-import com.furina.classtools.data.reminder.OneShotScheduleResult
 import com.furina.classtools.data.reminder.ReminderOneShot
 import com.furina.classtools.data.reminder.ReminderOneShotFactory
 import com.furina.classtools.data.reminder.ReminderSettings
@@ -397,7 +399,8 @@ fun MainNavHost(
                 val intent = CalendarIntentFactory.insertIntent(event)
                 if (intent != null) {
                     runCatching { context.startActivity(intent) }
-                    toast(context, CalendarIntentFactory.fallbackHint())
+                        .onSuccess { toast(context, if (event.sourceKey.startsWith("reminder:")) "请在系统日历确认「准时提醒」并保存" else CalendarIntentFactory.fallbackHint()) }
+                        .onFailure { toast(context, "没有可用的系统日历") }
                 } else {
                     toast(context, "没有可用的系统日历")
                 }
@@ -722,6 +725,9 @@ fun MainNavHost(
                             },
                             onShare = { launchExport(it, com.furina.classtools.features.share.ShareKind.HOMEWORK) },
                             onReminderSettings = { navController.navigate(Routes.REMINDER_SETTINGS) },
+                            onReminderCalendar = { task ->
+                                writeCalendarEvent(ReminderCalendar.task(session.reminderOwner, task))
+                            },
                             onRefreshHomework = { revision++ },
                             homeworkOverview = if (brief.pending.isEmpty()) null else ({
                                 com.furina.classtools.ui.screens.tasks.ClassHomeworkOverview(brief,
@@ -763,47 +769,14 @@ fun MainNavHost(
                     }
                     BackHandler(enabled = showHomework && remindTarget == null) { if (pickInTool) popTool(toolId) else { detailHomeworkId = null; showHomework = false } }
                     remindTarget?.let { row ->
-                        HomeworkReminderDialog(
-                            row = row,
-                            onDismiss = { remindTarget = null },
-                            onPick = { planned ->
-                                remindTarget = null
-                                val scheduler = oneShotScheduler
-                                if (scheduler == null) {
-                                    toast(context, "提醒服务不可用")
-                                } else {
-                                    scope.launch {
-                                        val label = row.subject.ifBlank {
-                                            row.content.lineSequence().firstOrNull().orEmpty()
-                                        }.ifBlank { "作业" }
-                                        when (
-                                            val result = scheduler.scheduleHomeworkReminder(
-                                                rowId = row.id,
-                                                fireAtMillis = planned.fireAtMillis,
-                                                label = label,
-                                                targetAtMillis = planned.targetAtMillis,
-                                            )
-                                        ) {
-                                            is OneShotScheduleResult.Scheduled -> {
-                                                reminderRevision++
-                                                toast(context, "已设置提醒：" + formatReminderTime(result.fireAtMillis))
-                                            }
-                                            OneShotScheduleResult.PermissionMissing -> {
-                                                toast(context, "开启通知权限后，即可设置这项作业提醒")
-                                                navController.navigate(Routes.PERMISSIONS)
-                                            }
-                                            is OneShotScheduleResult.TooLate ->
-                                                toast(context, "提醒时间已过，请选择更晚的时间")
-                                            is OneShotScheduleResult.LimitReached ->
-                                                toast(context, "提醒数量已达上限（${result.limit} 条）")
-                                            OneShotScheduleResult.EmptyTarget ->
-                                                toast(context, "该作业没有可提醒的时间")
-                                            is OneShotScheduleResult.Failed ->
-                                                toast(context, "设置失败：${result.message}")
-                                        }
-                                    }
-                                }
-                            },
+                        val title = row.subject.ifBlank { row.content.lineSequence().firstOrNull().orEmpty() }.ifBlank { "作业" }
+                        UserReminderDialog(
+                            OneShotTargetKind.HOMEWORK, row.id, title, remember(row) { ReminderOneShot.homeworkPlannedTimes(row) },
+                            oneShotScheduler, onDismiss = { remindTarget = null },
+                            onChange = { reminderRevision++ }, onPermissions = { navController.navigate(Routes.PERMISSIONS) },
+                            onCalendar = { key, at, description -> writeCalendarEvent(
+                                ReminderCalendar.event(key.calendarKey(session.reminderOwner), title, at, description)
+                            ) },
                         )
                     }
                 }
@@ -851,42 +824,13 @@ fun MainNavHost(
                         },
                     )
                     remindTarget?.let { group ->
-                        NoticeReminderDialog(
-                            group = group,
-                            onDismiss = { remindTarget = null },
-                            onPick = { planned ->
-                                remindTarget = null
-                                val scheduler = oneShotScheduler
-                                if (scheduler == null) {
-                                    toast(context, "提醒服务不可用")
-                                } else {
-                                    scope.launch {
-                                        when (
-                                            val result = scheduler.scheduleNoticeReminder(
-                                                groupId = group.id,
-                                                fireAtMillis = planned.fireAtMillis,
-                                                label = group.title,
-                                                targetAtMillis = planned.targetAtMillis,
-                                            )
-                                        ) {
-                                            is OneShotScheduleResult.Scheduled -> toast(
-                                                context,
-                                                "已设置提醒：" + formatReminderTime(result.fireAtMillis),
-                                            )
-                                            OneShotScheduleResult.PermissionMissing ->
-                                                toast(context, "请先开启通知权限")
-                                            is OneShotScheduleResult.TooLate ->
-                                                toast(context, "提醒时间已过，请选择更晚的时间")
-                                            is OneShotScheduleResult.LimitReached ->
-                                                toast(context, "提醒数量已达上限（${result.limit} 条）")
-                                            OneShotScheduleResult.EmptyTarget ->
-                                                toast(context, "该通知没有可提醒的时间")
-                                            is OneShotScheduleResult.Failed ->
-                                                toast(context, "设置失败：${result.message}")
-                                        }
-                                    }
-                                }
-                            },
+                        UserReminderDialog(
+                            OneShotTargetKind.NOTICE, group.id, group.title, remember(group) { ReminderOneShot.noticePlannedTimes(group) },
+                            oneShotScheduler, onDismiss = { remindTarget = null }, onPermissions = { navController.navigate(Routes.PERMISSIONS) },
+                            onCalendar = { key, at, description -> writeCalendarEvent(
+                                ReminderCalendar.event(key.calendarKey(session.reminderOwner), group.title, at, description,
+                                    NoticeCalendarMapper.locationOf(group))
+                            ) },
                         )
                     }
                 }
@@ -1630,69 +1574,3 @@ private fun RootTabs(
         }
     }
 }
-
-/** 单条通知提醒：选择提醒时间（截止/活动前）并交回 Lead 排程。 */
-@Composable
-private fun NoticeReminderDialog(
-    group: com.furina.classtools.data.notices.NoticeGroupDto,
-    onDismiss: () -> Unit,
-    onPick: (OneShotPlannedTime) -> Unit,
-) {
-    val options = remember(group) { ReminderOneShot.noticePlannedTimes(group) }
-    CtLightAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("提醒我") },
-        text = {
-            Column {
-                if (options.isEmpty()) {
-                    Text("该通知没有可提醒的时间（无截止/活动时间）")
-                } else {
-                    Text("选择提醒时间（本机通知）：")
-                    options.forEach { planned ->
-                        TextButton(onClick = { onPick(planned) }, modifier = Modifier.fillMaxWidth()) {
-                            Text("${planned.label} · ${formatReminderTime(planned.fireAtMillis)}")
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        },
-    )
-}
-
-/** 单条作业提醒：选择提醒时间（截止前）并交回 Lead 排程。 */
-@Composable
-private fun HomeworkReminderDialog(
-    row: com.furina.classtools.data.homework.HomeworkRow,
-    onDismiss: () -> Unit,
-    onPick: (OneShotPlannedTime) -> Unit,
-) {
-    val options = remember(row) { ReminderOneShot.homeworkPlannedTimes(row) }
-    CtLightAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("提醒我") },
-        text = {
-            Column {
-                if (options.isEmpty()) {
-                    Text("该作业没有可提醒的截止时间")
-                } else {
-                    Text("选择提醒时间（本机通知）：")
-                    options.forEach { planned ->
-                        TextButton(onClick = { onPick(planned) }, modifier = Modifier.fillMaxWidth()) {
-                            Text("${planned.label} · ${formatReminderTime(planned.fireAtMillis)}")
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        },
-    )
-}
-
-private fun formatReminderTime(millis: Long): String =
-    java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
-        .format(java.util.Date(millis))

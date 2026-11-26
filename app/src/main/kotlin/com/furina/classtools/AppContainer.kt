@@ -184,6 +184,9 @@ class AppContainer(context: Context) {
         val previous = activeSession
         val previousSid = previous?.sid
         activeSession = session
+        if (previous?.sid != session?.sid || previous?.debug != session?.debug) {
+            com.furina.classtools.data.reminder.UserReminderAlarms.restore(appContext)
+        }
         // 启动/登录后在线时补报本机待发的崩溃/诊断队列（契约 §2：启动后补报）。
         if (session != null && !session.debug && previousSid != session.sid) {
             appScope.launch { runCatching { clientDiagReporter.drainPending() } }
@@ -285,7 +288,12 @@ class AppContainer(context: Context) {
         val repository = TaskRepository(session.sid, TaskPreferences(store), taskApi, appScope,
             onChanged = { before, after ->
                 com.furina.classtools.data.tasks.TaskFiles.prune(appContext, before, after)
-                if (!session.debug) scheduleTaskReminders(appContext, session.sid, before, after)
+                if (!session.debug) {
+                    scheduleTaskReminders(appContext, session.sid, before, after)
+                    appScope.launch(Dispatchers.IO) {
+                        com.furina.classtools.data.tasks.updateTaskCalendarCopies(appContext, session.sid, before, after)
+                    }
+                }
                 if (com.furina.classtools.widget.DesktopWidgets.feedKinds(appContext).isNotEmpty())
                     com.furina.classtools.widget.DesktopWidgets.refresh(appContext)
             },

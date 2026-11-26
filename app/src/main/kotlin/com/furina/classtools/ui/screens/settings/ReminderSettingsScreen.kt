@@ -147,6 +147,8 @@ fun ReminderSettingsScreen(
                     onOpenPermissions = onOpenPermissions,
                 )
 
+                ExactAlarmAccess()
+
                 if (pushStatus != null) {
                     NotifySection("系统推送（应用关闭后）")
                     NotifyGroup {

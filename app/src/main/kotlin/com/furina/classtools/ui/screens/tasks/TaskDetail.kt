@@ -71,7 +71,7 @@ internal fun DetailFact(label: String, value: String) {
 
 @Composable
 internal fun TaskDetail(task: JsonObject, repository: TaskRepository, groups: List<JsonObject>, onEdit: () -> Unit,
-    onClose: () -> Unit, onSource: (JsonObject) -> Unit, onShare: () -> Unit, onMove: (Int) -> Unit) {
+    onClose: () -> Unit, onSource: (JsonObject) -> Unit, onShare: () -> Unit, onReminderCalendar: ((JsonObject) -> Unit)?, onMove: (Int) -> Unit) {
     val context = LocalContext.current
     val id = task.text("id")
     val done = task.flag("done")
@@ -134,6 +134,10 @@ internal fun TaskDetail(task: JsonObject, repository: TaskRepository, groups: Li
                     task.number("lastNotifyAt") >= reminder -> "已提醒 · " + taskTimeText(reminder)
                     else -> taskTimeText(reminder) + if (task.number("snoozeUntil") >= reminder) " · 已推迟" else ""
                 })
+                if (onReminderCalendar != null && !done && reminder > System.currentTimeMillis() &&
+                    reminder > task.number("lastNotifyAt")) {
+                    TextButton(onClick = { onReminderCalendar(task) }) { Text("将提醒加入系统日历") }
+                }
                 if (task.text("repeat").isNotBlank()) repeats[task.text("repeat")]?.let { DetailFact("重复", it) }
                 task.text("myDay").takeIf { it.isNotBlank() }?.let { DetailFact("我的一天", it) }
                 if (group.isNotBlank()) DetailFact("分组", group)

@@ -96,6 +96,7 @@ internal fun NoticeDetailSheet(
     onAddToCalendar: ((NoticeGroupDto) -> Unit)?,
     onRemindNotice: ((NoticeGroupDto) -> Unit)?,
     onAddTask: (() -> Unit)? = null,
+    countdownOwner: String? = null,
     onDismiss: () -> Unit,
     onToggleDone: () -> Unit,
     onTogglePin: () -> Unit,
@@ -122,6 +123,7 @@ internal fun NoticeDetailSheet(
             onAddToCalendar = onAddToCalendar,
             onRemindNotice = onRemindNotice,
             onAddTask = onAddTask,
+            countdownOwner = countdownOwner,
             onDismiss = onDismiss,
             onToggleDone = onToggleDone,
             onTogglePin = onTogglePin,
@@ -148,6 +150,7 @@ internal fun NoticeDetailSheetContent(
     onAddToCalendar: ((NoticeGroupDto) -> Unit)? = null,
     onRemindNotice: ((NoticeGroupDto) -> Unit)? = null,
     onAddTask: (() -> Unit)? = null,
+    countdownOwner: String? = null,
     onDismiss: () -> Unit = {},
     onToggleDone: () -> Unit = {},
     onTogglePin: () -> Unit = {},
@@ -179,6 +182,7 @@ internal fun NoticeDetailSheetContent(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.semantics { heading() },
             )
+            if (countdownOwner != null) SignupCountdownControl(countdownOwner, item)
             val metadata = detailMetaText(item, nowMillis)
             if (metadata.isNotBlank()) {
                 Text(metadata, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
@@ -900,6 +904,24 @@ private fun DetailActions(
                 Text("分享")
             }
         }
+        val reminderGroup = group?.copy(id = item.auto.id, title = item.title)
+            ?: item.manual?.let { NoticeGroupDto(id = it.id, title = item.title) }
+            if (onRemindNotice != null && reminderGroup != null) {
+                OutlinedButton(
+                    onClick = { onRemindNotice(reminderGroup) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    shape = CtShapeTokens.pill,
+                    border = actionBorder,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.NotificationsActive,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("提醒我")
+                }
+            }
         if (item.isAuto && group != null) {
             if (onAddToCalendar != null) {
                 OutlinedButton(
@@ -915,22 +937,6 @@ private fun DetailActions(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text("加入日程")
-                }
-            }
-            if (onRemindNotice != null) {
-                OutlinedButton(
-                    onClick = { onRemindNotice(group) },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    shape = CtShapeTokens.pill,
-                    border = actionBorder,
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.NotificationsActive,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("提醒我")
                 }
             }
             // 期次卡：本期单独已处理（marks ref = 期次 key，§2.3）；长期安排定义卡/已结束无 done

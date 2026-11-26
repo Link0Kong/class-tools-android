@@ -91,8 +91,10 @@ class MainActivity : ComponentActivity() {
         }
         val id = ReminderIntentFactory.toolIdFromExtras(intent.getStringExtra(ReminderIntentFactory.EXTRA_TOOL_ID)) ?: return null
         if (id == "vote") return routes.VOTE
+        val key = intent.getStringExtra(ReminderIntentFactory.EXTRA_REMINDER_KEY).orEmpty()
+        val detail = ReminderIntentFactory.focusFor(key)
         return routes.tool(id, pick = id == "hw" && intent.getStringExtra(ReminderIntentFactory.EXTRA_REMINDER_KIND) !=
-            com.furina.classtools.data.reminder.ReminderKind.PERSONAL_TASK.name)
+            com.furina.classtools.data.reminder.ReminderKind.PERSONAL_TASK.name, focus = detail)
     }
 
     companion object {
