@@ -9,5 +9,6 @@
             <TextView android:id="@id/widget_course" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:textStyle="bold" android:includeFontPadding="false" android:textColor="@color/widget_ink" android:singleLine="true" android:ellipsize="end" />
         </LinearLayout>
         <TextView android:id="@id/widget_details" android:layout_width="0dp" android:layout_weight="2" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:textSize="12sp" android:includeFontPadding="false" android:textColor="@color/widget_accent" android:maxLines="2" android:ellipsize="end" />
+        <ImageButton android:id="@+id/widget_primary_check" android:layout_width="48dp" android:layout_height="48dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:src="@drawable/widget_check_outline" android:scaleType="center" android:contentDescription="完成任务" android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>

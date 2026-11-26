@@ -7,6 +7,7 @@
             <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:id="@+id/widget_heading" android:includeFontPadding="false" android:textSize="13sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" android:layout_weight="1" android:fontFamily="sans-serif-medium" />
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/widget_summary" android:includeFontPadding="false" android:textSize="11sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" android:maxWidth="106dp" android:gravity="end" />
             <TextView android:layout_width="48dp" android:layout_height="48dp" android:id="@+id/widget_add" android:includeFontPadding="false" android:textSize="27sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" android:gravity="center" android:text="+" android:contentDescription="新建个人任务" android:visibility="gone" />
+            <ImageButton android:id="@+id/widget_refresh" android:layout_width="48dp" android:layout_height="48dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:src="@drawable/widget_refresh" android:scaleType="center" android:contentDescription="刷新班级通知" android:visibility="gone" />
         </LinearLayout>
         <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:id="@+id/widget_grid" android:orientation="vertical" android:layout_weight="1" />
     </LinearLayout>

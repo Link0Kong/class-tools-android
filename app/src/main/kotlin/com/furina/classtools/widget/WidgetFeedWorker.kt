@@ -12,7 +12,6 @@ import com.furina.classtools.BuildConfig
 import com.furina.classtools.data.tasks.*
 import com.furina.classtools.data.homework.*
 import com.furina.classtools.data.marks.MarkKind
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import com.furina.classtools.data.marks.DefaultMarksRepository
@@ -44,7 +43,7 @@ private fun taskList(doc: JsonObject, version: Long, now: Long): WidgetList {
             "重要".takeIf { task.flag("starred") },
             steps.takeIf { it.isNotEmpty() }?.let { "步骤 ${it.count { step -> step.flag("done") }}/${it.size}" },
         ).joinToString(" · ")
-        WidgetLine(task.text("title").take(150), detail, priority = taskPriority(task, today), homeworkId = task.text("sourceHwId"), focus = task.text("id"), deadlineAt = taskDeadline(task), starred = task.flag("starred"))
+        WidgetLine(task.text("title").take(150), detail, priority = taskPriority(task, today), homeworkId = task.text("sourceHwId"), focus = task.text("id"), deadlineAt = taskDeadline(task), starred = task.flag("starred"), canComplete = task.text("id").isNotBlank())
     }
     return WidgetList(items.size, rows.take(8), now, version, doc.importedHomeworkIds(), quadrantLeads(rows, now))
 }
@@ -56,12 +55,12 @@ internal object WidgetFeedStore {
         (SessionStore(context.applicationContext).state.first() as? SessionState.SignedIn)
             ?.session?.takeIf { it.isLikelyValid() }
 
-    fun read(context: Context, sid: String): WidgetFeed {
+    fun read(context: Context, sid: String, debug: Boolean = false): WidgetFeed {
         val raw = prefs(context).all
-        val feed = (raw["feed"] as? String)?.takeIf { raw["owner"] == sid }?.let {
+        val feed = (raw["feed"] as? String)?.takeIf { !debug && raw["owner"] == sid }?.let {
             runCatching { Json.decodeFromString(WidgetFeed.serializer(), it) }.getOrNull()
         } ?: WidgetFeed()
-        val tasks = TaskPreferences(context.getSharedPreferences("tasks_" + sid, Context.MODE_PRIVATE))
+        val tasks = TaskPreferences(context.getSharedPreferences((if (debug) "tasks_debug_" else "tasks_") + sid, Context.MODE_PRIVATE))
         val localText = tasks.read("local")
         val local = localText?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
         val cloud = feed.tasks?.takeIf { it.taskVersion != null }
@@ -100,11 +99,9 @@ class WidgetFeedWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val needNotices = WidgetKind.NOTICES in kinds || WidgetKind.WORKBENCH in kinds
         val tasks = async {
             if (!needTasks) return@async null
-            val rows = (api.getJson("taskdata?id=eq." + android.net.Uri.encode(session.sid) + "&select=blob,ts") as? ApiResult.Success)?.value as? JsonArray ?: return@async null
-            val row = rows.firstOrNull() as? JsonObject
-            val doc = if (row == null || row.text("blob").isBlank()) emptyTasks else
-                runCatching { Json.parseToJsonElement(row.text("blob")).jsonObject }.getOrNull() ?: return@async null
-            taskList(doc, row?.number("ts") ?: 0L, now)
+            val repository = (context as com.furina.classtools.ClassToolsApp).container.tasksFor(session)
+            val doc = repository.syncSnapshot() ?: return@async null
+            taskList(doc, doc.number("updatedAt"), now)
         }
         val marks = async { DefaultMarksRepository(api, { session.sid }).refresh() }
         val homework = async {

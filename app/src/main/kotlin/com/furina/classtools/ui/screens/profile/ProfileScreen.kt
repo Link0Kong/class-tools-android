@@ -776,7 +776,7 @@ private fun AppearanceSection(
             val monet by settings.dynamicColor.collectAsStateWithLifecycle(initialValue = settings.startupDynamicColor())
             val scope = rememberCoroutineScope()
             RowDivider()
-            SwitchRow(title = "莫奈壁纸配色", subtitle = if (monet) "工具和默认桌面卡片跟随系统配色" else "使用青瓷配色",
+            SwitchRow(title = "莫奈壁纸配色", subtitle = if (monet) "工具和默认桌面卡片跟随系统配色" else "使用网页配色 · 雾青、灰蓝与暖沙",
                 leadingIcon = Icons.Rounded.LightMode, checked = monet,
                 onCheckedChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } })
         }

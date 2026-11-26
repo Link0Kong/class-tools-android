@@ -212,7 +212,7 @@ fun CtGlassSurface(
     if (body || (opaque && !lightEnabled)) {
         val scheme = MaterialTheme.colorScheme
         val container = if (darkRole == CtDarkGlassRole.HERO) scheme.surfaceContainerHigh else scheme.surfaceContainerLow
-        val border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = if (lightEnabled && frosted) 0.8f else 0.55f))
+        val border = BorderStroke(1.dp, scheme.outlineVariant)
         if (onClick != null) {
             Surface(
                 onClick = onClick,
@@ -221,7 +221,7 @@ fun CtGlassSurface(
                 color = container,
                 contentColor = scheme.onSurface,
                 border = border,
-                shadowElevation = 0.dp,
+                shadowElevation = 1.dp,
             ) { content() }
         } else {
             Surface(
@@ -230,7 +230,7 @@ fun CtGlassSurface(
                 color = container,
                 contentColor = scheme.onSurface,
                 border = border,
-                shadowElevation = 0.dp,
+                shadowElevation = 1.dp,
             ) { content() }
         }
         return

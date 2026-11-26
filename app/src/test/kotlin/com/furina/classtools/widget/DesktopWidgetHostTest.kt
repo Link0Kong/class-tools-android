@@ -158,6 +158,8 @@ class DesktopWidgetHostTest {
 
     @Test fun toolAndWidgetUseTheSameSavedMonetChoice() = runBlocking {
         val settings = com.furina.classtools.data.settings.AppSettingsStore(app)
+        assertFalse(settings.startupDynamicColor())
+        assertFalse(settings.dynamicColor.first())
         for (enabled in listOf(false, true)) {
             settings.setDynamicColor(enabled)
             assertEquals(enabled, com.furina.classtools.data.settings.AppSettingsStore(app).startupDynamicColor())
@@ -182,6 +184,24 @@ class DesktopWidgetHostTest {
         assertEquals("b", shadowOf(app).nextStartedActivity.getStringExtra(com.furina.classtools.MainActivity.CARD_FOCUS))
         widget.findViewById<View>(R.id.widget_add).performClick()
         assertEquals(com.furina.classtools.MainActivity.WIDGET_ACTION + "new-task", shadowOf(app).nextStartedActivity.action)
+    }
+
+    @Test fun checkboxSendsOnlyTheBoundPersonalTaskAndTitleStillOpensIt() {
+        val task = WidgetLine("同名", destination = "hw", focus = "t/1", canComplete = true)
+        val homework = WidgetLine("同名", destination = "class-homework", focus = "h/2")
+        val data = WidgetContent("任务", task, listOf(homework), "", "2", "待完成")
+        val widget = host(WidgetViews.forHost(app, WidgetKind.TASKS, data, options(300, 245), owner = "debug:9999"), 300, 245)
+        val check = widget.findViewById<View>(R.id.widget_primary_check)
+        assertEquals(View.VISIBLE, check.visibility)
+        assertTrue(check.performClick())
+        val action = shadowOf(app).broadcastIntents.last()
+        assertEquals(WidgetCommandReceiver::class.java.name, action.component?.className)
+        assertEquals(listOf("complete", "t/1"), action.data?.pathSegments)
+        assertEquals("debug:9999", action.data?.getQueryParameter("owner"))
+        assertNull(shadowOf(app).nextStartedActivity)
+        assertEquals(View.GONE, widget.findViewById<View>(R.id.widget_row_check).visibility)
+        widget.findViewById<View>(R.id.widget_primary).performClick()
+        assertEquals("t/1", shadowOf(app).nextStartedActivity.getStringExtra(com.furina.classtools.MainActivity.CARD_FOCUS))
     }
 
     @Test fun primaryAndSecondaryRowsCarryIndependentIdsAndHeaderOpensOverview() {
@@ -238,7 +258,11 @@ class DesktopWidgetHostTest {
         val sessionStore = SessionStore(app)
         val testSid = "3260799999"
         sessionStore.save(Session(sid = testSid, name = "测试", token = "", debug = true))
-        WidgetFeedStore.save(app, testSid, feed)
+        val foreignFeed = feed.copy(tasks = feed.tasks?.copy(rows = listOf(WidgetLine("正式账号的任务"))))
+        WidgetFeedStore.save(app, testSid, foreignFeed)
+        val debugItems = (1..5).joinToString(",") { """{"id":"t$it","title":"报告 $it","order":$it}""" }
+        app.getSharedPreferences("tasks_debug_" + testSid, 0).edit()
+            .putString("local", """{"updatedAt":5,"items":[$debugItems]}""").commit()
         assertNull(WidgetFeedStore.read(app, "99990001").tasks)
         DesktopWidgets.update(app, TasksWidget::class.java, false)
         fun root(index: Int) = registry.getViewFor(ids[index])

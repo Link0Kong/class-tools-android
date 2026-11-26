@@ -30,20 +30,20 @@ val BrandInk3 = CtPalette.TextTertiary
 // ---------------------------------------------------------------------------
 // 浅色 · 48 角色
 // ---------------------------------------------------------------------------
-val LightPrimary = Color(0xFF24695C)
+val LightPrimary = Color(0xFF396B61)
 val LightOnPrimary = Color(0xFFFFFFFF)
-val LightPrimaryContainer = Color(0xFFACF0DF)
+val LightPrimaryContainer = Color(0xFFDCEDE5)
 val LightOnPrimaryContainer = Color(0xFF00201B)
-val LightInversePrimary = Color(0xFF90D3C4)
+val LightInversePrimary = Color(0xFFA4CEC4)
 
-val LightSecondary = Color(0xFF43617C)
+val LightSecondary = Color(0xFF486480)
 val LightOnSecondary = Color(0xFFFFFFFF)
-val LightSecondaryContainer = Color(0xFFCCE5FF)
+val LightSecondaryContainer = Color(0xFFDEEBF4)
 val LightOnSecondaryContainer = Color(0xFF001D31)
 
-val LightTertiary = Color(0xFF7B5730)
+val LightTertiary = Color(0xFF795B35)
 val LightOnTertiary = Color(0xFFFFFFFF)
-val LightTertiaryContainer = Color(0xFFFFDCBC)
+val LightTertiaryContainer = Color(0xFFF4E7CF)
 val LightOnTertiaryContainer = Color(0xFF2C1700)
 
 val LightError = Color(0xFF9A433E)
@@ -73,37 +73,37 @@ val LightSurfaceContainer = CtPalette.Container
 val LightSurfaceContainerHigh = CtPalette.ContainerHigh
 val LightSurfaceContainerHighest = CtPalette.ContainerHighest
 
-val LightPrimaryFixed = Color(0xFFACF0DF)
-val LightPrimaryFixedDim = Color(0xFF90D3C4)
+val LightPrimaryFixed = Color(0xFFDCEDE5)
+val LightPrimaryFixedDim = Color(0xFFA4CEC4)
 val LightOnPrimaryFixed = Color(0xFF00201B)
-val LightOnPrimaryFixedVariant = Color(0xFF005045)
-val LightSecondaryFixed = Color(0xFFCCE5FF)
+val LightOnPrimaryFixedVariant = Color(0xFF304D44)
+val LightSecondaryFixed = Color(0xFFDEEBF4)
 val LightSecondaryFixedDim = Color(0xFFABCAE8)
 val LightOnSecondaryFixed = Color(0xFF001D31)
-val LightOnSecondaryFixedVariant = Color(0xFF2B4963)
-val LightTertiaryFixed = Color(0xFFFFDCBC)
+val LightOnSecondaryFixedVariant = Color(0xFF334959)
+val LightTertiaryFixed = Color(0xFFF4E7CF)
 val LightTertiaryFixedDim = Color(0xFFEDBE8E)
 val LightOnTertiaryFixed = Color(0xFF2C1700)
-val LightOnTertiaryFixedVariant = Color(0xFF60401B)
+val LightOnTertiaryFixedVariant = Color(0xFF51412B)
 
 // ---------------------------------------------------------------------------
 // 深色 · 48 角色（surface #121517 / container #1A1E21 / high #232A2E）
 // ---------------------------------------------------------------------------
-val DarkPrimary = Color(0xFF90D3C4)
+val DarkPrimary = Color(0xFFA4CEC4)
 val DarkOnPrimary = Color(0xFF00382F)
-val DarkPrimaryContainer = Color(0xFF005045)
-val DarkOnPrimaryContainer = Color(0xFFACF0DF)
-val DarkInversePrimary = Color(0xFF24695C)
+val DarkPrimaryContainer = Color(0xFF304D44)
+val DarkOnPrimaryContainer = Color(0xFFDCEDE5)
+val DarkInversePrimary = Color(0xFF396B61)
 
 val DarkSecondary = Color(0xFFABCAE8)
 val DarkOnSecondary = Color(0xFF12334B)
-val DarkSecondaryContainer = Color(0xFF2B4963)
-val DarkOnSecondaryContainer = Color(0xFFCCE5FF)
+val DarkSecondaryContainer = Color(0xFF334959)
+val DarkOnSecondaryContainer = Color(0xFFDEEBF4)
 
 val DarkTertiary = Color(0xFFEDBE8E)
 val DarkOnTertiary = Color(0xFF462A07)
-val DarkTertiaryContainer = Color(0xFF60401B)
-val DarkOnTertiaryContainer = Color(0xFFFFDCBC)
+val DarkTertiaryContainer = Color(0xFF51412B)
+val DarkOnTertiaryContainer = Color(0xFFF4E7CF)
 
 val DarkError = Color(0xFFFFB4AB)
 val DarkOnError = Color(0xFF690005)
@@ -132,18 +132,18 @@ val DarkSurfaceContainer = CtPalette.DarkContainer
 val DarkSurfaceContainerHigh = CtPalette.DarkContainerHigh
 val DarkSurfaceContainerHighest = CtPalette.DarkContainerHighest
 
-val DarkPrimaryFixed = Color(0xFFACF0DF)
-val DarkPrimaryFixedDim = Color(0xFF90D3C4)
+val DarkPrimaryFixed = Color(0xFFDCEDE5)
+val DarkPrimaryFixedDim = Color(0xFFA4CEC4)
 val DarkOnPrimaryFixed = Color(0xFF00201B)
-val DarkOnPrimaryFixedVariant = Color(0xFF005045)
-val DarkSecondaryFixed = Color(0xFFCCE5FF)
+val DarkOnPrimaryFixedVariant = Color(0xFF304D44)
+val DarkSecondaryFixed = Color(0xFFDEEBF4)
 val DarkSecondaryFixedDim = Color(0xFFABCAE8)
 val DarkOnSecondaryFixed = Color(0xFF001D31)
-val DarkOnSecondaryFixedVariant = Color(0xFF2B4963)
-val DarkTertiaryFixed = Color(0xFFFFDCBC)
+val DarkOnSecondaryFixedVariant = Color(0xFF334959)
+val DarkTertiaryFixed = Color(0xFFF4E7CF)
 val DarkTertiaryFixedDim = Color(0xFFEDBE8E)
 val DarkOnTertiaryFixed = Color(0xFF2C1700)
-val DarkOnTertiaryFixedVariant = Color(0xFF60401B)
+val DarkOnTertiaryFixedVariant = Color(0xFF51412B)
 
 // ---------------------------------------------------------------------------
 // 品牌语义色（Material ColorScheme 之外的扩展；通过 LocalCtBrandColors 提供）

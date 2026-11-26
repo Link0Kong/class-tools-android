@@ -6,5 +6,6 @@
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/widget_row_title" android:includeFontPadding="false" android:textSize="14sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" android:textStyle="normal" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/widget_row_detail" android:includeFontPadding="false" android:textSize="12sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" />
         </LinearLayout>
+        <ImageButton android:id="@+id/widget_row_check" android:layout_width="48dp" android:layout_height="48dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:src="@drawable/widget_check_outline" android:scaleType="center" android:contentDescription="完成任务" android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>

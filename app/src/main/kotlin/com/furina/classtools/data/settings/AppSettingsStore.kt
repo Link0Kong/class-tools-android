@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.map
  * App 级本机外观设置（不进云端 userdata：主题是设备偏好，与账号无关）。
  *
  * 设置项：
- * - 壁纸取色 `dynamic_color`（Material You，默认开启）；
+ * - 壁纸取色 `dynamic_color`（Material You，可选）；
  * - 外观模式 `appearance_mode`（system/light/dark，默认跟随系统）；
  * - 隐藏状态栏 `hide_status_bar`（默认 true，沉浸式 sticky，下滑临时显示）。
  *
@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.map
  * 立即重组生效；重启后仍保留。
  *
  * 冷启动不闪烁：外观模式 / 隐藏状态栏另写一份 SharedPreferences 镜像（启动时同步读，
- * 用于首帧 initialValue），DataStore 仍是唯一真源。支持系统动态取色的设备默认跟随壁纸。
+ * 用于首帧 initialValue），DataStore 仍是唯一真源。默认使用与网页一致的配色。
  */
 class AppSettingsStore(private val context: Context) {
 
@@ -39,7 +39,7 @@ class AppSettingsStore(private val context: Context) {
     private val startupPrefs = appContext.getSharedPreferences(STARTUP_PREFS, Context.MODE_PRIVATE)
 
     val dynamicColor: Flow<Boolean> = store.data.map { prefs ->
-        val enabled = prefs[KEY_DYNAMIC_COLOR] ?: true
+        val enabled = prefs[KEY_DYNAMIC_COLOR] ?: false
         if (startupDynamicColor() != enabled) startupPrefs.edit().putBoolean("dynamic_color", enabled).apply()
         enabled
     }
@@ -118,7 +118,7 @@ class AppSettingsStore(private val context: Context) {
         store.edit { prefs -> prefs[KEY_DISMISSED_ANNOUNCEMENT_VERSION] = version }
     }
 
-    fun startupDynamicColor(): Boolean = startupPrefs.getBoolean("dynamic_color", true)
+    fun startupDynamicColor(): Boolean = startupPrefs.getBoolean("dynamic_color", false)
 
     suspend fun setDynamicColor(enabled: Boolean) {
         startupPrefs.edit().putBoolean("dynamic_color", enabled).apply()

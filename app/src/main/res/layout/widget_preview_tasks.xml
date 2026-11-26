@@ -8,6 +8,7 @@
         <ImageView android:layout_width="3dp" android:layout_height="20dp" android:src="@drawable/widget_rule_shape" android:scaleType="fitXY" />
         <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:text="整理访谈记录" android:textSize="14sp" android:textColor="@color/widget_ink" android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:layout_weight="1" android:paddingStart="6dp" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="今天 17:00 截止" android:textSize="11sp" android:textColor="@color/widget_accent" android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:fontFamily="sans-serif" />
+        <ImageView android:layout_width="24dp" android:layout_height="24dp" android:layout_marginStart="6dp" android:src="@drawable/widget_check_outline" android:importantForAccessibility="no" />
     </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginVertical="2dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="7dp" android:background="@drawable/widget_band_shape">
         <ImageView android:layout_width="3dp" android:layout_height="20dp" android:src="@drawable/widget_rule_shape" android:scaleType="fitXY" />

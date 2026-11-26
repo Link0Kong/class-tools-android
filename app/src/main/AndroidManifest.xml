@@ -177,6 +177,7 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/ct_file_paths" />
         </provider>
+        <receiver android:name=".widget.WidgetCommandReceiver" android:exported="false" />
         <receiver android:name=".widget.TimetableWidget" android:exported="false" android:label="班级课表">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

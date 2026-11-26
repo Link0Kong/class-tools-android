@@ -180,18 +180,21 @@ class TaskRepository(
         status.value = if (next.taskCloudView() == confirmed.taskCloudView()) "已同步" else "待同步"
     }
 
-    suspend fun sync() = network.withLock {
-        if (!canSync()) { status.value = "仅本机"; return@withLock }
+    suspend fun sync() { syncSnapshot() }
+
+    /** The merged document after a confirmed sync, or null when only local data is available. */
+    internal suspend fun syncSnapshot(): JsonObject? = network.withLock {
+        if (!canSync()) { status.value = "仅本机"; return@withLock null }
         status.value = "同步中…"
         val path = "taskdata?id=eq." + URLEncoder.encode(sid, "UTF-8")
         repeat(4) {
             val rows = (api.getJson(path + "&select=blob,ts", coalesce = false) as? ApiResult.Success)?.value as? JsonArray
-            if (rows == null || !canSync()) { status.value = "仅本机"; return@withLock }
+            if (rows == null || !canSync()) { status.value = "仅本机"; return@withLock null }
             val row = rows.firstOrNull() as? JsonObject
             val remote = if (row == null || row.text("blob").isBlank()) emptyTasks else
                 runCatching { Json.parseToJsonElement(row.text("blob")).jsonObject }.getOrNull()
             if (remote == null || remote["items"] !is JsonArray) {
-                status.value = "云端格式异常"; return@withLock
+                status.value = "云端格式异常"; return@withLock null
             }
             val (previous, local) = synchronized(this) { base to current.value }
             if (local.taskCloudView() == previous.taskCloudView()) {
@@ -206,12 +209,13 @@ class TaskRepository(
                 val write = if (row == null) api.postJson("taskdata", body, "resolution=ignore-duplicates,return=representation")
                     else api.patchJson(path + "&ts=eq." + row.number("ts"), body, "return=representation")
                 val saved = (write as? ApiResult.Success)?.value as? JsonArray
-                if (saved == null || !canSync()) { status.value = "仅本机"; return@withLock }
+                if (saved == null || !canSync()) { status.value = "仅本机"; return@withLock null }
                 if (saved.isEmpty()) return@repeat
                 accept(local, merged)
             }
-            if (synchronized(this) { current.value.taskCloudView() == base.taskCloudView() }) return@withLock
+            if (synchronized(this) { current.value.taskCloudView() == base.taskCloudView() }) return@withLock snapshot.value
         }
         status.value = "待同步"
+        null
     }
 }

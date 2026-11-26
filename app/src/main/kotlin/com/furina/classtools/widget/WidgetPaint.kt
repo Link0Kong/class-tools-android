@@ -41,15 +41,15 @@ internal class WidgetPaint(context: Context, palette: WidgetPalette, dark: Boole
     }
     fun text(view: RemoteViews, id: Int, color: Int) {
         val resource = when (color) {
-            ink -> R.color.widget_ink
-            accent -> R.color.widget_accent
+            ink -> R.color.widget_wallpaper_ink
+            accent -> R.color.widget_wallpaper_accent
             else -> 0
         }
         if (resourceColors && resource != 0 && android.os.Build.VERSION.SDK_INT >= 31) view.setColor(id, "setTextColor", resource)
         else view.setTextColor(id, color)
     }
     fun paintPaper(view: RemoteViews) {
-        if (resourceColors && android.os.Build.VERSION.SDK_INT >= 31) view.setColor(R.id.widget_backplate, "setColorFilter", R.color.widget_paper)
+        if (resourceColors && android.os.Build.VERSION.SDK_INT >= 31) view.setColor(R.id.widget_backplate, "setColorFilter", R.color.widget_wallpaper_paper)
         else view.setInt(R.id.widget_backplate, "setColorFilter", paper)
     }
     fun band(view: RemoteViews, background: Int, rule: Int, tone: Int) {

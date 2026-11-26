@@ -1,7 +1,7 @@
 <resources>
-    <color name="widget_ink">#1C2629</color>
-    <color name="widget_accent">#24695C</color>
-    <color name="widget_paper">#FFFFFF</color>
+    <color name="widget_ink">#303A35</color>
+    <color name="widget_accent">#396B61</color>
+    <color name="widget_paper">#FFFCF6</color>
     <color name="widget_blue_bg">#EBF3FF</color>
     <color name="widget_blue_accent">#315985</color>
     <color name="widget_blue_ink">#142E49</color>
@@ -16,5 +16,8 @@
     <color name="widget_amber_highlight">#FFFCF5</color>
     <color name="widget_lilac_highlight">#FAF8FF</color>
     <color name="widget_summary_fill">#96FFFFFF</color>
-    <color name="widget_band">#E6F0ED</color>
+    <color name="widget_band">#EAF2EC</color>
+    <color name="widget_wallpaper_paper">@color/widget_paper</color>
+    <color name="widget_wallpaper_accent">@color/widget_accent</color>
+    <color name="widget_wallpaper_ink">@color/widget_ink</color>
 </resources>

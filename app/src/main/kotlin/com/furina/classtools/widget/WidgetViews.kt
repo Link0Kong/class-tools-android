@@ -19,15 +19,16 @@ import kotlin.math.roundToInt
 
 internal object WidgetViews {
     private data class Layout(val width: Int, val height: Int, val rows: Int, val rowDetails: Boolean = false) {
-        val banner get() = width >= 230 && height < 96
+        val banner get() = width >= 160 && height < 96
         val compact get() = height < 96
     }
-    private val layouts = listOf(Layout(50, 26, 0), Layout(100, 48, 0), Layout(230, 48, 0),
-        Layout(100, 96, 0), Layout(230, 96, 0), Layout(100, 165, 1),
+    private val layouts = listOf(Layout(50, 26, 0), Layout(100, 48, 0), Layout(160, 48, 0), Layout(230, 48, 0),
+        Layout(100, 96, 0), Layout(160, 96, 0), Layout(160, 165, 1), Layout(230, 96, 0), Layout(100, 165, 1),
         Layout(230, 165, 1, true), Layout(100, 220, 2), Layout(230, 220, 2, true), Layout(100, 320, 4), Layout(230, 320, 4, true), Layout(320, 240, 2, true), Layout(320, 320, 4, true))
 
     fun forHost(context: Context, kind: WidgetKind, model: WidgetContent, options: Bundle, palette: WidgetPalette = WidgetPalette.SYSTEM,
-                monet: Boolean = com.furina.classtools.data.settings.AppSettingsStore(context).startupDynamicColor()): RemoteViews {
+                monet: Boolean = com.furina.classtools.data.settings.AppSettingsStore(context).startupDynamicColor(),
+                owner: String? = null): RemoteViews {
         val appearance = com.furina.classtools.data.settings.AppSettingsStore(context).startupAppearanceMode()
         val systemDark = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
             android.content.res.Configuration.UI_MODE_NIGHT_YES
@@ -37,7 +38,7 @@ internal object WidgetViews {
             .maxByOrNull { it.width * it.height } ?: layouts.first()
         if (Build.VERSION.SDK_INT >= 31 && !options.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES).isNullOrEmpty()) {
             val variants = layouts.associate { layout ->
-                SizeF(layout.width * scale, layout.height * scale) to render(context, kind, model, layout, colors)
+                SizeF(layout.width * scale, layout.height * scale) to render(context, kind, model, layout, colors, owner)
             }
             return RemoteViews(variants)
         }
@@ -46,11 +47,11 @@ internal object WidgetViews {
         val minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 96)
         val portrait = fit(minW, options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minH))
         val landscape = fit(options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minW), minH)
-        val view = render(context, kind, model, portrait, colors)
-        return if (landscape == portrait) view else RemoteViews(render(context, kind, model, landscape, colors), view)
+        val view = render(context, kind, model, portrait, colors, owner)
+        return if (landscape == portrait) view else RemoteViews(render(context, kind, model, landscape, colors, owner), view)
     }
 
-    private fun render(context: Context, kind: WidgetKind, model: WidgetContent, layout: Layout, colors: WidgetPaint): RemoteViews {
+    private fun render(context: Context, kind: WidgetKind, model: WidgetContent, layout: Layout, colors: WidgetPaint, owner: String?): RemoteViews {
         val board = layout.width >= 320 && layout.height >= 240 && model.sections.isNotEmpty()
         val resource = when {
             board -> R.layout.widget_board
@@ -87,7 +88,8 @@ internal object WidgetViews {
             colors.text(views, R.id.widget_course, colors.ink)
             views.setTextViewText(R.id.widget_details, first.detail)
             colors.text(views, R.id.widget_details, colors.ink)
-            views.setViewVisibility(R.id.widget_details, if (first.detail.isBlank()) View.GONE else View.VISIBLE)
+            views.setViewVisibility(R.id.widget_details, if (first.detail.isBlank() || layout.width < 230) View.GONE else View.VISIBLE)
+            bindCheck(context, views, R.id.widget_primary_check, first, colors, owner)
             return views
         }
         views.setViewVisibility(R.id.widget_header, if (layout.height < 48) View.GONE else View.VISIBLE)
@@ -107,8 +109,14 @@ internal object WidgetViews {
             colors.text(views, R.id.widget_add, colors.accent)
             views.setOnClickPendingIntent(R.id.widget_add, open(context, "new-task"))
         }
+        val refresh = kind == WidgetKind.NOTICES && (owner != null || model.number.isNotEmpty()) && layout.width >= 230 && !layout.compact
+        views.setViewVisibility(R.id.widget_refresh, if (refresh) View.VISIBLE else View.GONE)
+        if (refresh) {
+            views.setInt(R.id.widget_refresh, "setColorFilter", colors.accent)
+            views.setOnClickPendingIntent(R.id.widget_refresh, owner?.let { WidgetCommandReceiver.action(context, it, WidgetCommandReceiver.REFRESH) })
+        }
         if (board) {
-            populateBoard(context, views, colors, model, kind, layout)
+            populateBoard(context, views, colors, model, kind, layout, owner)
             return views
         }
         colors.band(views, R.id.widget_primary_fill, R.id.widget_primary_rule, colors.lane(first, kind))
@@ -122,6 +130,7 @@ internal object WidgetViews {
         views.setOnClickPendingIntent(R.id.widget_primary, primaryTarget.takeUnless { layout.compact })
         views.setInt(R.id.widget_primary, "setMinimumHeight", dp(if (layout.compact) 0 else 48))
         views.setInt(R.id.widget_primary_body, "setMinimumHeight", dp(if (layout.compact) 0 else 48))
+        bindCheck(context, views, R.id.widget_primary_check, first, colors, owner, layout.width >= 160 && !layout.compact)
         if (layout.compact) views.setViewVisibility(R.id.widget_primary_rule, View.GONE)
         views.removeAllViews(R.id.widget_list)
         for (line in model.more.take(layout.rows)) {
@@ -133,12 +142,13 @@ internal object WidgetViews {
             row.setTextViewText(R.id.widget_row_detail, line.detail)
             row.setViewVisibility(R.id.widget_row_detail, if (layout.rowDetails && line.detail.isNotBlank()) View.VISIBLE else View.GONE)
             row.setOnClickPendingIntent(R.id.widget_row, target(context, line, kind))
+            bindCheck(context, row, R.id.widget_row_check, line, colors, owner, layout.width >= 160)
             views.addView(R.id.widget_list, row)
         }
         return views
     }
 
-    private fun populateBoard(context: Context, views: RemoteViews, colors: WidgetPaint, model: WidgetContent, kind: WidgetKind, layout: Layout) {
+    private fun populateBoard(context: Context, views: RemoteViews, colors: WidgetPaint, model: WidgetContent, kind: WidgetKind, layout: Layout, owner: String?) {
         views.removeAllViews(R.id.widget_grid)
         for ((rowIndex, sections) in model.sections.chunked(2).withIndex()) {
             val horizontal = RemoteViews(context.packageName, R.layout.widget_grid_row)
@@ -166,12 +176,25 @@ internal object WidgetViews {
                     colors.text(item, R.id.widget_cell_detail, colors.ink)
                     item.setViewVisibility(R.id.widget_cell_detail, if (line.detail.isBlank()) View.GONE else View.VISIBLE)
                     item.setOnClickPendingIntent(R.id.widget_cell_item, target(context, line, kind))
+                    bindCheck(context, item, R.id.widget_cell_check, line, colors, owner)
                     panel.addView(R.id.widget_cell_items, item)
                 }
                 horizontal.addView(R.id.widget_grid_row, panel)
             }
             views.addView(R.id.widget_grid, horizontal)
         }
+    }
+
+    private fun bindCheck(context: Context, view: RemoteViews, control: Int, line: WidgetLine,
+                          colors: WidgetPaint, owner: String?, fits: Boolean = true) {
+        val available = fits && line.destination == "hw" && line.canComplete && line.focus.isNotBlank()
+        view.setViewVisibility(control, if (available) View.VISIBLE else View.GONE)
+        if (available) {
+            view.setInt(control, "setColorFilter", colors.accent)
+            view.setContentDescription(control, "完成任务，" + line.title.removePrefix("待办 · "))
+        }
+        view.setOnClickPendingIntent(control, if (available && owner != null)
+            WidgetCommandReceiver.action(context, owner, WidgetCommandReceiver.COMPLETE, line.focus) else null)
     }
 
     private fun target(context: Context, line: WidgetLine, kind: WidgetKind) =

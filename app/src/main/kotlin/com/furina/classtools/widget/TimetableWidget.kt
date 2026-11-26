@@ -123,9 +123,9 @@ internal object DesktopWidgets {
         val tomorrow = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1)
         val tomorrowCourses = if (kind == WidgetKind.TIMETABLE && snapshot != null)
             TtCalendar.sessionsOn(snapshot.c, TtCalendar.parseTermStart(snapshot.termStart), tomorrow, now, zone) else emptyList()
-        val feed = if (kind != WidgetKind.TIMETABLE && session != null) WidgetFeedStore.read(context, session.sid) else WidgetFeed()
+        val feed = if (kind != WidgetKind.TIMETABLE && session != null) WidgetFeedStore.read(context, session.sid, session.debug) else WidgetFeed()
         val model = widgetContent(kind, session != null, plan, feed, now, tomorrowCourses)
-        for (id in ids) manager.updateAppWidget(id, WidgetViews.forHost(context, kind, model, manager.getAppWidgetOptions(id), WidgetPalette.get(context, id), monet))
+        for (id in ids) manager.updateAppWidget(id, WidgetViews.forHost(context, kind, model, manager.getAppWidgetOptions(id), WidgetPalette.get(context, id), monet, session?.widgetOwner))
         if (periodic && session != null && !session.debug && kind != WidgetKind.TIMETABLE) WidgetFeedStore.request(context, session.sid)
         val current = plan?.today?.firstOrNull { it.state == SessionState.ONGOING }
         val boundary = listOfNotNull(current?.endAt, plan?.next?.startAt, session?.expiresAt,

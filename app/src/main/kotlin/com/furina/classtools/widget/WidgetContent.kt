@@ -13,7 +13,7 @@ internal enum class WidgetKind(val label: String, val destination: String) {
 
 @Serializable
 internal data class WidgetLine(val title: String, val detail: String = "", val destination: String = "", val priority: Int = 5, val homeworkId: String = "", val focus: String = "",
-    val deadlineAt: Long? = null, val starred: Boolean = false)
+    val deadlineAt: Long? = null, val starred: Boolean = false, val canComplete: Boolean = false)
 
 @Serializable
 internal data class WidgetList(

@@ -32,64 +32,46 @@ import kotlin.math.roundToInt
 // 1. 色板 CtPalette
 // -----------------------------------------------------------------------------
 
-/**
- * 色板令牌（明/暗各一套语义槽位）。
- *
- * 浅色对齐鸿蒙 Tokens.ets（BG #F7F8F8 / TEXT_PRIMARY #1C2629 / DIVIDER #E8EDEE…）；
- * 深色按同一语义做**中性深板岩**映射（surface #121517 / container #1A1E21 / high #232A2E），
- * 不再出现大面积品牌绿；品牌绿只作小面积强调（hero accent / 主色按钮）。
- *
- * 对比度（WCAG 2.1，实测见 docs/DESIGN_SYSTEM.md §2.4）：
- *   light textSecondary #4F5A5D / card = 6.52:1，textTertiary #61696C / card = 5.17:1，
- *   dark  textSecondary #A8B4B7 / #1A1E21 = 7.70:1，textTertiary #8A979A / #1A1E21 = 5.36:1 —— 全部 ≥ AA(4.5)。
- */
+/** 网页端的奶油、雾青与深绿灰映射为 Material 3 色阶。文字和操作色采用可读的深浅档。 */
 object CtPalette {
     // ---- 品牌三色（与网页 / 小程序 / 鸿蒙共用；图形/图标/大面积色块使用） ----
-    val MistTeal = Color(0xFF4E9082)
-    val SlateBlue = Color(0xFF6E8CA8)
-    val WarmSand = Color(0xFFB98F63)
+    val MistTeal = Color(0xFF5E8F87)
+    val SlateBlue = Color(0xFF7D9EBB)
+    val WarmSand = Color(0xFFC6A475)
 
     // ---- 浅色中性（M3 tonal 扩展：surface container 5 级） ----
-    val Bg = Color(0xFFF2F3F4)
+    val Bg = Color(0xFFF4F0E6)
     val Surface = Color(0xFFFFFFFF)
 
-    /**
-     * 卡片底（**半透明白**，2026-11-20 沉浸光感 v2）。
-     *
-     * 全 App 所有「直接使用 containerLow 作卡片底色」的 Surface（首页信息卡、列表卡、
-     * 大量工具页卡片）因此自动获得透光感 —— 光场颜色从卡片下透出来，不再是一块死白板。
-     * 不透明度 0.60：实测在最强光斑上正文对比度仍 > 9:1（AA 双倍余量）。
-     */
-    // M3 surfaceContainerLow 必须不透明；此前 0xE0FFFFFF 会让 Sheet/Dialog 透出底层，形成白色闪层。
-    val ContainerLow = Color(0xFFFFFFFF)
-    val Container = Color(0xFFF4F6F6)
-    val ContainerHigh = Color(0xFFEDF0F1)
-    val ContainerHighest = Color(0xFFE6EAEC)
-    val BarLight = Color(0xFFFBFCFC)
-    val TextPrimary = Color(0xFF1C2629)
-    val TextSecondary = Color(0xFF4F5A5D)
-    val TextTertiary = Color(0xFF596164)
-    val Divider = Color(0xFFE2E7E8)
-    val Outline = Color(0xFF98A4A8)
-    val TintTeal = Color(0xFFE7F0ED)
-    val TintBlue = Color(0xFFE9EFF4)
-    val TintSand = Color(0xFFF5EFE7)
+    // 卡片和表单使用实色底面。较高的容器色阶用于区分列表和选区。
+    val ContainerLow = Color(0xFFFFFCF6)
+    val Container = Color(0xFFFBF6EC)
+    val ContainerHigh = Color(0xFFF3EDDF)
+    val ContainerHighest = Color(0xFFEBE4D5)
+    val BarLight = Color(0xFFFFFCF6)
+    val TextPrimary = Color(0xFF303A35)
+    val TextSecondary = Color(0xFF5C6860)
+    val TextTertiary = Color(0xFF626C63)
+    val Divider = Color(0xFFE0D2BC)
+    val Outline = Color(0xFF8A8274)
+    val TintTeal = Color(0xFFEAF2EC)
+    val TintBlue = Color(0xFFEDF2F7)
+    val TintSand = Color(0xFFFAF3E6)
     val Danger = Color(0xFFB4553F)
 
     // ---- 深色中性（中性深板岩；hero/pill 同族更深一档） ----
-    val DarkBg = Color(0xFF10151D)
-    val DarkSurface = Color(0xFF18212C)
-    /** 深色卡片底（半透明深玻璃，比页面底亮半档 —— 在深色光场上才能「浮」起来）。 */
-    val DarkContainerLow = Color(0xFF1C2632)
-    val DarkContainer = Color(0xFF222F3C)
-    val DarkContainerHigh = Color(0xFF293846)
-    val DarkContainerHighest = Color(0xFF344554)
-    val DarkBar = Color(0xFF151D27)
-    val DarkTextPrimary = Color(0xFFECF1F6)
-    val DarkTextSecondary = Color(0xFFBECCD6)
-    val DarkTextTertiary = Color(0xFFA6B7C5)
-    val DarkDivider = Color(0xFF354452)
-    val DarkOutline = Color(0xFF7C909F)
+    val DarkBg = Color(0xFF111614)
+    val DarkSurface = Color(0xFF1A211E)
+    val DarkContainerLow = Color(0xFF1A211E)
+    val DarkContainer = Color(0xFF222A25)
+    val DarkContainerHigh = Color(0xFF29332D)
+    val DarkContainerHighest = Color(0xFF323D35)
+    val DarkBar = Color(0xFF1A201D)
+    val DarkTextPrimary = Color(0xFFE9F0EC)
+    val DarkTextSecondary = Color(0xFFB4C1BB)
+    val DarkTextTertiary = Color(0xFFA2AFA7)
+    val DarkDivider = Color(0xFF35413A)
+    val DarkOutline = Color(0xFF839289)
 
     // ---- 浅色「莫奈纸面」hero（鸿蒙 HomeScreen.heroCard 实测值） ----
     val HeroPaper = Color(0xFFF1F6F2)
@@ -102,12 +84,12 @@ object CtPalette {
     val HeroPaperLink = Color(0xFF4E6D8C)
 
     // ---- 深色 hero（中性 tonal，不含大面积品牌绿） ----
-    val HeroDarkPaper = Color(0xFF172C33)
-    val HeroDarkBorder = Color(0xFF304B53)
-    val HeroDarkPill = Color(0xFF253E47)
-    val HeroDarkDivider = Color(0xFF36515A)
-    val HeroDarkAccent = Color(0xFF9EDACE)
-    val HeroDarkLink = Color(0xFFB4D4F2)
+    val HeroDarkPaper = Color(0xFF1C2A25)
+    val HeroDarkBorder = Color(0xFF35413A)
+    val HeroDarkPill = Color(0xFF222F28)
+    val HeroDarkDivider = Color(0xFF35413A)
+    val HeroDarkAccent = Color(0xFFA2CCC2)
+    val HeroDarkLink = Color(0xFFB1CCDF)
 
     // ---- 加载骨架（鸿蒙 HomeScreen.skeletonPage 实测三档灰） ----
     val SkeletonStrong = Color(0xFFE9EFF1)

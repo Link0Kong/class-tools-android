@@ -41,7 +41,7 @@ import androidx.core.view.WindowCompat
 //
 // 取色策略：
 //   L1 品牌固定方案（默认）：跨端一致、QA 可复现；
-//   Android 12+ 默认使用系统生成的壁纸配色。
+//   Android 12+ 可以在外观设置中开启系统壁纸配色。
 // =============================================================================
 
 /** 语义间距（CompositionLocal；默认值 = [CtSpace]，大屏可由调用方覆盖）。 */
@@ -207,7 +207,7 @@ private fun ColorScheme.toolAccents(dark: Boolean): CtAccentColors {
  * 全局主题。
  *
  * @param darkTheme 是否深色（默认跟随系统；调用方按「外观模式」用 [AppearanceMode.resolveDark] 解析）。
- * @param dynamicColor 是否跟随系统壁纸取色（Material You）。设备支持时默认使用系统完整配色。
+ * @param dynamicColor 是否跟随系统壁纸取色（Material You）。未开启时使用网页品牌配色。
  * @param spacing 语义间距（默认 [CtSpacing]；大屏可由调用方覆盖）。
  * @param immersiveLight 沉浸光感设置（强 / 均衡 / 弱 / 关闭；默认 [CtLightSetting.Default]）。
  * @param lightCapabilityOverride 光感能力档覆盖（预览/测试注入；null = 按 Build.VERSION.SDK_INT + 硬件加速推导）。
@@ -215,7 +215,7 @@ private fun ColorScheme.toolAccents(dark: Boolean): CtAccentColors {
 @Composable
 fun ClassToolsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     spacing: CtSpacing = CtSpacing(),
     immersiveLight: CtLightSetting = CtLightSetting.Default,
     lightCapabilityOverride: CtLightCapability? = null,
@@ -282,7 +282,7 @@ fun ClassToolsTheme(
 @Composable
 fun ClassToolsTheme(
     appearance: AppearanceMode,
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     spacing: CtSpacing = CtSpacing(),
     immersiveLight: CtLightSetting = CtLightSetting.Default,
     content: @Composable () -> Unit,
