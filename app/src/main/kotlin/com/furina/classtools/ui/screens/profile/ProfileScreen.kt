@@ -73,6 +73,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -1117,6 +1118,7 @@ private fun SwitchRow(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
+            .toggleable(value = checked, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onCheckedChange)
             .padding(horizontal = HarmonyTokens.PagePadding, vertical = HarmonyTokens.ElementGap),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1145,8 +1147,7 @@ private fun SwitchRow(
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
-            modifier = Modifier.semantics { contentDescription = title },
+            onCheckedChange = null,
         )
     }
 }

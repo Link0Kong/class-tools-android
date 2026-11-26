@@ -98,11 +98,11 @@ fun TaskScreen(
     onSource: (JsonObject) -> Unit = { onHomework() },
     onShare: (com.furina.classtools.features.export.ExportCardSpec) -> Unit = {},
     onReminderSettings: () -> Unit = {},
-    createFromWidget: Boolean = false,
     openTaskId: String? = null,
     onTaskOpened: () -> Unit = {},
     onCloseFocused: (() -> Unit)? = null,
     sessionSid: String? = null,
+    createFromWidget: Boolean = false,
 ) {
     val context = LocalContext.current
     val snapshot by repository.snapshot.collectAsState()

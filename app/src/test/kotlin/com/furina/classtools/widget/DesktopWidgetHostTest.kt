@@ -18,6 +18,7 @@ import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.data.reminder.ReminderIntentFactory
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionStore
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -152,6 +153,15 @@ class DesktopWidgetHostTest {
             val host = host(WidgetViews.forHost(app, kind, content, options(300, 240)), 300, 240)
             host.findViewById<View>(R.id.widget_root).performClick()
             assertEquals(kind.destination, shadowOf(app).nextStartedActivity.getStringExtra(ReminderIntentFactory.EXTRA_TOOL_ID))
+        }
+    }
+
+    @Test fun toolAndWidgetUseTheSameSavedMonetChoice() = runBlocking {
+        val settings = com.furina.classtools.data.settings.AppSettingsStore(app)
+        for (enabled in listOf(false, true)) {
+            settings.setDynamicColor(enabled)
+            assertEquals(enabled, com.furina.classtools.data.settings.AppSettingsStore(app).startupDynamicColor())
+            assertEquals(enabled, settings.dynamicColor.first())
         }
     }
 
