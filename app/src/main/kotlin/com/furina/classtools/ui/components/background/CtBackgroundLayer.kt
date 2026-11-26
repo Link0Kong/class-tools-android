@@ -68,10 +68,7 @@ internal fun CtAppBackdrop(
             )
         } else {
             val field = remember(selection.preset, dark, light.setting) {
-                CtLightFields.scaled(
-                    field = CtLightFields.of(selection.preset, dark),
-                    factor = CtLightFields.alphaFactor(light.setting),
-                )
+                CtLightFields.forBackdrop(selection.preset, dark, light.setting)
             }
             CtAuroraField(field = field, dark = dark, animated = false)
         }

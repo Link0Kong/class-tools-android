@@ -6,6 +6,7 @@ import com.furina.classtools.data.background.CtBackgroundPreset
 import com.furina.classtools.ui.theme.CtDarkColorScheme
 import com.furina.classtools.ui.theme.CtLightColorScheme
 import com.furina.classtools.ui.theme.CtLightFields
+import com.furina.classtools.ui.theme.CtLightSetting
 import com.furina.classtools.ui.theme.CtPalette
 import com.furina.classtools.ui.theme.lucidContrastRatio
 import org.junit.Assert.assertTrue
@@ -26,7 +27,7 @@ class BackdropContrastTest {
     fun everyPresetKeepsTextReadableInBothThemes() {
         for (dark in listOf(false, true)) {
             for (preset in CtBackgroundPreset.entries) {
-                val field = CtLightFields.of(preset, dark)
+                val field = CtLightFields.forBackdrop(preset, dark, CtLightSetting.Default)
                 val layers = listOf(field.base, field.topGlow, field.vignette) + field.blooms.map { it.color }
                 assertContrast(dark, layers, hasPhoto = false)
             }

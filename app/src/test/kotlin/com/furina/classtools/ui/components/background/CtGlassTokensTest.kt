@@ -1,8 +1,15 @@
 package com.furina.classtools.ui.components.background
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import com.furina.classtools.data.background.CtBackgroundPalette
 import com.furina.classtools.data.background.CtBackgroundPreset
+import com.furina.classtools.ui.theme.CtDarkColorScheme
+import com.furina.classtools.ui.theme.CtDarkGlassRole
+import com.furina.classtools.ui.theme.CtGlassTable
 import com.furina.classtools.ui.theme.CtLightIntensity
+import com.furina.classtools.ui.theme.CtLightLevel
+import com.furina.classtools.ui.theme.CtLightSetting
 import com.furina.classtools.ui.theme.CtPalette
 import com.furina.classtools.ui.theme.ctLightContrastFloor
 import com.furina.classtools.ui.theme.lucidContrastRatio
@@ -10,16 +17,63 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * 磨砂玻璃卡片材质单测（`ui/components/background/CtGlassSurface.kt` 的纯逻辑部分）。
- *
- * 覆盖：
- * 1) 明暗 × 光感强度映射表：浅色底不透明度 0.55–0.70、深色 0.45–0.60、关闭时退化成实色；
- * 2) 背景补偿（`cardAlphaBoost`）抬升底不透明度，且被 [CtGlassTokens.MIN_BODY_ALPHA]/[MAX_BODY_ALPHA] 夹住；
- * 3) **可读性红线**：任意预设 × 明暗下，正文压在玻璃底（与「最坏底层」合成后）对比度 ≥ 4.5；
- * 4) 深色玻璃要求「更深 + 有高光边」（避免灰糊）。
- */
+/** 覆盖 CtGlassSurface 的当前材质表和 ctFrostedCard 的兼容规格。 */
 class CtGlassTokensTest {
+
+    @Test
+    fun `dark card glass is thicker than hero glass in every enabled setting`() {
+        val level = CtLightLevel.THIN
+        val boost = CtBackgroundPalette.dark(CtBackgroundPreset.DEFAULT).cardAlphaBoost
+        val settings = CtLightSetting.choices.filter(CtLightSetting::enabled)
+        val cardSpecs = settings.map { setting ->
+            val hero = CtGlassTable.specOf(level, setting, dark = true, darkRole = CtDarkGlassRole.HERO, fillBoost = boost)
+            val card = CtGlassTable.specOf(level, setting, dark = true, darkRole = CtDarkGlassRole.CARD, fillBoost = boost)
+            assertTrue(card.fillBottom.alpha > hero.fillTop.alpha)
+            assertTrue(card.fillTop.alpha < 1f)
+            assertTrue(hero.specularAlpha > card.specularAlpha)
+            assertEquals(0f, hero.edgeTopAlpha, 0f)
+            assertEquals(0f, hero.edgeBottomAlpha, 0f)
+            assertEquals(0f, card.edgeTopAlpha, 0f)
+            assertEquals(0f, card.edgeBottomAlpha, 0f)
+            card
+        }
+        assertTrue(cardSpecs.zipWithNext().all { (stronger, weaker) -> stronger.fillTop.alpha < weaker.fillTop.alpha })
+    }
+
+    @Test
+    fun `dark glass text stays readable over a white photo and peak reflection`() {
+        val scheme = CtDarkColorScheme
+        val photo = scheme.background.copy(alpha = backdropVeilAlpha(dark = true, hasPhoto = true))
+            .compositeOver(Color.White)
+        val boost = CtBackgroundPalette.dark(CtBackgroundPreset.DEFAULT).cardAlphaBoost + 0.18f
+        for (intensity in CtLightIntensity.entries) {
+            for (role in listOf(CtDarkGlassRole.HERO, CtDarkGlassRole.CARD)) {
+                val setting = CtLightSetting(intensity)
+                val spec = CtGlassTable.specOf(role.level, setting, dark = true, darkRole = role, fillBoost = boost)
+                assertTrue(spec.fillBottom.alpha > CtGlassTable.specOf(role.level, setting, dark = true, darkRole = role).fillBottom.alpha)
+                val brightest = Color.White.copy(alpha = spec.specularAlpha).compositeOver(spec.fillTop.compositeOver(photo))
+                for (text in listOf(scheme.onSurface, scheme.onSurfaceVariant, scheme.primary, CtPalette.HeroDarkLink)) {
+                    val ratio = lucidContrastRatio(text, brightest)
+                    assertTrue("$role $intensity $text contrast=$ratio", ratio >= 4.5)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `dark surface roles keep light and disabled specs intact`() {
+        val level = CtLightLevel.THIN
+        for (role in CtDarkGlassRole.entries) {
+            assertEquals(
+                CtGlassTable.specOf(level, CtLightSetting.Default, dark = false),
+                CtGlassTable.specOf(level, CtLightSetting.Default, dark = false, darkRole = role),
+            )
+            assertEquals(
+                CtGlassTable.specOf(level, CtLightSetting.Off, dark = true),
+                CtGlassTable.specOf(level, CtLightSetting.Off, dark = true, darkRole = role),
+            )
+        }
+    }
 
     @Test
     fun `light glass alpha stays in the frosted range`() {
@@ -113,7 +167,7 @@ class CtGlassTokensTest {
                     val palette = CtBackgroundPalette.of(preset, dark)
                     val spec = CtGlassTokens.of(dark, intensity, enabled = true)
                     val alpha = CtGlassTokens.resolvedAlpha(spec, palette.cardAlphaBoost)
-                    val cardSurface = CtGlassTokens.baseColor(dark) // 深色 = DarkContainer(= surfaceContainer #1E2326)，与实现一致
+                    val cardSurface = CtGlassTokens.baseColor(dark)
                     val bodyText = if (dark) CtPalette.DarkTextPrimary else CtPalette.TextPrimary
                     val ratio = ctLightContrastFloor(bodyText, cardSurface, palette.base, alpha)
                     assertTrue(

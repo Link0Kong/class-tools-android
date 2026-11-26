@@ -38,6 +38,17 @@ class CtDesignTokensTest {
     }
 
     // ---- 1. 色板 ----
+    @Test
+    fun `dark notice detail surface supports body text and outlined actions`() {
+        val scheme = CtDarkColorScheme
+        val panel = scheme.surfaceContainerHigh
+        for (text in listOf(scheme.onSurface, scheme.onSurfaceVariant, scheme.primary)) {
+            assertTrue(contrast(text, panel) >= 4.5)
+        }
+        assertTrue(contrast(scheme.outline, panel) >= 3.0)
+        assertTrue(contrast(scheme.onPrimary, scheme.primary) >= 4.5)
+    }
+
 
     @Test
     fun `品牌三色与鸿蒙 Tokens 同值（跨端一致）`() {

@@ -1,6 +1,7 @@
 package com.furina.classtools.ui.theme
 
 import com.furina.classtools.data.background.CtBackgroundPreset
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -27,7 +28,7 @@ class CtLightFieldPresetTest {
 
     private fun fieldColors(dark: Boolean): Map<CtBackgroundPreset, List<IntArray>> =
         CtBackgroundPreset.grid.associateWith { preset ->
-            val field = CtLightFields.of(preset, dark)
+            val field = CtLightFields.forBackdrop(preset, dark, CtLightSetting(CtLightIntensity.STRONG))
             samplePoints.map { (x, y) ->
                 val c = field.sampleAt(x, y, dark)
                 intArrayOf(
@@ -95,6 +96,28 @@ class CtLightFieldPresetTest {
         assertTrue("暖沙应偏暖（r>b）", sand.red > sand.blue)
         assertTrue("雾青应偏冷（g>b 或 b>r）", teal.green > teal.red || teal.blue > teal.red)
         assertNotEquals(sand.red, teal.red)
+    }
+
+    @Test
+    fun `默认深色玻璃光场把雾青集中在上部并随强度变化`() {
+        val preset = CtBackgroundPreset.DEFAULT
+        val peaks = CtLightIntensity.entries.map { intensity ->
+            val field = CtLightFields.forBackdrop(preset, dark = true, setting = CtLightSetting(intensity))
+            val bloom = field.blooms.single()
+            val upper = field.sampleAt(bloom.x, bloom.y, dark = true)
+            assertTrue(upper.green - field.base.green > upper.red - field.base.red)
+            assertEquals(field.base, field.sampleAt(0.15f, 0.85f, dark = true))
+            bloom.alpha
+        }
+        assertTrue(peaks.zipWithNext().all { (stronger, weaker) -> stronger > weaker })
+        assertEquals(
+            CtLightFields.scaled(CtLightFields.of(preset, dark = true), 0f),
+            CtLightFields.forBackdrop(preset, dark = true, setting = CtLightSetting.Off),
+        )
+        assertEquals(
+            CtLightFields.scaled(CtLightFields.of(preset, dark = false), 0.78f),
+            CtLightFields.forBackdrop(preset, dark = false, setting = CtLightSetting.Default),
+        )
     }
 
     @Test

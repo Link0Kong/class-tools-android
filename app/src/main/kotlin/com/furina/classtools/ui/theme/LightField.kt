@@ -9,21 +9,8 @@ import com.furina.classtools.data.background.CtBackgroundPreset
 // =============================================================================
 // 光场（Light Field）—— 沉浸光感的「底」
 //
-// 华为 HarmonyOS「沉浸光感」的核心是**材质与内容之间的光学关系**：材质层只有压在有光、
-// 有色彩、有明暗变化的「光场」上，透光 / 折射 / 高光才被感知；压在一块纯色板上时，
-// 再精确的模糊与描边看起来也只是「灰色卡片」（2026-11-20 模拟器实测确认的根因）。
-//
-// 因此本文件定义全局光场：一层中性底 + 3–4 团**品牌色柔光斑**（雾青 / 灰蓝 / 暖沙 +
-// 一点薄荷） + 一道斜向流光 + 极轻暗角。光斑以 20–40s 周期缓慢漂移（幅度 12–24dp），
-// 让玻璃材质上的透光有「活着」的呼吸感，同时避免逐帧重绘（用 graphicsLayer 位移）。
-//
-// 与既有代码的关系：
-//   - [CtLightFields] 是**唯一**光场配色表（纯数据 + 纯函数，可 JVM 单测）；
-//   - 渲染在 `ui/components/background/CtAuroraField.kt`；
-//   - 背景预设（[CtBackgroundPreset]）只改变**哪一团光更亮**，不改变整体语言。
-//
-// 设计口径（对齐官方「三档强度」）：强度只调光斑 alpha（强 1.0 / 均衡 0.78 / 弱 0.5），
-// 关闭时 alpha = 0（退化为纯色底，保留旧版「省电 / 高对比」路径）。
+// [CtLightFields] 提供光场配色，CtAuroraField 负责绘制。应用窗口固定光斑位置，滚动时内容经过同一片背景。
+// 强 / 均衡 / 弱调整光斑与流光的强度。关闭后保留预设底色和环境光。
 // =============================================================================
 
 /**
@@ -60,7 +47,7 @@ data class CtLightBloom(
  * @param blooms 柔光斑（绘制顺序 = 列表顺序，后面的叠在前面）
  * @param sheen 斜向流光色（一道 18° 的极淡光带，制造「玻璃被光扫过」的错觉）
  * @param sheenAlpha 流光峰值不透明度
- * @param vignette 暗角色（四角压暗 0–0.06，增强中心聚焦与深度）
+ * @param vignette 四角叠加的暗角色
  * @param vignetteAlpha 暗角峰值不透明度
  */
 @Immutable
@@ -79,8 +66,8 @@ data class CtLightField(
  *
  * 浅色：近白冷调底（#F4F7F6）+ 4 团 20–32% 品牌柔光；整体观感是「有颜色的白」，
  *      卡片压上去能明显看到青色/蓝色从边缘渗出来。
- * 深色：近墨底（#080B0C）+ 4 团 26–46% 发光斑（深色下 alpha 必须更高才「发光」），
- *      观感是夜里被环境光打亮的深色玻璃。
+ * 深色：启用玻璃化的默认预设使用深板岩与靠近工作台「今日」卡的一团弱雾青光。
+ * 其余深色预设使用各自的底色偏移和品牌光斑。
  *
  * 预设只调整 emphasis：雾青 → 青色斑 +25%；灰蓝 → 蓝色斑 +25%；暖沙 → 暖色斑 +25%；
  * 深空 / 夜幕 → 换成深色板的冷色偏移。
@@ -160,6 +147,28 @@ object CtLightFields {
         vignette = Color(0xFF000000),
         vignetteAlpha = 0.45f,
     )
+
+    private val darkDefaultGlassField = CtLightField(
+        base = Color(0xFF1F252A),
+        topGlow = CtPalette.DarkBar,
+        blooms = listOf(
+            CtLightBloom(x = 0.82f, y = 0.19f, radius = 0.30f, color = Color(0xFF3B7166), alpha = 0.32f),
+        ),
+        sheen = darkField.sheen,
+        sheenAlpha = 0.03f,
+        vignette = darkField.vignette,
+        vignetteAlpha = 0.16f,
+    )
+
+    /** 窗口光场，预设选色后再应用玻璃化开关和强度。 */
+    fun forBackdrop(preset: CtBackgroundPreset, dark: Boolean, setting: CtLightSetting): CtLightField {
+        val field = if (dark && setting.enabled && preset == CtBackgroundPreset.DEFAULT) {
+            darkDefaultGlassField
+        } else {
+            of(preset, dark)
+        }
+        return scaled(field, alphaFactor(setting))
+    }
 
     /**
      * 预设 → 光场（浅/深）。
@@ -260,7 +269,7 @@ object CtLightFields {
         else -> 0.78f
     }
 
-    /** 按强度缩放后的光场（关闭 → 光斑全透明，只剩底色）。 */
+    /** 按强度缩放光斑、流光与暗角。 */
     fun scaled(field: CtLightField, factor: Float): CtLightField {
         if (factor >= 0.999f) return field
         val f = factor.coerceIn(0f, 1f)

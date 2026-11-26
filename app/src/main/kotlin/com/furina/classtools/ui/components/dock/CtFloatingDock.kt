@@ -2,8 +2,6 @@ package com.furina.classtools.ui.components.dock
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +18,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -32,19 +29,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -52,52 +42,23 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.components.glass.ctGlass
+import com.furina.classtools.ui.theme.CtDarkGlassRole
 import com.furina.classtools.ui.theme.CtLightLevel
-import com.furina.classtools.ui.theme.CtRadius
-import com.furina.classtools.ui.theme.CtShape
+import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.theme.LocalCtDarkTheme
+import com.furina.classtools.ui.theme.LocalCtLight
 import kotlin.math.abs
-
 import kotlin.math.roundToInt
 
-/** 深色浮岛底不透明度（比页面底更实、更深，轮廓清楚不灰糊）。 */
-private const val DARK_DOCK_ALPHA: Float = 0.92f
-
 /**
- * **ColorOS 17 浮岛式底栏**（task-20 / v2.0.0）。
+ * 底部导航。玻璃化时使用 THIN 材质，关闭时使用实色导航栏。
  *
- * 设计要点（对齐 ColorOS 17 Floating Island + M3 Expressive floating toolbar）：
- * - 半透明胶囊条：surfaceContainer 半透明 + 1dp 高光描边（不用 NavigationBar 默认样式）；
- * - **浅色无黑色投影**（v4.55 用户反馈「浅色底部工具栏发黑」）：浅色下阴影 0dp、改用 1dp 细边框
- *   + 近白 tonal 底定义边缘；深色保留克制阴影（6dp）。避免 12dp 高度阴影在浅色页面上形成黑灰晕影；
- * - **悬浮离底**：底部在导航栏 insets 之上再留 10dp，左右留 20dp（平板限宽 480dp 居中）；
- * - **弹性药丸**：选中项背后 secondaryContainer 药丸，位置用 `selectedIndex + pagerOffsetFraction`
- *   跟手；松手由 [CtMotion.spatialFast] spring 吸附；拖动中药丸横向拉伸 8%、纵向略压；
- * - **柔性反馈**：按压时图标/文字缩放（选中 0.96 / 未选中 0.90），切换有轻触感；
- * - 触控：单个 item 高 60dp、宽 ≥ 1/3 屏宽（远超 48dp），`selectable(role = Role.Tab)`；
- * - TalkBack：`selectableGroup` + 每项 `contentDescription = "工作台，第 1 个 Tab，共 3 个，已选中"`。
- *
- * 接线（Lead 在 MainNavHost 的 `Scaffold.bottomBar`）：
- * ```kotlin
- * val pagerState = rememberCtTabPagerState(pageCount = 3)
- * Scaffold(bottomBar = {
- *     CtFloatingDock(
- *         destinations = TopLevelDestination.entries.map {
- *             CtDockDestination(it.route, it.label, it.icon)
- *         },
- *         selectedIndex = pagerState.currentPage,
- *         pagerOffsetFraction = pagerState.currentPageOffsetFraction, // 跟手药丸
- *         onSelect = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
- *     )
- * }, contentWindowInsets = WindowInsets(0, 0, 0, 0)) { ... }
- * ```
- *
- * @param pagerOffsetFraction 当前页内滑动偏移（PagerState.currentPageOffsetFraction），用于药丸跟手
- * @param translucent 半透明玻璃层（关闭后为不透明 surfaceContainer，省电/对比度偏好）
- * @param showLabels 是否显示文字（窄屏必须 true；大屏 rail 场景可 false）
+ * @param pagerOffsetFraction 当前页内滑动偏移，供选中指示器跟随分页滑动。
+ * @param translucent 兼容旧调用。浮岛材质跟随外观设置。
+ * @param showLabels 是否显示导航项文字。
  */
 @Composable
 fun CtFloatingDock(
@@ -117,8 +78,15 @@ fun CtFloatingDock(
     val safeIndex = selectedIndex.coerceIn(0, destinations.lastIndex)
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
-    val specularColor = MaterialTheme.colorScheme.surfaceBright
-    var specularX by remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
+    val scheme = MaterialTheme.colorScheme
+    val glass = LocalCtLight.current.enabled
+    val darkGlass = glass && LocalCtDarkTheme.current
+    val indicatorColor = if (darkGlass) {
+        lerp(scheme.primary, scheme.surfaceContainerHigh, 0.16f)
+    } else {
+        scheme.secondaryContainer
+    }
+    val selectedIconColor = if (darkGlass) scheme.onPrimary else scheme.onSecondaryContainer
 
     // 松手吸附：仅当不在拖动中时用 spring 动画；拖动中直接跟手。
     val dragging = abs(pagerOffsetFraction) > 0.01f
@@ -142,16 +110,6 @@ fun CtFloatingDock(
         label = "dockPillScaleY",
     )
 
-    // 2026-11-19 沉浸光感 + 深色优化：浮岛 = THIN + 底部渐变颜色蒙层（官方「底部悬浮」规范）。
-    // 深色专用（用户反馈「深色工具栏灰糊」）：
-    //   - 底色不再用 surfaceContainerLow（与页面底几乎同色 → 灰糊），改为**更深的实感底**
-    //     `DarkBar`(#171C1F) 叠加 0.92 不透明度：比内容层更暗、轮廓清楚；
-    //   - 1px 高光边（白 0.18）+ 顶部线性高光（白 0.10），让浮岛从深底上「浮」起来；
-    //   - 选中药丸改为**低饱和雾青**（primary 0.22）+ 1px 亮边，文字/图标用 primary（对深底 ≥7:1）。
-    // 2026-11-20 沉浸光感 v2：浮岛改用统一材质引擎（THIN 档 + 真模糊 + 点光源高光 + 折射亮边），
-    // 不再按明暗自建两套手绘材质 —— 深浅色差异全部由 CtGlassTable 表达（深色更实、亮边代替投影）。
-    val dockShape = RoundedCornerShape(CtRadius.hero)
-    val glass = com.furina.classtools.ui.theme.LocalCtLight.current.enabled
     // 玻璃浮动底栏：更薄（68dp）+ 左右 24dp / 底部 8dp；与实色 80dp 导航栏之间做收缩动画。
     val dockHeight by androidx.compose.animation.core.animateDpAsState(
         targetValue = if (glass) 68.dp else 80.dp,
@@ -196,16 +154,17 @@ fun CtFloatingDock(
                 .then(
                     if (glass) {
                         Modifier.ctGlass(
-                            level = com.furina.classtools.ui.theme.CtLightLevel.THIN,
+                            level = CtLightLevel.THIN,
                             shape = animatedShape,
                             bodySafe = false,
                             haze = hazeState,
+                            darkRole = CtDarkGlassRole.DOCK,
                         )
                     } else {
                         Modifier
                     },
                 ),
-            color = if (glass) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
+            color = if (glass) Color.Transparent else scheme.surfaceContainer,
             shape = animatedShape,
         ) {
             androidx.compose.foundation.layout.BoxWithConstraints(
@@ -225,7 +184,7 @@ fun CtFloatingDock(
                         indicatorPosition * itemWidthPx -
                         pillWidthPx / 2f
 
-                // 选中指示器（M3：64 × 32dp，secondaryContainer；与图标带 32dp 对齐，不压文案）
+                // 选中指示器（64 × 32dp），与图标带对齐。
                 Surface(
                     modifier = Modifier
                         .offset {
@@ -241,7 +200,7 @@ fun CtFloatingDock(
                             scaleY = pillScaleY
                         },
                     shape = CtShapeTokens.pill,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    color = indicatorColor,
                     shadowElevation = pillShadowElevation,
                 ) {}
 
@@ -256,6 +215,7 @@ fun CtFloatingDock(
                         DockItem(
                             destination = destination,
                             selected = index == safeIndex,
+                            selectedIconColor = selectedIconColor,
                             index = index,
                             count = destinations.size,
                             showLabel = showLabels,
@@ -278,6 +238,7 @@ fun CtFloatingDock(
 private fun DockItem(
     destination: CtDockDestination,
     selected: Boolean,
+    selectedIconColor: Color,
     index: Int,
     count: Int,
     showLabel: Boolean,
@@ -293,8 +254,7 @@ private fun DockItem(
     )
     val contentColor by animateColorAsState(
         targetValue = if (selected) {
-            // M3 navigation bar：选中图标 onSecondaryContainer（压在 secondaryContainer 指示器上）。
-            MaterialTheme.colorScheme.onSecondaryContainer
+            selectedIconColor
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },

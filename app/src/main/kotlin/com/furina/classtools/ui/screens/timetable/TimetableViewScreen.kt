@@ -130,6 +130,7 @@ import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtType
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
+import com.furina.classtools.ui.theme.LocalCtLight
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -1063,6 +1064,12 @@ private fun WeekGridV5(grid: TimetableGridContext, fillHeight: Boolean = false) 
         TimetableWeekLogic.visibleDays(grid.snapshot.c, grid.displayWeek)
     }
     val showNow = grid.now != null && days.contains(grid.todayIndex)
+    val darkGlass = grid.dark && LocalCtLight.current.enabled
+    val gridLine = when {
+        darkGlass -> MaterialTheme.colorScheme.outline.copy(alpha = 0.78f)
+        grid.dark -> CtPalette.MediaOnScrim.copy(alpha = 0.15f)
+        else -> CtPalette.MediaScrimSoft.copy(alpha = 0.09f)
+    }
 
     Surface(
         modifier = if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth(),
@@ -1154,10 +1161,11 @@ private fun WeekGridV5(grid: TimetableGridContext, fillHeight: Boolean = false) 
                         }
                         Box(modifier = Modifier.fillMaxWidth().height(gridHeight)) {
                             Canvas(modifier = Modifier.fillMaxSize()) {
-                                val gridLine = if (grid.dark) CtPalette.MediaOnScrim.copy(alpha = 0.15f) else CtPalette.MediaScrimSoft.copy(alpha = 0.09f)
                                 val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 7f))
                                 for (period in 1..periodCount) {
-                                    val y = period * rowHeight.toPx()
+                                    val rowEnd = period * rowHeight.toPx()
+                                    // 1px 的虚线对齐像素中心，避免浅线被抗锯齿摊到两行。
+                                    val y = if (darkGlass) kotlin.math.floor(rowEnd) + 0.5f else rowEnd
                                     drawLine(
                                         color = gridLine,
                                         start = Offset(0f, y),

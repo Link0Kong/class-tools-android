@@ -28,6 +28,7 @@ import com.furina.classtools.ui.components.glass.ctGlass
 import com.furina.classtools.ui.components.glass.ctGlassPointerLight
 import com.furina.classtools.ui.components.glass.rememberCtGlassPress
 import com.furina.classtools.ui.components.light.CtLightInk
+import com.furina.classtools.ui.theme.CtDarkGlassRole
 import com.furina.classtools.ui.theme.CtElevation
 import com.furina.classtools.ui.theme.CtLightIntensity
 import com.furina.classtools.ui.theme.CtLightLevel
@@ -37,19 +38,8 @@ import com.furina.classtools.ui.theme.LocalCtLight
 import com.furina.classtools.ui.theme.rememberCtColors
 
 // =============================================================================
-// 磨砂玻璃卡片材质（Frosted Glass Card）—— 所有卡片的**唯一材质来源**
-//
-// 视觉分层（自下而上）：
-//   1) 半透明底：浅色 = 白 0.55–0.70、深色 = 深容器 0.45–0.60（**[CtGlassTokens] 唯一映射表**）；
-//   2) 顶部线性高光（白 0.18 → 0，营造「玻璃被上方光照亮」的厚度感）；
-//   3) **1px 高光边**（顶部更亮、底部极淡）—— 取代纯色描边，保证深色下「清晰不灰糊」；
-//   4) 柔和外阴影（浅色 0.10 墨色 8dp；深色不投影，靠高光边分层）。
-//
-// 可读性红线（AA）：底不透明度随「背景花哨程度」自动抬高
-//   - 纯色预设：[CtGlassTokens.baseAlpha]
-//   - 渐变预设 / 自定义图片：+ [CtBackgroundColors.cardAlphaBoost]（最多 +0.30）
-//   - 封闭区（列表行/输入框）不用玻璃，保持实色 container（见 §3.8）
-// 单测 `CtGlassTokensTest` 锁定：任意预设 × 明暗下「正文压在玻璃上」的合成对比度 ≥ 4.5。
+// [CtGlassTokens] 保留旧绘制器 ctFrostedCard 的规格。
+// 线上的 CtGlassSurface 通过 ctGlass 使用 theme/Glass.kt 的规格。
 // =============================================================================
 
 /**
@@ -69,7 +59,7 @@ data class CtGlassSpec(
     val shadowElevation: Dp,
 )
 
-/** 卡片玻璃的**唯一映射表**：明暗 × 沉浸光感强度。 */
+/** ctFrostedCard 的材质规格：明暗 × 沉浸光感强度。 */
 object CtGlassTokens {
 
     /** 浅色玻璃（白底）。 */
@@ -195,43 +185,25 @@ fun rememberCtGlassSpec(boost: Float = 0f): CtGlassSpec {
 }
 
 /**
- * 磨砂玻璃卡片容器（**所有卡片组件的底层实现**）。
+ * 卡片表面。内容和内边距由调用方定义。玻璃材质使用半透明色叠加窗口光场，滚动时无需 Haze。
  *
- * 只负责「画材质 + 给可点反馈」，不定义内边距/排版；调用方（CtCard / CtGlassCard / ToolCard …）
- * 继续负责内容布局，因此改造是「换材质」而非「换结构」。
- *
- * @param onClick 非 null 时可点（自定义 interactionSource/indication 由调用方保留）
- * @param boost 背景补偿（来自 [com.furina.classtools.data.background.CtBackgroundColors.cardAlphaBoost]）
- * @param body 承载正文（影响不透明度下限）
- * @param frosted true = 磨砂玻璃；false = 实色（列表行/输入框/媒体卡）
- */
-/**
- * 玻璃表面（**所有卡片的唯一材质来源**，2026-11-20 材质引擎重写）。
- *
- * 材质参数不再由本文件推导，全部来自 `ui/theme/Glass.kt` 的 [com.furina.classtools.ui.theme.CtGlassTable]
- * （5 档 × 3 强度 × 明暗），绘制由 `ui/components/glass/CtGlassEngine.kt` 的 `Modifier.ctGlass` 完成：
- * 上亮下暗的介质底 + 极淡品牌赋色 + 点光源高光 + 上亮下暗折射亮边 + 底部内阴影 + 柔和外投影。
- *
- * 卡片默认**不做 Haze 真模糊**（它自己就是内容；官方功耗红线也要求材质只用在悬浮层与弹层）。
- * 真正需要「糊开背后文字」的顶栏 / 浮岛 / 弹层请直接用 `Modifier.ctGlass(..., haze = LocalCtHazeState.current)`。
- *
- * @param onClick 非 null 时可点（按压时点光源跟随手指 + 外部容器做弹性形变）
- * @param boost 背景补偿（自定义照片背景时抬高底色不透明度，来自 `LocalCtBackgroundCardBoost`）
- * @param body 承载正文（正文安全不透明度下限；装饰性容器传 false 可更透）
- * @param frosted true = 玻璃材质；false = 实色（列表行 / 输入框 / 媒体卡）
+ * @param onClick 非 null 时使用可点击的 Material Surface。
+ * @param boost 背景预设或自定义照片提供的底色不透明度补偿。
+ * @param body 正文卡默认使用 THIN 并应用正文不透明度下限，装饰面默认使用 ULTRA_THIN。
+ * @param frosted 使用半透明材质，或使用实色底。
+ * @param opaque 玻璃化关闭时使用实色 Material 卡片。
+ * @param darkRole 深色玻璃化开启时采用的材质用途。
  */
 @Composable
 fun CtGlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape,
     onClick: (() -> Unit)? = null,
-    // 默认读取「背景花哨程度」补偿（照片背景/强光场 → 卡片更实），保证正文可读；
-    // 2026-11-20：此前所有调用方都没传 boost，导致自定义照片上卡片过透、文字压不住。
     boost: Float = LocalCtBackgroundCardBoost.current,
     body: Boolean = true,
     frosted: Boolean = true,
-    /** 2026-11-21 M3：默认改为实色 surfaceContainer，不再用半透明玻璃（内容透字/对比度问题）。 */
     opaque: Boolean = true,
+    darkRole: CtDarkGlassRole? = null,
     content: @Composable () -> Unit,
 ) {
     val c = rememberCtColors()
@@ -270,21 +242,19 @@ fun CtGlassSurface(
         }
         return
     }
-    val press = rememberCtGlassPress()
-    // 内容材质档位：承载正文 → REGULAR（常规厚度，正文区域更实）；装饰性外壳 → THIN。
-    val level = remember(body) {
-        if (body) CtLightLevel.THIN else CtLightLevel.ULTRA_THIN
-    }
     val material: Modifier = if (frosted) {
-        Modifier
-            .ctGlassPointerLight(press)
-            .ctGlass(
-                level = level,
-                shape = shape,
-                bodySafe = body,
-                pressState = press,
-                fillBoost = boost,
-            )
+        val role = darkRole.takeIf { c.dark && lightEnabled }
+        // 深色工作台卡的反光固定在卡面，点击反馈由 Surface 提供。
+        val press = if (role == null) rememberCtGlassPress() else null
+        val pointerLight = if (press == null) Modifier else Modifier.ctGlassPointerLight(press)
+        pointerLight.ctGlass(
+            level = if (body) CtLightLevel.THIN else CtLightLevel.ULTRA_THIN,
+            shape = shape,
+            bodySafe = body,
+            pressState = press,
+            fillBoost = boost,
+            darkRole = role,
+        )
     } else {
         Modifier
             .then(
@@ -354,8 +324,7 @@ private fun Modifier.frostedEdge(shape: Shape, spec: CtGlassSpec): Modifier = dr
 /**
  * 背景补偿系数（当前预设/图片 → [com.furina.classtools.data.background.CtBackgroundColors.cardAlphaBoost]）。
  *
- * 卡片组件通过 CompositionLocal 读到它（由 `ExpressiveBackground` 每页注入），
- * 这样「背景越花 → 卡片越实」全局自动生效，页面代码零改动。
+ * 窗口背景层 CtAppBackdrop 为前景卡片提供这个补偿。
  */
 val LocalCtBackgroundCardBoost = androidx.compose.runtime.staticCompositionLocalOf { 0f }
 

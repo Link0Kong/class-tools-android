@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import com.furina.classtools.ui.theme.CtDarkGlassRole
 import com.furina.classtools.ui.theme.CtGlassSpec
 import com.furina.classtools.ui.theme.CtGlassTable
 import com.furina.classtools.ui.theme.CtLightIntensity
@@ -40,8 +41,7 @@ import dev.chrisbanes.haze.hazeEffect
 // =============================================================================
 // 沉浸光感 · 材质引擎（Glass Engine）
 //
-// 这是整个 App「玻璃感」的唯一绘制实现。所有表面（卡片 / 顶栏 / 浮岛 / 弹层 / 菜单 /
-// 输入框 / 按钮）都通过 [Modifier.ctGlass] 或 [CtGlassBox] 获得材质，因此调参数只有一处。
+// [Modifier.ctGlass] 绘制共享的玻璃材质，颜色、厚度和反光取自 [CtGlassTable]。
 //
 // 材质由 5 层叠加而成（对齐官方「材质滤镜 / 折射 / 高光 / 阴影」）：
 //
@@ -56,8 +56,8 @@ import dev.chrisbanes.haze.hazeEffect
 //   Compose 没有 backdrop-filter。Haze 通过把 source 子树画进图层、再按各 child 的
 //   区域做高斯采样来实现（API 31+ 用 RenderEffect）。它只能采样**同一窗口内、且不在
 //   自身子树里**的内容 —— 所以：
-//     · 卡片：默认不做 Haze（它自己就是内容），靠「半透明底 + 光场透出」表现，零开销；
-//     · 顶栏 / 浮岛 / 弹层：传入页面级 [LocalCtHazeState]（源 = 页面滚动内容），做真模糊。
+//     · 卡片使用半透明底叠加窗口光场，滚动时无需采样背景。
+//     · 同窗口内的悬浮层可传入 HazeState，在支持时采样滚动内容。
 // =============================================================================
 
 /**
@@ -100,6 +100,7 @@ fun rememberCtGlassSpec(level: CtLightLevel, bodySafe: Boolean = true): CtGlassS
  * @param pressState 按压点光源状态（[rememberCtGlassPress]）；null = 静态左上高光
  * @param intensityOverride 局部强度覆盖（极少用；播放器/媒体条等特殊场景）
  * @param glow 光晕强度（0..1；选中态/FAB 可以额外提亮）
+ * @param darkRole 深色玻璃化开启时的材质用途
  */
 @Composable
 fun Modifier.ctGlass(
@@ -111,6 +112,7 @@ fun Modifier.ctGlass(
     intensityOverride: CtLightIntensity? = null,
     glow: Float = 0f,
     fillBoost: Float = 0f,
+    darkRole: CtDarkGlassRole? = null,
 ): Modifier {
     val light = LocalCtLight.current
     val dark = LocalCtDarkTheme.current
@@ -120,17 +122,7 @@ fun Modifier.ctGlass(
     } else {
         light.setting.copy(intensity = intensityOverride, enabled = light.setting.enabled)
     }
-    val base = CtGlassTable.specOf(level, setting, dark, bodySafe)
-    // 背景越花（自定义照片 / 强光场）→ 底色越实，保证正文仍可读（0..+0.34）。
-    val boost = fillBoost.coerceIn(0f, 0.34f)
-    val spec = if (boost <= 0.001f) {
-        base
-    } else {
-        base.copy(
-            fillTop = base.fillTop.copy(alpha = (base.fillTop.alpha + boost).coerceAtMost(1f)),
-            fillBottom = base.fillBottom.copy(alpha = (base.fillBottom.alpha + boost).coerceAtMost(1f)),
-        )
-    }
+    val spec = CtGlassTable.specOf(level, setting, dark, bodySafe, darkRole, fillBoost)
     val pointer = pressState?.position
     val pressed = pressState?.pressed == true
 
@@ -157,8 +149,9 @@ fun Modifier.ctGlass(
     // 2) 形状裁剪（材质、模糊、描边全部在圆角内）
     chain = chain.clip(shape)
 
-    // 3) 材质滤镜（真模糊；只有拿到页面级 Haze 源时才启用）
-    if (haze != null && spec.blurRadius > 0.dp) {
+    // 深色材质在无模糊能力时直接用同一层半透明底色。
+    val canBlur = darkRole == null || !dark || light.blurAvailable
+    if (haze != null && canBlur && spec.blurRadius > 0.dp) {
         val hazeStyle = remember(spec, dark) {
             HazeStyle(
                 backgroundColor = Color.Transparent,
@@ -230,6 +223,8 @@ private fun DrawScope.drawGlassOverlay(
     pressed: Boolean,
     glow: Float,
 ) {
+    val hasEdgeHighlight = spec.edgeTopAlpha > 0f || spec.edgeBottomAlpha > 0f
+
     // 1) 品牌赋色（整块极淡）
     if (tint.alpha > 0.001f) drawRect(color = tint)
 
@@ -263,43 +258,17 @@ private fun DrawScope.drawGlassOverlay(
             radius = radius.coerceAtLeast(1f),
             center = anchor,
         )
-        // 顶部线性高光（薄薄一条，模拟掠射光）
-        drawRect(
-            brush = Brush.verticalGradient(
-                0f to Color.White.copy(alpha = spec.specularAlpha * 0.45f),
-                0.18f to Color.Transparent,
-            ),
-        )
+        if (hasEdgeHighlight) {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = spec.specularAlpha * 0.45f),
+                    0.18f to Color.Transparent,
+                ),
+            )
+        }
     }
 
-    // 4) 折射亮边：上亮下暗（深色下沿改亮边，靠「亮」而不是「影」塑造轮廓）
-    val edgeTop = Color.White.copy(alpha = spec.edgeTopAlpha)
-    val edgeBottom = if (dark) {
-        Color.White.copy(alpha = spec.edgeBottomAlpha)
-    } else {
-        Color(0xFF4E5C59).copy(alpha = spec.edgeBottomAlpha)
-    }
-    val hair = 1.2.dp.toPx()
-    drawRect(color = edgeTop, topLeft = Offset(0f, 0f), size = Size(size.width, hair))
-    drawRect(
-        color = edgeBottom,
-        topLeft = Offset(0f, size.height - hair),
-        size = Size(size.width, hair),
-    )
-    // 左右极淡侧边（让圆角处也有「玻璃边缘」，避免只上下有边）
-    val sideAlpha = spec.edgeTopAlpha * 0.35f
-    if (sideAlpha > 0.02f) {
-        drawRect(
-            color = Color.White.copy(alpha = sideAlpha),
-            topLeft = Offset(0f, 0f),
-            size = Size(hair, size.height),
-        )
-        drawRect(
-            color = Color.White.copy(alpha = sideAlpha * 0.6f),
-            topLeft = Offset(size.width - hair, 0f),
-            size = Size(hair, size.height),
-        )
-    }
+    if (hasEdgeHighlight) drawGlassEdgeHighlights(spec, dark)
 
     // 5) 光晕（选中/FAB）：在材质内侧描一圈品牌色柔光
     if (glow > 0.001f) {
@@ -316,12 +285,42 @@ private fun DrawScope.drawGlassOverlay(
             center = Offset(size.width * 0.5f, size.height * 0.5f),
         )
     }
-    // 6) 边缘描边（1px，仅在圆角外侧极淡一圈；深色下更明显，防止「黑玻璃糊进背景」）
-    drawRoundRect(
-        color = Color.White.copy(alpha = if (dark) 0.06f else 0.20f),
-        style = Stroke(width = 1f),
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.minDimension * 0.12f),
+    if (hasEdgeHighlight) {
+        drawRoundRect(
+            color = Color.White.copy(alpha = if (dark) 0.06f else 0.20f),
+            style = Stroke(width = 1f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.minDimension * 0.12f),
+        )
+    }
+}
+
+private fun DrawScope.drawGlassEdgeHighlights(spec: CtGlassSpec, dark: Boolean) {
+    val edgeTop = Color.White.copy(alpha = spec.edgeTopAlpha)
+    val edgeBottom = if (dark) {
+        Color.White.copy(alpha = spec.edgeBottomAlpha)
+    } else {
+        Color(0xFF4E5C59).copy(alpha = spec.edgeBottomAlpha)
+    }
+    val hair = 1.2.dp.toPx()
+    drawRect(color = edgeTop, topLeft = Offset(0f, 0f), size = Size(size.width, hair))
+    drawRect(
+        color = edgeBottom,
+        topLeft = Offset(0f, size.height - hair),
+        size = Size(size.width, hair),
     )
+    val sideAlpha = spec.edgeTopAlpha * 0.35f
+    if (sideAlpha > 0.02f) {
+        drawRect(
+            color = Color.White.copy(alpha = sideAlpha),
+            topLeft = Offset(0f, 0f),
+            size = Size(hair, size.height),
+        )
+        drawRect(
+            color = Color.White.copy(alpha = sideAlpha * 0.6f),
+            topLeft = Offset(size.width - hair, 0f),
+            size = Size(hair, size.height),
+        )
+    }
 }
 
 /** 颜色线性混合（不引入 lerp 的重载歧义）。 */

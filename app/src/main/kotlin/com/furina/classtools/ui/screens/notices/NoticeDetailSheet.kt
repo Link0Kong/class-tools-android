@@ -2,6 +2,7 @@
 
 package com.furina.classtools.ui.screens.notices
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,6 +73,8 @@ import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
+import com.furina.classtools.ui.theme.LocalCtDarkTheme
+import com.furina.classtools.ui.theme.LocalCtLight
 
 /**
  * 通知详情底部弹层（原生渲染）。
@@ -102,7 +106,14 @@ internal fun NoticeDetailSheet(
     onRetry: () -> Unit = {},
     nowMillis: Long = System.currentTimeMillis(),
 ) {
-    CtBottomSheet(onDismissRequest = onDismiss) {
+    val scheme = MaterialTheme.colorScheme
+    // 正文与操作区共用一个实色面，弹层窗口下的列表保留遮罩层次。
+    val container = if (LocalCtDarkTheme.current && LocalCtLight.current.enabled) {
+        scheme.surfaceContainerHigh
+    } else {
+        scheme.surfaceContainerLow
+    }
+    CtBottomSheet(onDismissRequest = onDismiss, containerColor = container) {
         NoticeDetailSheetContent(
             item = item,
             rawAttachmentLoader = rawAttachmentLoader,
@@ -857,6 +868,11 @@ private fun DetailActions(
     onShare: ((NoticeGroupDto, Int) -> Unit)? = null,
 ) {
     val group = item.auto?.group
+    val actionBorder = if (LocalCtDarkTheme.current && LocalCtLight.current.enabled) {
+        BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    } else {
+        ButtonDefaults.outlinedButtonBorder(enabled = true)
+    }
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -869,6 +885,7 @@ private fun DetailActions(
                 onClick = { onShare(group, item.attachmentCount) },
                 modifier = Modifier.heightIn(min = 48.dp),
                 shape = CtShapeTokens.pill,
+                border = actionBorder,
             ) {
                 Icon(
                     imageVector = Icons.Rounded.IosShare,
@@ -885,6 +902,7 @@ private fun DetailActions(
                     onClick = { onAddToCalendar(group) },
                     modifier = Modifier.heightIn(min = 48.dp),
                     shape = CtShapeTokens.pill,
+                    border = actionBorder,
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.CalendarMonth,
@@ -900,6 +918,7 @@ private fun DetailActions(
                     onClick = { onRemindNotice(group) },
                     modifier = Modifier.heightIn(min = 48.dp),
                     shape = CtShapeTokens.pill,
+                    border = actionBorder,
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.NotificationsActive,

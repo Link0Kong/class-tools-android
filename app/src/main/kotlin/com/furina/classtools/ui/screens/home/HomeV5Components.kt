@@ -2,7 +2,6 @@ package com.furina.classtools.ui.screens.home
 
 import androidx.compose.material3.MaterialTheme
 
-import com.furina.classtools.ui.components.background.CtGlassSurface
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -48,7 +47,9 @@ import com.furina.classtools.ui.components.CtIconBadge
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtPressLayer
 import com.furina.classtools.ui.components.CtTag
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.navigation.ctToolTransitionSource
+import com.furina.classtools.ui.theme.CtDarkGlassRole
 import com.furina.classtools.ui.theme.CtElevation
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtRadius
@@ -68,13 +69,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 // =============================================================================
-// 工作台组件（2026-11-17 按鸿蒙 HomeScreen.ets 重做）
-//
-// - hero：「莫奈纸面」浅色卡（#F1F6F2 / 1px #DCE7E2 / 24 圆角 / 顶部三色 3px 条 /
-//   「今日」#FFFCF6 胶囊 / 问候 24 Bold #303A35 / 副行 12 #5C6860 / 摘要分割线 #D8E4DE）；
-// - 信息卡：白 18 圆角 + 浅阴影 + 40dp tint 图标块 + 15 标题 + 12 说明；
-// - 常用工具：白卡 + 4 列 tint 图标块（46dp）+ 12 名称；
-// - 深色模式自动映射到中性深底（见 harmonyColors）。
+// 工作台首卡和信息卡使用 CtGlassSurface，内容排版及常用工具由页面组件定义。
 // =============================================================================
 
 /** 工作台卡片圆角（鸿蒙 18）。 */
@@ -84,10 +79,7 @@ internal val HomeCardShape = RoundedCornerShape(HarmonyTokens.RadiusCard)
 internal val HomeHeroShape = RoundedCornerShape(HarmonyTokens.RadiusHero)
 
 /**
- * 工作台 hero（鸿蒙 HomeScreen.heroCard 同款「莫奈纸面」浅色卡）。
- *
- * 结构：三色 3px 顶条 → 「今日」奶白胶囊 + 周次 → 问候 24 Bold → 副行 12 →
- * 摘要行（上分割线）：今日课程摘要 + 「课表 ›」；整卡点击打开课表。
+ * 工作台「今日」卡，展示日期、周次与课程摘要。整卡点击打开课表。
  */
 @Composable
 internal fun HomeHeroCard(
@@ -153,6 +145,7 @@ internal fun HomeHeroCard(
                 scaleY = pressScale
             },
         shape = RoundedCornerShape(16.dp),
+        darkRole = CtDarkGlassRole.HERO,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -238,12 +231,11 @@ internal fun HomeInfoCard(
     content: @Composable () -> Unit,
 ) {
     val c = rememberCtColors()
-    // 2026-11-20 沉浸光感 v2：卡片改用统一玻璃材质（透光 + 点光源高光 + 折射亮边 + 内阴影），
-    // 不再用实色 Surface —— 实色卡片压在光场上是「灰白板」，材质层的透光完全看不见。
     CtGlassSurface(
         modifier = modifier.fillMaxWidth(),
         shape = CtShape.card,
         onClick = onClick,
+        darkRole = CtDarkGlassRole.CARD,
     ) {
         Column(
             modifier = Modifier

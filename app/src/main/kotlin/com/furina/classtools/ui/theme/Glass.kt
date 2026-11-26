@@ -2,6 +2,7 @@ package com.furina.classtools.ui.theme
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -66,6 +67,13 @@ data class CtGlassSpec(
     val alpha: Float = 1f,
 )
 
+/** 深色玻璃化开启时，按表面用途选用的材质。 */
+enum class CtDarkGlassRole(val level: CtLightLevel, internal val fillAlpha: Float) {
+    HERO(CtLightLevel.THIN, 0.72f),
+    CARD(CtLightLevel.MEDIUM, 0.86f),
+    DOCK(CtLightLevel.THIN, 0.92f),
+}
+
 /**
  * 玻璃材质唯一映射表：level × intensity × dark → [CtGlassSpec]。
  *
@@ -119,15 +127,18 @@ object CtGlassTable {
      * @param level 材质档（场景决定）
      * @param setting 用户光感设置（关闭 → 实色规格）
      * @param dark 是否深色模式（深色板：更实、亮边代替投影、赋色更冷）
-     * @param bodySafe 该材质是否承载正文（true → 底色不透明度抬到 [MIN_BODY_ALPHA]）
+     * @param bodySafe 承载正文时抬高通用材质的底色不透明度。
+     * @param darkRole 深色玻璃化开启时采用的表面用途。
+     * @param fillBoost 预设或自定义图片给底色提供的不透明度补偿。
      */
     fun specOf(
         level: CtLightLevel,
         setting: CtLightSetting,
         dark: Boolean,
         bodySafe: Boolean = true,
+        darkRole: CtDarkGlassRole? = null,
+        fillBoost: Float = 0f,
     ): CtGlassSpec {
-        val i = levelIndex(level)
         if (!setting.enabled) {
             val solid = if (dark) CtPalette.DarkContainerLow else CtPalette.Surface
             return CtGlassSpec(
@@ -147,6 +158,8 @@ object CtGlassTable {
                 noiseFactor = 0f,
             )
         }
+        val role = darkRole.takeIf { dark }
+        val i = levelIndex(role?.level ?: level)
         val f = factors(setting.intensity)
         val fillBaseTop = (fillAlphaTop[i] * f[0]).coerceIn(0.14f, 1f)
         val fillBaseBottom = (fillAlphaBottom[i] * f[0]).coerceIn(0.10f, 1f)
@@ -160,7 +173,7 @@ object CtGlassTable {
         val bottomColor = if (dark) Color(0xFF151E20) else Color(0xFFF7FAFA)
         val tintColor = if (dark) CtPalette.MistTeal else CtPalette.SlateBlue
 
-        return CtGlassSpec(
+        val base = CtGlassSpec(
             fillTop = topColor.copy(alpha = safeTop),
             fillBottom = bottomColor.copy(alpha = safeBottom),
             tint = tintColor,
@@ -175,6 +188,38 @@ object CtGlassTable {
             shadowDy = (shadowBlur[i] * 0.26f).dp,
             blurRadius = (blurRadius[i] * f[1]).dp,
             noiseFactor = if (dark) 0.045f else 0.022f,
+        )
+        val surface = if (role == null) base else base.forDarkRole(role, f[0])
+        val boost = fillBoost.coerceIn(0f, 0.34f)
+        return if (boost <= 0.001f) surface else surface.copy(
+            fillTop = surface.fillTop.copy(alpha = (surface.fillTop.alpha + boost).coerceAtMost(1f)),
+            fillBottom = surface.fillBottom.copy(alpha = (surface.fillBottom.alpha + boost).coerceAtMost(1f)),
+        )
+    }
+
+    private fun CtGlassSpec.forDarkRole(role: CtDarkGlassRole, fillFactor: Float): CtGlassSpec {
+        val alpha = role.fillAlpha + (fillFactor - 1f) * 0.20f
+        val top = when (role) {
+            CtDarkGlassRole.HERO -> CtPalette.DarkContainer
+            CtDarkGlassRole.CARD -> lerp(CtPalette.DarkContainerLow, CtPalette.DarkContainer, 0.55f)
+            CtDarkGlassRole.DOCK -> CtPalette.DarkContainerLow
+        }
+        val bottom = if (role == CtDarkGlassRole.DOCK) CtPalette.DarkBar else CtPalette.DarkContainerLow
+        val reflection = when (role) {
+            CtDarkGlassRole.HERO -> 0.65f
+            CtDarkGlassRole.CARD -> 0f
+            CtDarkGlassRole.DOCK -> 0.18f
+        }
+        return copy(
+            fillTop = top.copy(alpha = alpha),
+            fillBottom = bottom.copy(alpha = alpha - 0.03f),
+            tintAlpha = 0f,
+            specularAlpha = specularAlpha * reflection,
+            specularSize = 0.88f,
+            edgeTopAlpha = 0f,
+            edgeBottomAlpha = 0f,
+            innerShadeAlpha = 0f,
+            shadowAlpha = 0f,
         )
     }
 
