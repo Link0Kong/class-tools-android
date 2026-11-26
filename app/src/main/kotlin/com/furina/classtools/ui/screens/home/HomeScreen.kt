@@ -496,8 +496,7 @@ fun HomeScreen(
                                         )
                                     }
                                 }
-                                // 鸿蒙 HomeScreen 顺序：hero → 今日课程 → 宿舍电费 → 作业待交 → 通知待处理 → 常用工具
-                                // （单列、内容最大宽 880/960 居中；平板不再分双栏）。
+                                // 课程与电费在宽窗共用左栏，窄窗时排在待办之前。
                                 HomeReveal(enabled = animateEntrance, index = 3) {
                                     HomeTodayCoursesCard(
                                         plan = ttPlan,
