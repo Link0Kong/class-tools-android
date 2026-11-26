@@ -34,7 +34,7 @@ interface DiagRepository {
     /** `service_health?select=...&order=id.asc`（全班有效 token 可读）。 */
     suspend fun loadServiceHealth(): DiagResult<List<ServiceHealthRow>>
 
-    /** `diag_analysis?select=*&order=ts.desc&limit=20`。 */
+    /** 最近 20 条未忽略的诊断结论。 */
     suspend fun loadAnalyses(): DiagResult<List<DiagAnalysis>>
 
     /** `repair_tasks?select=*&order=created_at.desc&limit=20`。 */
@@ -118,7 +118,7 @@ class DefaultDiagRepository(
     companion object {
         const val SERVICE_HEALTH_PATH: String =
             "service_health?select=id,name,kind,status,detail,meta,checked_at&order=id.asc"
-        const val ANALYSIS_PATH: String = "diag_analysis?select=*&order=ts.desc&limit=20"
+        const val ANALYSIS_PATH: String = "diag_analysis?select=*&status=neq.ignored&order=ts.desc&limit=20"
         const val REPAIRS_PATH: String = "repair_tasks?select=*&order=created_at.desc&limit=20"
         const val AGENT_INFO_PATH: String = "rpc/diag_agent_info"
         const val CLIENT_DIAG_PATH: String = "client_diag"
