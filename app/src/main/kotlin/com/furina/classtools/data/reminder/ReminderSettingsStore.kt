@@ -57,6 +57,7 @@ class DataStoreReminderSettingsStore(
             prefs[KEY_DIGEST] = next.digestEnabled
             prefs[KEY_LEAD_MINUTES] = next.leadMinutes
             prefs[KEY_CLASS_LEAD_MINUTES] = next.classLeadMinutes
+            prefs[KEY_BREAK_LEAD_MINUTES] = next.breakLeadMinutes
             prefs[KEY_DIGEST_HOUR] = next.homeworkDigestHour
             prefs[KEY_DIGEST_MINUTE] = next.homeworkDigestMinute
             prefs[KEY_QUIET_ENABLED] = next.quietHoursEnabled
@@ -97,6 +98,7 @@ class DataStoreReminderSettingsStore(
             waterDeductEnabled = prefs[KEY_WATER] ?: true,
             digestEnabled = prefs[KEY_DIGEST] ?: true,
             leadMinutes = prefs[KEY_LEAD_MINUTES] ?: legacyLead,
+            breakLeadMinutes = prefs[KEY_BREAK_LEAD_MINUTES] ?: ReminderSettings.DEFAULT_BREAK_LEAD_MINUTES,
             classLeadMinutes = prefs[KEY_CLASS_LEAD_MINUTES]
                 ?: legacyCourseMinutes
                 ?: ReminderSettings.DEFAULT_CLASS_LEAD_MINUTES,
@@ -121,6 +123,7 @@ class DataStoreReminderSettingsStore(
         val KEY_WATER = booleanPreferencesKey("water_deduct_enabled")
         val KEY_DIGEST = booleanPreferencesKey("digest_enabled")
         val KEY_LEAD_MINUTES = intPreferencesKey("lead_minutes")
+        val KEY_BREAK_LEAD_MINUTES = intPreferencesKey("break_lead_minutes")
         val KEY_CLASS_LEAD_MINUTES = intPreferencesKey("class_lead_minutes")
         val KEY_DIGEST_HOUR = intPreferencesKey("homework_digest_hour")
         val KEY_DIGEST_MINUTE = intPreferencesKey("homework_digest_minute")

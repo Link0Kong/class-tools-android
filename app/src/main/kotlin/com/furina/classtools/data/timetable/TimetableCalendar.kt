@@ -1,6 +1,7 @@
 package com.furina.classtools.data.timetable
 
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -161,7 +162,7 @@ object TtCalendar {
         val today = now.atZone(zone).toLocalDate()
         for (off in 0 until lookAheadDays) {
             val date = today.plusDays(off.toLong())
-            if (weekOf(termStart, date) == null) continue
+            val week = weekOf(termStart, date) ?: continue
             val candidate = sessionsOn(courses, termStart, date, nowMillis, zone, focusOnBell = true, upcomingBell = true)
                 .firstOrNull { it.startAt > now.toEpochMilli() }
                 ?: continue
@@ -170,7 +171,13 @@ object TtCalendar {
                 1 -> "明天"
                 else -> TtPeriods.DAY_LABELS[dayIndex(date)]
             }
+            val period = TtPeriods.PERIODS.indexOfFirst { it.first == candidate.startText } + 1
+            val previousEnd = TtPeriods.PERIODS.getOrNull(period - 2)?.second
+            val breakMinutes = previousEnd?.let { Duration.between(LocalTime.parse(it), LocalTime.parse(candidate.startText)).toMinutes() }
+            val afterShortBreak = breakMinutes != null && breakMinutes in 1..10 &&
+                coursesOnDay(courses, termStart, week, dayIndex(date)).any { period - 1 in it.start..it.end }
             return candidate.copy(
+                afterShortBreak = afterShortBreak,
                 dayOffset = off,
                 dayText = dayText,
                 dateText = "${date.monthValue}/${date.dayOfMonth}",

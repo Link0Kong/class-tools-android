@@ -202,6 +202,13 @@ fun ReminderSettingsScreen(
                         enabled = settings.enabled && settings.classRemindEnabled,
                         onSelect = { minutes -> update { it.copy(classLeadMinutes = minutes) } },
                     )
+                    LeadChipsRow(
+                        label = "课间提前时间",
+                        options = ReminderSettings.BREAK_LEAD_OPTIONS,
+                        selected = settings.breakLeadMinutes,
+                        enabled = settings.enabled && settings.classRemindEnabled,
+                        onSelect = { minutes -> update { it.copy(breakLeadMinutes = minutes) } },
+                    )
                 }
 
                 NotifySection("通知提醒")

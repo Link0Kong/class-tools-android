@@ -50,11 +50,13 @@ data class ReminderSettings(
     val quietHoursEnabled: Boolean = false,
     val quietStartHour: Int = 23,
     val quietEndHour: Int = 7,
+    val breakLeadMinutes: Int = DEFAULT_BREAK_LEAD_MINUTES,
 ) {
     /** 字段规范化（DataStore 读到脏值时用）。 */
     fun sanitized(): ReminderSettings = copy(
         leadMinutes = normalizeLead(leadMinutes),
         classLeadMinutes = normalizeClassLead(classLeadMinutes),
+        breakLeadMinutes = breakLeadMinutes.takeIf { it in BREAK_LEAD_OPTIONS } ?: DEFAULT_BREAK_LEAD_MINUTES,
         homeworkDigestHour = homeworkDigestHour.coerceIn(0, 23),
         homeworkDigestMinute = homeworkDigestMinute.coerceIn(0, 59),
         quietStartHour = quietStartHour.coerceIn(0, 23),
@@ -125,6 +127,8 @@ data class ReminderSettings(
         val LEAD_OPTIONS: List<Int> = listOf(10, 30, 60, 120, 1440)
 
         /** 上课提前档位（分钟）。 */
+        const val DEFAULT_BREAK_LEAD_MINUTES = 3
+        val BREAK_LEAD_OPTIONS = listOf(1, 3, 5, 10)
         val CLASS_LEAD_OPTIONS: List<Int> = listOf(5, 10, 15, 30)
 
         const val DEFAULT_LEAD_MINUTES: Int = 60

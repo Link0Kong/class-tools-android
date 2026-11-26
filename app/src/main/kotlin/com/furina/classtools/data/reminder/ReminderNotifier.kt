@@ -33,7 +33,7 @@ interface ReminderNotifier {
     fun notify(event: ReminderEvent): Boolean
 
     /** Refresh a visible course card or withdraw it if the timetable or clock moved out of its window. */
-    fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long): List<String> = emptyList()
+    fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long, alreadySent: Boolean = false): List<String> = emptyList()
 }
 
 /** 通知分组口径（纯常量/文案，可单测）。 */
@@ -79,11 +79,11 @@ object ReminderGrouping {
 
 class AndroidReminderNotifier(
     context: Context,
+    private val supportsLiveCourse: Boolean = Build.VERSION.SDK_INT >= 36 &&
+        (context.applicationContext as? ClassToolsApp)?.container?.hasColorOsRom() == true,
 ) : ReminderNotifier {
 
     private val appContext: Context = context.applicationContext
-
-    private val colorOs by lazy { (appContext as? ClassToolsApp)?.container?.hasColorOsRom() == true }
 
     private val smallIcon: Int by lazy {
         ReminderSmallIcon.resolve { name ->
@@ -116,9 +116,10 @@ class AndroidReminderNotifier(
             }
     }
 
-    override fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long): List<String> {
-        if (Build.VERSION.SDK_INT < 36 || !colorOs) return emptyList()
+    override fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long, alreadySent: Boolean): List<String> {
+        if (!supportsLiveCourse) return emptyList()
         val manager = appContext.getSystemService(NotificationManager::class.java) ?: return emptyList()
+        if (due == null) CourseLiveService.stop(appContext)
         val active = runCatching { manager.activeNotifications }.getOrElse { return emptyList() }
         val withdrawn = mutableListOf<String>()
         for (card in active) {
@@ -126,25 +127,28 @@ class AndroidReminderNotifier(
             if (!card.isOngoing || shown.channelId != ReminderKind.COURSE_SOON.channelId) continue
             val key = "class:${shown.`when`}"
             if (card.id != key.hashCode()) continue
-            if (due != null && shown.`when` == due.courseStartAtMillis) {
-                notify(due)
-            } else {
-                manager.cancel(card.id)
-                if (shown.`when` > nowMillis) withdrawn.add(key)
-            }
+            if (shown.`when` == due?.courseStartAtMillis) continue
+            if (due != null) CourseLiveService.stop(appContext)
+            manager.cancel(card.id)
+            if (shown.`when` > nowMillis) withdrawn.add(key)
+        }
+        if (alreadySent && due != null) {
+            post(due, silent = true)
         }
         return withdrawn
     }
 
-    override fun notify(event: ReminderEvent): Boolean {
+    override fun notify(event: ReminderEvent): Boolean = post(event, silent = false)
+
+    private fun post(event: ReminderEvent, silent: Boolean): Boolean {
         if (!canNotify()) return false
-        val pendingIntent = ReminderIntentFactory.pendingIntent(appContext, event) ?: return false
+        val pendingIntent = ReminderIntentFactory.pendingIntent(appContext, event)
         viewEvent(event)
         val startAt = event.courseStartAtMillis
         val now = System.currentTimeMillis()
         if (event.kind == ReminderKind.COURSE_SOON &&
             (startAt == null || startAt <= now || event.triggerAtMillis > now)) return false
-        val liveCourse = startAt != null && Build.VERSION.SDK_INT >= 36 && colorOs
+        val liveCourse = startAt != null && supportsLiveCourse
         val body = if (event.kind == ReminderKind.COURSE_SOON) event.body.substringBeforeLast(" · 还有 ") else event.body
         val groupKey = ReminderGrouping.groupKey(event.kind)
         val builder = NotificationCompat.Builder(appContext, event.kind.channelId)
@@ -172,7 +176,10 @@ class AndroidReminderNotifier(
         }
         if (liveCourse) {
             builder.setLiveCourseContent(appContext, event, body)
-            builder.setOngoing(true)
+            builder.setAutoCancel(false)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                .setSilent(silent)
+                .setOngoing(true)
                 .setRequestPromotedOngoing(true)
         } else {
             builder.setGroup(groupKey).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
@@ -180,6 +187,7 @@ class AndroidReminderNotifier(
         val childOk = runCatching {
             val notification = if (liveCourse) builder.buildLiveUpdate() else builder.build()
             NotificationManagerCompat.from(appContext).notify(event.notificationId, notification)
+            if (liveCourse) CourseLiveService.attach(appContext, event.notificationId, notification)
             true
         }.getOrDefault(false)
         if (childOk && !liveCourse) {

@@ -4,10 +4,14 @@ import android.Manifest
 import android.app.Application
 import android.app.Notification
 import android.app.NotificationManager
+import android.content.Intent
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.furina.classtools.R
 import com.furina.classtools.data.ppt.PptUploadPhase
 import com.furina.classtools.data.ppt.PptUploadProgress
+import com.furina.classtools.data.reminder.AndroidReminderNotifier
+import com.furina.classtools.data.reminder.CourseLiveService
 import com.furina.classtools.data.reminder.CourseReminderInfo
 import com.furina.classtools.data.reminder.ReminderEvent
 import com.furina.classtools.data.reminder.ReminderKind
@@ -19,6 +23,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
@@ -53,6 +58,38 @@ class LiveActivityNotificationTest {
         val legacy = card(event.copy(course = null, body = "08:00–09:35 · 教学楼 202"))
         assertEquals("高等数学", legacy.extras.getString(Notification.EXTRA_TITLE))
         assertEquals("08:00–09:35 · 教学楼 202", legacy.extras.getString(Notification.EXTRA_BIG_TEXT))
+    }
+
+    @Test fun courseSurvivesTaskRemovalAndRestoresTheSameDeadlineIfTheCardIsCleared() {
+        val now = System.currentTimeMillis()
+        val start = now + 180_000L
+        val event = ReminderEvent(ReminderKind.COURSE_SOON, "class:$start", now, "数学", "101",
+            course = CourseReminderInfo("数学", "101", start, start + 2_400_000L))
+        val notifier = AndroidReminderNotifier(app, supportsLiveCourse = true)
+        notifier.ensureChannels()
+        assertTrue(notifier.notify(event))
+        val serviceIntent = shadowOf(app).nextStartedService
+        assertEquals(CourseLiveService::class.java.name, serviceIntent.component?.className)
+        val controller = Robolectric.buildService(CourseLiveService::class.java).create()
+        val service = controller.get()
+        service.onStartCommand(serviceIntent, 0, 1)
+        service.onTaskRemoved(Intent())
+        val lifecycle = shadowOf(service)
+        assertFalse(lifecycle.isStoppedBySelf)
+        assertEquals(event.notificationId, lifecycle.lastForegroundNotificationId)
+        assertEquals(start, lifecycle.lastForegroundNotification.`when`)
+        assertEquals(0, posted().flags and Notification.FLAG_AUTO_CANCEL)
+        app.getSystemService(NotificationManager::class.java).cancelAll()
+        val reopened = AndroidReminderNotifier(app, supportsLiveCourse = true)
+        reopened.reconcileLiveCourse(event, System.currentTimeMillis(), alreadySent = true)
+        assertEquals(start, posted().`when`)
+        assertTrue(NotificationCompat.isRequestPromotedOngoing(posted()))
+
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMinutes(3))
+        assertEquals(1, lifecycle.stopSelfResultId)
+        controller.destroy()
+        reopened.reconcileLiveCourse(null, start)
+        assertTrue(app.getSystemService(NotificationManager::class.java).activeNotifications.isEmpty())
     }
 
     @Test fun uploadProgressUsesTheSameValueInChipAndExpandedTemplate() {

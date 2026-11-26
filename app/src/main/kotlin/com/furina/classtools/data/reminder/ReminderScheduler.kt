@@ -122,6 +122,7 @@ object ReminderRuntime {
         WorkManagerReminderScheduler(context).cancelAll()
         runCatching { WorkManager.getInstance(appContext).cancelUniqueWork(IMMEDIATE_WORK_NAME) }
         WorkManager.getInstance(appContext).cancelAllWorkByTag(COURSE_WORK_TAG)
+        AndroidReminderNotifier(appContext).reconcileLiveCourse(null, System.currentTimeMillis())
     }
 
     private const val COURSE_WORK_TAG = "ct_reminder_course"
@@ -360,8 +361,11 @@ class ReminderEngine(
                 ReminderKind.HOMEWORK_NEW, ReminderKind.NOTICE_NEW, ReminderKind.VOTE_NEW, ReminderKind.VOTE_RESULT)
         })
 
-        plan.events.firstOrNull { it.kind == ReminderKind.COURSE_SOON && it.triggerAtMillis > now }
-            ?.let { scheduleCourseAt(it.triggerAtMillis) }
+        plan.events.firstOrNull { it.kind == ReminderKind.COURSE_SOON }?.let { course ->
+            // At the bell, compute the next reminder even if the periodic scan is still far away.
+            val boundary = if (course.triggerAtMillis > now) course.triggerAtMillis else course.courseStartAtMillis
+            if (boundary != null && boundary > now) scheduleCourseAt(boundary)
+        }
 
         // Doze/省电延迟补偿：
         // 1) 从上次运行时间回看（10min..6h），补发上次规划留下、但已过点的事件；
@@ -384,7 +388,11 @@ class ReminderEngine(
         val due = ReminderPlanner.filterDue(plan.events, now, graceMillis = lookback)
         if (!stillSignedIn()) return ReminderRunResult(reason = "登录状态已变更")
         val liveCourse = due.firstOrNull { it.kind == ReminderKind.COURSE_SOON }
-        notifier.reconcileLiveCourse(liveCourse, now).forEach { key -> dedupeStore.markSent(key, 0L) }
+        if (ttPlan != null || !settings.classRemindEnabled) {
+            val alreadySent = liveCourse != null &&
+                !ReminderDedupe.shouldNotify(liveCourse.key, dedupeStore.lastSent(liveCourse.key), now, zone)
+            notifier.reconcileLiveCourse(liveCourse, now, alreadySent).forEach { key -> dedupeStore.markSent(key, 0L) }
+        }
         val catchUpPending = ReminderPendingCatchUp.dueCatchUp(
             pending = pending.filter(dataProvider::canReplay),
             nowMillis = now,

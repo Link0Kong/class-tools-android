@@ -87,6 +87,7 @@ import com.furina.classtools.data.privacy.CallbackLocalCleaner
 import com.furina.classtools.data.privacy.DefaultPrivacyRepository
 import com.furina.classtools.data.privacy.PrivacyRepository
 import com.furina.classtools.data.privacy.RepositoryPrivacyUserDataAccess
+import com.furina.classtools.data.reminder.AndroidReminderNotifier
 import com.furina.classtools.data.reminder.DataStoreReminderSettingsStore
 import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.data.reminder.ReminderScheduler
@@ -199,6 +200,10 @@ class AppContainer(context: Context) {
             runCatching { oppoPushManager.onSessionChanged() }
         }
         if (previousSid != session?.sid) {
+            if (previousSid != null) {
+                AndroidReminderNotifier(appContext)
+                    .reconcileLiveCourse(null, System.currentTimeMillis())
+            }
             // 云空间会话绑定班级身份；切号/退出时丢弃内存会话与游标，避免串号。
             if (cloudSpace.isInitialized()) cloudSpaceRepository.reset()
             // 账号绑定列表按学号区分：切号/退出时丢弃内存列表，避免显示上一个账号的绑定。

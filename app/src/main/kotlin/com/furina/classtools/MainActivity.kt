@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
 import com.furina.classtools.data.push.OppPushClick
 import com.furina.classtools.data.reminder.ReminderIntentFactory
+import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.ui.ClassToolsRoot
 import com.furina.classtools.ui.ClassToolsThemeHost
 import com.furina.classtools.ui.platform.VolumeKeyBridge
@@ -62,6 +63,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        ReminderRuntime.scheduleCourseAt(applicationContext, System.currentTimeMillis())
         // 访问统计：回前台补报一次（同一账号同一小时 reporter 内部去重，失败静默）。
         runCatching { (application as ClassToolsApp).container.reportVisitOnResume() }
     }

@@ -544,6 +544,7 @@ fun HomeScreen(
                         HomeReveal(enabled = animateEntrance, index = 3) {
                             HomeTodayCoursesCard(
                                 plan = ttPlan,
+                                nowMillis = currentTime,
                                 loading = ttLoading,
                                 onOpen = { openToolId("tt") },
                             )
@@ -641,6 +642,7 @@ private enum class NoticeHomeState { LOADING, READY, OFFLINE, ERROR }
 @Composable
 private fun HomeTodayCoursesCard(
     plan: TtPlan?,
+    nowMillis: Long,
     loading: Boolean,
     onOpen: () -> Unit,
 ) {
@@ -678,7 +680,7 @@ private fun HomeTodayCoursesCard(
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     plan.today.forEachIndexed { index, sessionInfo ->
                         if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        CourseRow(sessionInfo, isNext = sessionInfo.state == SessionState.NEXT &&
+                        CourseRow(sessionInfo, nowMillis, isNext = sessionInfo.state == SessionState.NEXT &&
                             plan.next?.startAt == sessionInfo.startAt)
                     }
                 }
@@ -703,7 +705,7 @@ private fun HomeTodayCoursesCard(
 
 /** 单节课程行：时间、课程名、节次、教室和实时状态。 */
 @Composable
-private fun CourseRow(sessionInfo: SessionInfo, isNext: Boolean) {
+private fun CourseRow(sessionInfo: SessionInfo, nowMillis: Long, isNext: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -737,7 +739,7 @@ private fun CourseRow(sessionInfo: SessionInfo, isNext: Boolean) {
         if (sessionInfo.state == SessionState.ONGOING || isNext) {
             Spacer(modifier = Modifier.width(6.dp))
             CtPill(
-                text = if (isNext) "下一节" else "上课中",
+                text = HomeWorkbenchLogic.courseStatus(sessionInfo, nowMillis),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             )

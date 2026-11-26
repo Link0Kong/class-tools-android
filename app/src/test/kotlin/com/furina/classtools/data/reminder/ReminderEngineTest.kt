@@ -102,8 +102,11 @@ class ReminderEngineTest {
             return succeed
         }
 
-        override fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long): List<String> =
-            withdrawn.also { withdrawn = emptyList() }
+        val restored = mutableListOf<String>()
+        override fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long, alreadySent: Boolean): List<String> {
+            if (alreadySent && due != null) restored += due.key
+            return withdrawn.also { withdrawn = emptyList() }
+        }
     }
 
     private class FakeDataProvider(
@@ -156,6 +159,7 @@ class ReminderEngineTest {
         permission: PermissionState = PermissionState.GRANTED,
         notifier: FakeNotifier = FakeNotifier(),
         data: FakeDataProvider = FakeDataProvider(),
+        dedupeStore: ReminderDedupeStore = InMemoryReminderDedupeStore(),
         runStateStore: ReminderRunStateStore = InMemoryReminderRunStateStore(),
         pendingStore: ReminderPendingEventStore = InMemoryReminderPendingEventStore(),
         snapshotStore: ReminderSnapshotStore = InMemoryReminderSnapshotStore(),
@@ -163,7 +167,7 @@ class ReminderEngineTest {
         scheduleCourseAt: (Long) -> Unit = {},
     ): ReminderEngine = ReminderEngine(
         settingsStore = FakeSettingsStore(settings),
-        dedupeStore = InMemoryReminderDedupeStore(),
+        dedupeStore = dedupeStore,
         notifier = notifier,
         permissionController = FakePermissionController(permission),
         dataProvider = data,
@@ -209,10 +213,32 @@ class ReminderEngineTest {
         current -= 5 * 60_000L
         notifier.withdrawn = listOf("class:$start")
         assertEquals(0, engine.runNow().sent)
-        assertEquals(listOf(now), wakeups)
+        assertEquals(listOf(start, now), wakeups)
         current = now
         assertEquals(1, engine.runNow().sent)
         assertEquals(0, engine.runNow().sent)
+    }
+
+    @Test
+    fun relaunchRestoresSentCourseOnlyInsideItsBreakWindow() = runTest {
+        val start = now + 10 * 60_000L
+        val regular = coursePlan(start)
+        val data = FakeDataProvider(ttPlan = regular.copy(next = regular.next!!.copy(afterShortBreak = true)))
+        val dedupe = InMemoryReminderDedupeStore()
+        val wakeups = mutableListOf<Long>()
+        var clock = now
+        val first = engine(data = data, dedupeStore = dedupe, clock = { clock }, scheduleCourseAt = { wakeups.add(it) })
+        assertEquals(0, first.runNow().sent)
+        assertEquals(listOf(start - 3 * 60_000L), wakeups)
+        clock = wakeups.single()
+        assertEquals(1, first.runNow().sent)
+        val notifier = FakeNotifier()
+        val relaunched = engine(notifier = notifier, data = data, dedupeStore = dedupe, clock = { clock })
+        assertEquals(0, relaunched.runNow().sent)
+        assertEquals(listOf("class:$start"), notifier.restored)
+        clock = start
+        assertEquals(0, relaunched.runNow().sent)
+        assertEquals(1, notifier.restored.size)
     }
 
     // ------------------------------------------------------------ 运行结果/诊断字段

@@ -179,7 +179,7 @@ object ReminderPlanner {
         val next = plan?.next ?: return emptyList()
         if (!plan.hasData) return emptyList()
         if (next.startAt <= nowMillis) return emptyList()
-        val leadMillis = settings.classLeadMillis
+        val leadMillis = if (next.afterShortBreak) settings.breakLeadMinutes * 60_000L else settings.classLeadMillis
         val rawTrigger = next.startAt - leadMillis
         val trigger = maxOf(rawTrigger, nowMillis)
         if (settings.isQuiet(trigger, zone)) return emptyList()

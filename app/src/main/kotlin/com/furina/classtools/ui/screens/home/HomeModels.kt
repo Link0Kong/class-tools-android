@@ -43,7 +43,7 @@ data class HomePowerCard(
  * @param tag 状态标签（`上课中 / 下一节 / 已结束 / 今日无课 / 未同步`）
  * @param title 主标题（上课中 = 课程名；下一节 = 课程名；其余 = 空态标题）
  * @param detail 副标题（时间 · 地点 / 下次课程）
- * @param hint 右下提示（`还剩 22 分钟` / `距上课 35 分钟` / `点此打开课表`）
+ * @param hint 右下提示（`还剩 22 分钟` / `距上课 5 分钟` / `点此打开课表`）
  * @param progress 进度条 0..1；null = 不展示（未同步/无课/无数据）
  * @param progressText 进度说明（`已上 40%` / `今日 2/5 节`）
  */
@@ -245,6 +245,12 @@ object HomeWorkbenchLogic {
         return (elapsed.toDouble() / total.toDouble()).toFloat().coerceIn(0f, 1f)
     }
 
+    fun courseStatus(session: SessionInfo, nowMillis: Long): String {
+        if (session.state == SessionState.ONGOING) return "距下课 ${minutesUntil(session.endAt, nowMillis)} 分钟"
+        val minutes = minutesUntil(session.startAt, nowMillis)
+        return if (minutes in 1..10) "距上课 $minutes 分钟" else "下一节"
+    }
+
     /** 距离 [atMillis] 的分钟数（向上取整；已过返回 0）。 */
     fun minutesUntil(atMillis: Long, nowMillis: Long): Int {
         val delta = atMillis - nowMillis
@@ -311,7 +317,7 @@ object HomeWorkbenchLogic {
                 tag = "下一节",
                 title = nextToday.name,
                 detail = courseDetail(nextToday.startText, nextToday.endText, nextToday.room),
-                hint = if (minutes > 0) "距上课 $minutes 分钟" else "即将上课",
+                hint = if (minutes in 1..10) courseStatus(nextToday, nowMillis) else "",
                 progress = if (totalToday > 0) doneToday.toFloat() / totalToday.toFloat() else null,
                 progressText = "今日 $doneToday/$totalToday 节",
             )

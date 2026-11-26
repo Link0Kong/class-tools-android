@@ -23,6 +23,7 @@ class TimetableCalendarTest {
             termStart, morning.toInstant().toEpochMilli(), TimetableLink.CHINA_ZONE)
         assertEquals("09:00", result?.startText)
         assertEquals("09:40", result?.endText)
+        assertEquals(true, result?.afterShortBreak)
         assertEquals(morning.withHour(9).withMinute(0).toInstant().toEpochMilli(), result?.startAt)
     }
 
