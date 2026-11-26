@@ -23,6 +23,9 @@ class DrawRecordSyncTest {
                 put("ok", true)
                 if (request.url.endsWith("draw_record_create")) {
                     assertEquals(JsonArray(emptyList()), body["p_labels"])
+                    assertEquals(proof.id, body.getValue("p_id").jsonPrimitive.content)
+                    assertEquals("draw", body.getValue("p_params").jsonObject.getValue("sort").jsonPrimitive.content)
+                    assertEquals(listOf(9, 10, 4), body.getValue("p_result").jsonArray.map { it.jsonPrimitive.int })
                     put("record", buildJsonObject {
                         put("id", proof.id); put("seed", proof.seed); put("canon", "测试记录")
                         put("hash", DrawProofVerifier.sha256Hex("测试记录")); put("result", body.getValue("p_result"))
@@ -35,11 +38,28 @@ class DrawRecordSyncTest {
             ApiResponse(200, response.toString())
         }
         val publisher = DrawRecordPublisher(ApiClient("https://example.test/", "test", { "test" }, fake))
-        assertNotNull(publisher.publish(changed))
-        assertNotNull(publisher.publish(changed))
+        val receipt = publisher.publish(changed)
+        assertNotNull(receipt)
+        var displayed = changed
+        for (sort in listOf(DrawSortMode.ASCENDING, DrawSortMode.DESCENDING, DrawSortMode.RANDOM)) {
+            val state = DrawWorkflowState(DrawStep.RESULT, displayed.config, result = displayed)
+            val next = (DrawWorkflow.changeSort(state, sort, proof.random()) as DrawTransition.Next).state.result!!
+            displayed = next.copy(proof = displayed.proof!!.after(displayed, next))
+            assertEquals(changed.proof, displayed.proof)
+            assertEquals(receipt, publisher.publish(displayed))
+        }
+        assertEquals(receipt, publisher.publish(displayed))
         assertEquals(1, events.size)
         assertEquals("remove", events.single()["kind"]?.jsonPrimitive?.content)
         val restored = DrawWorkflowCodec.fromJson(DrawWorkflowCodec.toJson(DrawWorkflowState(DrawStep.RESULT, config, result = changed)))
         assertEquals(changed.proof, restored.result?.proof)
+
+        // Older clients persisted display-sort events. Their exact position and note still verify.
+        val legacyEvent = RoundEvent("sort", note = "asc")
+        val historical = changed.copy(proof = changed.proof!!.copy(events = changed.proof.events + legacyEvent))
+        events.add(buildJsonObject { put("kind", "sort"); put("note", "asc") })
+        assertEquals(receipt, publisher.publish(historical))
+        assertNull(publisher.publish(changed))
+        assertEquals(2, events.size)
     }
 }

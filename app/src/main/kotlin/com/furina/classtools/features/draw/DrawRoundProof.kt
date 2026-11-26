@@ -23,7 +23,6 @@ data class DrawRoundProof(val id: String, val seed: String, val sort: String, va
 
     fun after(previous: DrawResult, next: DrawResult): DrawRoundProof {
         val additions = buildList {
-            if (previous.config.sort != next.config.sort) add(RoundEvent("sort", note = next.config.sort.wire))
             next.log.forEachIndexed { index, item ->
                 val prior = previous.log.getOrNull(index)
                 if (prior == null) add(RoundEvent("remove", item.removed.number, item.added?.number))
