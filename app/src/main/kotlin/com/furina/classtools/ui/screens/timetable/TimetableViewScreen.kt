@@ -25,6 +25,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -88,10 +91,12 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -420,7 +425,8 @@ fun TimetableViewScreen(
                     .widthIn(max = spec.contentMaxWidth)
                     .fillMaxWidth()
                     .fillMaxHeight()
-                    .statusBarsPadding(),
+                    .statusBarsPadding()
+                    .navigationBarsPadding(),
             ) {
                 ctTopBarRaw(
                     subtitle = sourceLabel,
@@ -474,7 +480,6 @@ fun TimetableViewScreen(
                                 grid = gridContext,
                                 plan = plan,
                                 nowMillis = nowMillis,
-                                maxWeek = maxWeek,
                                 canGoPrev = displayWeek != null && displayWeek > TimetableWeekLogic.MIN_WEEK,
                                 canGoNext = displayWeek != null && displayWeek < maxWeek,
                                 showThisWeek = !TimetableWeekLogic.isThisWeek(weekOffset),
@@ -488,6 +493,7 @@ fun TimetableViewScreen(
                                 onSelectDay = { selectedDay = it },
                                 onOpenWeekPicker = { showWeekPicker = true },
                                 onOpenSettings = { showSettingsSheet = true },
+                                onOpenLink = { showLinkSheet = true },
                                 onExport = if (onExportTimetable != null) ({ exportTimetable() }) else null,
                                 swipeModifier = Modifier.timetableSwipe(
                                     displayWeek = displayWeek,
@@ -518,7 +524,6 @@ fun TimetableViewScreen(
                                 grid = gridContext,
                                 plan = plan,
                                 nowMillis = nowMillis,
-                                maxWeek = maxWeek,
                                 canGoPrev = displayWeek != null && displayWeek > TimetableWeekLogic.MIN_WEEK,
                                 canGoNext = displayWeek != null && displayWeek < maxWeek,
                                 showThisWeek = !TimetableWeekLogic.isThisWeek(weekOffset),
@@ -532,6 +537,7 @@ fun TimetableViewScreen(
                                 onSelectDay = { selectedDay = it },
                                 onOpenWeekPicker = { showWeekPicker = true },
                                 onOpenSettings = { showSettingsSheet = true },
+                                onOpenLink = { showLinkSheet = true },
                                 onExport = if (onExportTimetable != null) ({ exportTimetable() }) else null,
                                 swipeModifier = Modifier.timetableSwipe(
                                     displayWeek = displayWeek,
@@ -559,17 +565,6 @@ fun TimetableViewScreen(
                         }
                     }
                 }
-            }
-
-            // 课表接入入口（悬浮按钮）：导出 .ics / WakeUp 备份、写入系统日历并提醒
-            if (phase == TtPhase.READY && snapshot.c.isNotEmpty()) {
-                TimetableLinkFab(
-                    onClick = { showLinkSheet = true },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
-                        .padding(end = 16.dp, bottom = 16.dp),
-                )
             }
         }
 
@@ -693,7 +688,6 @@ private fun CompactBodyV5(
     grid: TimetableGridContext,
     plan: TtPlan?,
     nowMillis: Long,
-    maxWeek: Int,
     canGoPrev: Boolean,
     canGoNext: Boolean,
     showThisWeek: Boolean,
@@ -707,6 +701,7 @@ private fun CompactBodyV5(
     onSelectDay: (Int) -> Unit,
     onOpenWeekPicker: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenLink: () -> Unit,
     onExport: (() -> Unit)?,
     swipeModifier: Modifier,
 ) {
@@ -720,7 +715,6 @@ private fun CompactBodyV5(
     ) {
         WeekControlBar(
             displayWeek = grid.displayWeek,
-            maxWeek = maxWeek,
             canGoPrev = canGoPrev,
             canGoNext = canGoNext,
             showThisWeek = showThisWeek,
@@ -731,6 +725,7 @@ private fun CompactBodyV5(
             onViewMode = onViewMode,
             onOpenWeekPicker = onOpenWeekPicker,
             onOpenSettings = onOpenSettings,
+            onOpenLink = onOpenLink,
             onExport = onExport,
         )
         Box(
@@ -749,6 +744,7 @@ private fun CompactBodyV5(
                     plan = plan,
                     selectedDay = selectedDay,
                     onSelectDay = onSelectDay,
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
                 )
             }
         }
@@ -761,7 +757,6 @@ private fun TabletBodyV5(
     grid: TimetableGridContext,
     plan: TtPlan?,
     nowMillis: Long,
-    maxWeek: Int,
     canGoPrev: Boolean,
     canGoNext: Boolean,
     showThisWeek: Boolean,
@@ -775,6 +770,7 @@ private fun TabletBodyV5(
     onSelectDay: (Int) -> Unit,
     onOpenWeekPicker: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenLink: () -> Unit,
     onExport: (() -> Unit)?,
     swipeModifier: Modifier,
 ) {
@@ -793,7 +789,6 @@ private fun TabletBodyV5(
         ) {
             WeekControlBar(
                 displayWeek = grid.displayWeek,
-                maxWeek = maxWeek,
                 canGoPrev = canGoPrev,
                 canGoNext = canGoNext,
                 showThisWeek = showThisWeek,
@@ -804,6 +799,7 @@ private fun TabletBodyV5(
                 onViewMode = onViewMode,
                 onOpenWeekPicker = onOpenWeekPicker,
                 onOpenSettings = onOpenSettings,
+                onOpenLink = onOpenLink,
                 onExport = onExport,
             )
             Box(
@@ -856,10 +852,10 @@ private fun TabletBodyV5(
 // 顶部控制条（周次胶囊 / 切换视图 / 导出+设置）
 // =============================================================================
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WeekControlBar(
     displayWeek: Int?,
-    maxWeek: Int,
     canGoPrev: Boolean,
     canGoNext: Boolean,
     showThisWeek: Boolean,
@@ -870,6 +866,7 @@ private fun WeekControlBar(
     onViewMode: (TimetableViewMode) -> Unit,
     onOpenWeekPicker: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenLink: () -> Unit,
     onExport: (() -> Unit)?,
 ) {
     Surface(
@@ -882,91 +879,98 @@ private fun WeekControlBar(
             // 顶栏两组控件（周切换 / 视图切换）之间按鸿蒙「控件间距」留 8vp（2026-11-20）
             verticalArrangement = Arrangement.spacedBy(CtSpace.controlGap),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onPrev, enabled = canGoPrev, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                        contentDescription = "上一周",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Surface(
-                    onClick = onOpenWeekPicker,
-                    shape = CtShapeTokens.pill,
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = displayWeek?.let { "第 $it 周" } ?: "我的课表",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onPrev, enabled = canGoPrev, modifier = Modifier.size(40.dp)) {
                         Icon(
-                            imageVector = Icons.Rounded.ExpandMore,
-                            contentDescription = "选择周次",
-                            modifier = Modifier.size(18.dp),
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                            contentDescription = "上一周",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                }
-                IconButton(onClick = onNext, enabled = canGoNext, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                        contentDescription = "下一周",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                if (onExport != null) {
-                    IconButton(onClick = onExport) {
+                    Surface(
+                        onClick = onOpenWeekPicker,
+                        shape = CtShapeTokens.pill,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = displayWeek?.let { "第 $it 周" } ?: "我的课表",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.ExpandMore,
+                                contentDescription = "选择周次",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    IconButton(onClick = onNext, enabled = canGoNext, modifier = Modifier.size(40.dp)) {
                         Icon(
-                            imageVector = Icons.Rounded.IosShare,
-                            contentDescription = "导出课表图片",
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = "下一周",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                IconButton(onClick = onOpenSettings) {
-                    Icon(
-                        imageVector = Icons.Rounded.Settings,
-                        contentDescription = "课表设置",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onExport != null) {
+                        IconButton(onClick = onExport) {
+                            Icon(
+                                imageVector = Icons.Rounded.IosShare,
+                                contentDescription = "导出课表图片",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = "课表设置",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                itemVerticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "切换视图",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 6.dp),
-                )
-                CtSegmentedButtons(
-                    options = listOf(
-                        CtSegmentOption(key = "week", label = "周"),
-                        CtSegmentOption(key = "day", label = "日"),
-                    ),
-                    selectedKey = if (viewMode == TimetableViewMode.WEEK) "week" else "day",
-                    onSelect = { onViewMode(if (it == "week") TimetableViewMode.WEEK else TimetableViewMode.DAY) },
-                    showCheckIcon = false,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                if (showThisWeek) {
-                    TextButton(onClick = onThisWeek) { Text("本周") }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CtSegmentedButtons(
+                        options = listOf(
+                            CtSegmentOption(key = "week", label = "周"),
+                            CtSegmentOption(key = "day", label = "日"),
+                        ),
+                        selectedKey = if (viewMode == TimetableViewMode.WEEK) "week" else "day",
+                        onSelect = { onViewMode(if (it == "week") TimetableViewMode.WEEK else TimetableViewMode.DAY) },
+                        showCheckIcon = false,
+                    )
+                    if (showThisWeek) {
+                        TextButton(
+                            onClick = onThisWeek,
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                        ) { Text("本周") }
+                    }
                 }
-                Text(
-                    text = "共 $maxWeek 周",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                FilledTonalButton(
+                    onClick = onOpenLink,
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                ) { Text("课表接入") }
             }
         }
     }
@@ -1098,7 +1102,11 @@ private fun WeekGridV5(grid: TimetableGridContext, fillHeight: Boolean = false) 
                 val gridHeight = rowHeight * periodCount
                 val blockShape = remember(metrics) { RoundedCornerShape(metrics.blockCornerDp.dp) }
 
-                Row(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().then(
+                        if (fillHeight) Modifier.verticalScroll(rememberScrollState()) else Modifier,
+                    ),
+                ) {
                     // 左列：月份 + 节次
                     Column(modifier = Modifier.width(labelWidth)) {
                         Box(
@@ -1380,7 +1388,10 @@ private fun CourseBlockV5(
             )
             .padding(metrics.blockPaddingDp.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Column(
+            modifier = Modifier.padding(bottom = if (isOngoing && ongoingProgress != null) 4.dp else 0.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
             val nameSize = (width.value / 4.5f).coerceIn(10f, 15f)
             Text(
                 text = course.name,
@@ -1399,6 +1410,25 @@ private fun CourseBlockV5(
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = CtType.microSize),
                     color = content,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (course.teacher.isNotBlank()) {
+                Text(
+                    text = course.teacher,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = content,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    // 课程名和教室占用空间后，至少还能容纳一整行才显示教师。
+                    modifier = Modifier.layout { measurable, constraints ->
+                        val line = measurable.measure(constraints.copy(maxHeight = Constraints.Infinity))
+                        if (line.height <= constraints.maxHeight) {
+                            layout(line.width, line.height) { line.placeRelative(0, 0) }
+                        } else {
+                            layout(0, 0) {}
+                        }
+                    },
                 )
             }
         }
@@ -1466,6 +1496,7 @@ private fun DayViewV5(
     plan: TtPlan?,
     selectedDay: Int,
     onSelectDay: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val date = remember(grid.monday, selectedDay) { grid.monday.plusDays(selectedDay.toLong()) }
     val sessions = remember(grid.snapshot, grid.termStart, grid.displayWeek, selectedDay, grid.monday, grid.nowMillis) {
@@ -1476,7 +1507,7 @@ private fun DayViewV5(
             nowMillis = grid.nowMillis,
         )
     }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -1636,6 +1667,13 @@ private fun DaySessionRowV5(
                     style = MaterialTheme.typography.labelSmall,
                     color = content.copy(alpha = 0.72f),
                 )
+                if (session.teacher.isNotBlank()) {
+                    Text(
+                        text = "教师 ${session.teacher}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = content.copy(alpha = 0.72f),
+                    )
+                }
             }
             when (session.state) {
                 SessionState.ONGOING -> CtPill(

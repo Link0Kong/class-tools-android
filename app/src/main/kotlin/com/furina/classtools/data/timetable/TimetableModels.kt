@@ -97,6 +97,7 @@ data class SessionInfo(
     val label: String = "",
     val fullRoom: String = room,
     val afterShortBreak: Boolean = false,
+    val teacher: String = "",
 )
 
 /** 工作台/课表页共用计算产物。 */

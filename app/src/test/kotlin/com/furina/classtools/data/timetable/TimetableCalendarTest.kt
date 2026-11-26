@@ -164,6 +164,17 @@ class TimetableCalendarTest {
         assertEquals("01104", session.room)
     }
 
+    @Test
+    fun sessionsOn_preservesTheTeacherOfEachCourseSlot() {
+        val courses = listOf(
+            course(start = 1, end = 2).copy(teacher = " 张老师、李老师 "),
+            course(start = 3, end = 4).copy(teacher = "王老师"),
+            course(start = 5, end = 5),
+        )
+        val sessions = TtCalendar.sessionsOn(courses, termStart, LocalDate.of(2026, 11, 2), now, zone)
+        assertEquals(listOf("张老师、李老师", "王老师", ""), sessions.map { it.teacher })
+    }
+
     // ---- nextSession / plan -------------------------------------------------
 
     @Test

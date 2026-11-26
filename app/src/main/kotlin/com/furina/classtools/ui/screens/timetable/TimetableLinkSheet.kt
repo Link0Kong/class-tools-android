@@ -25,7 +25,6 @@ import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -65,38 +64,6 @@ import com.furina.classtools.ui.theme.CtSpace
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.launch
-
-/**
- * 「课表接入」入口（悬浮按钮）：生成 .ics / WakeUp 备份，或原生写入系统日历并提醒。
- *
- * 放在课表页右下角（不占顶栏，避免与顶栏/紧凑化改动冲突）。
- */
-@Composable
-fun TimetableLinkFab(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    ExtendedFloatingActionButton(
-        onClick = onClick,
-        modifier = modifier,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-        containerColor = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        icon = {
-            Icon(
-                imageVector = Icons.Rounded.CalendarMonth,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-            )
-        },
-        text = {
-            Text(
-                text = "课表接入",
-                style = MaterialTheme.typography.labelLarge,
-            )
-        },
-    )
-}
 
 /**
  * 课表接入弹层（纯增量功能，自包含权限申请/文件导出/日历写入）。
