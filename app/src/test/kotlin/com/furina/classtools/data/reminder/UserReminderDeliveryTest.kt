@@ -27,12 +27,15 @@ import org.robolectric.annotation.Config
 
 /** The Android 16 framework requires Java 21. Keep the repo's Java 17 test entry point usable. */
 class ReminderFrameworkRunner(testClass: Class<*>) : RobolectricTestRunner(testClass) {
-    override fun buildGlobalConfig(): Config = Config.Builder(super.buildGlobalConfig())
-        .setSdk(if (Runtime.version().feature() >= 21) 36 else 34).build()
+    override fun getChildren(): MutableList<org.junit.runners.model.FrameworkMethod> {
+        val methods = super.getChildren()
+        val java = System.getProperty("java.specification.version").substringAfterLast('.').toInt()
+        return if (java >= 21) methods else methods.filter { (it as RobolectricFrameworkMethod).sdk.apiLevel < 36 }.toMutableList()
+    }
 }
 
 @RunWith(ReminderFrameworkRunner::class)
-@Config(application = Application::class, instrumentedPackages = ["com.vivo.push.sdk"])
+@Config(sdk = [34], application = Application::class, instrumentedPackages = ["com.vivo.push.sdk"])
 class UserReminderDeliveryTest {
     private val app: Application get() = RuntimeEnvironment.getApplication()
     private val manager get() = app.getSystemService(NotificationManager::class.java)
@@ -82,6 +85,7 @@ class UserReminderDeliveryTest {
         assertTrue(manager.activeNotifications.isEmpty())
     }
 
+    @Config(sdk = [34, 36])
     @Test fun systemCardChangesAtOpeningAndKeepsSeparateActivityIdentities() = runBlocking {
         val now = System.currentTimeMillis()
         val watch = SignupCountdown(owner, "a/b", "社团报名", now + 45_000, now + 120_000, "礼堂", "社团")
