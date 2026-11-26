@@ -80,6 +80,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -94,12 +95,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.serialization.json.Json
 import com.furina.classtools.data.timetable.Course
 import com.furina.classtools.data.timetable.SessionInfo
 import com.furina.classtools.data.timetable.SessionState
@@ -262,7 +266,10 @@ fun TimetableViewScreen(
     val preferDay = initialDayView || LocalDensity.current.fontScale > 1.3f
     var viewMode by rememberSaveable { mutableStateOf(if (preferDay) TimetableViewMode.DAY else TimetableViewMode.WEEK) }
     var selectedDay by rememberSaveable { mutableIntStateOf(todayIndex) }
-    var selectedCourse by remember { mutableStateOf<Course?>(null) }
+    var selectedCourse by rememberSaveable(stateSaver = Saver<Course?, String>(
+        save = { course -> course?.let { Json.encodeToString(it) } },
+        restore = { Json.decodeFromString<Course>(it) },
+    )) { mutableStateOf<Course?>(null) }
 
     var focusApplied by rememberSaveable(focus?.encode()) { mutableStateOf(false) }
     var focusDetail by rememberSaveable { mutableStateOf(false) }
@@ -380,7 +387,8 @@ fun TimetableViewScreen(
         termStart = termStart,
         displayWeek = displayWeek,
         monday = monday,
-        todayIndex = todayIndex,
+        todayIndex = if (today in monday..monday.plusDays(6)) todayIndex else -1,
+        selectedDay = selectedDay,
         dark = dark,
         nowMillis = nowMillis,
         wide = twoPane,
@@ -388,11 +396,14 @@ fun TimetableViewScreen(
         ongoingName = ongoing?.name,
         ongoingProgress = ongoingProgress,
         onCourseClick = { course ->
-            if (System.currentTimeMillis() >= suppressClickUntil) selectedCourse = course
+            if (System.currentTimeMillis() >= suppressClickUntil) {
+                if (twoPane) selectedDay = course.day
+                selectedCourse = course
+            }
         },
         onSelectDay = { day ->
             selectedDay = day
-            viewMode = TimetableViewMode.DAY
+            if (!twoPane) viewMode = TimetableViewMode.DAY
         },
     )
 
@@ -668,6 +679,7 @@ private data class TimetableGridContext(
     val displayWeek: Int?,
     val monday: LocalDate,
     val todayIndex: Int,
+    val selectedDay: Int,
     val dark: Boolean,
     val nowMillis: Long,
     val wide: Boolean,
@@ -782,7 +794,7 @@ private fun TabletBodyV5(
     ) {
         Column(
             modifier = Modifier
-                .weight(0.68f)
+                .weight(0.62f)
                 .verticalScroll(rememberScrollState())
                 .padding(top = 6.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -823,7 +835,7 @@ private fun TabletBodyV5(
         }
         Column(
             modifier = Modifier
-                .weight(0.32f)
+                .weight(0.38f)
                 .padding(top = 6.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -833,6 +845,9 @@ private fun TabletBodyV5(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                if (viewMode == TimetableViewMode.WEEK) {
+                    DayAgenda(grid, plan, selectedDay)
+                }
                 NextSessionBar(plan = plan, dark = grid.dark, nowMillis = nowMillis)
                 AllCoursesCardV5(
                     snapshot = grid.snapshot,
@@ -1161,6 +1176,7 @@ private fun WeekGridV5(grid: TimetableGridContext, fillHeight: Boolean = false) 
                                     date = grid.monday.plusDays(dayIndex.toLong()),
                                     dayIndex = dayIndex,
                                     isToday = dayIndex == grid.todayIndex,
+                                    isSelected = grid.wide && dayIndex == grid.selectedDay,
                                     isWeekend = dayIndex >= 5,
                                     width = columnWidth,
                                     height = headerHeight,
@@ -1226,6 +1242,7 @@ private fun DayHeaderCell(
     date: LocalDate,
     dayIndex: Int,
     isToday: Boolean,
+    isSelected: Boolean,
     isWeekend: Boolean,
     width: Dp,
     height: Dp,
@@ -1233,11 +1250,13 @@ private fun DayHeaderCell(
 ) {
     val shape = RoundedCornerShape(CtRadius.input)
     val container = when {
+        isSelected -> MaterialTheme.colorScheme.primary
         isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
         isWeekend -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.65f)
         else -> Color.Transparent
     }
     val labelColor = when {
+        isSelected -> MaterialTheme.colorScheme.onPrimary
         isToday -> MaterialTheme.colorScheme.onPrimaryContainer
         isWeekend -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
         else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
@@ -1247,6 +1266,7 @@ private fun DayHeaderCell(
         modifier = Modifier
             .width(width)
             .height(height)
+            .semantics { selected = isSelected }
             .padding(horizontal = 1.5.dp, vertical = 3.dp),
         shape = shape,
         color = container,
@@ -1267,7 +1287,7 @@ private fun DayHeaderCell(
                 text = "${date.dayOfMonth}",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.SemiBold,
-                color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else {
+                color = if (isSelected || isToday) labelColor else {
                     if (isWeekend) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
                     else MaterialTheme.colorScheme.onSurface
                 },
@@ -1498,15 +1518,6 @@ private fun DayViewV5(
     onSelectDay: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val date = remember(grid.monday, selectedDay) { grid.monday.plusDays(selectedDay.toLong()) }
-    val sessions = remember(grid.snapshot, grid.termStart, grid.displayWeek, selectedDay, grid.monday, grid.nowMillis) {
-        TtCalendar.sessionsOn(
-            courses = grid.snapshot.c,
-            termStart = grid.termStart,
-            date = date,
-            nowMillis = grid.nowMillis,
-        )
-    }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1551,69 +1562,83 @@ private fun DayViewV5(
             }
         }
 
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(CtRadius.card),
-            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        DayAgenda(grid, plan, selectedDay)
+    }
+}
+
+@Composable
+private fun DayAgenda(grid: TimetableGridContext, plan: TtPlan?, selectedDay: Int) {
+    val date = remember(grid.monday, selectedDay) { grid.monday.plusDays(selectedDay.toLong()) }
+    val sessions = remember(grid.snapshot, grid.termStart, grid.displayWeek, selectedDay, grid.monday, grid.nowMillis) {
+        TtCalendar.sessionsOn(
+            courses = grid.snapshot.c,
+            termStart = grid.termStart,
+            date = date,
+            nowMillis = grid.nowMillis,
+        )
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(CtRadius.card),
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = "${date.monthValue}月${date.dayOfMonth}日 · ${TtPeriods.DAY_LABELS[selectedDay]}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                if (sessions.isEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 22.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+            Text(
+                text = "${date.monthValue}月${date.dayOfMonth}日 · ${TtPeriods.DAY_LABELS[selectedDay]}",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (sessions.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.size(52.dp),
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier.size(52.dp),
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.CalendarMonth,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                        Text(
-                            text = "当天没有课",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        val next = plan?.next
-                        if (next != null) {
-                            Text(
-                                text = "下次 · ${next.label} ${next.name}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            Icon(
+                                imageVector = Icons.Rounded.CalendarMonth,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
-                } else {
-                    sessions.forEach { session ->
-                        DaySessionRowV5(
-                            session = session,
-                            dark = grid.dark,
-                            onClick = {
-                                CourseFocus.of(session).match(grid.snapshot, date)?.let(grid.onCourseClick)
-                            },
+                    Text(
+                        text = "当天没有课",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val next = plan?.next
+                    if (next != null) {
+                        Text(
+                            text = "下次 · ${next.label} ${next.name}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+            } else {
+                sessions.forEach { session ->
+                    DaySessionRowV5(
+                        session = session,
+                        dark = grid.dark,
+                        onClick = {
+                            CourseFocus.of(session).match(grid.snapshot, date)?.let(grid.onCourseClick)
+                        },
+                    )
                 }
             }
         }

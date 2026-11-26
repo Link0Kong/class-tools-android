@@ -6,9 +6,15 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.node.RootForTest
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.dp
 import com.furina.classtools.FakeTransport
 import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.ui.screens.homework.HomeworkScreen
@@ -40,7 +46,11 @@ class TaskScreenTest {
 
     @Test fun oldSourceShowsExactHomeworkWithFullRequirements() = exerciseTaskScreen(0f, testHomeworkSource = true)
 
-    private fun exerciseTaskScreen(animationScale: Float, testSharedImport: Boolean = false, testHomeworkSource: Boolean = false) {
+    @Test
+    @Config(qualifiers = "zh-w1200dp-h800dp-land-mdpi")
+    fun tabletKeepsCurrentTaskAcrossSplitScreen() = exerciseTaskScreen(0f, tablet = true)
+
+    private fun exerciseTaskScreen(animationScale: Float, testSharedImport: Boolean = false, testHomeworkSource: Boolean = false, tablet: Boolean = false) {
         // The dropdown tracks its anchor on every vsync. Advance finite frames while it is open.
         ShadowChoreographer.setPaused(true)
         val frameDuration = Duration.ofMillis(16)
@@ -50,6 +60,15 @@ class TaskScreenTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         val store = TaskPreferences(activity.getSharedPreferences("tasks_test_3260799999", 0))
         val repository = TaskRepository("3260799999", store, testApiClient(FakeTransport { error("offline") }), scope) { false }
+        val viewport = mutableIntStateOf(1100)
+        if (tablet) repository.edit { _, now ->
+            listOf("整理读书笔记", "提交实验报告").mapIndexed { index, title ->
+                newTask(title, now + index, index.toDouble()).withFields {
+                    put("notes", "详情 · " + title)
+                    put("starred", true)
+                }
+            }
+        }
         var opened = false
         var preview: SharedTask? = null
         var canceled = false
@@ -61,7 +80,9 @@ class TaskScreenTest {
                     initialRows = listOf(source), skipLoad = true, initialDetailId = source.id, importedHomework = setOf(source.id),
                     onAddTask = { opened = true })
             } else if (testSharedImport) ImportSharedTask({ canceled = true }, { preview = it })
-            else TaskScreen(repository, onBack = {}, onHomework = { opened = true })
+            else if (tablet) Box(Modifier.requiredWidth(viewport.intValue.dp)) {
+                TaskScreen(repository, onBack = {}, onHomework = {}, homeworkOverview = { Text("班级作业示例") })
+            } else TaskScreen(repository, onBack = {}, onHomework = { opened = true })
         }
         val decor = activity.window.decorView
         fun frame() {
@@ -69,9 +90,11 @@ class TaskScreenTest {
                 ShadowSystemClock.advanceBy(frameDuration)
                 shadowOf(Looper.getMainLooper()).idle()
             }
-            decor.measure(View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.EXACTLY))
-            decor.layout(0, 0, 800, 1600)
+            val width = if (tablet) 1200 else 800
+            val height = if (tablet) 800 else 1600
+            decor.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+            decor.layout(0, 0, width, height)
             ShadowSystemClock.advanceBy(frameDuration)
             shadowOf(Looper.getMainLooper()).idle()
         }
@@ -97,6 +120,28 @@ class TaskScreenTest {
             assertTrue(node.config[SemanticsActions.OnClick].action!!.invoke())
         }
         try {
+            if (tablet) {
+                fun label(value: String) = find(value) { node ->
+                    node.config.getOrNull(SemanticsProperties.Text)?.any { it.text == value } == true
+                }
+                assertTrue(label("班级作业示例").boundsInRoot.left > label("整理读书笔记").boundsInRoot.left)
+                click("整理读书笔记")
+                label("详情 · 整理读书笔记")
+                click("提交实验报告")
+                label("详情 · 提交实验报告")
+                find("宽窗详情关闭") { it.config.getOrNull(SemanticsProperties.ContentDescription)?.contains("收起任务详情") == true }
+                val listX = label("整理读书笔记").boundsInRoot.left
+                val detailPane = find("详情分栏") { it.config.getOrNull(SemanticsProperties.PaneTitle) == "任务详情" }
+                assertTrue("详情应在列表右侧", detailPane.boundsInRoot.left > listX)
+                viewport.intValue = 620
+                label("详情 · 提交实验报告")
+                find("窄窗详情返回") { it.config.getOrNull(SemanticsProperties.ContentDescription)?.contains("返回") == true }
+                viewport.intValue = 1000
+                label("详情 · 提交实验报告")
+                click("收起任务详情")
+                label("班级作业示例")
+                return
+            }
             if (testHomeworkSource) {
                 for (text in listOf("班级作业详情", "积分练习", "高等数学", "提交完整证明", "2023-09-12 18:00")) {
                     find(text) { n -> n.config.getOrNull(SemanticsProperties.Text)?.any { it.text == text } == true }

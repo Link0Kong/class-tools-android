@@ -4,6 +4,7 @@ import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import com.furina.classtools.ui.components.CtToastBus
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -39,6 +40,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -46,6 +49,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.furina.classtools.data.tasks.*
 import com.furina.classtools.ui.components.CtLightTopBar
+import com.furina.classtools.ui.adaptive.CtAdaptive
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import java.time.LocalDate
@@ -224,13 +228,37 @@ fun TaskScreen(
         }
     }
     val dueReminder = all.filter { taskReminderTime(it) in 1..clock }.minByOrNull(::taskReminderTime)
-    ExpressiveBackground(modifier = Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
+    fun closeDetail() {
+        if (openedFromCard == detail) onCloseFocused?.invoke()
+        openedFromCard = null
+        detail = null
+    }
+    TaskWorkspace(
+        task = all.find { it.text("id") == detail && editing == null },
+        onCloseDetail = ::closeDetail,
+        homework = homeworkOverview,
+        showDetail = { task, inline ->
+            TaskDetail(task, repository, groups, { editing = task.text("id") }, ::closeDetail,
+                onSource, { onShare(taskShareCard(listOf(task), true)) }, onReminderCalendar, inline) { direction ->
+                repository.edit { list, now ->
+                    val ordered = list.filterNot { it.flag("done") }.sortedBy { it.text("order").toDoubleOrNull() ?: 0.0 }.toMutableList()
+                    val i = ordered.indexOfFirst { it.text("id") == task.text("id") }
+                    if (i < 0 || i + direction !in ordered.indices) list else {
+                        java.util.Collections.swap(ordered, i, i + direction)
+                        val indices = ordered.mapIndexed { index, t -> t.text("id") to index }.toMap()
+                        list.map { t -> indices[t.text("id")]?.let { t.withFields { put("order", it); put("updatedAt", now) } } ?: t }
+                    }
+                }
+                sort = "manual"
+            }
+        },
+    ) { wide ->
+        Column(Modifier.fillMaxSize()) {
             CtLightTopBar(title = "任务", scrollPx = 0f, subtitle = if (status.contains("离线") || status.contains("失败") || status.contains("同步中")) status else "${all.count { !it.flag("done") }} 项个人待办 · ${all.count { !it.flag("done") && it.text("due") == today }} 项今天截止", onBack = onBack, actions = {
                 IconButton(onClick = { searching = !searching; if (!searching) query = "" }) {
                     Icon(Icons.Rounded.Search, "搜索任务")
                 }
-                if (homeworkOverview == null || searching || view != "all") TextButton(onClick = onHomework) { Text("班级作业") }
+                if (wide || homeworkOverview == null || searching || view != "all") TextButton(onClick = onHomework) { Text("班级作业") }
                 IconButton(onClick = { onRefreshHomework(); scope.launch { repository.sync() } }, enabled = status != "同步中…") {
                     Icon(Icons.Rounded.Refresh, "同步任务")
                 }
@@ -278,7 +306,7 @@ fun TaskScreen(
                 }
                 LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (homeworkOverview != null && pageView == "all" && !searching) {
+                    if (!wide && homeworkOverview != null && pageView == "all" && !searching) {
                         item("class-homework") { homeworkOverview() }
                         item("personal-heading") { Text("个人任务", style = MaterialTheme.typography.titleMedium) }
                     }
@@ -299,13 +327,17 @@ fun TaskScreen(
                     items(visible, key = { "item-" + it.text("id") }) { task ->
                         val id = task.text("id")
                         val done = task.flag("done")
+                        val active = wide && detail == id
                         val colors = MaterialTheme.colorScheme
                         Card(
                             modifier = if (reduceMotion) Modifier else Modifier.animateItem(),
-                            colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
+                            colors = CardDefaults.cardColors(containerColor = if (active) colors.secondaryContainer else colors.surfaceContainerLow),
                         ) {
                             Row(
-                                Modifier.fillMaxWidth().clickable { detail = id }.padding(horizontal = 4.dp, vertical = 6.dp),
+                                Modifier.fillMaxWidth().clickable {
+                                    if (id != openedFromCard) openedFromCard = null
+                                    detail = id
+                                }.semantics { if (wide) selected = active }.padding(horizontal = 4.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Checkbox(done, { value -> repository.edit { list, time -> changeCompletion(list, id, value, time) } },
@@ -424,25 +456,6 @@ fun TaskScreen(
         newDraft = shared.draft(System.currentTimeMillis(), firstOrder(all)).toString()
     }
     if (manage) TaskManagement(repository, snapshot, viewOrder) { manage = false }
-    all.find { it.text("id") == detail && editing == null }?.let { task ->
-        TaskDetail(task, repository, groups, { editing = detail }, {
-            if (openedFromCard == detail) onCloseFocused?.invoke()
-            openedFromCard = null
-            detail = null
-        },
-            onSource, { onShare(taskShareCard(listOf(task), true)) }, onReminderCalendar) { direction ->
-            repository.edit { list, now ->
-                val ordered = list.filterNot { it.flag("done") }.sortedBy { it.text("order").toDoubleOrNull() ?: 0.0 }.toMutableList()
-                val i = ordered.indexOfFirst { it.text("id") == detail }
-                if (i < 0 || i + direction !in ordered.indices) list else {
-                    java.util.Collections.swap(ordered, i, i + direction)
-                    val indices = ordered.mapIndexed { index, t -> t.text("id") to index }.toMap()
-                    list.map { t -> indices[t.text("id")]?.let { t.withFields { put("order", it); put("updatedAt", now) } } ?: t }
-                }
-            }
-            sort = "manual"
-        }
-    }
     if (addGroup) CtLightAlertDialog(onDismissRequest = { addGroup = false }, title = { Text("新建分组") },
         text = { OutlinedTextField(groupName, { groupName = it.take(20) }, label = { Text("分组名称") }, singleLine = true) },
         confirmButton = { TextButton(enabled = groupName.isNotBlank(), onClick = {
@@ -490,6 +503,44 @@ fun TaskScreen(
                 sharedContext = null
                 editing = null
             })
+        }
+    }
+}
+
+@Composable
+private fun TaskWorkspace(
+    task: JsonObject?,
+    onCloseDetail: () -> Unit,
+    homework: (@Composable () -> Unit)?,
+    showDetail: @Composable (JsonObject, Boolean) -> Unit,
+    list: @Composable (Boolean) -> Unit,
+) {
+    ExpressiveBackground(modifier = Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            val available = maxWidth.value.toInt()
+            val layout = remember(available) { CtAdaptive.specFor(available) }
+            val wide = layout.twoPane
+            BackHandler(enabled = wide && task != null, onBack = onCloseDetail)
+            Row(Modifier.widthIn(max = layout.contentMaxWidth).fillMaxSize()
+                .statusBarsPadding().navigationBarsPadding().imePadding()) {
+                Box(Modifier.weight(1f).fillMaxHeight()) { list(wide) }
+                if (wide) {
+                    VerticalDivider()
+                    Box(Modifier.weight(1.08f).fillMaxHeight().semantics {
+                        paneTitle = if (task == null && homework != null) "班级作业" else "任务详情"
+                    }) {
+                        if (task != null) {
+                            key(task.text("id")) { showDetail(task, true) }
+                        } else if (homework != null) {
+                            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp)) { homework() }
+                        } else {
+                            Text("从左侧选择任务查看详情", Modifier.align(Alignment.Center),
+                                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            if (!wide && task != null) key(task.text("id")) { showDetail(task, false) }
         }
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
@@ -34,15 +35,19 @@ import kotlinx.serialization.json.*
 internal fun TaskDetailPage(
     pageTitle: String,
     onBack: () -> Unit,
+    inline: Boolean = false,
     actions: @Composable () -> Unit = {},
     bottom: @Composable RowScope.() -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        CtFeedbackWindow()
+    val page: @Composable () -> Unit = {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            Column(Modifier.fillMaxSize().safeDrawingPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-                CtTopBar(title = pageTitle, onBack = onBack, actions = actions)
+            val insets = if (inline) Modifier else Modifier.safeDrawingPadding()
+            Column(Modifier.fillMaxSize().then(insets), horizontalAlignment = Alignment.CenterHorizontally) {
+                CtTopBar(title = pageTitle, onBack = if (inline) null else onBack, actions = {
+                    actions()
+                    if (inline) IconButton(onClick = onBack) { Icon(Icons.Rounded.Close, "收起任务详情") }
+                })
                 Column(Modifier.weight(1f).widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
                 HorizontalDivider()
@@ -50,6 +55,13 @@ internal fun TaskDetailPage(
                     horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically, content = bottom)
             }
         }
+    }
+    if (inline) page() else Dialog(
+        onDismissRequest = onBack,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        CtFeedbackWindow()
+        page()
     }
 }
 
@@ -71,7 +83,8 @@ internal fun DetailFact(label: String, value: String) {
 
 @Composable
 internal fun TaskDetail(task: JsonObject, repository: TaskRepository, groups: List<JsonObject>, onEdit: () -> Unit,
-    onClose: () -> Unit, onSource: (JsonObject) -> Unit, onShare: () -> Unit, onReminderCalendar: ((JsonObject) -> Unit)?, onMove: (Int) -> Unit) {
+    onClose: () -> Unit, onSource: (JsonObject) -> Unit, onShare: () -> Unit, onReminderCalendar: ((JsonObject) -> Unit)?,
+    inline: Boolean, onMove: (Int) -> Unit) {
     val context = LocalContext.current
     val id = task.text("id")
     val done = task.flag("done")
@@ -93,7 +106,7 @@ internal fun TaskDetail(task: JsonObject, repository: TaskRepository, groups: Li
         val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, TaskShareLink.create(task, group))
         context.startActivity(Intent.createChooser(intent, "分享可保存的任务链接"))
     }
-    TaskDetailPage("任务详情", onClose, actions = {
+    TaskDetailPage("任务详情", onClose, inline = inline, actions = {
         IconToggleButton(checked = starred, onCheckedChange = { value ->
             repository.edit { items, now -> items.map {
                 if (it.text("id") == id) it.withFields { put("starred", value); put("updatedAt", now) } else it
