@@ -3,6 +3,7 @@ package com.furina.classtools.data.notify
 import android.Manifest
 import android.app.Application
 import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
 import android.os.Looper
@@ -39,6 +40,22 @@ class LiveActivityNotificationTest {
 
     @Before fun allowNotifications() {
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    @Test fun updatesOldChannelDescriptionAndPreservesChannelSettings() {
+        val manager = app.getSystemService(NotificationManager::class.java)
+        val channelId = LiveUpdateNotifier.CHANNEL_ID
+        manager.createNotificationChannel(
+            NotificationChannel(channelId, "实时活动", NotificationManager.IMPORTANCE_NONE).apply {
+                description = "上传进度、限时投票倒计时等实时活动（支持 Android 16 实时更新/流体云）"
+            },
+        )
+
+        LiveUpdateNotifier.ensureChannel(app)
+
+        val updated = manager.getNotificationChannel(channelId)
+        assertEquals("上传进度、限时投票倒计时等实时通知", updated.description)
+        assertEquals(NotificationManager.IMPORTANCE_NONE, updated.importance)
     }
 
     @Test fun expandedCourseUsesCampusClockAndOnlyShowsAvailableDetails() {

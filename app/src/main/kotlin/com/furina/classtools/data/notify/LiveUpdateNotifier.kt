@@ -40,23 +40,29 @@ object LiveUpdateNotifier {
     private const val DEBUG_NOTIFICATION_ID = 7403
     private const val PPT_RESULT_NOTIFICATION_ID = 7411
     private const val PROGRESS_MAX = 100
+    private const val CHANNEL_DESCRIPTION = "上传进度、限时投票倒计时等实时通知"
+    private const val OLD_CHANNEL_DESCRIPTION = "上传进度、限时投票倒计时等实时活动（支持 Android 16 实时更新/流体云）"
 
     /** 预先创建「实时活动」通知渠道（设置入口跳转前调用）。 */
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+        val existing = manager.getNotificationChannel(CHANNEL_ID)
+        if (existing == null) {
             manager.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_ID,
                     "实时活动",
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
-                    description = "上传进度、限时投票倒计时等实时活动（支持 Android 16 实时更新/流体云）"
+                    description = CHANNEL_DESCRIPTION
                     setShowBadge(false)
                     enableVibration(false)
                 },
             )
+        } else if (existing.description == OLD_CHANNEL_DESCRIPTION) {
+            existing.description = CHANNEL_DESCRIPTION
+            manager.createNotificationChannel(existing)
         }
     }
 

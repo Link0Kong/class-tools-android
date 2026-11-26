@@ -36,6 +36,13 @@ data class PushProviderStatus(
 ) {
     val isRegistered: Boolean get() = if (provider == "vivo") state == "BOUND" else state == "REGISTERED"
 
+    val providerTitle: String
+        get() = when (provider) {
+            PushTokenPayload.PROVIDER_OPPO -> "OPPO 推送"
+            PushTokenPayload.PROVIDER_VIVO -> "vivo 推送"
+            else -> "系统推送"
+        }
+
     /** 设置页展示文案。 */
     val label: String
         get() = when (state) {
@@ -156,11 +163,9 @@ object PushStatusDiag {
     /** 供 Application 使用的默认协程作用域（进程级，不随页面销毁）。 */
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** 设置页展示用的 `服务商=文案` 列表。 */
-    fun summaryLines(snapshot: PushStatusSnapshot): List<String> = listOf(
-        "OPPO 推送：${snapshot.oppo.label}",
-        "vivo 推送：${snapshot.vivo.label}",
-    )
+    /** 两家厂商的可读诊断摘要。 */
+    fun summaryLines(snapshot: PushStatusSnapshot): List<String> =
+        listOf(snapshot.oppo, snapshot.vivo).map { "${it.providerTitle}：${it.label}" }
 
     /** 诊断 code 里的 state 是否属于已知枚举（防脏数据）。 */
     fun isKnownState(state: String): Boolean = state in setOf(

@@ -13,6 +13,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import android.Manifest
 import android.graphics.Bitmap
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -92,7 +93,10 @@ import com.furina.classtools.data.account.OppoAccountText
 import com.furina.classtools.data.account.OppoBindResult
 import com.furina.classtools.data.account.OppoBindingsUiState
 import com.furina.classtools.data.account.OppoUnbindResult
+import com.furina.classtools.data.push.DevicePushProvider
 import com.furina.classtools.data.push.OppPushClick
+import com.furina.classtools.data.push.PushProviderStatus
+import com.furina.classtools.data.push.PushTokenPayload
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
@@ -1068,6 +1072,9 @@ fun MainNavHost(
                 onBack = { navController.popBackStack() },
                 controller = permissionController,
                 onOpenReminderSettings = { navController.navigate(Routes.REMINDER_SETTINGS) },
+                showColorOsLiveUpdates = remember(container) {
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA && container.hasColorOsRom()
+                },
             )
         }
         composable(
@@ -1080,13 +1087,44 @@ fun MainNavHost(
             val permissionController = remember {
                 com.furina.classtools.data.permission.AndroidPermissionController(context)
             }
-            val vivoStatus by container.vivoPushManager.status.collectAsStateWithLifecycle()
+            val pushProvider = remember(container) {
+                DevicePushProvider.forDevice(
+                    brand = Build.BRAND,
+                    manufacturer = Build.MANUFACTURER,
+                    hasColorOsRom = container.hasColorOsRom(),
+                    supportsOppoPush = container.oppoPushManager.isDeviceSupported,
+                )
+            }
+            val pushStatus = when (pushProvider) {
+                DevicePushProvider.OPPO -> {
+                    val status by container.oppoPushManager.status.collectAsStateWithLifecycle()
+                    PushProviderStatus(
+                        provider = PushTokenPayload.PROVIDER_OPPO,
+                        state = status.state.name,
+                        errorCode = status.errorCode,
+                        registrationTail = status.registrationId.takeIf { it.length >= 4 }?.takeLast(4).orEmpty(),
+                    )
+                }
+                DevicePushProvider.VIVO -> {
+                    val status by container.vivoPushManager.status.collectAsStateWithLifecycle()
+                    PushProviderStatus(
+                        provider = PushTokenPayload.PROVIDER_VIVO,
+                        state = status.state.name,
+                        errorCode = status.errorCode,
+                        registrationTail = status.registrationId.takeLast(4),
+                    )
+                }
+                null -> null
+            }
             ReminderSettingsScreen(
-                vivoStatus = com.furina.classtools.data.push.PushProviderStatus(
-                    provider = "vivo", state = vivoStatus.state.name, errorCode = vivoStatus.errorCode,
-                    registrationTail = vivoStatus.registrationId.takeLast(4),
-                ),
-                onRetryVivoPush = container.vivoPushManager::retry,
+                pushStatus = pushStatus,
+                onRetryPush = {
+                    when (pushProvider) {
+                        DevicePushProvider.OPPO -> container.oppoPushManager.retry()
+                        DevicePushProvider.VIVO -> container.vivoPushManager.retry()
+                        null -> Unit
+                    }
+                },
                 onBack = { navController.popBackStack() },
                 settingsStore = container.reminderSettingsStore,
                 permissionController = permissionController,

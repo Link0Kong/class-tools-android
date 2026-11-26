@@ -72,6 +72,7 @@ fun PermissionSettingsScreen(
     controller: PermissionController,
     modifier: Modifier = Modifier,
     onOpenReminderSettings: (() -> Unit)? = null,
+    showColorOsLiveUpdates: Boolean = false,
 ) {
     val context = LocalContext.current
     var refreshTick by remember { mutableIntStateOf(0) }
@@ -178,7 +179,11 @@ fun PermissionSettingsScreen(
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                "上传进度 · 投票倒计时（Android 16 实时更新 / 流体云）",
+                                if (showColorOsLiveUpdates) {
+                                    "上传进度 · 投票倒计时（流体云）"
+                                } else {
+                                    "上传进度 · 投票倒计时"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
