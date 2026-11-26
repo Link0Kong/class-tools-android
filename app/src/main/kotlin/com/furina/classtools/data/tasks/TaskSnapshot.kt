@@ -141,22 +141,13 @@ internal fun mergeTasks(base: JsonObject, local: JsonObject, remote: JsonObject)
     val before = byId(base)
     val after = byId(local)
     val result = byId(remote).toMutableMap()
-    val remoteIds = result.keys.toSet()
     for (id in before.keys - after.keys) result.remove(id)
     for ((id, item) in after) {
         val old = before[id]
         if (old == item) continue
         val existing = result[id]
-        result[id] = if (old == null || existing == null) item
-            else JsonObject(existing + item.filter { (key, value) -> old[key] != value })
-    }
-    val seenSources = mutableSetOf<String>()
-    val merged = result.values.filter { task ->
-        val source = listOf("sourceHwId", "sourceNoticeId").firstNotNullOfOrNull { key ->
-            task.text(key).takeIf(String::isNotEmpty)?.let { key + ":" + it }
-        }.orEmpty()
-        source.isBlank() || task.text("fromId").isNotBlank() || seenSources.add(source) ||
-            before.containsKey(task.text("id")) || task.text("id") in remoteIds
+        if (existing == null && (old != null || result.values.any { sameTaskImport(item, it) })) continue
+        result[id] = JsonObject(existing.orEmpty() + item.filter { (key, value) -> old?.get(key) != value })
     }
     val oldGroups = base.objects("lists").associateBy { it.text("id") }
     val localGroups = local.objects("lists").associateBy { it.text("id") }
@@ -172,9 +163,18 @@ internal fun mergeTasks(base: JsonObject, local: JsonObject, remote: JsonObject)
     return remote.withFields {
         put("lists", JsonArray(groups.values.sortedBy { it.number("order") }))
         if (prefChanges.isNotEmpty()) put("prefs", JsonObject(remote.prefs() + prefChanges))
-        put("items", JsonArray(merged.map { task ->
+        put("items", JsonArray(result.values.map { task ->
             if (task.text("list").isNotBlank() && task.text("list") !in groups) task.withFields { put("list", "") } else task
         }))
+    }
+}
+
+private fun sameTaskImport(candidate: JsonObject, existing: JsonObject): Boolean {
+    val parent = candidate.text("fromId")
+    if (parent.isNotEmpty()) return existing.text("fromId") == parent && existing.text("due") == candidate.text("due")
+    return listOf("sourceHwId", "sourceNoticeId").any { key ->
+        val source = candidate.text(key)
+        source.isNotEmpty() && source == existing.text(key)
     }
 }
 

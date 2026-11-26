@@ -713,6 +713,7 @@ fun MainNavHost(
                             container.homeworkRepository, container.marksRepository, tasks, session.sid, revision,
                         )
                         val taskAiClient = remember(session) { TaskAiClient { session.token } }
+                        com.furina.classtools.ui.screens.tasks.TaskCacheRecovery(tasks)
                         TaskScreen(tasks, sessionSid = session.sid, createFromWidget = entry.arguments?.getBoolean(Routes.CREATE_TASK_ARG) == true, openTaskId = openTaskId, onTaskOpened = { openTaskId = null }, taskAiClient = taskAiClient,
                             onCloseFocused = focus?.takeUnless { pickInTool }?.let { { popTool(toolId) } },
                             onBack = { popTool(toolId) }, onHomework = { showHomework = true },
