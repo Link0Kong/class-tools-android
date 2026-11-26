@@ -78,6 +78,41 @@ class CloudSpaceRepositoryTest {
         """{"id":"$id","name":"$name","size":$size,"mime":"application/octet-stream",""" +
             """"at":$at,"downloadUrl":"https://example.invalid/drop/file/$id"}"""
 
+    @Test
+    fun conversionUsesObservedAttemptAndOnlyDownloadsSameOwnerManifestAssets() = runTest {
+        var status = "failed"
+        val initial = listFileJson("f", "source.pptx")
+        val manifest = """{"files":{"pdf":{"name":"result.pdf","s":"http://example.invalid/drop/ppt-result/s1/f/pdf?sig=qa"},"compat":{"s":"https://other.invalid/x"}},"media_files":[]}"""
+        val transport = FakeCloudSpaceTransport { req ->
+            val reply = when {
+                req.url.endsWith("/mine") -> """{"ok":true,"session":{"id":"s1"}}"""
+                req.url.contains("/state?") -> {
+                    val item = initial.dropLast(1) + ""","conversion":{"status":"$status","attempt":3}}"""
+                    stateAllJson(listOf(item, listFileJson("ordinary", "doc.zip")), 8).dropLast(1) + ""","pptConversion":true}"""
+                }
+                req.method == CloudSpaceHttpMethod.POST -> {
+                    assertTrue(req.body!!.decodeToString().contains(""""retryAttempt":3"""))
+                    status = "ready"
+                    """{"ok":true}"""
+                }
+                else -> """{"ok":true,"name":"source.pptx","conversion":{"status":"ready"},"manifest":$manifest}"""
+            }
+            CloudSpaceResponse(200, reply)
+        }
+        val repo = repository(transport)
+        val first = (repo.ensureSpace() as CloudSpaceResult.Success).value
+        assertTrue(first.pptConversion)
+        val failed = first.files.first { it.id == "f" }
+        assertFalse(first.files.first { it.id == "ordinary" }.canConvert)
+        assertTrue(repo.submitConversion(failed) is CloudSpaceResult.Success)
+        assertTrue(repo.submitConversion(failed) is CloudSpaceResult.Failure)
+        assertEquals(1, transport.requests.count { it.method == CloudSpaceHttpMethod.POST })
+        val assets = (repo.assets("f") as CloudSpaceResult.Success).value
+        assertEquals(listOf("pdf"), assets.map { it.key })
+        assertEquals("test-token", transport.requests.last().headers["X-Device-Id"])
+        assertTrue((repo.findFreshFile("f") as CloudSpaceResult.Success).value.downloadUrl.contains("/file/"))
+    }
+
     // ---------------------------------------------------------------- 会话 / 列表
 
     @Test
@@ -107,7 +142,7 @@ class CloudSpaceRepositoryTest {
         assertEquals("s1", snapshot.session?.id)
         assertEquals(1, snapshot.count)
         assertEquals("讲义.pdf", snapshot.files[0].name)
-        assertEquals(listOf("/mine", "/open", "/state?sessionId=s1&all=1&since=0"), transport.paths())
+        assertEquals(listOf("/mine", "/open", "/state?sessionId=s1&all=1&ppt=1&since=0"), transport.paths())
     }
 
     @Test
@@ -150,7 +185,7 @@ class CloudSpaceRepositoryTest {
         assertTrue(result is CloudSpaceResult.Success)
         val snapshot = (result as CloudSpaceResult.Success).value
         assertEquals(listOf("keep"), snapshot.files.map { it.id })
-        assertEquals("/state?sessionId=s1&all=1&since=2", transport.paths().last())
+        assertEquals("/state?sessionId=s1&all=1&ppt=1&since=2", transport.paths().last())
     }
 
     @Test
@@ -465,7 +500,7 @@ class CloudSpaceRepositoryTest {
         val file = (result as CloudSpaceResult.Success).value
         assertTrue(file.downloadUrl.contains("sig=new"))
         // findFreshFile 内部强制全量刷新（since=0）
-        assertEquals("/state?sessionId=s1&all=1&since=0", transport.paths().last())
+        assertEquals("/state?sessionId=s1&all=1&ppt=1&since=0", transport.paths().last())
     }
 
     @Test

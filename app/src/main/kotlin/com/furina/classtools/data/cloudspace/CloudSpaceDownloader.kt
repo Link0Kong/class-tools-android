@@ -35,13 +35,13 @@ sealed interface CloudSpaceDownloadEvent {
 
     data class Done(val ticket: CloudSpaceDownloadTicket) : CloudSpaceDownloadEvent
 
-    data class Failed(val message: String) : CloudSpaceDownloadEvent
+    data class Failed(val message: String, val status: Int? = null) : CloudSpaceDownloadEvent
 }
 
 /** 下载能力抽象（生产实现 [OkHttpCloudSpaceDownloader]；UI 只依赖本接口，便于预览/测试注入）。 */
 interface CloudSpaceDownloader {
     /** 流式下载签名 URL 到本机下载目录（同名自动追加 ` (n)`，不覆盖）。 */
-    fun download(url: String, fileName: String, mimeType: String): Flow<CloudSpaceDownloadEvent>
+    fun download(url: String, fileName: String, mimeType: String, deviceToken: String? = null): Flow<CloudSpaceDownloadEvent>
 }
 
 /**
@@ -72,6 +72,7 @@ class OkHttpCloudSpaceDownloader(
         url: String,
         fileName: String,
         mimeType: String,
+        deviceToken: String?,
     ): Flow<CloudSpaceDownloadEvent> = flow {
         if (url.isBlank()) {
             emit(CloudSpaceDownloadEvent.Failed("文件不存在或已过期"))
@@ -84,8 +85,12 @@ class OkHttpCloudSpaceDownloader(
         val target = File(dir, finalName)
         val partial = File(dir, "$finalName.part")
         try {
-            val request = Request.Builder().url(url).get().build()
-            client.newCall(request).execute().use { response ->
+            val request = Request.Builder().url(url).get().apply {
+                deviceToken?.let { header("X-Device-Id", it) }
+            }.build()
+            val downloadClient = if (deviceToken == null) client else client.newBuilder()
+                .followRedirects(false).followSslRedirects(false).build()
+            downloadClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     emit(
                         CloudSpaceDownloadEvent.Failed(
@@ -94,6 +99,7 @@ class OkHttpCloudSpaceDownloader(
                             } else {
                                 "下载失败（HTTP ${response.code}）"
                             },
+                            status = response.code,
                         ),
                     )
                     return@flow

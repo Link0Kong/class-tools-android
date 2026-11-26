@@ -41,6 +41,7 @@ class CloudSpaceApi(
     private val json: Json = NetJson,
     /** 401 回调（可选）：装配层可据此清会话；默认不做任何事（避免临时鉴权故障强制退出）。 */
     private val onUnauthorized: () -> Unit = {},
+    val isCurrent: () -> Boolean = { true },
 ) {
 
     /** 规范化基址（**结尾不带 `/`**）；`url("/state")` → `<base>/state`。 */
@@ -96,7 +97,7 @@ class CloudSpaceApi(
      * 且「since 之后没有新事件」≠「没有文件」——文件列表必须以 files 为准。
      */
     suspend fun state(sessionId: String, since: Long = 0L): CloudSpaceResult<CloudSpaceState> {
-        val path = "/state?sessionId=${encode(sessionId)}&all=1&since=${since.coerceAtLeast(0L)}"
+        val path = "/state?sessionId=${encode(sessionId)}&all=1&ppt=1&since=${since.coerceAtLeast(0L)}"
         return when (val result = callGet(path)) {
             is CloudSpaceResult.Failure -> result
             is CloudSpaceResult.Success -> {
@@ -114,6 +115,7 @@ class CloudSpaceApi(
                         events = events,
                         cursor = cursor,
                         files = files,
+                        pptConversion = obj["pptConversion"] == kotlinx.serialization.json.JsonPrimitive(true),
                         expiredCount = obj["expiredNotice"].asIntOrNull() ?: 0,
                     ),
                 )
@@ -261,6 +263,7 @@ class CloudSpaceApi(
     }
 
     private suspend fun execute(request: CloudSpaceRequest): CloudSpaceResult<JsonObject> {
+        if (!isCurrent()) return CloudSpaceResult.Failure(CloudSpaceErrors.local("账号已切换"))
         val response = try {
             transport.execute(request)
         } catch (cancellation: CancellationException) {
@@ -269,6 +272,7 @@ class CloudSpaceApi(
             // 异常信息可能包含 URL / 主机名；统一用固定中文文案，不拼接 cause（避免泄漏到 UI/日志）。
             return CloudSpaceResult.Failure(CloudSpaceErrors.network())
         }
+        if (!isCurrent()) return CloudSpaceResult.Failure(CloudSpaceErrors.local("账号已切换"))
         return interpret(response)
     }
 
@@ -361,7 +365,51 @@ class CloudSpaceApi(
             downloadUrl = if (expired) "" else downloadUrl,
             expired = expired,
             uploadedAt = uploadedAt,
+            conversion = parseConversion(obj["conversion"] as? JsonObject),
         )
+    }
+
+    private fun parseConversion(obj: JsonObject?): DropConversion? {
+        if (obj == null) return null
+        val status = obj["status"].asStringOrNull() ?: return null
+        if (status !in setOf("queued", "processing", "ready", "failed")) return null
+        return DropConversion(status, obj["progress"].asIntOrNull()?.coerceIn(0, 100) ?: 0,
+            obj["error"].asStringOrNull().orEmpty(), obj["attempt"].asIntOrNull() ?: 0)
+    }
+
+    suspend fun submitConversion(sid: String, id: String, retry: Int?): CloudSpaceResult<JsonObject> =
+        callJson(CloudSpaceHttpMethod.POST, "/ppt/" + encode(id), buildJsonObject {
+            put("sessionId", sid)
+            retry?.let { put("retryAttempt", it) }
+        }.toString())
+
+    suspend fun assets(sid: String, id: String): CloudSpaceResult<List<DropAsset>> {
+        val response = callGet("/ppt/" + encode(id) + "?sessionId=" + encode(sid))
+        if (response is CloudSpaceResult.Failure) return response
+        val detail = (response as CloudSpaceResult.Success).value
+        val manifest = detail["manifest"] as? JsonObject
+        if (parseConversion(detail["conversion"] as? JsonObject)?.status != "ready" || manifest == null)
+            return CloudSpaceResult.Failure(CloudSpaceErrors.local("转换结果尚未就绪，请刷新"))
+        val base = java.net.URI(baseUrl)
+        val prefix = base.path.trimEnd('/') + "/ppt-result/$sid/$id/"
+        fun asset(key: String, element: JsonElement?): DropAsset? {
+            val obj = element as? JsonObject ?: return null
+            val link = obj["s"].asStringOrNull() ?: return null
+            val uri = runCatching { base.resolve(link) }.getOrNull() ?: return null
+            if (uri.scheme != base.scheme || uri.rawAuthority != base.rawAuthority ||
+                !uri.rawPath.startsWith(prefix) || uri.rawPath != uri.normalize().rawPath ||
+                uri.rawPath.removePrefix(prefix).contains('/')) return null
+            return DropAsset(key, obj["name"].asStringOrNull() ?: key, obj["mime"].asStringOrNull().orEmpty(), uri.toString())
+        }
+        val files = manifest["files"] as? JsonObject
+        val assets = buildList {
+            for (key in listOf("compat", "pdf")) asset(key, files?.get(key))?.let(::add)
+            (manifest["media_files"] as? JsonArray)?.forEach { media ->
+                val path = (media as? JsonObject)?.get("s").asStringOrNull().orEmpty().substringBefore('?')
+                asset(path.substringAfterLast('/'), media)?.let(::add)
+            }
+        }
+        return CloudSpaceResult.Success(assets)
     }
 
     private fun encode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())

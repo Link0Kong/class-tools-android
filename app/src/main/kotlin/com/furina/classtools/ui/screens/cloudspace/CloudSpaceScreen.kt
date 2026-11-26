@@ -68,6 +68,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.furina.classtools.data.cloudspace.CloudSpaceByteSource
 import com.furina.classtools.data.cloudspace.CloudSpaceDefaults
+import com.furina.classtools.data.cloudspace.DropAsset
 import com.furina.classtools.data.cloudspace.CloudSpaceDownloadEvent
 import com.furina.classtools.data.cloudspace.CloudSpaceDownloadTicket
 import com.furina.classtools.data.cloudspace.CloudSpaceFile
@@ -132,6 +133,7 @@ fun CloudSpaceScreen(
     var uploads by remember { mutableStateOf<List<CloudSpaceUploadTask>>(emptyList()) }
     var downloadingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var downloadedFiles by remember { mutableStateOf<Map<String, CloudSpaceDownloadTicket>>(emptyMap()) }
+    var conversionFiles by remember { mutableStateOf<Pair<String, List<DropAsset>>?>(null) }
     var deleteTarget by remember { mutableStateOf<CloudSpaceFile?>(null) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -354,6 +356,64 @@ fun CloudSpaceScreen(
         }
     }
 
+    fun openConversion(file: CloudSpaceFile) {
+        scope.launch {
+            if (file.conversion?.status != "ready") {
+                applyResult(repository.submitConversion(file))
+                return@launch
+            }
+            when (val result = repository.assets(file.id)) {
+                is CloudSpaceResult.Failure -> toast(context, result.error.displayMessage)
+                is CloudSpaceResult.Success -> if (repository.currentOwner()) conversionFiles = file.id to result.value
+            }
+        }
+    }
+
+    fun saveAsset(id: String, key: String) {
+        scope.launch {
+            repeat(2) { attempt ->
+                val assets = repository.assets(id)
+                if (assets is CloudSpaceResult.Failure) {
+                    toast(context, assets.error.displayMessage)
+                    return@launch
+                }
+                val asset = (assets as CloudSpaceResult.Success).value.firstOrNull { it.key == key }
+                if (asset == null) {
+                    toast(context, "转换产物已不可用")
+                    return@launch
+                }
+                val token = repository.downloadToken() ?: return@launch
+                var expired = false
+                downloader.download(asset.url, asset.name, asset.mime, token).collect { event ->
+                    if (repository.currentOwner()) when (event) {
+                        is CloudSpaceDownloadEvent.Progress -> Unit
+                        is CloudSpaceDownloadEvent.Done -> {
+                            val ticket = event.ticket
+                            if (!CloudSpaceFileIntents.tryOpen(context, ticket.file, ticket.mimeType, ticket.fileName))
+                                toast(context, "已下载到本机")
+                        }
+                        is CloudSpaceDownloadEvent.Failed -> {
+                            expired = event.status == 403 && attempt == 0
+                            if (!expired) toast(context, event.message)
+                        }
+                    }
+                }
+                if (!expired) return@launch
+            }
+        }
+    }
+
+    conversionFiles?.let { (id, assets) ->
+        CtLightAlertDialog(onDismissRequest = { conversionFiles = null }, title = { Text("转换结果") },
+            text = { Column {
+                if (assets.isEmpty()) Text("没有可下载的产物")
+                for (asset in assets) TextButton(onClick = { conversionFiles = null; saveAsset(id, asset.key) }) {
+                    Text(when (asset.key) { "compat" -> "下载兼容版"; "pdf" -> "下载 PDF"; else -> "下载 " + asset.name })
+                }
+            } },
+            confirmButton = { TextButton(onClick = { conversionFiles = null }) { Text("关闭") } })
+    }
+
     CloudSpaceContent(
         snapshot = snapshot,
         loading = loading,
@@ -367,6 +427,7 @@ fun CloudSpaceScreen(
         onUpload = { pickFiles.launch(arrayOf("*/*")) },
         onClear = { showClearConfirm = true },
         onDownload = ::openOrDownload,
+        onConvert = ::openConversion,
         onDelete = { deleteTarget = it },
         onCancelUpload = ::cancelUpload,
         onRetry = ::manualRefresh,
@@ -430,6 +491,7 @@ fun CloudSpaceContent(
     onUpload: () -> Unit,
     onClear: () -> Unit,
     onDownload: (CloudSpaceFile) -> Unit,
+    onConvert: (CloudSpaceFile) -> Unit = {},
     onDelete: (CloudSpaceFile) -> Unit,
     onCancelUpload: (String) -> Unit,
     onRetry: () -> Unit,
@@ -579,6 +641,7 @@ fun CloudSpaceContent(
                                 downloaded = file.id in downloadedIds,
                                 stackActions = spec.widthDp < 380,
                                 onDownload = { onDownload(file) },
+                                onConvert = if (snapshot.pptConversion && file.canConvert) ({ onConvert(file) }) else null,
                                 onDelete = { onDelete(file) },
                             )
                         }
@@ -840,6 +903,7 @@ private fun FileRow(
     downloaded: Boolean,
     stackActions: Boolean,
     onDownload: () -> Unit,
+    onConvert: (() -> Unit)?,
     onDelete: () -> Unit,
 ) {
     Surface(
@@ -891,6 +955,13 @@ private fun FileRow(
                         onDownload = onDownload,
                         onDelete = onDelete,
                     )
+                }
+            }
+            if (onConvert != null) {
+                val conversion = file.conversion
+                TextButton(onClick = onConvert, enabled = conversion?.status !in setOf("queued", "processing") &&
+                    (conversion?.status != "failed" || conversion.attempt > 0)) {
+                    Text(conversion?.label ?: "转换为兼容版和 PDF")
                 }
             }
             if (stackActions) {

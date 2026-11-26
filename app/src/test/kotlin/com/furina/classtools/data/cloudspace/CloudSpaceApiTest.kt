@@ -135,7 +135,7 @@ class CloudSpaceApiTest {
         assertEquals("f3", deleted[0].fileId)
 
         assertEquals(
-            "/state?sessionId=s1&all=1&since=0",
+            "/state?sessionId=s1&all=1&ppt=1&since=0",
             transport.pathOf(0),
         )
     }
@@ -167,7 +167,7 @@ class CloudSpaceApiTest {
         assertEquals("f9", files[0].id)
         assertEquals(1762860009234L, files[0].uploadedAt)
         assertEquals(3, state.expiredCount)
-        assertEquals("/state?sessionId=s1&all=1&since=42", transport.pathOf(0))
+        assertEquals("/state?sessionId=s1&all=1&ppt=1&since=42", transport.pathOf(0))
     }
 
     @Test
@@ -179,7 +179,7 @@ class CloudSpaceApiTest {
 
         api.state("s1", since = 9)
 
-        assertEquals("/state?sessionId=s1&all=1&since=9", transport.pathOf(0))
+        assertEquals("/state?sessionId=s1&all=1&ppt=1&since=9", transport.pathOf(0))
     }
 
     @Test

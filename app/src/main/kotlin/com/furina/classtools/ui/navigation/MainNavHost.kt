@@ -918,10 +918,9 @@ fun MainNavHost(
                     onBack = { popTool(toolId) },
                 )
 
-                "file" -> CloudSpaceScreen(
-                    onBack = { popTool(toolId) },
-                    repository = container.cloudSpaceRepository,
-                )
+                "file" -> androidx.compose.runtime.key(container.cloudSpaceRepository) {
+                    CloudSpaceScreen(onBack = { popTool(toolId) }, repository = container.cloudSpaceRepository)
+                }
 
                 "express" -> ExpressScreen(
                     onBack = { popTool(toolId) },

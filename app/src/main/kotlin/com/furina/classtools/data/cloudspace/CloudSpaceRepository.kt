@@ -40,6 +40,9 @@ class CloudSpaceRepository(
 
     @Volatile
     private var cursor: Long = 0L
+    @Volatile private var pptConversion = false
+    fun currentOwner() = api.isCurrent()
+    fun downloadToken() = if (currentOwner()) api.headers()["X-Device-Id"] else null
 
     /** 当前列表快照（只读；可在组合/任意线程读取）。 */
     fun snapshot(): CloudSpaceSnapshot = CloudSpaceSnapshot(
@@ -47,6 +50,7 @@ class CloudSpaceRepository(
         files = files,
         expiredCount = if (knownExpiredCount != 0) knownExpiredCount else expiredIds.size,
         cursor = cursor,
+        pptConversion = pptConversion,
     )
 
     // ---------------------------------------------------------------- 会话 + 列表
@@ -101,6 +105,27 @@ class CloudSpaceRepository(
                 return CloudSpaceResult.Success(file)
             }
         }
+    }
+
+    suspend fun submitConversion(file: CloudSpaceFile): CloudSpaceResult<CloudSpaceSnapshot> = mutex.withLock {
+        val sid = session?.id ?: return@withLock CloudSpaceResult.Failure(CloudSpaceErrors.local("云空间未连接"))
+        val current = files.firstOrNull { it.id == file.id }
+        if (!pptConversion || current?.canConvert != true || file.conversion != current.conversion)
+            return@withLock CloudSpaceResult.Failure(CloudSpaceErrors.local("文件状态已变化，请刷新"))
+        val seen = file.conversion
+        if (seen != null && (seen.status != "failed" || seen.attempt < 1))
+            return@withLock CloudSpaceResult.Success(snapshot())
+        when (val response = api.submitConversion(sid, file.id, seen?.attempt)) {
+            is CloudSpaceResult.Failure -> response
+            is CloudSpaceResult.Success -> refreshLocked(true)
+        }
+    }
+
+    suspend fun assets(fileId: String): CloudSpaceResult<List<DropAsset>> {
+        val sid = session?.id
+        if (sid == null || !pptConversion || files.none { it.id == fileId && it.conversion?.status == "ready" })
+            return CloudSpaceResult.Failure(CloudSpaceErrors.local("文件已过期或转换结果不可用"))
+        return api.assets(sid, fileId)
     }
 
     // ---------------------------------------------------------------- 上传
@@ -280,6 +305,7 @@ class CloudSpaceRepository(
             files = emptyList()
             expiredIds = emptySet()
             knownExpiredCount = 0
+        pptConversion = false
             cursor = 0L
         }
         return ensureSpace()
@@ -291,6 +317,7 @@ class CloudSpaceRepository(
         files = emptyList()
         expiredIds = emptySet()
         knownExpiredCount = 0
+        pptConversion = false
         cursor = 0L
     }
 
@@ -313,6 +340,7 @@ class CloudSpaceRepository(
             is CloudSpaceResult.Failure -> stateResult
             is CloudSpaceResult.Success -> {
                 val state = stateResult.value
+                pptConversion = state.pptConversion
                 val listed = state.files
                 if (listed != null) {
                     /* drop v2.5：服务端随 /state 返回当前有效文件清单 → 列表以它为准。

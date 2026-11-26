@@ -63,7 +63,10 @@ data class CloudSpaceFile(
     val expired: Boolean = false,
     /** 上传完成时刻（文件 TTL 起算点；毫秒）。 */
     val uploadedAt: Long = 0L,
+    val conversion: DropConversion? = null,
 ) {
+    val canConvert: Boolean get() = !expired && sizeBytes in 1..(64L * 1024 * 1024) &&
+        name.substringAfterLast('.', "").lowercase() in setOf("ppt", "pptx")
     val sizeText: String get() = CloudSpaceLogic.fmtSize(sizeBytes)
     val timeText: String get() = CloudSpaceLogic.fmtTime(uploadedAt)
     fun ttlText(now: Long = System.currentTimeMillis()): String =
@@ -78,6 +81,7 @@ data class CloudSpaceSnapshot(
     val expiredCount: Int = 0,
     /** 已合并的最大事件 seq（增量轮询用）。 */
     val cursor: Long = 0L,
+    val pptConversion: Boolean = false,
 ) {
     val connected: Boolean get() = session != null
     val count: Int get() = files.size
@@ -106,6 +110,7 @@ data class CloudSpaceState(
     val cursor: Long,
     val files: List<CloudSpaceFile>? = null,
     val expiredCount: Int = 0,
+    val pptConversion: Boolean = false,
 )
 
 /** `/upload/init` 响应。 */
@@ -151,3 +156,15 @@ data class CloudSpaceUploadTask(
             CloudSpaceUploadState.CANCELED -> message.ifBlank { "已取消" }
         }
 }
+
+
+data class DropConversion(val status: String, val progress: Int, val error: String, val attempt: Int) {
+    val label: String get() = when (status) {
+        "queued" -> "等待转换"
+        "processing" -> "转换中 $progress%"
+        "ready" -> "查看转换结果"
+        else -> if (error.isBlank()) "转换失败，重试" else "转换失败，重试 · $error"
+    }
+}
+
+data class DropAsset(val key: String, val name: String, val mime: String, val url: String)

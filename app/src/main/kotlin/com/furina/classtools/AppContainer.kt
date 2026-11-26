@@ -230,7 +230,7 @@ class AppContainer(context: Context) {
                     .reconcileLiveCourse(null, System.currentTimeMillis())
             }
             // 云空间会话绑定班级身份；切号/退出时丢弃内存会话与游标，避免串号。
-            if (cloudSpace.isInitialized()) cloudSpaceRepository.reset()
+            cloudSpace = null
             // 账号绑定列表按学号区分：切号/退出时丢弃内存列表，避免显示上一个账号的绑定。
             if (oppoAccount.isInitialized()) oppoAccountManager.clearBindings()
             if (honorAccount.isInitialized()) honorAccountManager.clearBindings()
@@ -458,14 +458,19 @@ class AppContainer(context: Context) {
     ) }
 
     /** 临时云空间（ECS drop 服务）：同账号跨设备；token 只放 X-Device-Id 请求头。 */
-    private val cloudSpace = lazy {
-        CloudSpaceRepository(
-            api = CloudSpaceApi(
-                baseUrl = CloudSpaceDefaults.BASE_URL,
-                tokenProvider = { activeSession?.takeUnless { it.debug }?.token },
-            ),
-        )
-    }
+    private var cloudOwner: ApiIdentity? = null
+    private var cloudSpace: CloudSpaceRepository? = null
+    val cloudSpaceRepository: CloudSpaceRepository
+        @Synchronized get() {
+            val owner = identity
+            val existing = cloudSpace
+            if (existing != null && owner == cloudOwner) return existing
+            val repository = CloudSpaceRepository(CloudSpaceApi(baseUrl = CloudSpaceDefaults.BASE_URL,
+                tokenProvider = { owner.token }, isCurrent = { identity == owner }))
+            cloudOwner = owner
+            cloudSpace = repository
+            return repository
+        }
 
     /** 团员名单仓库（RPC class_league；仅姓名/座号，无 sid）。 */
     /** 懒加载：启动首帧不需要团员名单仓库。 */
@@ -682,7 +687,6 @@ class AppContainer(context: Context) {
         )
     }
 
-    val cloudSpaceRepository: CloudSpaceRepository by cloudSpace
     val oppoAccountManager: OppoAccountManager by oppoAccount
     val honorAccountManager: HonorAccountManager by honorAccount
 
