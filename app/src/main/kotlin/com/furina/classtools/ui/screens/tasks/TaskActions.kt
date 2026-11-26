@@ -1,9 +1,10 @@
 package com.furina.classtools.ui.screens.tasks
 
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
+import com.furina.classtools.ui.components.CtToastBus
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -67,7 +68,7 @@ internal fun TaskMenu(repository: TaskRepository, snapshot: JsonObject, onNew: (
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
     var clear by rememberSaveable { mutableStateOf(false) }
-    fun feedback(message: String) = Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    fun feedback(message: String) = CtToastBus.show(message)
     fun write(uri: android.net.Uri?, content: () -> String) {
         if (uri != null) scope.launch {
             val result = withContext(Dispatchers.IO) { runCatching {
@@ -104,7 +105,7 @@ internal fun TaskMenu(repository: TaskRepository, snapshot: JsonObject, onNew: (
             options.forEach { (name, act) -> DropdownMenuItem(text = { Text(name) }, onClick = { menu = false; act() }) }
         }
     }
-    if (clear) AlertDialog(onDismissRequest = { clear = false }, title = { Text("清除已完成的 ${snapshot.objects("items").count { it.flag("done") }} 项任务？") },
+    if (clear) CtLightAlertDialog(onDismissRequest = { clear = false }, title = { Text("清除已完成的 ${snapshot.objects("items").count { it.flag("done") }} 项任务？") },
         confirmButton = { TextButton(onClick = { repository.edit { items, _ -> items.filterNot { it.flag("done") } }; clear = false }) { Text("清除") } },
         dismissButton = { TextButton(onClick = { clear = false }) { Text("取消") } })
 }
@@ -113,15 +114,17 @@ internal fun TaskMenu(repository: TaskRepository, snapshot: JsonObject, onNew: (
 internal fun ImportSharedTask(onClose: () -> Unit, onPreview: (SharedTask) -> Unit) {
     var link by rememberSaveable { mutableStateOf("") }
     var invalid by rememberSaveable { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onClose, title = { Text("从分享链接添加") }, text = {
+    CtLightAlertDialog(onDismissRequest = onClose, title = { Text("从分享链接添加") }, text = {
         OutlinedTextField(link, {
             link = it.take(TaskShareLink.MAX_INPUT + 1)
             invalid = false
-        }, label = { Text("任务分享链接或小程序路径") }, maxLines = 6, isError = invalid,
-            supportingText = if (invalid) ({ Text("无法读取任务，请粘贴完整的任务分享链接或小程序分享参数。") }) else null)
+        }, label = { Text("任务分享链接或小程序路径") }, maxLines = 6, isError = invalid)
     }, confirmButton = { TextButton(enabled = link.isNotBlank(), onClick = {
         val shared = TaskShareLink.parse(link)
-        if (shared == null) invalid = true else onPreview(shared)
+        if (shared == null) {
+            invalid = true
+            CtToastBus.show("无法读取任务，请粘贴完整的任务分享链接或小程序分享参数。")
+        } else onPreview(shared)
     }) { Text("预览任务") } }, dismissButton = { TextButton(onClick = onClose) { Text("取消") } })
 }
 
@@ -135,7 +138,7 @@ internal fun TaskManagement(repository: TaskRepository, snapshot: JsonObject, vi
     fun form(group: JsonObject?) {
         form = group?.text("id").orEmpty(); name = group?.text("name").orEmpty(); color = group?.text("color") ?: "cy"
     }
-    AlertDialog(onDismissRequest = onClose, title = { Text("任务管理") }, text = {
+    CtLightAlertDialog(onDismissRequest = onClose, title = { Text("任务管理") }, text = {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
             Choice("默认提醒", snapshot.prefs().text("defaultRemind").ifBlank { "none" }, reminderOptions) {
                 repository.savePreferences(buildJsonObject { put("defaultRemind", it) })
@@ -156,7 +159,7 @@ internal fun TaskManagement(repository: TaskRepository, snapshot: JsonObject, vi
             if (groups.size < 30) TextButton(onClick = { form(null) }) { Text("新建分组") }
         }
     }, confirmButton = { TextButton(onClick = onClose) { Text("完成") } })
-    if (form != null) AlertDialog(onDismissRequest = { form = null }, title = { Text(if (form.isNullOrEmpty()) "新建分组" else "编辑分组") }, text = {
+    if (form != null) CtLightAlertDialog(onDismissRequest = { form = null }, title = { Text(if (form.isNullOrEmpty()) "新建分组" else "编辑分组") }, text = {
         Column {
             OutlinedTextField(name, { name = it.take(20) }, label = { Text("分组名称") }, singleLine = true)
             Choice("颜色", color, groupColors.toList()) { color = it }
@@ -166,7 +169,7 @@ internal fun TaskManagement(repository: TaskRepository, snapshot: JsonObject, vi
         if (form.isNullOrEmpty()) repository.addGroup(name, color) else repository.editGroup(form.orEmpty(), name, color)
         form = null
     }) { Text("保存") } }, dismissButton = { TextButton(onClick = { form = null }) { Text("取消") } })
-    if (remove) AlertDialog(onDismissRequest = { remove = false }, title = { Text("删除分组「$name」？") },
+    if (remove) CtLightAlertDialog(onDismissRequest = { remove = false }, title = { Text("删除分组「$name」？") },
         text = { Text("该分组的任务将移到未分组。") }, confirmButton = { TextButton(onClick = {
             repository.removeGroup(form.orEmpty()); remove = false; form = null
         }) { Text("删除") } }, dismissButton = { TextButton(onClick = { remove = false }) { Text("取消") } })

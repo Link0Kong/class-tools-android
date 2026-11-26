@@ -2,10 +2,8 @@
 
 package com.furina.classtools.ui.screens.timetable
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animate
@@ -67,8 +65,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -125,7 +121,6 @@ import com.furina.classtools.ui.components.expressive.CtSegmentedButtons
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtPalette
 import com.furina.classtools.ui.theme.CtRadius
-import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtType
@@ -194,7 +189,6 @@ fun TimetableViewScreen(
     onExportTimetable: ((ExportCardSpec) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
     val spec = rememberCtAdaptiveSpec()
     val dark = LocalCtDarkTheme.current
     val zone = remember { ZoneId.systemDefault() }
@@ -276,7 +270,7 @@ fun TimetableViewScreen(
         viewMode = TimetableViewMode.DAY
         focusDetail = focus.start > 0 && focus.match(snapshot, day) != null
         focusApplied = true
-        if (focus.start > 0 && !focusDetail) snackbar.showSnackbar("这节课已变动，显示当天安排")
+        if (focus.start > 0 && !focusDetail) CtToastBus.show("这节课已变动，显示当天安排")
     }
     val focusedCourse = if (focusDetail && focus != null) focus.match(snapshot, LocalDate.parse(focus.date)) else null
     val displayWeek = remember(currentWeek, weekOffset, maxWeek) {
@@ -353,7 +347,7 @@ fun TimetableViewScreen(
             nowMillis = nowMillis,
         )
         if (exportSpec == null) {
-            scope.launch { snackbar.showSnackbar("当前周次无课，暂无可导出的内容") }
+            CtToastBus.show("当前周次无课，暂无可导出的内容")
         } else {
             export(exportSpec)
         }
@@ -363,7 +357,7 @@ fun TimetableViewScreen(
         scope.launch {
             runCatching { repository.clearPersonal() }
             loadToken += 1
-            snackbar.showSnackbar("已清除个人课表，回退公共课表")
+            CtToastBus.show("已清除个人课表，回退公共课表")
         }
     }
 
@@ -567,21 +561,6 @@ fun TimetableViewScreen(
                 }
             }
 
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-            )
-            }
-
             // 课表接入入口（悬浮按钮）：导出 .ics / WakeUp 备份、写入系统日历并提醒
             if (phase == TtPhase.READY && snapshot.c.isNotEmpty()) {
                 TimetableLinkFab(
@@ -657,7 +636,7 @@ fun TimetableViewScreen(
                 sessionSid = sessionSid,
                 termStart = termStart,
                 onDismiss = { showLinkSheet = false },
-                onMessage = { text -> scope.launch { snackbar.showSnackbar(text) } },
+                onMessage = CtToastBus::show,
             )
         }
 
@@ -671,13 +650,13 @@ fun TimetableViewScreen(
                     scope.launch {
                         runCatching { repository.savePersonal(personal) }
                         loadToken += 1
-                        snackbar.showSnackbar("已保存个人课表（${personal.c.size} 门）")
+                        CtToastBus.show("已保存个人课表（${personal.c.size} 门）")
                     }
                 },
                 onClearPersonal = {
                     runCatching { repository.clearPersonal() }
                     loadToken += 1
-                    snackbar.showSnackbar("已清除个人课表，回退公共课表")
+                    CtToastBus.show("已清除个人课表，回退公共课表")
                 },
             )
         }

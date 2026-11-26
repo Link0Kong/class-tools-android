@@ -2,11 +2,8 @@
 
 package com.furina.classtools.ui.screens.vote
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
-import com.furina.classtools.ui.theme.CtShape
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.net.Uri
@@ -45,8 +42,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -236,7 +231,6 @@ fun VoteCreateScreen(
     val spec = rememberCtAdaptiveSpec()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
 
     val editing = !editingPollId.isNullOrBlank()
     var loading by remember { mutableStateOf(editing && initialEditDetail == null && !skipLoad) }
@@ -279,12 +273,12 @@ fun VoteCreateScreen(
             }
             submittingImage = false
             if (dataUrl == null) {
-                snackbar.showSnackbar("图片处理失败，请换一张")
+                CtToastBus.show("图片处理失败，请换一张")
             } else {
                 val currentTotal = form.options.sumOf { it.img.length }
                 val replaced = form.options.getOrNull(index)?.img?.length ?: 0
                 if (currentTotal - replaced + dataUrl.length > VoteLimits.MAX_TOTAL_IMAGE_CHARS) {
-                    snackbar.showSnackbar("选项图片总大小超限")
+                    CtToastBus.show("选项图片总大小超限")
                 } else {
                     updateForm { copy(options = options.replaceAt(index) { it.copy(img = dataUrl) }) }
                 }
@@ -303,7 +297,7 @@ fun VoteCreateScreen(
                 form = VoteFormState.fromPoll(result.value.poll)
                 loading = false
                 if (result.value.total > 0) {
-                    snackbar.showSnackbar("已有投票，不能修改内容")
+                    CtToastBus.show("已有投票，不能修改内容")
                 }
             }
 
@@ -332,7 +326,7 @@ fun VoteCreateScreen(
                     }
 
                     is VoteResult.Failure -> {
-                        snackbar.showSnackbar(result.error.message)
+                        CtToastBus.show(result.error.message)
                         errors = listOf(VoteValidationError(VoteField.TITLE, "SUBMIT", result.error.message))
                     }
                 }
@@ -340,7 +334,7 @@ fun VoteCreateScreen(
                 when (val result = repository.create(draft)) {
                     is VoteResult.Success -> onFinished(result.value.poll.id, true)
                     is VoteResult.Failure -> {
-                        snackbar.showSnackbar(result.error.message)
+                        CtToastBus.show(result.error.message)
                         errors = listOf(VoteValidationError(VoteField.TITLE, "SUBMIT", result.error.message))
                     }
                 }
@@ -481,20 +475,6 @@ fun VoteCreateScreen(
                         }
                     }
                 }
-            }
-
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp),
-            )
             }
         }
     }

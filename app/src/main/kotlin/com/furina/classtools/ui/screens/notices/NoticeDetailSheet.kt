@@ -2,6 +2,8 @@
 
 package com.furina.classtools.ui.screens.notices
 
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
+import com.furina.classtools.ui.components.CtToastBus
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +45,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import android.content.Intent
-import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -595,7 +596,7 @@ internal fun NoticeRawMessagesButton(item: NoticeUiItem, nowMillis: Long = Syste
     TextButton(onClick = { expanded = true }) { Text("原始消息") }
     if (expanded) {
         val anchor = entry?.let { NoticeStatusMachine.anchorOf(it.group, it.items) } ?: item.ts
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { expanded = false },
             title = { Text("原始消息") },
             text = {
@@ -720,11 +721,14 @@ private fun DetailInfoRow(
                         val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
                         if (runCatching { context.startActivity(intent) }.isFailure) {
                             clipboard.setText(AnnotatedString(url))
-                            android.widget.Toast.makeText(context, "链接已复制", android.widget.Toast.LENGTH_SHORT).show()
+                            CtToastBus.showCopied("链接已复制")
                         }
                     }) { Text("打开") }
                 }
-                TextButton(onClick = { clipboard.setText(AnnotatedString(url)) }) { Text("复制链接") }
+                TextButton(onClick = {
+                    clipboard.setText(AnnotatedString(url))
+                    CtToastBus.showCopied("链接已复制")
+                }) { Text("复制链接") }
             }
         }
     }

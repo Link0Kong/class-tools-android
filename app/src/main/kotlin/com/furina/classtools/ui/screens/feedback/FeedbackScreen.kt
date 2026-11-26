@@ -1,10 +1,7 @@
 package com.furina.classtools.ui.screens.feedback
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
-import com.furina.classtools.ui.theme.CtShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -35,8 +31,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextField
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -104,7 +98,6 @@ fun FeedbackScreen(
     nameOfSid: (String) -> String? = { null },
 ) {
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
     val isAdmin = session?.isAdmin == true
     val sid = session?.sid
 
@@ -127,7 +120,7 @@ fun FeedbackScreen(
     var reloadToken by remember { mutableStateOf(0) }
 
     fun notify(message: String) {
-        scope.launch { snackbar.showSnackbar(message) }
+        CtToastBus.show(message)
     }
 
     LaunchedEffect(reloadToken) {
@@ -268,21 +261,6 @@ fun FeedbackScreen(
                         )
                     }
                 }
-            }
-
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-            )
             }
         }
     }

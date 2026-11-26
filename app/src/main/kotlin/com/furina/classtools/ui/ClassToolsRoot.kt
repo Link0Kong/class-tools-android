@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -33,7 +32,6 @@ import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.ui.components.BrandMark
 import com.furina.classtools.ui.components.CtContainerTransformHost
-import com.furina.classtools.ui.components.CtToastHost
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.components.update.UpdateHost
@@ -118,7 +116,6 @@ fun ClassToolsRoot(
     val announcementVersion by container.appSettings.remoteAnnouncementVersion.collectAsStateWithLifecycle(0)
     val dismissedAnnouncementVersion by container.appSettings.dismissedAnnouncementVersion.collectAsStateWithLifecycle(0)
     var announcementClosedVersion by remember { mutableStateOf(0) }
-    val signedIn = sessionState is SessionState.SignedIn
 
     Box(modifier = Modifier.fillMaxSize()) {
         CtContainerTransformHost {
@@ -202,14 +199,6 @@ fun ClassToolsRoot(
             }
         }
         }
-
-        // 全局 M3 Snackbar：所有 CtToastBus 消息都在底栏上方显示。
-        CtToastHost(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = if (signedIn) 96.dp else 24.dp),
-        )
 
         // App 内更新：宿主放根级 —— 冷启动即自动检查并直接弹窗（登录后首页可见），
         // 不依赖用户去「我的 → 检查更新」；身份门禁/加载页也能看到（未登录也检查）。

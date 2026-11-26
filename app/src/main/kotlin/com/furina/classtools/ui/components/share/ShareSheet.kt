@@ -45,6 +45,7 @@ import com.furina.classtools.features.share.ShareFiles
 import com.furina.classtools.features.share.ShareOutcome
 import com.furina.classtools.features.share.SharePresenter
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
+import com.furina.classtools.ui.components.CtToastBus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -200,7 +201,7 @@ fun ShareSheet(
                 TextButton(
                     onClick = {
                         ShareFiles.copyToClipboard(context, view)
-                        onMessage("已复制分享文案")
+                        CtToastBus.showCopied("已复制分享文案")
                     },
                     modifier = Modifier.heightIn(min = 48.dp),
                 ) {

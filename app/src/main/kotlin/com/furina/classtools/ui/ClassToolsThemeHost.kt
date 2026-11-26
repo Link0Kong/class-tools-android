@@ -11,6 +11,7 @@ import com.furina.classtools.AppContainer
 import androidx.compose.runtime.withFrameNanos
 import com.furina.classtools.data.background.LocalBackgroundStore
 import com.furina.classtools.data.settings.LocalAppSettingsStore
+import com.furina.classtools.ui.components.CtFeedbackRoot
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.CtImmersiveStatusBar
 
@@ -63,7 +64,9 @@ fun ClassToolsThemeHost(
             LocalBackgroundStore provides backgroundStore,
         ) {
             // 全局隐藏系统状态栏（下滑临时显示）；关闭时恢复 statusBarsPadding 的常规行为。
-            CtImmersiveStatusBar(enabled = hideStatusBar, content = content)
+            CtImmersiveStatusBar(enabled = hideStatusBar) {
+                CtFeedbackRoot(content)
+            }
         }
     }
 }

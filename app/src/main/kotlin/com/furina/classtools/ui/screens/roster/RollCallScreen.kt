@@ -2,11 +2,9 @@
 
 package com.furina.classtools.ui.screens.roster
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
+import com.furina.classtools.ui.components.ctFeedbackState
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
-import com.furina.classtools.ui.theme.CtShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +15,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
@@ -35,8 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -115,7 +110,7 @@ fun RollCallScreen(
     forcedErrorMessage: String? = null,
 ) {
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
+    val snackbar = ctFeedbackState
     val haptics = LocalHapticFeedback.current
     val (rosterState, writeRoster) = rememberRosterSync(
         userDataRepository = userDataRepository,
@@ -139,7 +134,7 @@ fun RollCallScreen(
     var editingRoster by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
     fun notify(message: String) {
-        scope.launch { snackbar.showSnackbar(message) }
+        CtToastBus.show(message)
     }
 
     /** v4.1 撤销：5s 内可撤销的本地危险操作（重置本轮/清空点名名单）。 */
@@ -152,7 +147,7 @@ fun RollCallScreen(
             )
             if (result == SnackbarResult.ActionPerformed) {
                 undo()
-                snackbar.showSnackbar("已撤销")
+                CtToastBus.show("已撤销")
             }
         }
     }
@@ -383,21 +378,6 @@ fun RollCallScreen(
                         )
                     }
                 }
-            }
-
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-            )
             }
         }
     }

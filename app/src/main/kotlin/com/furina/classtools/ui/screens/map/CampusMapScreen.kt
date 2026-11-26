@@ -50,6 +50,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.furina.classtools.BuildConfig
 import com.furina.classtools.R
+import com.furina.classtools.ui.components.CtToastBus
+import com.furina.classtools.ui.components.EmbeddedFeedbackScript
 import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlinx.coroutines.delay
@@ -112,6 +114,7 @@ fun CampusMapScreen(
 
     fun openBrowser(uri: Uri) {
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+            .onFailure { CtToastBus.show("无法打开浏览器") }
     }
 
     val webView = remember(context) {
@@ -131,6 +134,7 @@ fun CampusMapScreen(
 
                 override fun onPageFinished(view: WebView, url: String) {
                     if (url != currentUrl) return
+                    view.evaluateJavascript(EmbeddedFeedbackScript, null)
                     listOf(0L, 150L, 600L, 1800L, 4500L).forEach { wait ->
                         view.postDelayed({
                             if (url == currentUrl && loading) {

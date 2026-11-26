@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.furina.classtools.ui.components.CtFeedbackWindow
 import com.furina.classtools.data.network.ApiClient
 import com.furina.classtools.data.network.ApiResult
 import com.furina.classtools.data.network.NetJson
@@ -440,6 +441,7 @@ fun NoticeImageFullDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        CtFeedbackWindow()
         Box(
             modifier = Modifier
                 .fillMaxSize()

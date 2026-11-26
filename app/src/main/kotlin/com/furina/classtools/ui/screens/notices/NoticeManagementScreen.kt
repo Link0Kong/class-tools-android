@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.furina.classtools.data.session.Session
+import com.furina.classtools.ui.components.EmbeddedFeedbackScript
 import com.furina.classtools.ui.components.ctTopBarRaw
 import org.json.JSONObject
 
@@ -62,6 +63,7 @@ internal fun NoticeManagementScreen(session: Session, onBack: () -> Unit) {
 
                                 override fun onPageFinished(view: WebView, url: String) {
                                     if (url.substringBefore('#') != MANAGEMENT_URL || failed) return
+                                    view.evaluateJavascript(EmbeddedFeedbackScript, null)
                                     val identity = JSONObject().put("sid", session.sid).put("name", session.name)
                                         .put("role", session.role).put("badge", session.badge)
                                         .put("token", session.token).put("is_admin", session.isAdmin)

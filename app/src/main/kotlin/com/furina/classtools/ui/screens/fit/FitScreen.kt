@@ -34,6 +34,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.TextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -68,6 +70,8 @@ import com.furina.classtools.features.fit.FitScoring
 import com.furina.classtools.features.fit.FitSex
 import com.furina.classtools.features.fit.FitTables
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.CtToastBus
+import com.furina.classtools.ui.components.ctFeedbackState
 import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
@@ -156,9 +160,7 @@ fun FitScreen(
     var showClearDialog by remember { mutableStateOf(false) }
     var renameIndex by remember { mutableStateOf<Int?>(null) }
     var deleteIndex by remember { mutableStateOf<Int?>(null) }
-    var toast by remember { mutableStateOf<String?>(null) }
-    // D-07：删除后 5 秒内可撤销（撤销=恢复本地列表并按原 id 重新保存）。
-    var undoRecord by remember { mutableStateOf<FitRecord?>(null) }
+    val snackbar = ctFeedbackState
 
     val calc: FitCalc = remember(input) { FitScoring.calc(input) }
 
@@ -192,7 +194,7 @@ fun FitScreen(
 
     fun saveRecord() {
         if (calc.wtDone <= 0) {
-            toast = "先填写成绩"
+            CtToastBus.show("先填写成绩")
             return
         }
         val saved = FitHistory.save(
@@ -204,7 +206,7 @@ fun FitScreen(
         )
         history = saved.records
         onSave(saved.record, saved.records, saved.dropped)
-        toast = if (saved.merged) "已合并到历史记录" else "已保存到历史记录"
+        CtToastBus.show(if (saved.merged) "已合并到历史记录" else "已保存到历史记录")
     }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
@@ -301,7 +303,7 @@ fun FitScreen(
                         onClear = { showClearDialog = true },
                         onCopy = {
                             clipboard.setText(AnnotatedString(FitExportFactory.copyText(calc)))
-                            toast = "已复制成绩"
+                            CtToastBus.showCopied("已复制成绩")
                         },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                     )
@@ -366,12 +368,19 @@ fun FitScreen(
                 text = { Text("删除后可在提示条中撤销（云端会同步删除）") },
                 confirmButton = {
                     TextButton(onClick = {
-                        val removed = history.getOrNull(index)
+                        val removed = history.getOrNull(index) ?: return@TextButton
                         history = FitHistory.deleteAt(history, index)
-                        removed?.let { onDelete(it) }
-                        undoRecord = removed
+                        onDelete(removed)
                         deleteIndex = null
-                        toast = "已删除"
+                        scope.launch {
+                            val action = snackbar.showSnackbar("已删除", "撤销", duration = SnackbarDuration.Long)
+                            if (action == SnackbarResult.ActionPerformed) {
+                                val restored = (listOf(removed) + history).take(FitRecord.MAX_RECORDS)
+                                history = restored
+                                onSave(removed, restored, emptyList())
+                                CtToastBus.show("已恢复")
+                            }
+                        }
                     }) { Text("删除") }
                 },
                 dismissButton = { TextButton(onClick = { deleteIndex = null }) { Text("取消") } },
@@ -386,53 +395,13 @@ fun FitScreen(
                     TextButton(onClick = {
                         input = FitInput.blank(input.sex, input.grade)
                         showClearDialog = false
-                        toast = "已清空"
+                        CtToastBus.show("已清空")
                     }) { Text("清空") }
                 },
                 dismissButton = { TextButton(onClick = { showClearDialog = false }) { Text("取消") } },
             )
         }
 
-        toast?.let { message ->
-            LaunchedEffect(message) {
-                // 有可撤销记录时给足 5 秒操作窗口，否则保持 2.2 秒。
-                delay(if (undoRecord != null) 5000 else 2200)
-                if (toast == message) {
-                    toast = null
-                    undoRecord = null
-                }
-            }
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-                Surface(
-                    modifier = Modifier.padding(bottom = 72.dp),
-                    shape = CtShapeTokens.pill,
-                    color = MaterialTheme.colorScheme.inverseSurface,
-                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = 16.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
-                    ) {
-                        Text(
-                            text = message,
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                        val pending = undoRecord
-                        if (pending != null) {
-                            TextButton(onClick = {
-                                val restored = (listOf(pending) + history).take(FitRecord.MAX_RECORDS)
-                                history = restored
-                                onSave(pending, restored, emptyList())
-                                undoRecord = null
-                                toast = "已恢复"
-                            }) {
-                                Text("撤销")
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

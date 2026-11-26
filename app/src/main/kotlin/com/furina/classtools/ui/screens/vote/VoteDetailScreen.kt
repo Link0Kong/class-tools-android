@@ -2,11 +2,10 @@
 
 package com.furina.classtools.ui.screens.vote
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
 
 import com.furina.classtools.ui.components.light.ctLightMaterial
 import com.furina.classtools.ui.theme.CtLightScene
-import com.furina.classtools.ui.theme.CtShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,8 +41,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -134,7 +131,6 @@ fun VoteDetailScreen(
     val spec = rememberCtAdaptiveSpec()
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
-    val snackbar = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var detail by remember(initialDetail) { mutableStateOf(initialDetail) }
@@ -217,7 +213,7 @@ fun VoteDetailScreen(
             optionIds = current.poll.options.map { it.id },
         )
         if (choiceError != null) {
-            scope.launch { snackbar.showSnackbar(choiceError.message) }
+            CtToastBus.show(choiceError.message)
             return
         }
         scope.launch {
@@ -225,10 +221,10 @@ fun VoteDetailScreen(
             when (val result = repository.submit(pollId, selected.toList())) {
                 is VoteResult.Success -> {
                     applyDetail(result.value)
-                    snackbar.showSnackbar(if (current.hasVoted) "已改票" else "已提交投票")
+                    CtToastBus.show(if (current.hasVoted) "已改票" else "已提交投票")
                 }
 
-                is VoteResult.Failure -> snackbar.showSnackbar(result.error.message)
+                is VoteResult.Failure -> CtToastBus.show(result.error.message)
             }
             submitting = false
         }
@@ -243,11 +239,11 @@ fun VoteDetailScreen(
                     is PollManageResult.Deleted -> onBack()
                     is PollManageResult.Updated -> {
                         applyDetail(value.detail)
-                        successMessage?.let { snackbar.showSnackbar(it) }
+                        successMessage?.let { CtToastBus.show(it) }
                     }
                 }
 
-                is VoteResult.Failure -> snackbar.showSnackbar(result.error.message)
+                is VoteResult.Failure -> CtToastBus.show(result.error.message)
             }
             managing = false
         }
@@ -383,7 +379,7 @@ fun VoteDetailScreen(
                                             poll.settings.multi -> {
                                                 if (selected.size >= poll.settings.maxChoices) {
                                                     scope.launch {
-                                                        snackbar.showSnackbar("最多选 ${poll.settings.maxChoices} 项")
+                                                        CtToastBus.show("最多选 ${poll.settings.maxChoices} 项")
                                                     }
                                                     selected
                                                 } else {
@@ -446,20 +442,6 @@ fun VoteDetailScreen(
                     }
                 }
             }
-
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp),
-            )
-            }
         }
     }
 
@@ -472,7 +454,7 @@ fun VoteDetailScreen(
             onDismiss = { showManageSheet = false },
             onEdit = {
                 showManageSheet = false
-                if (total == 0) onEdit(pollId) else scope.launch { snackbar.showSnackbar("已有投票，不能修改内容") }
+                if (total == 0) onEdit(pollId) else CtToastBus.show("已有投票，不能修改内容")
             },
             onClose = {
                 showManageSheet = false

@@ -1,6 +1,6 @@
 package com.furina.classtools.ui.screens.profile
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
 
 import androidx.compose.ui.platform.LocalDensity
 import com.furina.classtools.ui.components.CtRootHeader
@@ -13,8 +13,6 @@ import com.furina.classtools.ui.components.light.ctLightSummaryText
 import com.furina.classtools.ui.theme.CtLightSetting
 import com.furina.classtools.ui.theme.CtLightIntensity
 import kotlinx.coroutines.flow.flowOf
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -35,7 +33,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -72,8 +69,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -134,7 +129,6 @@ import com.furina.classtools.ui.screens.privacy.PrivacyPolicyDialog
 import com.furina.classtools.ui.screens.privacy.UserAgreementDialog
 import com.furina.classtools.ui.theme.AppearanceMode
 import com.furina.classtools.ui.theme.CtMotion
-import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
@@ -232,7 +226,6 @@ fun ProfileScreen(
     var showAgreement by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember(initialShowSignOutConfirm) { mutableStateOf(initialShowSignOutConfirm) }
     var showClearCacheConfirm by remember(initialShowClearCacheConfirm) { mutableStateOf(initialShowClearCacheConfirm) }
-    val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val spec = adaptiveSpec ?: rememberCtAdaptiveSpec()
     val twoPane = spec.twoPane
@@ -299,7 +292,7 @@ fun ProfileScreen(
                 // 发现新版本：弹窗由全局/局部 UpdateHost 展示，不再额外 Snackbar。
                 is UpdateCheckResult.Available -> null
             }
-            message?.let { snackbar.showSnackbar(it) }
+            message?.let { CtToastBus.show(it) }
         }
     }
 
@@ -405,14 +398,6 @@ fun ProfileScreen(
         if (resolvedUpdateManager != null && updateCheckStatus == null && !updateHostState.value) {
             UpdateDialogHost(resolvedUpdateManager)
         }
-        CtSnackbarHost(
-            hostState = snackbar,
-            // 底栏浮岛高 64dp + 上下留白：Snackbar 必须在其上方，否则「已是最新版本」会被 dock 盖住。
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 96.dp),
-        )
     }
 
     if (showPrivacy) PrivacyPolicyDialog(onDismiss = { showPrivacy = false })
@@ -433,7 +418,7 @@ fun ProfileScreen(
                     onClick = {
                         showClearCacheConfirm = false
                         onClearLocalCache()
-                        scope.launch { snackbar.showSnackbar("已清除本机缓存") }
+                        CtToastBus.show("已清除本机缓存")
                     },
                 ) {
                     Text("清除", color = MaterialTheme.colorScheme.error)

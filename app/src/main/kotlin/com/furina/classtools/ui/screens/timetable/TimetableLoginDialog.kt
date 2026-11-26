@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.furina.classtools.ui.components.CtFeedbackWindow
 import com.furina.classtools.data.timetable.DefaultTimetableLoginRepository
 import com.furina.classtools.data.timetable.TtLoginEnqueueResult
 import com.furina.classtools.data.timetable.TtLoginFailureReason
@@ -131,6 +132,7 @@ fun TimetableLoginDialog(
     }
 
     Dialog(onDismissRequest = { if (!submitting) onDismiss() }) {
+        CtFeedbackWindow()
         Surface(
             modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
             shape = CtShapeTokens.dialog,

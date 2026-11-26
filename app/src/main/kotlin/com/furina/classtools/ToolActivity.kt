@@ -7,18 +7,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionState
 import com.furina.classtools.data.tool.ToolCatalog
 import com.furina.classtools.ui.ClassToolsThemeHost
-import com.furina.classtools.ui.components.CtToastHost
 import com.furina.classtools.ui.motion.SharedViewMotion
 import com.furina.classtools.ui.navigation.MainNavHost
 import com.furina.classtools.ui.platform.enableClassToolsEdgeToEdge
@@ -80,7 +75,6 @@ class ToolActivity : ComponentActivity() {
                             onCloseStandaloneTool = { finishWithSharedViewMotion() },
                         )
                     }
-                    CtToastHost(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp))
                 }
             }
         }

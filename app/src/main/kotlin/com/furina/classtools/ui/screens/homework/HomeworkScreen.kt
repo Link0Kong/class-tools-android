@@ -3,10 +3,9 @@ package com.furina.classtools.ui.screens.homework
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.furina.classtools.ui.components.CtPrimaryTabs
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
+import com.furina.classtools.ui.components.ctFeedbackState
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -59,8 +57,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -108,7 +104,6 @@ import com.furina.classtools.ui.components.tool.CtToolErrorState
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSectionHeader
 import com.furina.classtools.ui.theme.CtRadius
-import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.rememberReduceMotion
@@ -164,7 +159,7 @@ fun HomeworkScreen(
     reminderTimes: Map<String, List<Long>> = emptyMap(),
 ) {
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
+    val snackbar = ctFeedbackState
     val haptics = LocalHapticFeedback.current
     val reduceMotion = rememberReduceMotion()
     val fallbackMarks = remember { MutableStateFlow(initialMarks ?: MarksSnapshot()) }
@@ -183,7 +178,7 @@ fun HomeworkScreen(
     var detailId by rememberSaveable(initialDetailId) { mutableStateOf(initialDetailId) }
 
     fun notify(message: String) {
-        scope.launch { snackbar.showSnackbar(message) }
+        CtToastBus.show(message)
     }
 
     /** v4.1 撤销：完成/取消完成后 5s 内可一键撤销。 */
@@ -196,7 +191,7 @@ fun HomeworkScreen(
             )
             if (result == SnackbarResult.ActionPerformed) {
                 undo()
-                snackbar.showSnackbar("已撤销")
+                CtToastBus.show("已撤销")
             }
         }
     }
@@ -408,21 +403,6 @@ fun HomeworkScreen(
                     }
                 }
             }
-
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-            )
-            }
         }
     }
 
@@ -440,7 +420,7 @@ fun HomeworkScreen(
     } else if (detailId != null && phase == Phase.READY && loadComplete) {
         LaunchedEffect(detailId) {
             detailId = null
-            snackbar.showSnackbar("找不到这项班级作业，可能已归档")
+            CtToastBus.show("找不到这项班级作业，可能已归档")
         }
     }
 }

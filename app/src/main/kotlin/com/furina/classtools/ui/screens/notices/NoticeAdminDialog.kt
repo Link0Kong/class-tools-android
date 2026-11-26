@@ -1,11 +1,11 @@
 package com.furina.classtools.ui.screens.notices
 
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -51,7 +51,7 @@ internal fun NoticeAdminDialog(
     val scope = rememberCoroutineScope()
     val edit = action == NoticeAdminAction.EDIT
     val title = if (edit) "编辑通知" else if (entry.hidden) "恢复通知" else "隐藏通知"
-    AlertDialog(
+    CtLightAlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
         title = { Text(title) },
         text = {

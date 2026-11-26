@@ -2,10 +2,9 @@
 
 package com.furina.classtools.ui.screens.water
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
+import com.furina.classtools.ui.components.ctFeedbackState
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -28,7 +27,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -52,8 +50,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -102,7 +98,6 @@ import com.furina.classtools.ui.components.tool.CtToolField
 import com.furina.classtools.ui.components.tool.CtToolInfoRow
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolStat
-import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.rememberReduceMotion
@@ -159,7 +154,7 @@ fun WaterScreen(
 ) {
     val scope = rememberCoroutineScope()
     val reduceMotion = rememberReduceMotion()
-    val snackbar = remember { SnackbarHostState() }
+    val snackbar = ctFeedbackState
     val waterRepository = remember(userDataRepository) {
         userDataRepository?.let { UserDataWaterRepository(it) }
     }
@@ -234,7 +229,7 @@ fun WaterScreen(
     }
 
     fun notify(message: String) {
-        scope.launch { snackbar.showSnackbar(message) }
+        CtToastBus.show(message)
     }
 
     /** v4.1 撤销：删除抄表记录后 5s 内可恢复（重新 persist 旧 state）。 */
@@ -247,7 +242,7 @@ fun WaterScreen(
             )
             if (result == SnackbarResult.ActionPerformed) {
                 undo()
-                snackbar.showSnackbar("已撤销")
+                CtToastBus.show("已撤销")
             }
         }
     }
@@ -517,21 +512,6 @@ fun WaterScreen(
                         }
                     }
                 }
-            }
-
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-            )
             }
         }
     }

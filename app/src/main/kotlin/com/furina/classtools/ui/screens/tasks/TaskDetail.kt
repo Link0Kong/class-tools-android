@@ -1,7 +1,7 @@
 package com.furina.classtools.ui.screens.tasks
 
+import com.furina.classtools.ui.components.CtToastBus
 import android.content.Intent
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +25,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.furina.classtools.data.homework.HomeworkAttachmentMeta
 import com.furina.classtools.data.tasks.*
+import com.furina.classtools.ui.components.CtFeedbackWindow
 import com.furina.classtools.ui.components.CtTopBar
 import kotlinx.serialization.json.*
 
@@ -38,6 +39,7 @@ internal fun TaskDetailPage(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        CtFeedbackWindow()
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxSize().safeDrawingPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
                 CtTopBar(title = pageTitle, onBack = onBack, actions = actions)
@@ -167,7 +169,7 @@ internal fun TaskDetail(task: JsonObject, repository: TaskRepository, groups: Li
         if (files.isNotEmpty()) DetailSection("本机附件 · ${files.size}") {
             files.forEach { file ->
                 Row(Modifier.fillMaxWidth().clickable {
-                    runCatching { TaskFiles.open(context, file) }.onFailure { Toast.makeText(context, "无法打开附件", Toast.LENGTH_SHORT).show() }
+                    runCatching { TaskFiles.open(context, file) }.onFailure { CtToastBus.show("无法打开附件") }
                 }.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(file.text("n").ifBlank { "附件" }, Modifier.weight(1f))
                     if (file.number("s") > 0) Text(HomeworkAttachmentMeta.formatSize(file.number("s")), style = MaterialTheme.typography.bodySmall)

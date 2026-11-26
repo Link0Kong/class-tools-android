@@ -1,9 +1,7 @@
 package com.furina.classtools.ui.screens.vote
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,8 +31,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -67,7 +63,6 @@ import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolChip
 import com.furina.classtools.ui.components.tool.CtToolPrimaryButton
 import com.furina.classtools.ui.components.tool.CtToolSegmented
-import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.delay
@@ -114,7 +109,6 @@ fun VoteListScreen(
 ) {
     val spec = rememberCtAdaptiveSpec()
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var pollList by remember(initialPolls) { mutableStateOf(initialPolls) }
@@ -155,7 +149,7 @@ fun VoteListScreen(
         loading = false
         backgroundError = if (next.fromCache) next.warning else null
         if (fromRefresh && next.fromCache) {
-            scope.launch { snackbar.showSnackbar(next.warning ?: "网络不可用，显示缓存") }
+            CtToastBus.show(next.warning ?: "网络不可用，显示缓存")
         }
     }
 
@@ -191,7 +185,7 @@ fun VoteListScreen(
             isRefreshing = true
             when (val result = repository.list(force = true)) {
                 is VoteResult.Success -> applyList(result.value, fromRefresh = true)
-                is VoteResult.Failure -> snackbar.showSnackbar(result.error.message)
+                is VoteResult.Failure -> CtToastBus.show(result.error.message)
             }
             isRefreshing = false
         }
@@ -371,20 +365,6 @@ fun VoteListScreen(
                         }
                     }
                 }
-            }
-
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp),
-            )
             }
         }
     }

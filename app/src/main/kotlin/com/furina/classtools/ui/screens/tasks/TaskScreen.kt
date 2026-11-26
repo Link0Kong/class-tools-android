@@ -1,8 +1,9 @@
 package com.furina.classtools.ui.screens.tasks
 
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
+import com.furina.classtools.ui.components.CtToastBus
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -162,7 +163,7 @@ fun TaskScreen(
             openedFromCard = openTaskId
             onTaskOpened()
         } else if (openTaskId != null && firstSyncComplete) {
-            com.furina.classtools.ui.components.CtToastBus.show("当前任务列表中找不到这项任务")
+            CtToastBus.show("当前任务列表中找不到这项任务")
             onTaskOpened()
         }
     }
@@ -398,7 +399,7 @@ fun TaskScreen(
             sort = "manual"
         }
     }
-    if (addGroup) AlertDialog(onDismissRequest = { addGroup = false }, title = { Text("新建分组") },
+    if (addGroup) CtLightAlertDialog(onDismissRequest = { addGroup = false }, title = { Text("新建分组") },
         text = { OutlinedTextField(groupName, { groupName = it.take(20) }, label = { Text("分组名称") }, singleLine = true) },
         confirmButton = { TextButton(enabled = groupName.isNotBlank(), onClick = {
             repository.addGroup(groupName)?.let { savedView = "group-" + it }
@@ -468,11 +469,11 @@ private fun TaskEditor(task: JsonObject, groups: List<JsonObject>, isNew: Boolea
                 val attachment = withContext(Dispatchers.IO) { TaskFiles.copy(context, uri) }
                 fileData = JsonArray(files + attachment).toString()
             } catch (_: java.io.IOException) {
-                Toast.makeText(context, "文件读取失败，请重新选择", Toast.LENGTH_SHORT).show()
+                CtToastBus.show("文件读取失败，请重新选择")
             } catch (_: SecurityException) {
-                Toast.makeText(context, "没有读取此文件的权限", Toast.LENGTH_SHORT).show()
+                CtToastBus.show("没有读取此文件的权限")
             } catch (_: IllegalArgumentException) {
-                Toast.makeText(context, "无法读取此文件", Toast.LENGTH_SHORT).show()
+                CtToastBus.show("无法读取此文件")
             } finally { loadingFile = false }
         }
     }
@@ -489,7 +490,7 @@ private fun TaskEditor(task: JsonObject, groups: List<JsonObject>, isNew: Boolea
     fun updateStep(index: Int, field: String, value: String) {
         stepData = JsonArray(draftSteps.mapIndexed { i, s -> if (i == index) s.withFields { put(field, value) } else s }).toString()
     }
-    AlertDialog(onDismissRequest = ::close, title = { Text(if (sharedContext != null) "保存为我的任务" else if (isNew) "新建任务" else "编辑任务") }, text = {
+    CtLightAlertDialog(onDismissRequest = ::close, title = { Text(if (sharedContext != null) "保存为我的任务" else if (isNew) "新建任务" else "编辑任务") }, text = {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (!sharedContext.isNullOrEmpty()) Text("原任务 · $sharedContext", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(title, { title = it.take(200) }, label = { Text("标题") }, singleLine = true)
@@ -539,7 +540,7 @@ private fun TaskEditor(task: JsonObject, groups: List<JsonObject>, isNew: Boolea
                 }, enabled = stepTitle.isNotBlank()) { Icon(Icons.Rounded.Add, "添加步骤") } })
             files.forEach { attachment -> Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(modifier = Modifier.weight(1f), onClick = {
-                    runCatching { TaskFiles.open(context, attachment) }.onFailure { Toast.makeText(context, "无法打开附件", Toast.LENGTH_SHORT).show() }
+                    runCatching { TaskFiles.open(context, attachment) }.onFailure { CtToastBus.show("无法打开附件") }
                 }) { Text(attachment.text("n")) }
                 TextButton(onClick = {
                     if (attachment !in initial.objects("localFiles")) TaskFiles.discard(context, listOf(attachment))
@@ -574,7 +575,7 @@ private fun TaskEditor(task: JsonObject, groups: List<JsonObject>, isNew: Boolea
             }
         }))
     }) { Text("保存") } }, dismissButton = { TextButton(onClick = ::close, enabled = !loadingFile) { Text("取消") } })
-    if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text("删除这项任务？") },
+    if (confirmDelete) CtLightAlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text("删除这项任务？") },
         text = { Text(title) }, confirmButton = { TextButton(onClick = {
             TaskFiles.discard(context, files - initial.objects("localFiles").toSet())
             confirmDelete = false; onDelete()

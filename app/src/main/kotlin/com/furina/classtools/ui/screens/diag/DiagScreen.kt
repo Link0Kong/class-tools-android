@@ -2,10 +2,8 @@
 
 package com.furina.classtools.ui.screens.diag
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -38,8 +35,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -96,7 +91,6 @@ import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.tool.CtToolCard
 import com.furina.classtools.ui.theme.ClassToolsTheme
-import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtType
 import java.text.SimpleDateFormat
@@ -143,7 +137,6 @@ fun DiagScreen(
     pollConfig: DiagPollConfig = DiagPollConfig(),
 ) {
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
     val spec = rememberCtAdaptiveSpec()
 
     var loading by remember { mutableStateOf(!skipLoad) }
@@ -344,7 +337,7 @@ fun DiagScreen(
     fun reportManually(check: DiagCheck) {
         val reporterOrNull = reporter ?: return
         if (session.sid.isBlank() || session.token.isBlank()) {
-            scope.launch { snackbar.showSnackbar("未登录，无法上报") }
+            CtToastBus.show("未登录，无法上报")
             return
         }
         reportingIds = reportingIds + check.id
@@ -357,7 +350,7 @@ fun DiagScreen(
                 com.furina.classtools.data.diag.DiagReportOutcome.Skipped -> "10 分钟内已上报过，已去重"
             }
             reportingIds = reportingIds - check.id
-            snackbar.showSnackbar(message)
+            CtToastBus.show(message)
         }
     }
 
@@ -504,21 +497,6 @@ fun DiagScreen(
                     }
                     Spacer(modifier = Modifier.height(CtSpace.xxl))
                 }
-            }
-
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-            )
             }
         }
     }

@@ -2,11 +2,8 @@
 
 package com.furina.classtools.ui.screens.data
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
-import com.furina.classtools.ui.theme.CtShape
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.clickable
@@ -45,8 +42,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -135,7 +130,6 @@ fun DataPrivacyScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
     var summary by remember { mutableStateOf(initialSummary) }
     var feedback by remember { mutableStateOf(initialFeedback) }
     var feedbackIsError by remember { mutableStateOf(false) }
@@ -159,7 +153,7 @@ fun DataPrivacyScreen(
     fun notify(message: String, isError: Boolean = false) {
         feedback = message
         feedbackIsError = isError
-        scope.launch { snackbar.showSnackbar(message) }
+        CtToastBus.show(message)
     }
 
     LaunchedEffect(reloadToken) {
@@ -320,21 +314,6 @@ fun DataPrivacyScreen(
                         )
                     }
                 }
-            }
-
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-            )
             }
         }
     }

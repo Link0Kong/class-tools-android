@@ -2,11 +2,9 @@
 
 package com.furina.classtools.ui.screens.notices
 
-import com.furina.classtools.ui.components.CtSnackbarHost
+import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.components.ctTopBarRaw
 
-import com.furina.classtools.ui.components.light.ctLightMaterial
-import com.furina.classtools.ui.theme.CtLightScene
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -67,8 +65,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -129,7 +125,6 @@ import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.CtRadius
-import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.rememberReduceMotion
@@ -401,7 +396,6 @@ fun NoticesScreen(
         return
     }
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
     val haptics = LocalHapticFeedback.current
     // 动效：系统「移除动画」时全部退化为无动画；预览注入动画帧时按注入态渲染（不看系统开关）。
     val systemReduceMotion = rememberReduceMotion()
@@ -493,7 +487,7 @@ fun NoticesScreen(
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     fun notify(message: String) {
-        scope.launch { snackbar.showSnackbar(message) }
+        CtToastBus.show(message)
     }
 
     var firstLoadComplete by remember { mutableStateOf(skipLoad || noticesRepository == null) }
@@ -904,21 +898,6 @@ fun NoticesScreen(
                         }
                     }
                 }
-            }
-
-            androidx.compose.foundation.layout.Box(
-            modifier = Modifier.ctLightMaterial(
-                CtLightScene.SNACKBAR,
-                shape = CtShape.input,
-                bodySafe = true,
-            ),
-        ) { CtSnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-            )
             }
         }
     }

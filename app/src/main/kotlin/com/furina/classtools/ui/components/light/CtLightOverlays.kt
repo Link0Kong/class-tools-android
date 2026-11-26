@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import com.furina.classtools.ui.components.CtFeedbackWindow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.theme.CtLightScene
 import com.furina.classtools.ui.theme.CtPalette
@@ -98,7 +99,10 @@ fun CtLightAlertDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        confirmButton = confirmButton,
+        confirmButton = {
+            CtFeedbackWindow()
+            confirmButton()
+        },
         modifier = modifier,
         dismissButton = dismissButton,
         icon = icon,

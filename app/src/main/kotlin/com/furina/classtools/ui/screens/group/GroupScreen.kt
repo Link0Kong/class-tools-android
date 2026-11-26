@@ -74,6 +74,7 @@ import com.furina.classtools.features.group.GroupWorkflowState
 import com.furina.classtools.features.group.SeededGroupRandom
 import com.furina.classtools.ui.components.RosterPickerSheet
 import com.furina.classtools.ui.components.CtPill
+import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.components.ctTopBarRaw
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.expressive.CtBottomSheet
@@ -289,6 +290,7 @@ fun GroupScreen(
                         onCopy = {
                             val result = state.result ?: return@GroupContent
                             clipboard.setText(AnnotatedString(GroupExportFactory.copyText(result)))
+                            CtToastBus.showCopied("已复制分组结果")
                         },
                     )
                 }

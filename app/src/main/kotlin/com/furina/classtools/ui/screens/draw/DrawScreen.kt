@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.screens.draw
 
+import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +18,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.QrCodeScanner
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -304,7 +304,7 @@ fun DrawScreen(
     }
 
     if (confirmClear && result != null) {
-        AlertDialog(
+        CtLightAlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text("清空本轮结果？") },
             text = { Text("本页的抽签结果和剔除记录将被清空。") },
