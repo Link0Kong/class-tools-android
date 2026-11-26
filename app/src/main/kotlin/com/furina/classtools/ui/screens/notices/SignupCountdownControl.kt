@@ -9,6 +9,9 @@ import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import com.furina.classtools.data.notify.SignupClock
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,12 +32,13 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
-internal fun pickReminderInstant(context: Context, zone: ZoneId, onPicked: (Long) -> Unit) {
+internal fun pickReminderInstant(context: Context, zone: ZoneId, allowCurrentMinute: Boolean = false, onPicked: (Long) -> Unit) {
     val seed = ZonedDateTime.now(zone).plusMinutes(5)
     DatePickerDialog(context, { _, y, month, day ->
         TimePickerDialog(context, { _, h, m ->
             val at = LocalDate.of(y, month + 1, day).atTime(LocalTime.of(h, m)).atZone(zone).toInstant().toEpochMilli()
-            if (at > System.currentTimeMillis()) onPicked(at) else CtToastBus.show("请选择未来的时间")
+            val latest = if (allowCurrentMinute) at + 59_999L else at
+            if (latest > System.currentTimeMillis()) onPicked(at) else CtToastBus.show("请选择未来的时间")
         }, seed.hour, seed.minute, true).show()
     }, seed.year, seed.monthValue - 1, seed.dayOfMonth).show()
 }
@@ -59,11 +63,14 @@ internal fun SignupCountdownControl(owner: String, item: NoticeUiItem) {
     }
     var configure by rememberSaveable(owner, id) { mutableStateOf(false) }
     var custom by rememberSaveable(owner, id) { mutableStateOf<Long?>(null) }
+    var seconds by rememberSaveable(owner, id) { mutableStateOf("00.000") }
     var lead by rememberSaveable(owner, id) { mutableIntStateOf(5) }
     val now = System.currentTimeMillis()
     val active = saved?.takeIf { it.expiresAt > now }
-    val watch = SignupCountdown.from(owner, group, entry?.items.orEmpty(), now, custom)
-    if (active == null && (item.expired || item.hidden || (watch == null &&
+    val offset = SignupClock.millisInMinute(seconds)
+    val watch = if (custom != null && offset == null) null else
+        SignupCountdown.from(owner, group, entry?.items.orEmpty(), now, custom?.plus(offset ?: 0L))
+    if (!configure && active == null && (item.expired || item.hidden || (watch == null &&
             listOf("活动", "报名", "开抢").none { word ->
                 item.cat.contains(word) || item.title.contains(word) || item.summary.contains(word) ||
                     group.aiSegments.any { it.type.contains(word) }
@@ -79,9 +86,16 @@ internal fun SignupCountdownControl(owner: String, item: NoticeUiItem) {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(group.title, style = MaterialTheme.typography.titleMedium)
                 if (watch != null) Text("北京时间 ${SignupCountdown.timeText(watch.start)}")
-                TextButton(onClick = { pickReminderInstant(context, TimetableLink.CHINA_ZONE) { custom = it } }) {
+                TextButton(onClick = { pickReminderInstant(context, TimetableLink.CHINA_ZONE, allowCurrentMinute = true) {
+                    custom = it
+                    seconds = "00.000"
+                } }) {
                     Text(if (watch != null) "修改开抢时间" else "选择开抢时间")
                 }
+                if (custom != null) OutlinedTextField(value = seconds, onValueChange = { seconds = it.take(6) },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, isError = offset == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    label = { Text("开抢秒数（0–59.999）") })
                 Text("提前显示流体云", style = MaterialTheme.typography.labelLarge)
                 for (minutes in listOf(1, 5, 15, 30)) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).selectable(lead == minutes,

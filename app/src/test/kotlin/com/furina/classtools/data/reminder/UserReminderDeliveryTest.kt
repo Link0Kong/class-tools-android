@@ -76,6 +76,7 @@ class UserReminderDeliveryTest {
         assertTrue(manager.activeNotifications.isEmpty())
     }
 
+    @Config(sdk = [34, 36])
     @Test fun systemCardChangesAtOpeningAndKeepsSeparateActivityIdentities() = runBlocking {
         val now = System.currentTimeMillis()
         val watch = SignupCountdown(owner, "a/b", "社团报名", now + 45_000, now + 120_000, "礼堂", "社团")
@@ -92,6 +93,7 @@ class UserReminderDeliveryTest {
         val card = entries.single { it.notification.extras.getString(Notification.EXTRA_TITLE) == watch.title }.notification
         assertEquals(watch.start, card.`when`)
         assertTrue(NotificationCompat.isRequestPromotedOngoing(card))
+        if (android.os.Build.VERSION.SDK_INT >= 36) assertTrue(card.hasPromotableCharacteristics())
         assertTrue(card.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN))
         assertEquals(watch.details(), card.extras.getString(Notification.EXTRA_BIG_TEXT))
         assertEquals(2, entries.map { it.notification.contentIntent }.distinct().size)

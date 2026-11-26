@@ -37,7 +37,11 @@ internal data class SignupCountdown(
     companion object {
         private val clock = DateTimeFormatter.ofPattern("MM-dd HH:mm:ss", Locale.CHINA)
             .withZone(TimetableLink.CHINA_ZONE)
-        fun timeText(at: Long): String = clock.format(Instant.ofEpochMilli(at))
+        fun timeText(at: Long): String {
+            val formatted = clock.format(Instant.ofEpochMilli(at))
+            val millis = Math.floorMod(at, 1000L)
+            return if (millis == 0L) formatted else formatted + ".%03d".format(Locale.ROOT, millis)
+        }
 
         fun from(owner: String, group: NoticeGroupDto, items: List<NoticeItemMeta>, now: Long,
             customStart: Long? = null): SignupCountdown? {
@@ -64,6 +68,13 @@ internal data class SignupCountdown(
 
 /** Round coarse stages upward so the UI never says zero before the opening instant. */
 internal object SignupClock {
+    private val secondsInput = Regex("""([0-5]?[0-9])(?:[.]([0-9]{1,3}))?""")
+
+    fun millisInMinute(input: String): Long? {
+        val match = secondsInput.matchEntire(input) ?: return null
+        return match.groupValues[1].toLong() * 1000 + match.groupValues[2].padEnd(3, '0').toLong()
+    }
+
     fun label(left: Long): String = when {
         left <= 0 -> "已到报名时间"
         left > 3_600_000 -> {

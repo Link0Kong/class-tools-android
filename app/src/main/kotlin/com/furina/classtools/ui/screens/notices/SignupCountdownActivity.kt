@@ -99,7 +99,7 @@ class SignupCountdownActivity : ComponentActivity() {
                             if (supportsPip) Button(onClick = { pin() }, modifier = Modifier.fillMaxWidth()) { Text("悬浮小窗") }
                             if (current.signupUrl.isNotEmpty()) OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
                                 runCatching {
-                                    val link = Intent(Intent.ACTION_VIEW, Uri.parse(current.signupUrl))
+                                    val link = Intent(Intent.ACTION_VIEW, Uri.parse(current.signupUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     if (supportsPip) pin()
                                     startActivity(link)
                                 }.onFailure { CtToastBus.show("无法打开报名链接，请查看活动原文") }

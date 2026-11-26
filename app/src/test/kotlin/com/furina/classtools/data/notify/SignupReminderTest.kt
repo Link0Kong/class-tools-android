@@ -40,6 +40,14 @@ class SignupReminderTest {
         assertNull(custom.end)
     }
 
+    @Test fun customTargetPreservesTypedSecondsAndMilliseconds() {
+        assertEquals(50L, SignupClock.millisInMinute("0.05"))
+        assertEquals(59_999L, SignupClock.millisInMinute("59.999"))
+        assertEquals(0L, SignupClock.millisInMinute("00.000"))
+        for (input in listOf("", "60", "1.2345", "-1")) assertNull(SignupClock.millisInMinute(input))
+        assertTrue(SignupCountdown.timeText(now + 123L).endsWith(":00.123"))
+    }
+
     @Test fun progressivelyRefinesAndNeverDisplaysZeroEarly() {
         for ((left, label) in listOf(3_600_001L to "1小时 1分", 3_600_000L to "60:00",
             60_001L to "01:01", 60_000L to "60.0 秒", 10_001L to "10.1 秒", 10_000L to "10.000 秒",
