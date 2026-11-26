@@ -25,8 +25,14 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class, instrumentedPackages = ["com.vivo.push.sdk"])
+/** The Android 16 framework requires Java 21. Keep the repo's Java 17 test entry point usable. */
+class ReminderFrameworkRunner(testClass: Class<*>) : RobolectricTestRunner(testClass) {
+    override fun buildGlobalConfig(): Config = Config.Builder(super.buildGlobalConfig())
+        .setSdk(if (Runtime.version().feature() >= 21) 36 else 34).build()
+}
+
+@RunWith(ReminderFrameworkRunner::class)
+@Config(application = Application::class, instrumentedPackages = ["com.vivo.push.sdk"])
 class UserReminderDeliveryTest {
     private val app: Application get() = RuntimeEnvironment.getApplication()
     private val manager get() = app.getSystemService(NotificationManager::class.java)
@@ -76,7 +82,6 @@ class UserReminderDeliveryTest {
         assertTrue(manager.activeNotifications.isEmpty())
     }
 
-    @Config(sdk = [34, 36])
     @Test fun systemCardChangesAtOpeningAndKeepsSeparateActivityIdentities() = runBlocking {
         val now = System.currentTimeMillis()
         val watch = SignupCountdown(owner, "a/b", "社团报名", now + 45_000, now + 120_000, "礼堂", "社团")
