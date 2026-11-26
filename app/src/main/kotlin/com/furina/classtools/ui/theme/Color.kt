@@ -30,18 +30,18 @@ val BrandInk3 = CtPalette.TextTertiary
 // ---------------------------------------------------------------------------
 // 浅色 · 48 角色
 // ---------------------------------------------------------------------------
-val LightPrimary = Color(0xFF396B61)
+val LightPrimary = Color(0xFF346259)
 val LightOnPrimary = Color(0xFFFFFFFF)
 val LightPrimaryContainer = Color(0xFFDCEDE5)
 val LightOnPrimaryContainer = Color(0xFF00201B)
 val LightInversePrimary = Color(0xFFA4CEC4)
 
-val LightSecondary = Color(0xFF486480)
+val LightSecondary = Color(0xFF405C76)
 val LightOnSecondary = Color(0xFFFFFFFF)
 val LightSecondaryContainer = Color(0xFFDEEBF4)
 val LightOnSecondaryContainer = Color(0xFF001D31)
 
-val LightTertiary = Color(0xFF795B35)
+val LightTertiary = Color(0xFF715431)
 val LightOnTertiary = Color(0xFFFFFFFF)
 val LightTertiaryContainer = Color(0xFFF4E7CF)
 val LightOnTertiaryContainer = Color(0xFF2C1700)
@@ -93,7 +93,7 @@ val DarkPrimary = Color(0xFFA4CEC4)
 val DarkOnPrimary = Color(0xFF00382F)
 val DarkPrimaryContainer = Color(0xFF304D44)
 val DarkOnPrimaryContainer = Color(0xFFDCEDE5)
-val DarkInversePrimary = Color(0xFF396B61)
+val DarkInversePrimary = Color(0xFF346259)
 
 val DarkSecondary = Color(0xFFABCAE8)
 val DarkOnSecondary = Color(0xFF12334B)
