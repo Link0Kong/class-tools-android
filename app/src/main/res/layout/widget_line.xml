@@ -1,7 +1,10 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_row"
-    android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:minHeight="48dp" android:gravity="center_vertical">
-    <TextView android:id="@+id/widget_row_title" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:includeFontPadding="false" android:textColor="@color/widget_ink" android:textSize="14sp" android:singleLine="true" android:ellipsize="end"/>
-    <TextView android:id="@+id/widget_row_detail" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:includeFontPadding="false" android:textColor="@color/widget_accent" android:textSize="12sp" android:singleLine="true" android:ellipsize="end"/>
-</LinearLayout>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/widget_row" android:minHeight="48dp" android:layout_marginBottom="3dp">
+    <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/widget_row_fill" android:src="@drawable/widget_band_shape" android:scaleType="fitXY" android:importantForAccessibility="no" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:minHeight="48dp" android:gravity="center_vertical" android:paddingHorizontal="9dp" android:paddingVertical="3dp">
+        <ImageView android:layout_width="3dp" android:layout_height="26dp" android:id="@+id/widget_row_rule" android:src="@drawable/widget_rule_shape" android:scaleType="fitXY" android:importantForAccessibility="no" />
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:orientation="vertical" android:layout_weight="1" android:paddingStart="8dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/widget_row_title" android:includeFontPadding="false" android:textSize="14sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" android:textStyle="normal" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/widget_row_detail" android:includeFontPadding="false" android:textSize="12sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

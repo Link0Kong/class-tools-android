@@ -770,6 +770,15 @@ private fun AppearanceSection(
     SectionTitle("外观")
     GroupCard {
         AppearanceModeRows(mode = appearanceMode, onModeChange = onAppearanceModeChange)
+        val settings = LocalAppSettingsStore.current
+        if (android.os.Build.VERSION.SDK_INT >= 31 && settings != null) {
+            val monet by settings.dynamicColor.collectAsStateWithLifecycle(initialValue = settings.startupDynamicColor())
+            val scope = rememberCoroutineScope()
+            RowDivider()
+            SwitchRow(title = "莫奈壁纸配色", subtitle = if (monet) "工具和默认桌面卡片跟随系统配色" else "使用青瓷配色",
+                leadingIcon = Icons.Rounded.LightMode, checked = monet,
+                onCheckedChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } })
+        }
         RowDivider()
         SwitchRow(
             title = "隐藏状态栏",

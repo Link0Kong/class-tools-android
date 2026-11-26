@@ -1,0 +1,13 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/widget_root">
+    <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/widget_backplate" android:src="@drawable/widget_paper_shape" android:scaleType="fitXY" android:importantForAccessibility="no" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/widget_body" android:orientation="vertical" android:gravity="center_vertical" android:padding="10dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/widget_header" android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="48dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/widget_number" android:includeFontPadding="false" android:textSize="29sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" android:textStyle="bold" android:layout_marginEnd="5dp" />
+            <ImageView android:layout_width="16dp" android:layout_height="16dp" android:id="@+id/widget_icon" android:importantForAccessibility="no" android:layout_marginEnd="5dp" />
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:id="@+id/widget_heading" android:includeFontPadding="false" android:textSize="13sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" android:layout_weight="1" android:fontFamily="sans-serif-medium" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/widget_summary" android:includeFontPadding="false" android:textSize="11sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" android:maxWidth="106dp" android:gravity="end" />
+            <TextView android:layout_width="48dp" android:layout_height="48dp" android:id="@+id/widget_add" android:includeFontPadding="false" android:textSize="27sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" android:gravity="center" android:text="+" android:contentDescription="新建个人任务" android:visibility="gone" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:id="@+id/widget_grid" android:orientation="vertical" android:layout_weight="1" />
+    </LinearLayout>
+</FrameLayout>

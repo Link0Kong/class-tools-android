@@ -1,0 +1,7 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="0dp" android:layout_height="match_parent" android:id="@+id/widget_cell" android:layout_weight="1" android:layout_margin="2dp">
+    <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/widget_cell_fill" android:src="@drawable/widget_band_shape" android:scaleType="fitXY" android:importantForAccessibility="no" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:paddingHorizontal="8dp" android:paddingVertical="7dp" android:gravity="top">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/widget_cell_label" android:includeFontPadding="false" android:textSize="12sp" android:textColor="@color/widget_ink" android:ellipsize="end" android:maxLines="1" android:fontFamily="sans-serif-medium" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/widget_cell_items" android:orientation="vertical" />
+    </LinearLayout>
+</FrameLayout>

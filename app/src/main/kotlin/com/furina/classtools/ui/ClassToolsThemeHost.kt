@@ -37,8 +37,8 @@ fun ClassToolsThemeHost(
         backgroundStore.restoreBitmap()
     }
     // 外观偏好存本机（不进 userdata）：外观模式 / 隐藏状态栏 / 玻璃材质均实时生效。
-    // 壁纸取色（Material You）功能已移除，固定关闭。
-    val dynamicColor = false
+    val dynamicColor by container.appSettings.dynamicColor
+        .collectAsStateWithLifecycle(initialValue = container.appSettings.startupDynamicColor())
     // 首帧用 SharedPreferences 镜像同步初始化，避免冷启动先按系统/默认渲染一帧再跳变。
     val initialAppearanceMode = remember { container.appSettings.startupAppearanceMode() }
     val initialHideStatusBar = remember { container.appSettings.startupHideStatusBar() }

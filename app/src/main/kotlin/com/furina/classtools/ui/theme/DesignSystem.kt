@@ -216,11 +216,7 @@ val LocalCtAccents = androidx.compose.runtime.staticCompositionLocalOf { ctAccen
 
 /** 取当前主题强调色。 */
 @Composable
-fun rememberCtAccents(): CtAccentColors = rememberCtAccentsFor(LocalCtDarkTheme.current)
-
-@Composable
-private fun rememberCtAccentsFor(dark: Boolean): CtAccentColors =
-    androidx.compose.runtime.remember(dark) { ctAccentsOf(dark) }
+fun rememberCtAccents(): CtAccentColors = LocalCtAccents.current
 
 /**
  * 工具/分类强调色解析：由工具目录的「族名」取强调色族（**数据层只存族名，不存颜色**）。
@@ -244,12 +240,7 @@ fun CtAccentColors.family(name: String): CtAccentRef = when (name) {
  */
 @Composable
 fun uiAccentOf(tool: com.furina.classtools.data.tool.AppTool): CtAccentRef {
-    val accents = rememberCtAccents()
-    return if (tool.accentFamily == com.furina.classtools.data.tool.CtAccentFamilies.WATER) {
-        if (LocalCtDarkTheme.current) CtAccents.darkWater else CtAccents.water
-    } else {
-        accents.family(tool.accentFamily)
-    }
+    return rememberCtAccents().family(tool.accentFamily)
 }
 
 /** 纯函数版本：按明暗 + 族名解析（预览/单测）。 */
@@ -307,8 +298,9 @@ data class HarmonyColors(
 )
 
 /** 旧入口：按明暗构造 [HarmonyColors]（纯函数）。 */
-fun harmonyColors(dark: Boolean): HarmonyColors {
-    val c = ctColorOf(dark)
+fun harmonyColors(dark: Boolean): HarmonyColors = harmonyColors(ctColorOf(dark))
+
+private fun harmonyColors(c: CtColor): HarmonyColors {
     return HarmonyColors(
         background = c.background,
         card = c.surface,
@@ -317,7 +309,7 @@ fun harmonyColors(dark: Boolean): HarmonyColors {
         textSecondary = c.textSecondary,
         textTertiary = c.textTertiary,
         divider = c.divider,
-        dark = dark,
+        dark = c.dark,
         heroPaper = c.heroPaper,
         heroBorder = c.heroBorder,
         heroPill = c.heroPill,
@@ -334,11 +326,10 @@ fun harmonyColors(dark: Boolean): HarmonyColors {
 
 /** 旧入口：当前明暗下的 [HarmonyColors]。 */
 @Composable
-fun rememberHarmonyColors(): HarmonyColors = rememberHarmonyColorsFor(LocalCtDarkTheme.current)
-
-@Composable
-private fun rememberHarmonyColorsFor(dark: Boolean): HarmonyColors =
-    androidx.compose.runtime.remember(dark) { harmonyColors(dark) }
+fun rememberHarmonyColors(): HarmonyColors {
+    val colors = LocalCtColors.current
+    return androidx.compose.runtime.remember(colors) { harmonyColors(colors) }
+}
 
 // -----------------------------------------------------------------------------
 // 旧入口：形状单例

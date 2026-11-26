@@ -15,6 +15,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -59,7 +60,7 @@ internal object DesktopWidgets {
     private const val REFRESH = "com.furina.classtools.widget.REFRESH"
     val refreshActions = setOf(REFRESH, AppWidgetManager.ACTION_APPWIDGET_UPDATE,
         AppWidgetManager.ACTION_APPWIDGET_OPTIONS_CHANGED, Intent.ACTION_DATE_CHANGED,
-        Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_CONFIGURATION_CHANGED)
+        Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_CONFIGURATION_CHANGED, Intent.ACTION_WALLPAPER_CHANGED)
     private val lock = Mutex()
 
     private fun ids(context: Context, provider: Class<out DesktopWidgetProvider>) =
@@ -80,17 +81,16 @@ internal object DesktopWidgets {
         val manager = AppWidgetManager.getInstance(context)
         val category = android.appwidget.AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN
         val prefs = context.getSharedPreferences("widget_picker_previews", Context.MODE_PRIVATE)
-        val layouts = mapOf(
-            WidgetKind.TIMETABLE to com.furina.classtools.R.layout.widget_preview_timetable,
-            WidgetKind.WORKBENCH to com.furina.classtools.R.layout.widget_preview_workbench,
-            WidgetKind.NOTICES to com.furina.classtools.R.layout.widget_preview_notices,
-            WidgetKind.TASKS to com.furina.classtools.R.layout.widget_preview_tasks,
-        )
-        layouts.forEach { (kind, layout) ->
-            if (prefs.getInt(kind.name, 0) != com.furina.classtools.BuildConfig.VERSION_CODE) {
+        val settings = com.furina.classtools.data.settings.AppSettingsStore(context)
+        val systemDark = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val dark = settings.startupAppearanceMode().resolveDark(systemDark)
+        val scheme = com.furina.classtools.ui.theme.appColorScheme(context, dark, settings.startupDynamicColor())
+        val signature = listOf(com.furina.classtools.BuildConfig.VERSION_CODE, scheme.primary, scheme.surfaceContainerLow, scheme.tertiary).hashCode()
+        components.keys.forEach { kind ->
+            if (prefs.getInt(kind.name, 0) != signature) {
                 val accepted = runCatching { manager.setWidgetPreview(ComponentName(context, components.getValue(kind)),
-                    category, android.widget.RemoteViews(context.packageName, layout)) }.getOrDefault(false)
-                if (accepted) prefs.edit().putInt(kind.name, com.furina.classtools.BuildConfig.VERSION_CODE).apply()
+                    category, WidgetPreviews.render(context, kind, 320, if (kind == WidgetKind.TIMETABLE || kind == WidgetKind.WORKBENCH) 240 else 220)) }.getOrDefault(false)
+                if (accepted) prefs.edit().putInt(kind.name, signature).apply()
             }
         }
     }
@@ -113,16 +113,19 @@ internal object DesktopWidgets {
         val ids = ids(context, provider)
         if (ids.isEmpty()) return@withLock
         val kind = components.entries.first { it.value == provider }.key
+        val monet = com.furina.classtools.data.settings.AppSettingsStore(context).dynamicColor.first()
         val session = WidgetFeedStore.session(context)
         val now = System.currentTimeMillis()
         val zone = ZoneId.systemDefault()
         val timetable = kind == WidgetKind.TIMETABLE || kind == WidgetKind.WORKBENCH
-        val plan = if (timetable && session != null) deviceTimetable(context, session.sid)?.let {
-            TtCalendar.plan(it, now, zone)
-        } else null
+        val snapshot = if (timetable && session != null) deviceTimetable(context, session.sid) else null
+        val plan = snapshot?.let { TtCalendar.plan(it, now, zone) }
+        val tomorrow = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1)
+        val tomorrowCourses = if (kind == WidgetKind.TIMETABLE && snapshot != null)
+            TtCalendar.sessionsOn(snapshot.c, TtCalendar.parseTermStart(snapshot.termStart), tomorrow, now, zone) else emptyList()
         val feed = if (kind != WidgetKind.TIMETABLE && session != null) WidgetFeedStore.read(context, session.sid) else WidgetFeed()
-        val model = widgetContent(kind, session != null, plan, feed, now)
-        for (id in ids) manager.updateAppWidget(id, WidgetViews.forHost(context, kind, model, manager.getAppWidgetOptions(id), WidgetPalette.get(context, id)))
+        val model = widgetContent(kind, session != null, plan, feed, now, tomorrowCourses)
+        for (id in ids) manager.updateAppWidget(id, WidgetViews.forHost(context, kind, model, manager.getAppWidgetOptions(id), WidgetPalette.get(context, id), monet))
         if (periodic && session != null && !session.debug && kind != WidgetKind.TIMETABLE) WidgetFeedStore.request(context, session.sid)
         val current = plan?.today?.firstOrNull { it.state == SessionState.ONGOING }
         val boundary = listOfNotNull(current?.endAt, plan?.next?.startAt, session?.expiresAt,

@@ -81,6 +81,7 @@ class MainActivity : ComponentActivity() {
         when (widgetTool) {
             "home" -> return routes.ROOT
             "tt", "nt", "hw" -> return routes.tool(widgetTool, focus = focus)
+            "new-task" -> return routes.tool("hw", createTask = true)
             "class-homework" -> return routes.tool("hw", pick = true, focus = focus)
         }
         val notice = noticeIdFrom(intent)

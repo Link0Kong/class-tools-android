@@ -39,11 +39,10 @@ data class CtHeroColors(
 
 /** 当前主题下的 hero 配色。 */
 @Composable
-fun rememberCtHeroColors(): CtHeroColors = rememberCtHeroColorsFor(LocalCtDarkTheme.current)
-
-@Composable
-private fun rememberCtHeroColorsFor(dark: Boolean): CtHeroColors =
-    androidx.compose.runtime.remember(dark) { ctHeroColors(ctColorOf(dark)) }
+fun rememberCtHeroColors(): CtHeroColors {
+    val colors = LocalCtColors.current
+    return androidx.compose.runtime.remember(colors) { ctHeroColors(colors) }
+}
 
 /** 纯函数版本（预览/单测可直接传 [CtColor]；保留旧签名重载见下）。 */
 fun ctHeroColors(dark: Boolean, scheme: ColorScheme): CtHeroColors =

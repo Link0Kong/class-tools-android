@@ -35,10 +35,12 @@ object Routes {
     const val TOOL_PICK_ARG = "pick"
     const val MAP_ROOM_ARG = "room"
     const val FOCUS_ARG = "focus"
-    const val TOOL = "tool/{$TOOL_ARG}?$TOOL_PICK_ARG={$TOOL_PICK_ARG}&$MAP_ROOM_ARG={$MAP_ROOM_ARG}&$FOCUS_ARG={$FOCUS_ARG}"
+    const val CREATE_TASK_ARG = "createTask"
+    const val TOOL = "tool/{$TOOL_ARG}?$TOOL_PICK_ARG={$TOOL_PICK_ARG}&$MAP_ROOM_ARG={$MAP_ROOM_ARG}&$FOCUS_ARG={$FOCUS_ARG}&$CREATE_TASK_ARG={$CREATE_TASK_ARG}"
 
-    fun tool(toolId: String, pick: Boolean = false, focus: String? = null): String {
+    fun tool(toolId: String, pick: Boolean = false, focus: String? = null, createTask: Boolean = false): String {
         val query = listOfNotNull(
+            "createTask=true".takeIf { createTask },
             "pick=true".takeIf { pick },
             focus?.takeIf(String::isNotBlank)?.let { "focus=" + Uri.encode(it) },
         )

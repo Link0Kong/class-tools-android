@@ -98,6 +98,7 @@ fun TaskScreen(
     onSource: (JsonObject) -> Unit = { onHomework() },
     onShare: (com.furina.classtools.features.export.ExportCardSpec) -> Unit = {},
     onReminderSettings: () -> Unit = {},
+    createFromWidget: Boolean = false,
     openTaskId: String? = null,
     onTaskOpened: () -> Unit = {},
     onCloseFocused: (() -> Unit)? = null,
@@ -177,6 +178,13 @@ fun TaskScreen(
             put("remindMode", if (date.isBlank()) "none" else snapshot.prefs().text("defaultRemind").ifBlank { "none" })
         }
         return task.withFields { put("remindAt", reminderAt(task)) }
+    }
+    var createConsumed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(createFromWidget) {
+        if (createFromWidget && !createConsumed) {
+            newDraft = draft("", System.currentTimeMillis(), all).toString()
+            createConsumed = true
+        }
     }
     fun resetQuick() {
         quick = ""; quickDue = ""; quickTime = ""; quickStar = false; quickGroup = null; query = ""

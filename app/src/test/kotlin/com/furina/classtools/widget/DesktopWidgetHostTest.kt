@@ -155,6 +155,25 @@ class DesktopWidgetHostTest {
         }
     }
 
+    @Test fun largeTaskWidgetUsesStarAndDeadlineAndRoutesAddSeparately() {
+        val tomorrow = java.time.LocalDate.now().plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val lines = listOf(
+            WidgetLine("同名事项", focus = "a", starred = true, deadlineAt = tomorrow - 1),
+            WidgetLine("同名事项", focus = "b", starred = true),
+            WidgetLine("同名事项", focus = "c", deadlineAt = tomorrow - 10),
+            WidgetLine("同名事项", focus = "d", deadlineAt = tomorrow),
+        )
+        val content = widgetContent(WidgetKind.TASKS, true, null, WidgetFeed(tasks = WidgetList(4, lines, tomorrow - 10)), tomorrow - 10)
+        assertEquals(listOf("a", "b", "c", "d"), content.sections.map { it.lines.single().focus })
+        val widget = host(WidgetViews.forHost(app, WidgetKind.TASKS, content, options(340, 245)), 340, 245)
+        val grid = widget.findViewById<LinearLayout>(R.id.widget_grid)
+        assertEquals(2, grid.childCount)
+        (grid.getChildAt(0) as LinearLayout).getChildAt(1).findViewById<View>(R.id.widget_cell_item).performClick()
+        assertEquals("b", shadowOf(app).nextStartedActivity.getStringExtra(com.furina.classtools.MainActivity.CARD_FOCUS))
+        widget.findViewById<View>(R.id.widget_add).performClick()
+        assertEquals(com.furina.classtools.MainActivity.WIDGET_ACTION + "new-task", shadowOf(app).nextStartedActivity.action)
+    }
+
     @Test fun primaryAndSecondaryRowsCarryIndependentIdsAndHeaderOpensOverview() {
         val rows = listOf(WidgetLine("同名", destination = "hw", focus = "task/1"),
             WidgetLine("同名", destination = "class-homework", focus = "作业?2"))

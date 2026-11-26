@@ -9,7 +9,7 @@ import android.os.Bundle
 import com.furina.classtools.R
 
 internal enum class WidgetPalette(val label: String, val background: Int, val accent: Int, val ink: Int) {
-    SYSTEM("默认青瓷", R.drawable.timetable_widget_background, R.color.widget_accent, R.color.widget_ink),
+    SYSTEM("跟随应用配色", R.drawable.timetable_widget_background, R.color.widget_accent, R.color.widget_ink),
     BLUE("海蓝", R.drawable.widget_blue_bg, R.color.widget_blue_accent, R.color.widget_blue_ink),
     AMBER("琥珀", R.drawable.widget_amber_bg, R.color.widget_amber_accent, R.color.widget_amber_ink),
     LILAC("丁香", R.drawable.widget_lilac_bg, R.color.widget_lilac_accent, R.color.widget_lilac_ink);

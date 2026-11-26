@@ -16,4 +16,5 @@
     <color name="widget_amber_highlight">#473823</color>
     <color name="widget_lilac_highlight">#3C3046</color>
     <color name="widget_summary_fill">#206F8390</color>
+    <color name="widget_band">#273733</color>
 </resources>

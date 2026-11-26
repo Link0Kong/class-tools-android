@@ -1,9 +1,17 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
-    android:layout_height="match_parent" android:gravity="center_vertical" android:orientation="vertical"
-    android:background="@drawable/timetable_widget_background" android:padding="12dp">
-    <TextView android:drawableStart="@drawable/widget_icon_tasks" android:drawablePadding="6dp"
-        android:gravity="center_vertical" android:fontFamily="sans-serif-medium" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/widget_accent" android:textSize="12sp" android:text="待办任务 · 2 项" />
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/widget_ink" android:textSize="18sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" android:text="待办 · 提交课程报告" />
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/widget_accent" android:textSize="13sp" android:maxLines="1" android:ellipsize="end" android:text="今天 18:00 截止 · 重要" />
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" android:ellipsize="end" android:textSize="12sp" android:textColor="@color/widget_accent" android:text="作业 · 预习第二章　明天截止" />
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="9dp" android:background="@drawable/widget_paper_shape">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="3" android:textSize="26sp" android:textColor="@color/widget_ink" android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:fontFamily="sans-serif-medium" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:text="待完成" android:textSize="13sp" android:textColor="@color/widget_accent" android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:layout_weight="1" android:paddingStart="4dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="＋" android:textSize="13sp" android:textColor="@color/widget_accent" android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:fontFamily="sans-serif" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginVertical="2dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="7dp" android:background="@drawable/widget_band_shape">
+        <ImageView android:layout_width="3dp" android:layout_height="20dp" android:src="@drawable/widget_rule_shape" android:scaleType="fitXY" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:text="整理访谈记录" android:textSize="14sp" android:textColor="@color/widget_ink" android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:layout_weight="1" android:paddingStart="6dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="今天 17:00 截止" android:textSize="11sp" android:textColor="@color/widget_accent" android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:fontFamily="sans-serif" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginVertical="2dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="7dp" android:background="@drawable/widget_band_shape">
+        <ImageView android:layout_width="3dp" android:layout_height="20dp" android:src="@drawable/widget_rule_shape" android:scaleType="fitXY" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:text="作业 · 提交实验草图" android:textSize="14sp" android:textColor="@color/widget_ink" android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:layout_weight="1" android:paddingStart="6dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="明天 12:00 截止" android:textSize="11sp" android:textColor="@color/widget_accent" android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:fontFamily="sans-serif" />
+    </LinearLayout>
 </LinearLayout>

@@ -41,7 +41,7 @@ import androidx.core.view.WindowCompat
 //
 // 取色策略：
 //   L1 品牌固定方案（默认）：跨端一致、QA 可复现；
-//   L2 品牌混合动态（可选）：surface/中性跟随壁纸，品牌主色保留。
+//   Android 12+ 默认使用系统生成的壁纸配色。
 // =============================================================================
 
 /** 语义间距（CompositionLocal；默认值 = [CtSpace]，大屏可由调用方覆盖）。 */
@@ -176,47 +176,38 @@ internal val CtDarkColorScheme: ColorScheme = darkColorScheme(
 /** M3 标准（非 Expressive）取色入口，供测试/预览对照。 */
 val CtThemeColorSchemes: Pair<ColorScheme, ColorScheme> = CtLightColorScheme to CtDarkColorScheme
 
-/**
- * L2 混合动态取色：surface/neutral 跟随系统壁纸，品牌 primary/secondary/tertiary
- * （含容器与 fixed 角色）保留品牌方案，避免「跟随壁纸后认不出班级工具」。
- */
-private fun brandedDynamicScheme(context: Context, dark: Boolean): ColorScheme {
-    val dynamic = if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    val brand = if (dark) CtDarkColorScheme else CtLightColorScheme
-    return dynamic.copy(
-        primary = brand.primary,
-        onPrimary = brand.onPrimary,
-        primaryContainer = brand.primaryContainer,
-        onPrimaryContainer = brand.onPrimaryContainer,
-        inversePrimary = brand.inversePrimary,
-        secondary = brand.secondary,
-        onSecondary = brand.onSecondary,
-        secondaryContainer = brand.secondaryContainer,
-        onSecondaryContainer = brand.onSecondaryContainer,
-        tertiary = brand.tertiary,
-        onTertiary = brand.onTertiary,
-        tertiaryContainer = brand.tertiaryContainer,
-        onTertiaryContainer = brand.onTertiaryContainer,
-        primaryFixed = brand.primaryFixed,
-        primaryFixedDim = brand.primaryFixedDim,
-        onPrimaryFixed = brand.onPrimaryFixed,
-        onPrimaryFixedVariant = brand.onPrimaryFixedVariant,
-        secondaryFixed = brand.secondaryFixed,
-        secondaryFixedDim = brand.secondaryFixedDim,
-        onSecondaryFixed = brand.onSecondaryFixed,
-        onSecondaryFixedVariant = brand.onSecondaryFixedVariant,
-        tertiaryFixed = brand.tertiaryFixed,
-        tertiaryFixedDim = brand.tertiaryFixedDim,
-        onTertiaryFixed = brand.onTertiaryFixed,
-        onTertiaryFixedVariant = brand.onTertiaryFixedVariant,
-    )
+/** The same surface and content roles are used by Compose and the desktop widgets. */
+internal fun appColorScheme(context: Context, dark: Boolean, monet: Boolean): ColorScheme =
+    if (monet && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else if (dark) CtDarkColorScheme else CtLightColorScheme
+
+private fun ColorScheme.semanticColors(dark: Boolean) = ctColorOf(dark).copy(
+    background = surface, surface = surface, containerLow = surfaceContainerLow,
+    container = surfaceContainer, containerHigh = surfaceContainerHigh, containerHighest = surfaceContainerHighest,
+    bar = surfaceContainer, textPrimary = onSurface, textSecondary = onSurfaceVariant,
+    textTertiary = onSurfaceVariant, divider = outlineVariant, outline = outline,
+    primary = primary, onPrimary = onPrimary, primaryContainer = primaryContainer,
+    onPrimaryContainer = onPrimaryContainer, error = error, onError = onError, errorContainer = errorContainer,
+    stateLayer = onSurface, skeletonStrong = surfaceContainerHighest, skeletonBase = surfaceContainer,
+    skeletonSoft = surfaceContainerLow, heroPaper = surfaceContainerLow, heroTitle = onSurface,
+    heroBorder = outlineVariant, heroPill = primaryContainer, heroSub = onSurfaceVariant,
+    heroAccent = primary, heroLink = primary, heroDivider = outlineVariant,
+)
+
+private fun ColorScheme.toolAccents(dark: Boolean): CtAccentColors {
+    val first = CtAccentRef(primary, primary)
+    val second = CtAccentRef(secondary, secondary)
+    val third = CtAccentRef(tertiary, tertiary)
+    return ctAccentsOf(dark).copy(teal = first, blue = second, sand = third, leaf = first,
+        plum = third, clay = third, amber = third, water = second)
 }
 
 /**
  * 全局主题。
  *
  * @param darkTheme 是否深色（默认跟随系统；调用方按「外观模式」用 [AppearanceMode.resolveDark] 解析）。
- * @param dynamicColor 是否跟随系统壁纸取色（Material You）。默认关闭以保持品牌识别。
+ * @param dynamicColor 是否跟随系统壁纸取色（Material You）。设备支持时默认使用系统完整配色。
  * @param spacing 语义间距（默认 [CtSpacing]；大屏可由调用方覆盖）。
  * @param immersiveLight 沉浸光感设置（强 / 均衡 / 弱 / 关闭；默认 [CtLightSetting.Default]）。
  * @param lightCapabilityOverride 光感能力档覆盖（预览/测试注入；null = 按 Build.VERSION.SDK_INT + 硬件加速推导）。
@@ -224,20 +215,18 @@ private fun brandedDynamicScheme(context: Context, dark: Boolean): ColorScheme {
 @Composable
 fun ClassToolsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
+    dynamicColor: Boolean = true,
     spacing: CtSpacing = CtSpacing(),
     immersiveLight: CtLightSetting = CtLightSetting.Default,
     lightCapabilityOverride: CtLightCapability? = null,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val colorScheme: ColorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            brandedDynamicScheme(context, darkTheme)
-
-        darkTheme -> CtDarkColorScheme
-        else -> CtLightColorScheme
-    }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val monet = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val colorScheme = remember(context, configuration, darkTheme, monet) { appColorScheme(context, darkTheme, monet) }
+    val semantic = remember(colorScheme, darkTheme, monet) { if (monet) colorScheme.semanticColors(darkTheme) else ctColorOf(darkTheme) }
+    val accents = remember(colorScheme, darkTheme, monet) { if (monet) colorScheme.toolAccents(darkTheme) else ctAccentsOf(darkTheme) }
 
     // 系统栏图标随主题切换：深色模式状态栏/导航栏图标用浅色，避免「黑字压暗底」不可读。
     LaunchedEffect(darkTheme) {
@@ -274,8 +263,8 @@ fun ClassToolsTheme(
                 androidx.compose.material3.LocalContentColor provides colorScheme.onSurface,
                 LocalCtSpacing provides spacing,
                 LocalCtEmphasizedType provides CtEmphasizedType,
-                LocalCtColors provides ctColorOf(darkTheme),
-                LocalCtAccents provides ctAccentsOf(darkTheme),
+                LocalCtColors provides semantic,
+                LocalCtAccents provides accents,
                 LocalCtBrandColors provides if (darkTheme) DarkCtBrandColors else LightCtBrandColors,
                 LocalCtDarkTheme provides darkTheme,
                 LocalCtLightSetting provides immersiveLight,
@@ -293,7 +282,7 @@ fun ClassToolsTheme(
 @Composable
 fun ClassToolsTheme(
     appearance: AppearanceMode,
-    dynamicColor: Boolean = false,
+    dynamicColor: Boolean = true,
     spacing: CtSpacing = CtSpacing(),
     immersiveLight: CtLightSetting = CtLightSetting.Default,
     content: @Composable () -> Unit,

@@ -527,6 +527,7 @@ fun MainNavHost(
                     type = NavType.BoolType
                     defaultValue = false
                 },
+                navArgument(Routes.CREATE_TASK_ARG) { type = NavType.BoolType; defaultValue = false },
                 navArgument(Routes.FOCUS_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                 navArgument(Routes.MAP_ROOM_ARG) {
                     type = NavType.StringType
@@ -707,7 +708,7 @@ fun MainNavHost(
                         val brief = com.furina.classtools.ui.screens.tasks.rememberHomeworkBrief(
                             container.homeworkRepository, container.marksRepository, tasks, session.sid, revision,
                         )
-                        TaskScreen(tasks, sessionSid = session.sid, openTaskId = openTaskId, onTaskOpened = { openTaskId = null },
+                        TaskScreen(tasks, sessionSid = session.sid, createFromWidget = entry.arguments?.getBoolean(Routes.CREATE_TASK_ARG) == true, openTaskId = openTaskId, onTaskOpened = { openTaskId = null },
                             onCloseFocused = focus?.takeUnless { pickInTool }?.let { { popTool(toolId) } },
                             onBack = { popTool(toolId) }, onHomework = { showHomework = true },
                             onSource = { task ->

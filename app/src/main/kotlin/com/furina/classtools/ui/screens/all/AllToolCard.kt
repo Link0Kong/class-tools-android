@@ -111,16 +111,21 @@ internal fun AllToolCard(
             ) {
                 // 40dp Monet 淡色底图标块（网页同款 tint）
                 val scheme = MaterialTheme.colorScheme
+                val (tile, glyph) = when (tool.accentFamily) {
+                    "sand", "plum", "clay", "amber" -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+                    "blue", "water" -> scheme.secondaryContainer to scheme.onSecondaryContainer
+                    else -> scheme.primaryContainer to scheme.onPrimaryContainer
+                }
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = if (selected) scheme.primaryContainer else scheme.surfaceContainerHigh,
-                    contentColor = if (selected) scheme.onPrimaryContainer else scheme.primary,
+                    color = if (selected) scheme.primary else tile,
+                    contentColor = if (selected) scheme.onPrimary else glyph,
                 ) {
                     Box(modifier = Modifier.size(HarmonyTokens.GlyphBox), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
-                            tint = if (selected) scheme.onPrimaryContainer else scheme.primary,
+                            tint = if (selected) scheme.onPrimary else glyph,
                             modifier = Modifier.size(HarmonyTokens.TileGlyph),
                         )
                     }

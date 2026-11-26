@@ -37,16 +37,16 @@ import kotlinx.serialization.json.Json
 private fun taskList(doc: JsonObject, version: Long, now: Long): WidgetList {
     val today = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
     val items = doc.pendingTasks().sortedWith(taskPriorityOrder(today))
-    val rows = items.take(8).map { task ->
+    val rows = items.map { task ->
         val steps = task.objects("steps")
         val detail = listOfNotNull(
             taskDueLabel(task, today).takeIf(String::isNotBlank),
             "重要".takeIf { task.flag("starred") },
             steps.takeIf { it.isNotEmpty() }?.let { "步骤 ${it.count { step -> step.flag("done") }}/${it.size}" },
         ).joinToString(" · ")
-        WidgetLine(task.text("title").take(150), detail, priority = taskPriority(task, today), homeworkId = task.text("sourceHwId"), focus = task.text("id"), deadlineAt = taskDeadline(task))
+        WidgetLine(task.text("title").take(150), detail, priority = taskPriority(task, today), homeworkId = task.text("sourceHwId"), focus = task.text("id"), deadlineAt = taskDeadline(task), starred = task.flag("starred"))
     }
-    return WidgetList(items.size, rows, now, version, doc.importedHomeworkIds())
+    return WidgetList(items.size, rows.take(8), now, version, doc.importedHomeworkIds(), quadrantLeads(rows, now))
 }
 
 internal object WidgetFeedStore {
