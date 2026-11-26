@@ -41,7 +41,7 @@ internal fun TaskDetailPage(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val page: @Composable () -> Unit = {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             val insets = if (inline) Modifier else Modifier.safeDrawingPadding()
             Column(Modifier.fillMaxSize().then(insets), horizontalAlignment = Alignment.CenterHorizontally) {
                 CtTopBar(title = pageTitle, onBack = if (inline) null else onBack, actions = {

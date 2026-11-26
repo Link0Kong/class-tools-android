@@ -171,6 +171,7 @@ internal object WidgetViews {
                         item.setInt(R.id.widget_event_rule, "setColorFilter", colors.tones[(col + slot) % colors.tones.size])
                     }
                     item.setTextViewText(R.id.widget_cell_title, line.title)
+                    if (line.canComplete) item.setInt(R.id.widget_cell_title, "setMaxLines", 2)
                     colors.text(item, R.id.widget_cell_title, colors.ink)
                     item.setTextViewText(R.id.widget_cell_detail, line.detail)
                     colors.text(item, R.id.widget_cell_detail, colors.ink)
