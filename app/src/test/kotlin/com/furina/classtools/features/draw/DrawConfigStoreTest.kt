@@ -1,5 +1,7 @@
 package com.furina.classtools.features.draw
 
+import kotlinx.serialization.json.put
+
 import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.data.sync.UserdataPullResult
 import com.furina.classtools.data.sync.UserdataPushResult
@@ -92,6 +94,7 @@ class DrawConfigStoreTest {
         val original = buildJsonObject {
             put("fit", buildJsonObject { put("sex", JsonPrimitive("f")) })
             put("nick", JsonPrimitive("陈同学"))
+            put("draw", buildJsonObject { put("names", "1=QA"); put("future", 7) })
         }
         val repo = FakeUserDataRepository(original)
         val store = UserDataDrawConfigStore(repo)
@@ -104,6 +107,8 @@ class DrawConfigStoreTest {
         assertEquals("陈同学", updated["nick"]!!.jsonPrimitive.content)
         // draw section 写入契约字段
         val draw = updated["draw"]!!.jsonObject
+        assertEquals("1=QA", draw["names"]!!.jsonPrimitive.content)
+        assertEquals(7, draw["future"]!!.jsonPrimitive.int)
         assertEquals(2, draw["start"]!!.jsonPrimitive.int)
         assertEquals(40, draw["end"]!!.jsonPrimitive.int)
         assertEquals(7, draw["count"]!!.jsonPrimitive.int)

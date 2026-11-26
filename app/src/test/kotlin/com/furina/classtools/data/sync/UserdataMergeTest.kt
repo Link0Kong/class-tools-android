@@ -19,6 +19,27 @@ import org.junit.Test
  */
 class UserdataMergeTest {
 
+    @Test
+    fun frozenCrossPlatformVectors() {
+        val cases = Fixtures.jsonObject("contract_v1.json").getValue("cases") as kotlinx.serialization.json.JsonArray
+        assertEquals(6, cases.size)
+        for (entry in cases) {
+            val case = entry as JsonObject
+            val id = case.getValue("id").toString()
+            val result = UserdataMerge.merge(case["remote"] as JsonObject, case["local"] as JsonObject)
+            fun value(path: String): JsonElement? =
+                path.split('.').fold(result as JsonElement?) { obj, key -> (obj as? JsonObject)?.get(key) }
+            for ((path, expected) in case["expect"] as JsonObject) {
+                assertEquals("$id $path", expected, value(path))
+            }
+            val absent = case["absent"] as? kotlinx.serialization.json.JsonArray
+            absent?.forEach { path -> assertEquals("$id $path", null, value((path as JsonPrimitive).content)) }
+            if (case["legacyEmptyDraw"] == JsonPrimitive(true)) {
+                assertTrue(id, result["draw"] in setOf(JsonObject(emptyMap()), buildJsonObject { put("names", "") }))
+            }
+        }
+    }
+
     private fun localV5Fixture(): JsonObject = buildJsonObject {
         put("at", JsonObject(emptyMap()))
         put(

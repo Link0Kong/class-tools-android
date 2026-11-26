@@ -32,7 +32,9 @@
     "durM": "",
     "durS": ""
   },
-  "draw": {},
+  "draw": {
+    "names": ""
+  },
   "group": {},
   "roster": {
     "rosterSel": [],

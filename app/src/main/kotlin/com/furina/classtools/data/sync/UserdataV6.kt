@@ -33,7 +33,8 @@ object UserdataV6 {
     /** 某个 section 的默认值（与 mp privacy.DEFAULTS / web UD_DEF / merge_ref.js DEFAULTS 逐字段一致）。 */
     fun defaultSection(key: String): JsonElement = when (key) {
         "homeTools" -> JsonArray(emptyList())
-        "fit", "draw", "group" -> JsonObject(emptyMap())
+        "fit", "group" -> JsonObject(emptyMap())
+        "draw" -> buildJsonObject { put("names", "") }
         "roster" -> buildJsonObject {
             put("rosterSel", JsonArray(emptyList()))
             put("rollSel", JsonArray(emptyList()))
