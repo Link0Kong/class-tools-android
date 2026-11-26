@@ -1,5 +1,10 @@
 package com.furina.classtools.data.sync
 
+import com.furina.classtools.createTempDir
+import com.furina.classtools.data.network.ApiClient
+import com.furina.classtools.data.network.ApiIdentity
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import com.furina.classtools.FakeTransport
 import com.furina.classtools.Fixtures
 import com.furina.classtools.data.network.ApiResponse
@@ -64,6 +69,72 @@ class UserDataRepositoryTest {
         val array = kotlinx.serialization.json.Json.parseToJsonElement(post.body!!) as JsonArray
         val row = array[0] as JsonObject
         return UserdataV6.decode((row["blob"] as JsonPrimitive).content)!!
+    }
+
+    @Test
+    fun lateReadWriteAndQueuedChangesBelongToTheirOriginalLogin() = runTest {
+        val directory = createTempDir()
+        val mux = SessionUserdataRepository()
+        var identity = ApiIdentity(null)
+        val entered = CompletableDeferred<Unit>()
+        val oldResponse = CompletableDeferred<ApiResponse>()
+        var blockedMethod: HttpMethod? = null
+        val transport = FakeTransport { req ->
+            if (req.headers["X-Class-Token"] == "a1" && req.method == blockedMethod) {
+                entered.complete(Unit)
+                oldResponse.await()
+            } else {
+                val nickname = req.headers["X-Class-Token"].orEmpty()
+                userdataResponse("""{"v":6,"at":{"nick":100},"nick":"$nickname"}""")
+            }
+        }
+        val api = ApiClient("https://fixture.invalid", "qa", transport = transport, identityProvider = { identity })
+        fun login(sid: String, token: String) {
+            identity = ApiIdentity(token, identity.generation + 1)
+            val http = api.forIdentity(identity)
+            mux.switchTo(sid) { owner, publish ->
+                DefaultUserDataRepository(http,
+                    FileUserDataLocalStore(directory, { owner.sid }, commit = owner::commit),
+                    { owner.sid.takeIf { owner.active } }, backgroundScope, onSections = publish)
+            }
+        }
+
+        login("A", "a1")
+        mux.pull(true)
+        mux.updateCurrent(JsonObject(mux.currentSections.value + ("nick" to JsonPrimitive("draft-a"))))
+        blockedMethod = HttpMethod.POST
+        val pending = async { mux.push(true) }
+        entered.await()
+        login("B", "b1")
+        assertTrue(mux.currentSections.value.isEmpty())
+        mux.pull(true)
+        val b = mux.cachedBlob()
+        login("A", "a2")
+        mux.hydrateFromLocal()
+        val local = FileUserDataLocalStore(directory, { "A" })
+        val before = local.readCurrent()
+        oldResponse.complete(ApiResponse(200, "[]"))
+        assertEquals(UserdataPushResult.Disabled, pending.await())
+        assertEquals(before, local.readCurrent())
+        assertEquals(JsonPrimitive("draft-a"), mux.currentSections.value["nick"])
+        advanceTimeBy(3000)
+        runCurrent()
+        assertEquals(1, transport.requests.count { it.method == HttpMethod.POST })
+        login("B", "b1")
+        mux.hydrateFromLocal()
+        assertEquals(b, mux.cachedBlob())
+        assertEquals(JsonPrimitive("b1"), mux.currentSections.value["nick"])
+
+        val delayed = CompletableDeferred<ApiResponse>()
+        val reading = CompletableDeferred<Unit>()
+        transport.responder = { reading.complete(Unit); delayed.await() }
+        val oldRead = async { mux.pull(true) }
+        reading.await()
+        login("A", "a3")
+        delayed.complete(userdataResponse("""{"v":6,"nick":"late-B"}"""))
+        assertEquals(UserdataPullResult.Disabled, oldRead.await())
+        mux.hydrateFromLocal()
+        assertEquals(JsonPrimitive("draft-a"), mux.currentSections.value["nick"])
     }
 
     // ------------------------------------------------------------ pull

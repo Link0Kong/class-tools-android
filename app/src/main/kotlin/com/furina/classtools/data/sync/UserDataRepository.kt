@@ -104,6 +104,51 @@ interface UserDataRepository {
     suspend fun hydrateFromLocal()
 }
 
+/** One disk/UI publication can complete before retirement; later work cannot commit into a new login. */
+class UserdataSession(val sid: String) {
+    @Volatile var active: Boolean = true
+        private set
+
+    @Synchronized fun commit(action: () -> Unit) {
+        if (active) action()
+    }
+
+    @Synchronized fun retire() { active = false }
+}
+
+/** Keep a stable observable for UI and injected services, but bind each operation and timer to one repository. */
+class SessionUserdataRepository : UserDataRepository {
+    private val sections = MutableStateFlow(JsonObject(emptyMap()))
+    override val currentSections = sections.asStateFlow()
+    @Volatile private var repository: DefaultUserDataRepository? = null
+    private var session: UserdataSession? = null
+
+    @Synchronized
+    fun switchTo(sid: String?, create: (UserdataSession, (JsonObject) -> Unit) -> DefaultUserDataRepository) {
+        session?.retire()
+        repository?.stop()
+        repository = null
+        sections.value = JsonObject(emptyMap())
+        session = sid?.let { UserdataSession(it) }?.also { owner ->
+            repository = create(owner) { value -> owner.commit { sections.value = value } }
+        }
+    }
+
+    override suspend fun pull(force: Boolean) = repository?.pull(force) ?: UserdataPullResult.Disabled
+    override suspend fun push(force: Boolean, forceKeys: Set<String>) =
+        repository?.push(force, forceKeys) ?: UserdataPushResult.Disabled
+    override suspend fun flush() = repository?.flush() ?: UserdataPushResult.Disabled
+    override suspend fun updateCurrent(sections: JsonObject) { repository?.updateCurrent(sections) }
+    override fun touch() { repository?.touch() }
+    override suspend fun setSyncEnabled(enabled: Boolean) { repository?.setSyncEnabled(enabled) }
+    override suspend fun syncEnabled() = repository?.syncEnabled() == true
+    override suspend fun cachedBlob(): JsonObject? {
+        val owner = repository ?: return null
+        return owner.cachedBlob()?.takeIf { repository === owner }
+    }
+    override suspend fun hydrateFromLocal() { repository?.hydrateFromLocal() }
+}
+
 class DefaultUserDataRepository(
     private val api: ApiClient,
     private val local: UserDataLocalStore,
@@ -115,6 +160,7 @@ class DefaultUserDataRepository(
     /** Android 全量客户端拥有全部 section；如某端只想写部分，可收窄（未拥有 section 原样保留云端值）。 */
     private val ownedSections: Set<String> = UserdataV6.SECTION_KEYS.toSet(),
     private val syncAllowed: () -> Boolean = { true },
+    private val onSections: (JsonObject) -> Unit = {},
 ) : UserDataRepository {
 
     private val _currentSections = MutableStateFlow(JsonObject(emptyMap()))
@@ -126,15 +172,22 @@ class DefaultUserDataRepository(
     private var debounceJob: Job? = null
     private var recovering = false
 
+    fun stop() { debounceJob?.cancel() }
+
+    private fun publish(value: JsonObject) {
+        _currentSections.value = value
+        onSections(value)
+    }
+
     // ------------------------------------------------------------ 本机状态
 
     override suspend fun updateCurrent(sections: JsonObject) {
-        val sid = sidOrNull()
+        val sid = sidOrNull() ?: return
         val normalized = UserdataV6.sectionsOf(sections)
         local.writeCurrent(normalized)
         if (sid != sidOrNull()) return
         sectionsSid = sid
-        _currentSections.value = normalized
+        publish(normalized)
         onLocalChanged()
     }
 
@@ -147,7 +200,7 @@ class DefaultUserDataRepository(
         if (!syncEnabled()) return
 
         val current = normalizedCurrent()
-        _currentSections.value = current
+        publish(current)
         val base = local.readCache()
 
         if (base == null) {
@@ -207,7 +260,9 @@ class DefaultUserDataRepository(
             return UserdataPullResult.Success(changed = false, pushed = false, fresh = true)
         }
 
-        val remote = when (val result = fetchRemote(sid)) {
+        val response = fetchRemote(sid)
+        if (sid != sidOrNull()) return UserdataPullResult.Disabled
+        val remote = when (val result = response) {
             is ApiResult.Failure -> return UserdataPullResult.Failure(result.error)
             is ApiResult.Success -> result.value
         }
@@ -275,7 +330,9 @@ class DefaultUserDataRepository(
                 return UserdataPushResult.Skipped
             }
 
-            val remote = when (val result = fetchRemote(sid)) {
+            val response = fetchRemote(sid)
+            if (sid != sidOrNull()) return UserdataPushResult.Disabled
+            val remote = when (val result = response) {
                 is ApiResult.Failure -> {
                     local.setPend(true)
                     return UserdataPushResult.Failure(result.error)
@@ -313,7 +370,10 @@ class DefaultUserDataRepository(
                 )
             }.toString()
 
-            when (val result = api.post(path = USERDATA_PATH, body = body, prefer = UPSERT_PREFER)) {
+            if (sid != sidOrNull()) return UserdataPushResult.Disabled
+            val write = api.post(path = USERDATA_PATH, body = body, prefer = UPSERT_PREFER)
+            if (sid != sidOrNull()) return UserdataPushResult.Disabled
+            when (val result = write) {
                 is ApiResult.Failure -> {
                     val dirty = UserdataMerge.dirtySections(base, current, ownedSections)
                     local.markPending(if (forceKeys.isNotEmpty()) forceKeys else dirty)
@@ -377,7 +437,7 @@ class DefaultUserDataRepository(
         val stored = local.readCurrent()
         if (sid != sidOrNull()) return
         sectionsSid = sid
-        _currentSections.value = if (stored.isEmpty()) stored else UserdataV6.sectionsOf(stored)
+        publish(if (stored.isEmpty()) stored else UserdataV6.sectionsOf(stored))
     }
 
     // ------------------------------------------------------------ 内部工具
@@ -389,7 +449,7 @@ class DefaultUserDataRepository(
         local.writeCurrent(sections)
         if (sid != sidOrNull()) return
         sectionsSid = sid
-        _currentSections.value = sections
+        publish(sections)
     }
 
     private suspend fun applyMerged(merged: JsonObject) = persistApplied(merged)

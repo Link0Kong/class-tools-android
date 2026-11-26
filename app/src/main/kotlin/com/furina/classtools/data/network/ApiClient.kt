@@ -9,6 +9,10 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 
+data class ApiIdentity(val token: String?, val generation: Long = 0) {
+    override fun toString() = "ApiIdentity(generation=$generation)"
+}
+
 /**
  * CloudBase PostgREST 网关客户端（契约：docs/BACKEND_CONTRACT.md §1 + docs/api/ENDPOINTS.md）。
  *
@@ -39,6 +43,9 @@ class ApiClient(
     private val retryJitterMs: Long = DEFAULT_RETRY_JITTER_MS,
     /** 幂等只读请求遇到这些网关瞬时状态码时重试一次。 */
     private val transientStatusCodes: Set<Int> = DEFAULT_TRANSIENT_STATUS,
+    private val identityProvider: () -> ApiIdentity = { ApiIdentity(tokenProvider()) },
+    private val invalidateIdentity: (ApiIdentity) -> Unit = { onTokenInvalid() },
+    private val boundIdentity: ApiIdentity? = null,
 ) {
     /** 规范化后的 REST 根（结尾必带 `/`；与网页 `var CB` / 小程序 `restBase` 语义一致）。 */
     val baseUrl: String = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
@@ -48,10 +55,25 @@ class ApiClient(
     /** `path` 可携带 query（如 `userdata?select=*&id=eq.123`）。 */
     fun url(path: String): String = baseUrl + path.removePrefix("/")
 
+    fun forIdentity(owner: ApiIdentity): ApiClient = ApiClient(
+        baseUrl, publishableKey, transport = transport, json = json,
+        retryDelayMs = retryDelayMs, maxRetries = maxRetries, retryJitterMs = retryJitterMs,
+        transientStatusCodes = transientStatusCodes, identityProvider = identityProvider,
+        invalidateIdentity = invalidateIdentity, boundIdentity = owner,
+    )
+
+    private fun requestIdentity(authenticated: Boolean): ApiIdentity? =
+        if (authenticated) boundIdentity ?: identityProvider() else null
+
+    private fun obsolete(owner: ApiIdentity?): Boolean = owner != null && owner != identityProvider()
+
+    private fun stale() = ApiResult.Failure(ApiError.Config("请求所属身份已切换"))
+
     fun buildHeaders(
         authenticated: Boolean,
         prefer: String? = null,
         extra: Map<String, String> = emptyMap(),
+        identity: ApiIdentity? = requestIdentity(authenticated),
     ): Map<String, String> {
         val headers = LinkedHashMap<String, String>()
         if (publishableKey.isNotBlank()) headers["Authorization"] = "Bearer $publishableKey"
@@ -59,7 +81,7 @@ class ApiClient(
         headers["Accept"] = "application/json"
         headers["Cache-Control"] = "no-store"
         if (authenticated) {
-            val token = tokenProvider()?.trim().orEmpty()
+            val token = identity?.token?.trim().orEmpty()
             if (token.isNotEmpty()) headers["X-Class-Token"] = token
         }
         if (!prefer.isNullOrBlank()) headers["Prefer"] = prefer
@@ -82,8 +104,10 @@ class ApiClient(
         timeoutMs: Long? = null,
         coalesce: Boolean = true,
     ): ApiResult<String> {
+        val owner = requestIdentity(authenticated)
         val block: suspend () -> ApiResult<String> = {
             execute(
+                owner = owner,
                 method = HttpMethod.GET,
                 path = pathAndQuery,
                 body = null,
@@ -95,7 +119,7 @@ class ApiClient(
             )
         }
         if (!coalesce) return block()
-        return executeCoalesced(coalesceKey(pathAndQuery, authenticated, extraHeaders), block)
+        return executeCoalesced(GetKey(pathAndQuery, owner, extraHeaders.toMap()), block)
     }
 
     /**
@@ -195,10 +219,12 @@ class ApiClient(
         if (baseUrl.isBlank() || publishableKey.isBlank()) {
             return ApiResult.Failure(ApiError.Config("云端未配置（baseUrl/publishableKey 为空）"))
         }
+        val owner = requestIdentity(authenticated)
+        if (obsolete(owner)) return stale()
         val request = ApiRequest(
             method = HttpMethod.GET,
             url = url(pathAndQuery),
-            headers = buildHeaders(authenticated),
+            headers = buildHeaders(authenticated, identity = owner),
             body = null,
         )
         val startedNanos = System.nanoTime()
@@ -212,7 +238,8 @@ class ApiClient(
             return ApiResult.Failure(ApiError.Network(cause = t))
         }
         val latencyMs = (System.nanoTime() - startedNanos) / 1_000_000L
-        return when (val result = interpretResponse(response)) {
+        if (obsolete(owner)) return stale()
+        return when (val result = interpretResponse(response, owner, notifyTokenInvalid = false)) {
             is ApiResult.Failure -> result
             is ApiResult.Success -> ApiResult.Success(
                 TimedResponse(
@@ -238,22 +265,8 @@ class ApiClient(
 
     // ------------------------------------------------------------ 在途合并（2026-11-18）
 
-    /** 在途 GET 表：key = path + 身份/头指纹 → 共享结果（不保存任何 token 明文）。 */
-    private val inFlightGets = ConcurrentHashMap<String, CompletableDeferred<ApiResult<String>>>()
-
-    /**
-     * 合并键：同一会话（token 指纹）+ 相同 path/头 → 视为同一逻辑请求。
-     * 只用于 GET（幂等只读）；写请求永不合并/重试。
-     */
-    private fun coalesceKey(
-        pathAndQuery: String,
-        authenticated: Boolean,
-        extraHeaders: Map<String, String>,
-    ): String {
-        val tokenFingerprint = if (authenticated) (tokenProvider()?.hashCode() ?: 0).toString() else "anon"
-        val headers = extraHeaders.entries.sortedBy { it.key }.joinToString(",") { it.key + "=" + it.value }
-        return pathAndQuery + "|" + authenticated + "|" + tokenFingerprint + "|" + headers
-    }
+    private data class GetKey(val path: String, val owner: ApiIdentity?, val headers: Map<String, String>)
+    private val inFlightGets = ConcurrentHashMap<GetKey, CompletableDeferred<ApiResult<String>>>()
 
     /**
      * 在途合并：首个调用者真正发请求，其余同键调用者等待并复用同一结果。
@@ -261,7 +274,7 @@ class ApiClient(
      * - 请求结束即从表里移除（不缓存旧数据，后续调用仍会真正发请求）。
      */
     private suspend fun executeCoalesced(
-        key: String,
+        key: GetKey,
         block: suspend () -> ApiResult<String>,
     ): ApiResult<String> {
         while (true) {
@@ -299,6 +312,7 @@ class ApiClient(
         retryNetworkFailure: Boolean,
         timeoutMs: Long? = null,
         notifyTokenInvalid: Boolean = true,
+        owner: ApiIdentity? = requestIdentity(authenticated),
     ): ApiResult<String> {
         if (baseUrl.isBlank() || publishableKey.isBlank()) {
             return ApiResult.Failure(ApiError.Config("云端未配置（baseUrl/publishableKey 为空）"))
@@ -306,12 +320,13 @@ class ApiClient(
         val request = ApiRequest(
             method = method,
             url = url(path),
-            headers = buildHeaders(authenticated, prefer, extraHeaders),
+            headers = buildHeaders(authenticated, prefer, extraHeaders, owner),
             body = body,
             timeoutMs = timeoutMs,
         )
         var attempt = 0
         while (true) {
+            if (obsolete(owner)) return stale()
             val response = try {
                 transport.execute(request)
             } catch (c: kotlinx.coroutines.CancellationException) {
@@ -325,13 +340,14 @@ class ApiClient(
                 }
                 return ApiResult.Failure(ApiError.Network(cause = t))
             }
+            if (obsolete(owner)) return stale()
             // 幂等只读请求遇到网关瞬时错误（502/503/504）重试一次（写请求 retryNetworkFailure=false 不会走到）
             if (retryNetworkFailure && attempt < maxRetries && response.status in transientStatusCodes) {
                 attempt += 1
                 delay(retryDelayOf(attempt))
                 continue
             }
-            return interpretResponse(response, notifyTokenInvalid)
+            return interpretResponse(response, owner, notifyTokenInvalid)
         }
     }
 
@@ -349,13 +365,15 @@ class ApiClient(
         return t.cause is java.io.IOException
     }
 
-    private fun interpretResponse(response: ApiResponse, notifyTokenInvalid: Boolean = true): ApiResult<String> {
+    private fun interpretResponse(response: ApiResponse, owner: ApiIdentity?, notifyTokenInvalid: Boolean): ApiResult<String> {
         val status = response.status
         return when {
             status in 200..299 -> ApiResult.Success(response.body)
             status == 401 || status == 403 -> {
                 // 探测类调用（notifyTokenInvalid=false）只返回 TokenInvalid，不清会话。
-                if (notifyTokenInvalid) onTokenInvalid()
+                val error = httpError(status, response.body)
+                if (error.postgrestCode in setOf("42501", "DATABASE_42501")) return ApiResult.Failure(error)
+                if (notifyTokenInvalid && owner?.token?.isNotBlank() == true && !obsolete(owner)) invalidateIdentity(owner)
                 ApiResult.Failure(ApiError.TokenInvalid(status))
             }
             else -> ApiResult.Failure(httpError(status, response.body))

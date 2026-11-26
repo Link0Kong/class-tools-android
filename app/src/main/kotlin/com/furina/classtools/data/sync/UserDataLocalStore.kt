@@ -65,6 +65,7 @@ class FileUserDataLocalStore(
     private val directory: File,
     private val sidProvider: () -> String?,
     private val json: Json = NetJson,
+    private val commit: (() -> Unit) -> Unit = { it() },
 ) : UserDataLocalStore {
 
     private val mutex = Mutex()
@@ -90,9 +91,9 @@ class FileUserDataLocalStore(
         }
     }
 
-    private fun updateBlocking(transform: (UserDataStoreFile) -> UserDataStoreFile) {
+    private fun updateBlocking(transform: (UserDataStoreFile) -> UserDataStoreFile) = commit {
         val sid = currentSid()
-        if (sid.isEmpty()) return
+        if (sid.isEmpty()) return@commit
         try {
             directory.mkdirs()
             val next = transform(readFileBlocking())
@@ -170,7 +171,7 @@ class FileUserDataLocalStore(
             val sid = currentSid()
             if (sid.isNotEmpty()) {
                 try {
-                    fileFor(sid).delete()
+                    commit { fileFor(sid).delete() }
                 } catch (_: Throwable) {
                     // ignore
                 }

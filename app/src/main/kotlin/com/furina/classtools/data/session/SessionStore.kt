@@ -75,6 +75,13 @@ class SessionStore(private val context: Context) {
         }
     }
 
+    suspend fun clearIf(expired: Session) {
+        context.sessionDataStore.edit { prefs ->
+            if (prefs[Keys.sid] == expired.sid && prefs[Keys.token] == expired.token &&
+                (prefs[Keys.issuedAt] == null || prefs[Keys.issuedAt] == expired.issuedAt)) prefs.clear()
+        }
+    }
+
     suspend fun clear() {
         context.sessionDataStore.edit { it.clear() }
     }

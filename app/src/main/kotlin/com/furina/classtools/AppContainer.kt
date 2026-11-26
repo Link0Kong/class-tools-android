@@ -45,6 +45,8 @@ import com.furina.classtools.data.member.ClassMembersRepository
 import com.furina.classtools.data.member.DefaultClassLeagueRepository
 import com.furina.classtools.data.member.DefaultClassMembersRepository
 import com.furina.classtools.data.member.FileClassMemberCache
+import com.furina.classtools.data.network.ApiIdentity
+import com.furina.classtools.data.sync.SessionUserdataRepository
 import com.furina.classtools.data.network.ApiClient
 import com.furina.classtools.data.scan.QrLoginRepository
 import com.furina.classtools.data.network.OkHttpTransport
@@ -162,6 +164,7 @@ class AppContainer(context: Context) {
 
     @Volatile
     private var activeSession: Session? = null
+    @Volatile private var identity = ApiIdentity(null)
 
     /** ApiClient 的 token 提供者与仓库的 sid 来源都读取这里。 */
     val currentSession: Session?
@@ -175,14 +178,31 @@ class AppContainer(context: Context) {
         if (isSessionPrepared(session)) return@withLock
         updateActiveSession(session)
         userDataRepository.hydrateFromLocal()
+        if (activeSession != session) return@withLock
         preparedSession = session
         warmReminderCaches()
         if (!session.debug) ReminderRuntime.runNow(appContext)
     }
 
+    @Synchronized
     internal fun updateActiveSession(session: Session?): kotlinx.coroutines.Job? {
         val previous = activeSession
         val previousSid = previous?.sid
+        val credentialsChanged = previousSid != session?.sid || previous?.token != session?.token || previous?.debug != session?.debug
+        if (credentialsChanged || previous?.issuedAt != session?.issuedAt) {
+            val owner = ApiIdentity(session?.takeUnless { it.debug }?.token, identity.generation + 1)
+            identity = owner
+            userDataRepository.switchTo(session?.sid) { files, publish ->
+                DefaultUserDataRepository(
+                    api = apiClient.forIdentity(owner),
+                    local = FileUserDataLocalStore(File(appContext.filesDir, "userdata"), { files.sid }, commit = files::commit),
+                    currentSid = { files.sid.takeIf { files.active } },
+                    scope = appScope,
+                    syncAllowed = { files.active && session?.debug == false },
+                    onSections = publish,
+                )
+            }
+        }
         activeSession = session
         if (previous?.sid != session?.sid || previous?.debug != session?.debug) {
             com.furina.classtools.data.reminder.UserReminderAlarms.restore(appContext)
@@ -198,7 +218,6 @@ class AppContainer(context: Context) {
         }
         // OPPO PUSH：登录 / 切换账号 / token 恢复后，用缓存 RegistrationID 重新上传到当前账号
         // （未登录时 manager 内部跳过，等下次 onSessionChanged；重复上传由幂等门跳过）。
-        val credentialsChanged = previousSid != session?.sid || previous?.token != session?.token || previous?.debug != session?.debug
         if (credentialsChanged) {
             runCatching { oppoPushManager.onSessionChanged() }
         }
@@ -219,14 +238,17 @@ class AppContainer(context: Context) {
     val apiClient: ApiClient = ApiClient(
         baseUrl = BuildConfig.REST_BASE_URL,
         publishableKey = BuildConfig.PUBLISHABLE_KEY,
-        tokenProvider = { activeSession?.takeUnless { it.debug }?.token },
-        onTokenInvalid = {
-            android.util.Log.w("ClassTools", "onTokenInvalid -> clear session")
-            // 统一 401：清会话（不打印 token / 学号），UI 会随 SessionState 回到身份页。
-            updateActiveSession(null)
-            appScope.launch { sessionStore.clear() }
-        },
+        identityProvider = { identity },
+        invalidateIdentity = ::invalidateIdentity,
     )
+
+    @Synchronized
+    private fun invalidateIdentity(owner: ApiIdentity) {
+        if (owner != identity) return
+        val expired = activeSession ?: return
+        updateActiveSession(null)
+        appScope.launch { sessionStore.clearIf(expired) }
+    }
 
     val authRepository: AuthRepository = ApiAuthRepository(apiClient)
 
@@ -259,16 +281,7 @@ class AppContainer(context: Context) {
         currentSid = { activeSession?.sid },
     )
 
-    val userDataRepository: UserDataRepository = DefaultUserDataRepository(
-        api = apiClient,
-        local = FileUserDataLocalStore(
-            directory = File(appContext.filesDir, "userdata"),
-            sidProvider = { activeSession?.sid },
-        ),
-        currentSid = { activeSession?.sid },
-        scope = appScope,
-        syncAllowed = { activeSession?.debug == false },
-    )
+    val userDataRepository = SessionUserdataRepository()
 
     val marksRepository: MarksRepository = DefaultMarksRepository(
         api = apiClient,

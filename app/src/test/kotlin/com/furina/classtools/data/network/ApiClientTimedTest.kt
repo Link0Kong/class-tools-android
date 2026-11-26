@@ -49,14 +49,14 @@ class ApiClientTimedTest {
     }
 
     @Test
-    fun getTimed_tokenInvalid_invokesCallback() = runTest {
+    fun getTimed_permissionProbe_keepsSession() = runTest {
         var invalidated = false
         val transport = FakeTransport { ApiResponse(401, """{"code":"DATABASE_42501"}""") }
         val result = testApiClient(transport, onTokenInvalid = { invalidated = true })
             .getTimed("x")
         assertTrue(result is ApiResult.Failure)
-        assertTrue((result as ApiResult.Failure).error is ApiError.TokenInvalid)
-        assertTrue(invalidated)
+        assertTrue((result as ApiResult.Failure).error is ApiError.Http)
+        assertTrue(!invalidated)
     }
 
     @Test

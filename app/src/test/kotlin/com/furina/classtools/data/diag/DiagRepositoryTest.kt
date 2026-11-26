@@ -148,11 +148,11 @@ class DiagRepositoryTest {
     }
 
     @Test
-    fun tokenInvalid_mapsToFailure() = runTest {
+    fun permissionDenied_mapsToHttpFailure() = runTest {
         val transport = FakeTransport { ApiResponse(401, """{"code":"DATABASE_42501","message":"denied"}""") }
         val result = repository(transport).loadServiceHealth()
         assertTrue(result is DiagResult.Failure)
-        assertTrue((result as DiagResult.Failure).error is ApiError.TokenInvalid)
+        assertEquals("DATABASE_42501", ((result as DiagResult.Failure).error as ApiError.Http).postgrestCode)
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.furina.classtools.data.network
 
+import kotlinx.coroutines.async
 import com.furina.classtools.FakeTransport
 import com.furina.classtools.testApiClient
 import java.io.IOException
@@ -11,6 +12,29 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ApiClientTest {
+
+    @Test
+    fun lateResponsesAndRetriesCannotInvalidateTheNextGeneration() = kotlinx.coroutines.test.runTest {
+        for (status in listOf(401, 403, 503)) {
+            val response = kotlinx.coroutines.CompletableDeferred<ApiResponse>()
+            val entered = kotlinx.coroutines.CompletableDeferred<Unit>()
+            var owner = ApiIdentity("same-token", 1)
+            var callbacks = 0
+            val transport = FakeTransport { entered.complete(Unit); response.await() }
+            val api = ApiClient("https://qa.invalid", "qa", transport = transport,
+                identityProvider = { owner }, invalidateIdentity = { callbacks++ }, retryDelayMs = 0, retryJitterMs = 0)
+            val old = async { api.get("userdata") }
+            entered.await()
+            owner = owner.copy(generation = 2)
+            response.complete(ApiResponse(status, ""))
+            assertTrue(old.await() is ApiResult.Failure)
+            assertEquals(0, callbacks)
+            assertEquals(1, transport.requests.size)
+            transport.responder = { ApiResponse(401, """{"code":"PGRST301"}""") }
+            api.get("current")
+            assertEquals(1, callbacks)
+        }
+    }
 
     @Test
     fun `GET 带契约要求的请求头`() = runTest {
