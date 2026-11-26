@@ -3,6 +3,7 @@ package com.furina.classtools.widget
 import com.furina.classtools.data.homework.*
 import com.furina.classtools.data.timetable.SessionState
 import com.furina.classtools.data.timetable.TtPlan
+import com.furina.classtools.data.timetable.CourseFocus
 import kotlinx.serialization.Serializable
 
 internal enum class WidgetKind(val label: String, val destination: String) {
@@ -11,7 +12,8 @@ internal enum class WidgetKind(val label: String, val destination: String) {
 }
 
 @Serializable
-internal data class WidgetLine(val title: String, val detail: String = "", val destination: String = "", val priority: Int = 5, val homeworkId: String = "")
+internal data class WidgetLine(val title: String, val detail: String = "", val destination: String = "", val priority: Int = 5, val homeworkId: String = "", val focus: String = "",
+    val deadlineAt: Long? = null)
 
 @Serializable
 internal data class WidgetList(
@@ -45,7 +47,7 @@ internal data class WidgetHomework(val rows: List<HomeworkRow>, val fetchedAt: L
             val title = item.row.briefTitle()
             val subject = item.row.subject.trim().takeIf { it.isNotEmpty() && it != title }
             WidgetLine("作业 · " + title, listOfNotNull(subject, deadline).joinToString(" · "),
-                "class-homework", priority, item.id)
+                "class-homework", priority, item.id, focus = item.id, deadlineAt = item.due?.atMillis)
         }
         return WidgetList(items.size, lines, fetchedAt)
     }
@@ -64,20 +66,20 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
     val course = active ?: plan?.next
     val courseLine = course?.let {
         WidgetLine(it.name, listOf("${it.startText}–${it.endText}", it.fullRoom, it.span)
-            .filter(String::isNotBlank).joinToString(" · "), "tt")
+            .filter(String::isNotBlank).joinToString(" · "), "tt", focus = CourseFocus.of(it).encode())
     } ?: WidgetLine(if (plan?.hasData == true) "近期暂无课程" else "打开课表同步课程", destination = "tt")
     val courseLabel = when {
         active != null -> "正在上课"
-        course != null -> listOf(course.dayText, "下一节").filter(String::isNotBlank).joinToString(" · ")
+        course != null -> listOf(course.dateText.takeIf { course.dayOffset > 0 }.orEmpty(), course.dayText, "下一节").filter(String::isNotBlank).joinToString(" · ")
         else -> "今日课表"
     }
     fun countText(list: WidgetList?, unit: String) = list?.let { "${it.count} $unit" } ?: "待同步"
     return when (kind) {
         WidgetKind.TIMETABLE -> {
             val upcoming = plan?.today.orEmpty().filter { it.startAt > (course?.startAt ?: now) }
-                .map { WidgetLine(it.name, "${it.startText}–${it.endText}  ${it.fullRoom}".trim(), "tt") }.toMutableList()
+                .map { WidgetLine(it.name, "${it.startText}–${it.endText}  ${it.fullRoom}".trim(), "tt", focus = CourseFocus.of(it).encode()) }.toMutableList()
             plan?.next?.takeIf { active != null && it.dayOffset > 0 }?.let {
-                upcoming.add(WidgetLine(it.name, "${it.dayText} ${it.startText}  ${it.fullRoom}".trim(), "tt"))
+                upcoming.add(WidgetLine(it.name, "${it.dayText} ${it.startText}  ${it.fullRoom}".trim(), "tt", focus = CourseFocus.of(it).encode()))
             }
             val daySummary = plan?.takeIf { it.hasData }?.let {
                 listOfNotNull(it.week?.let { week -> "第 ${week} 周" }, "今日 ${it.today.size} 门").joinToString(" · ")
@@ -90,7 +92,7 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
             val tasks = feed.tasks
             val notices = feed.notices
             val overview = listOf(tasks?.let { "${it.count} 待办" } ?: "任务待同步",
-                notices?.let { "${it.count} 通知" } ?: "通知待同步")
+                notices?.let { "${it.count} 待处理通知" } ?: "通知待同步")
             val assignments = feed.homework?.current(now, tasks?.importedHomeworkIds.orEmpty())
             val sections = buildList {
                 assignments?.rows?.firstOrNull()?.let { add(it) }
@@ -107,9 +109,11 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
             val tasks = kind == WidgetKind.TASKS
             val list = if (tasks) feed.tasks else feed.latestNotices
             val assignments = if (tasks) feed.homework?.current(now, list?.importedHomeworkIds.orEmpty()) else null
-            val personal = list?.rows.orEmpty()
+            val personal = list?.rows.orEmpty().map {
+                if (tasks) it.copy(title = "待办 · " + it.title, destination = "hw") else it.copy(destination = "nt")
+            }
             val rows = if (assignments == null) personal else {
-                (assignments.rows + personal).sortedBy { it.priority }
+                (assignments.rows + personal).sortedWith(compareBy<WidgetLine> { it.priority }.thenBy { it.deadlineAt ?: Long.MAX_VALUE })
             }
             val empty = when {
                 list == null -> "等待同步"
@@ -122,8 +126,9 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
                 else if (list != null && now - list.fetchedAt >= 60 * 60_000L) "上次同步"
                 else countText(list, if (tasks) "项待办" else "条通知")
             val primary = rows.firstOrNull()
-            val emphasis = primary?.detail?.substringBefore(" · ")?.takeIf { it.contains("截止") || it.contains("逾期") }
-            val heading = listOfNotNull(kind.label, emphasis).joinToString(" · ")
+            val emphasis = primary?.detail?.split(" · ")?.firstOrNull { it.contains("截止") || it.contains("逾期") }
+            val heading = if (tasks) listOfNotNull(kind.label, emphasis).joinToString(" · ")
+                else listOf(kind.label, primary?.detail.orEmpty()).filter(String::isNotBlank).joinToString(" · ")
             WidgetContent(heading, primary ?: WidgetLine(empty,
                 if (list == null) "点按查看并刷新" else ""), rows.drop(1), summary)
         }

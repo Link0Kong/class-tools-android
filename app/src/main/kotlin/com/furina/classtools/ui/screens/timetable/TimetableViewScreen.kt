@@ -133,6 +133,7 @@ import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import com.furina.classtools.ui.theme.LocalCtLight
 import java.time.Instant
 import java.time.LocalDate
+import com.furina.classtools.data.timetable.CourseFocus
 import java.time.ZoneId
 import kotlin.math.abs
 import kotlin.math.max
@@ -183,6 +184,7 @@ fun TimetableViewScreen(
     initialErrorKind: TtFailureKind? = null,
     initialDayView: Boolean = false,
     initialWeekOffset: Int = 0,
+    focus: CourseFocus? = null,
     initialSwipeOffsetPx: Float = 0f,
     skipLoad: Boolean = false,
     nowMillis: Long = System.currentTimeMillis(),
@@ -224,6 +226,11 @@ fun TimetableViewScreen(
     LaunchedEffect(loadToken, refreshToken) {
         if (skipLoad) return@LaunchedEffect
         phase = TtPhase.LOADING
+        repository.cached()?.takeIf { it.c.isNotEmpty() }?.let {
+            snapshot = it
+            fromCache = true
+            phase = TtPhase.READY
+        }
         when (val result = repository.load(force = refreshToken > 0)) {
             is TtLoadResult.Success -> {
                 snapshot = result.snapshot
@@ -236,7 +243,7 @@ fun TimetableViewScreen(
             is TtLoadResult.Failure -> {
                 errorMessage = result.message
                 errorKind = result.kind
-                phase = TtPhase.ERROR
+                phase = if (snapshot.c.isEmpty()) TtPhase.ERROR else TtPhase.READY
             }
         }
         pullRefreshing = false
@@ -248,20 +255,35 @@ fun TimetableViewScreen(
     val termStart = remember(snapshot) { TtCalendar.parseTermStart(snapshot.termStart) }
     val today = remember(nowMillis) { Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate() }
     val todayIndex = remember(today) { TtCalendar.dayIndex(today) }
-    val currentWeek = plan?.week
+    val focusDate = remember(focus) { focus?.let { LocalDate.parse(it.date) } }
+    val currentWeek = plan?.week ?: focusDate?.let { TtCalendar.weekOf(termStart, it) }
     val maxWeek = remember(snapshot, currentWeek) { TimetableWeekLogic.maxWeekOf(snapshot.c, currentWeek) }
 
-    var weekOffset by remember { mutableIntStateOf(initialWeekOffset) }
+    var weekOffset by rememberSaveable { mutableIntStateOf(initialWeekOffset) }
     val preferDay = initialDayView || LocalDensity.current.fontScale > 1.3f
     var viewMode by rememberSaveable { mutableStateOf(if (preferDay) TimetableViewMode.DAY else TimetableViewMode.WEEK) }
-    var selectedDay by remember { mutableIntStateOf(todayIndex) }
+    var selectedDay by rememberSaveable { mutableIntStateOf(todayIndex) }
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
 
+    var focusApplied by rememberSaveable(focus?.encode()) { mutableStateOf(false) }
+    var focusDetail by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(focus, phase, snapshot) {
+        if (focus == null || focusApplied || phase != TtPhase.READY) return@LaunchedEffect
+        val day = LocalDate.parse(focus.date)
+        val week = TtCalendar.weekOf(termStart, day)
+        if (week != null && currentWeek != null) weekOffset = (week - currentWeek).coerceIn(1 - currentWeek, maxWeek - currentWeek)
+        selectedDay = TtCalendar.dayIndex(day)
+        viewMode = TimetableViewMode.DAY
+        focusDetail = focus.start > 0 && focus.match(snapshot, day) != null
+        focusApplied = true
+        if (focus.start > 0 && !focusDetail) snackbar.showSnackbar("这节课已变动，显示当天安排")
+    }
+    val focusedCourse = if (focusDetail && focus != null) focus.match(snapshot, LocalDate.parse(focus.date)) else null
     val displayWeek = remember(currentWeek, weekOffset, maxWeek) {
         TimetableWeekLogic.displayWeek(currentWeek, weekOffset, maxWeek)
     }
     val monday = remember(termStart, displayWeek, today, todayIndex) {
-        displayWeek?.let { TtCalendar.mondayOf(termStart, it) } ?: today.minusDays(todayIndex.toLong())
+        displayWeek?.let { TtCalendar.mondayOf(termStart, it) } ?: (focusDate ?: today).let { it.minusDays(TtCalendar.dayIndex(it).toLong()) }
     }
 
     // 滑动切周状态
@@ -572,15 +594,15 @@ fun TimetableViewScreen(
             }
         }
 
-        selectedCourse?.let { course ->
-            CtBottomSheet(onDismissRequest = { selectedCourse = null }) {
+        (focusedCourse ?: selectedCourse)?.let { course ->
+            CtBottomSheet(onDismissRequest = { if (focusDetail) onBack() else selectedCourse = null }) {
                 TimetableCourseDetailContent(
                     course = course,
                     displayWeek = displayWeek,
                     termStart = termStart,
                     onAddToCalendar = onAddToCalendar,
                     onOpenMap = onOpenMap?.let { open ->
-                        { selectedCourse = null; open(course.room) }
+                        { if (!focusDetail) selectedCourse = null; open(course.room) }
                     },
                 )
             }
@@ -1578,9 +1600,7 @@ private fun DayViewV5(
                             session = session,
                             dark = grid.dark,
                             onClick = {
-                                grid.snapshot.c.firstOrNull { course ->
-                                    course.name == session.name && course.day == selectedDay
-                                }?.let(grid.onCourseClick)
+                                CourseFocus.of(session).match(grid.snapshot, date)?.let(grid.onCourseClick)
                             },
                         )
                     }
@@ -1968,9 +1988,9 @@ fun TimetableCourseDetailContent(
     termStart: LocalDate? = null,
     onOpenMap: (() -> Unit)? = null,
 ) {
-    val dark = LocalCtDarkTheme.current
-    val pair = if (dark) TimetablePalette.darkOf(course.name) else TimetablePalette.lightOf(course.name)
-    val content = Color(pair.content)
+    val scheme = MaterialTheme.colorScheme
+    val content = scheme.onPrimaryContainer
+    val date = displayWeek?.let { TtCalendar.mondayOf(termStart, it)?.plusDays(course.day.toLong()) }
     Column(
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1978,7 +1998,7 @@ fun TimetableCourseDetailContent(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(CtRadius.card),
-            color = Color(pair.container),
+            color = scheme.primaryContainer,
             contentColor = content,
         ) {
             Column(
@@ -1996,10 +2016,11 @@ fun TimetableCourseDetailContent(
                         append(" · ")
                         append(TimetableDetail.timeRangeText(course.start, course.end))
                         append(" · ")
+                        append(date?.let { "${it.monthValue}月${it.dayOfMonth}日 " }.orEmpty())
                         append(TtCalendar.dayLabel(course.day))
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = content.copy(alpha = 0.78f),
+                    color = content,
                 )
             }
         }

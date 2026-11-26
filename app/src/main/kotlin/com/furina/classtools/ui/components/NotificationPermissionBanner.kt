@@ -66,36 +66,13 @@ fun NotificationPermissionBanner(
     modifier: Modifier = Modifier,
 ) {
     if (!visible || NotificationPermissionBannerState.dismissedThisSession) return
-    val colors = rememberHarmonyColors()
-    val accent = MaterialTheme.colorScheme.tertiary
     // 2026-11-20：与首页其它卡片统一为玻璃材质（透光 + 高光 + 折射亮边）。
     com.furina.classtools.ui.components.background.CtGlassSurface(
         modifier = modifier.fillMaxWidth(),
         shape = CtShapeTokens.toolCard,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-            ) {
-                Box(
-                    modifier = Modifier.size(40.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.NotificationsActive,
-                        contentDescription = null,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-            }
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "通知权限未开启",
@@ -108,15 +85,11 @@ fun NotificationPermissionBanner(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = onOpenPermissions) { Text("去开启") }
-            IconButton(onClick = { NotificationPermissionBannerState.dismiss() }) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "关闭通知权限提示",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                IconButton(onClick = { NotificationPermissionBannerState.dismiss() }) {
+                    Icon(Icons.Rounded.Close, "关闭通知权限提示", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
+            TextButton(onClick = onOpenPermissions) { Text("去开启") }
         }
     }
 }
-

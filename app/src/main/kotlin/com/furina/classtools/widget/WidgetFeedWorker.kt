@@ -27,6 +27,7 @@ import com.furina.classtools.ui.screens.notices.NoticeUiItem
 import com.furina.classtools.ui.screens.home.HomeWorkbenchLogic
 import com.furina.classtools.ui.screens.notices.NoticeCardFilter
 import com.furina.classtools.ui.screens.notices.buildUiItems
+import com.furina.classtools.ui.screens.notices.noticePostedDescComparator
 import com.furina.classtools.ui.screens.notices.viewContentOf
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -43,7 +44,7 @@ private fun taskList(doc: JsonObject, version: Long, now: Long): WidgetList {
             "重要".takeIf { task.flag("starred") },
             steps.takeIf { it.isNotEmpty() }?.let { "步骤 ${it.count { step -> step.flag("done") }}/${it.size}" },
         ).joinToString(" · ")
-        WidgetLine(task.text("title").take(150), detail, priority = taskPriority(task, today), homeworkId = task.text("sourceHwId"))
+        WidgetLine(task.text("title").take(150), detail, priority = taskPriority(task, today), homeworkId = task.text("sourceHwId"), focus = task.text("id"), deadlineAt = taskDeadline(task))
     }
     return WidgetList(items.size, rows, now, version, doc.importedHomeworkIds())
 }
@@ -123,7 +124,7 @@ class WidgetFeedWorker(context: Context, params: WorkerParameters) : CoroutineWo
             val snapshot = (marks.await() as? ApiResult.Success)?.value ?: return@async null
             val result = DefaultNoticesRepository(api).load() as? NoticesLoadResult.Success ?: return@async null
             val items = buildUiItems(result.data, snapshot, now)
-            val latest = viewContentOf(items, cardFilter = NoticeCardFilter.LATEST, nowMillis = now).latest
+            val latest = items.filterNot { it.hidden }.sortedWith(noticePostedDescComparator)
             val urgent = viewContentOf(items, cardFilter = NoticeCardFilter.URGENT, nowMillis = now).primary
                 .mapNotNull { it.auto?.id }.toSet()
             fun rank(item: NoticeUiItem) = when {
@@ -134,11 +135,10 @@ class WidgetFeedWorker(context: Context, params: WorkerParameters) : CoroutineWo
             }
             val pending = HomeWorkbenchLogic.noticeRotation(result.data.auto, snapshot, now)
             val pendingRows = pending.map { WidgetLine(it.title.take(150), it.sub.take(100),
-                priority = if (it.id in urgent) 1 else 5) }.sortedBy { it.priority }
-            val rows = latest.sortedBy(::rank).take(8).map {
-                val detail = listOf(it.status?.label.orEmpty(), it.cat, it.summary.ifBlank { it.postedText })
-                    .filter(String::isNotBlank).joinToString(" · ").take(100)
-                WidgetLine(it.title.take(150), detail, priority = rank(it))
+                priority = if (it.id in urgent) 1 else 5, focus = it.id) }.sortedBy { it.priority }
+            val rows = latest.take(8).map {
+                val detail = it.postedText.ifBlank { "发布时间未知" }
+                WidgetLine(it.title.take(150), detail, priority = rank(it), focus = it.occurrenceKey ?: it.auto?.id ?: it.manual?.id.orEmpty())
             }
             WidgetList(pending.size, pendingRows.take(8), now) to WidgetList(latest.size, rows, now)
         }

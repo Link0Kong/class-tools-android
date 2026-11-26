@@ -173,11 +173,8 @@ fun MainNavHost(
     session: Session,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
-    initialToolId: String? = null,
-    onInitialToolConsumed: () -> Unit = {},
-    /** OPPO PUSH 通知点击带入的通知 id（登录/进入主界面后进通知页并定位一次）。 */
-    initialNoticeId: String? = null,
-    onInitialNoticeConsumed: () -> Unit = {},
+    pendingRoute: String? = null,
+    onRouteConsumed: () -> Unit = {},
     /**
      * 独立工具页启动（金标 SharedView 的 Activity 目标）：直接把 NavHost 起点设为该工具，
      * 不再先渲染根页。为空 = 正常 MainActivity 根导航。
@@ -247,30 +244,33 @@ fun MainNavHost(
     var transitionPendingPop by remember { mutableStateOf(false) }
     val reduceMotion = rememberReduceMotion()
 
-    // 通知点击带入的工具（hw/tt）：登录/进入主界面后消费一次。
-    // 独立工具宿主已经直接以目标工具为起点，不能再 navigate 一次（会叠一层工具页）。
-    LaunchedEffect(initialToolId, standaloneTool) {
-        if (!standaloneTool && !initialToolId.isNullOrBlank()) {
-            if (initialToolId == "home") {
-                navController.popBackStack(Routes.ROOT, inclusive = false)
+    // Keep the graph's start stable after consumption and process recreation.
+    val startRoute = androidx.compose.runtime.saveable.rememberSaveable {
+        if (standaloneTool && startToolId != null) Routes.tool(startToolId, startToolPick)
+        else pendingRoute ?: Routes.ROOT
+    }
+    var initialDelivery by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(pendingRoute != null) }
+    LaunchedEffect(pendingRoute) {
+        val target = pendingRoute ?: return@LaunchedEffect
+        if (!initialDelivery || target != startRoute) {
+            if (target == Routes.ROOT) {
+                if (!navController.popBackStack(Routes.ROOT, inclusive = false)) {
+                    navController.navigate(Routes.ROOT) { launchSingleTop = true }
+                }
                 pagerState.scrollToPage(0)
             } else {
-                val homework = initialToolId == "class-homework"
-                navController.navigate(Routes.tool(if (homework) "hw" else initialToolId, pick = homework)) { launchSingleTop = true }
+                val current = navController.currentBackStackEntry
+                navController.navigate(target) {
+                    if (current?.destination?.route == Routes.TOOL &&
+                        current.arguments?.getString(Routes.TOOL_ARG) == target.substringBefore('?').removePrefix("tool/")) {
+                        popUpTo(current.destination.id) { inclusive = true }
+                    }
+                    launchSingleTop = true
+                }
             }
-            onInitialToolConsumed()
         }
-    }
-
-    // OPPO PUSH 通知点击：进入通知页并定位到该通知（NoticesScreen 消费后清空）。
-    var pendingFocusNoticeId by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(initialNoticeId, standaloneTool) {
-        if (standaloneTool) return@LaunchedEffect
-        val noticeId = initialNoticeId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
-        pendingFocusNoticeId = noticeId
-        val targetTool = OppPushClick.targetToolId(noticeId) ?: OppPushClick.NOTICE_TOOL_ID
-        navController.navigate(Routes.tool(targetTool))
-        onInitialNoticeConsumed()
+        initialDelivery = false
+        onRouteConsumed()
     }
 
     fun selectTab(index: Int) {
@@ -284,6 +284,7 @@ fun MainNavHost(
 
     /** 打开工具；「设置」工具卡已移除，设置入口统一在「我的」页。 */
     fun openTool(tool: AppTool) {
+        if (transitionTool != null || navController.currentDestination?.route != Routes.ROOT) return
         val route = when (tool.id) {
             "vote" -> Routes.VOTE
             else -> Routes.tool(tool.id)
@@ -307,7 +308,7 @@ fun MainNavHost(
             transitionReverse = false
             transitionPendingPop = false
         } else {
-            navController.navigate(route)
+            navController.navigate(route) { launchSingleTop = true }
         }
     }
 
@@ -330,6 +331,10 @@ fun MainNavHost(
             } else {
                 navController.popBackStack()
             }
+            return
+        }
+        if (navController.previousBackStackEntry == null) {
+            context.findActivity()?.finish()
             return
         }
         val tool = ToolCatalog.byId(toolId)
@@ -445,11 +450,7 @@ fun MainNavHost(
             NavHost(
                 navController = navController,
                 // 独立 ToolActivity 直接以工具页为起点，首帧就是目标内容，SharedView 才不会捕到根页。
-                startDestination = if (standaloneTool && !startToolId.isNullOrBlank()) {
-                    Routes.tool(startToolId, startToolPick)
-                } else {
-                    Routes.ROOT
-                },
+                startDestination = startRoute,
                 modifier = modifier.fillMaxSize(),
             ) {
         composable(
@@ -483,6 +484,12 @@ fun MainNavHost(
                 onOpenGuide = { navController.navigate(Routes.GUIDE) },
                 onSelectTab = ::selectTab,
                 onOpenTool = ::openTool,
+                onCardOpen = { tool, focus ->
+                    if (navController.currentDestination?.route == Routes.ROOT) {
+                        navController.navigate(Routes.tool(if (tool == "class-homework") "hw" else tool,
+                            pick = tool == "class-homework", focus = focus)) { launchSingleTop = true }
+                    }
+                },
                 onHomeToolsChange = { ids ->
                     optimisticQuickToolIds = ids
                     scope.launch {
@@ -516,6 +523,7 @@ fun MainNavHost(
                     type = NavType.BoolType
                     defaultValue = false
                 },
+                navArgument(Routes.FOCUS_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                 navArgument(Routes.MAP_ROOM_ARG) {
                     type = NavType.StringType
                     nullable = true
@@ -539,8 +547,13 @@ fun MainNavHost(
         ) { entry ->
             val toolId = entry.arguments?.getString(Routes.TOOL_ARG).orEmpty()
             val pickInTool = entry.arguments?.getBoolean(Routes.TOOL_PICK_ARG) == true
+            val focus = entry.arguments?.getString(Routes.FOCUS_ARG)
             // 工具页系统返回也播放「收回卡片」退场动画（屏幕内弹层自己的 BackHandler 后注册，优先处理）。
             BackHandler { popTool(toolId) }
+            if (ToolCatalog.byId(toolId)?.adminOnly == true && !session.isAdmin) {
+                LaunchedEffect(toolId) { CtToastBus.show("当前账号无法访问此工具"); popTool(toolId) }
+                return@composable
+            }
             when (toolId) {
                 "draw" -> {
                     val loadMembers: suspend () -> List<ClassMember> = remember(container) {
@@ -677,10 +690,12 @@ fun MainNavHost(
                     var showHomework by androidx.compose.runtime.saveable.rememberSaveable(session.sid) {
                         mutableStateOf(pickInTool)
                     }
-                    var detailHomeworkId by androidx.compose.runtime.saveable.rememberSaveable(session.sid) {
-                        mutableStateOf<String?>(null)
+                    var detailHomeworkId by androidx.compose.runtime.saveable.rememberSaveable(session.sid, focus) {
+                        mutableStateOf(focus.takeIf { pickInTool })
                     }
-                    var openTaskId by androidx.compose.runtime.saveable.rememberSaveable(session.sid) { mutableStateOf<String?>(null) }
+                    var openTaskId by androidx.compose.runtime.saveable.rememberSaveable(session.sid, focus) {
+                        mutableStateOf(focus.takeUnless { pickInTool })
+                    }
                     var reminderRevision by remember(session.sid) { mutableIntStateOf(0) }
                     val taskState = rememberSaveableStateHolder()
                     if (!showHomework) taskState.SaveableStateProvider(session.sid) {
@@ -688,13 +703,13 @@ fun MainNavHost(
                         val brief = com.furina.classtools.ui.screens.tasks.rememberHomeworkBrief(
                             container.homeworkRepository, container.marksRepository, tasks, session.sid, revision,
                         )
-                        TaskScreen(tasks, openTaskId = openTaskId, onTaskOpened = { openTaskId = null },
+                        TaskScreen(tasks, sessionSid = session.sid, openTaskId = openTaskId, onTaskOpened = { openTaskId = null },
+                            onCloseFocused = focus?.takeUnless { pickInTool }?.let { { popTool(toolId) } },
                             onBack = { popTool(toolId) }, onHomework = { showHomework = true },
                             onSource = { task ->
                                 val notice = (task["sourceNoticeId"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
                                 if (notice.isNotEmpty()) {
-                                    pendingFocusNoticeId = notice
-                                    navController.navigate(Routes.tool("nt"))
+                                    navController.navigate(Routes.tool("nt", focus = notice))
                                 } else {
                                     detailHomeworkId = (task["sourceHwId"] as? kotlinx.serialization.json.JsonPrimitive)?.content
                                     showHomework = true
@@ -722,7 +737,7 @@ fun MainNavHost(
                         }
                         HomeworkScreen(
                             initialDetailId = detailHomeworkId,
-                            onBack = { detailHomeworkId = null; showHomework = false },
+                            onBack = { if (pickInTool) popTool(toolId) else { detailHomeworkId = null; showHomework = false } },
                             importedHomework = taskSnapshot.importedHomeworkIds(),
                             reminderTimes = reminderTimes,
                             onAddTask = { row ->
@@ -741,7 +756,7 @@ fun MainNavHost(
                             onRemindHomework = { row -> remindTarget = row },
                         )
                     }
-                    BackHandler(enabled = showHomework && remindTarget == null) { detailHomeworkId = null; showHomework = false }
+                    BackHandler(enabled = showHomework && remindTarget == null) { if (pickInTool) popTool(toolId) else { detailHomeworkId = null; showHomework = false } }
                     remindTarget?.let { row ->
                         HomeworkReminderDialog(
                             row = row,
@@ -806,8 +821,8 @@ fun MainNavHost(
                         // v3 附件外置：图片 https 签名 URL 复用 data/ppt 的 OkHttp+BitmapFactory+LRU 加载器
                         imageLoader = container.pptImageLoader,
                         // OPPO PUSH 点击带入的通知：加载完成后定位并展开该通知详情
-                        initialFocusNoticeId = pendingFocusNoticeId,
-                        onFocusConsumed = { pendingFocusNoticeId = null },
+                        initialFocusNoticeId = focus,
+                        onCloseFocused = { popTool(toolId) },
                         onAddToCalendar = { group ->
                             if (NoticeCalendarMapper.eligible(group)) {
                                 writeCalendarEvent(NoticeCalendarMapper.eventFor(group))
@@ -872,6 +887,7 @@ fun MainNavHost(
                 }
 
                 "tt" -> TimetableViewScreen(
+                    focus = com.furina.classtools.data.timetable.CourseFocus.decode(focus),
                     onBack = { popTool(toolId) },
                     onOpenMap = { room -> navController.navigate(Routes.campusMap(room)) },
                     repository = container.timetableRepository,
@@ -1123,7 +1139,7 @@ fun MainNavHost(
         ) {
             VoteListScreen(
                 repository = container.voteRepository,
-                onBack = { navController.popBackStack() },
+                onBack = { popTool("vote") },
                 onOpenDetail = { id -> navController.navigate(Routes.voteDetail(id)) },
                 onCreate = { navController.navigate(Routes.voteCreate()) },
             )
@@ -1187,7 +1203,7 @@ fun MainNavHost(
                     } else {
                         transitionRoute?.let { route ->
                             transitionRoute = null
-                            navController.navigate(route)
+                            navController.navigate(route) { launchSingleTop = true }
                         }
                     }
                 },
@@ -1241,6 +1257,7 @@ private fun RootTabs(
     onOpenGuide: () -> Unit,
     onSelectTab: (Int) -> Unit,
     onOpenTool: (AppTool) -> Unit,
+    onCardOpen: (String, String?) -> Unit,
     onHomeToolsChange: (List<String>) -> Unit,
     onOpenPowerPicker: () -> Unit,
     /** 根页「扫一扫」：电脑扫码登录 / 抽签存证核验。 */
@@ -1461,6 +1478,7 @@ private fun RootTabs(
                     session = session,
                     quickToolIds = quickToolIds,
                     onOpenTool = onOpenTool,
+                    onCardOpen = onCardOpen,
                     homeworkRepository = container.homeworkRepository,
                     timetableRepository = container.timetableRepository,
                     marksRepository = container.marksRepository,

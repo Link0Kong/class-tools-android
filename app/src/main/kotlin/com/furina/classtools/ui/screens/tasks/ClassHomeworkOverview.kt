@@ -2,6 +2,7 @@ package com.furina.classtools.ui.screens.tasks
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -90,10 +91,10 @@ internal fun ClassHomeworkOverview(brief: HomeworkBrief, onOpen: (String?) -> Un
             brief.highlights.forEach { item ->
                 HorizontalDivider(Modifier.padding(top = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).clickable { onOpen(item.id) }.padding(vertical = 8.dp)) {
+                    Column(Modifier.weight(1f).clickable { onOpen(item.id) }.heightIn(min = 48.dp).padding(vertical = 8.dp)) {
                         val title = item.row.briefTitle()
                         Text(title, style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            maxLines = 3, overflow = TextOverflow.Ellipsis)
                         val deadline = item.due?.let {
                             HomeworkDueCalculator.shortDueText(item.row) + " · " + it.label
                         } ?: item.row.due.ifBlank { "无截止日期" }

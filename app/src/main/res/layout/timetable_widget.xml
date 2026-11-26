@@ -10,14 +10,17 @@
             android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" />
         <TextView android:id="@+id/widget_summary" android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:layout_marginStart="4dp" android:maxWidth="124dp" android:ellipsize="end"
-            android:background="@drawable/widget_summary_pill" android:paddingHorizontal="6dp" android:paddingVertical="1dp"
+            android:paddingHorizontal="6dp" android:paddingVertical="1dp"
             android:textColor="@color/widget_accent" android:textSize="11sp" android:includeFontPadding="false" android:singleLine="true" />
     </LinearLayout>
+    <LinearLayout android:id="@+id/widget_primary" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:gravity="center_vertical">
     <TextView android:id="@+id/widget_course" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="2dp" android:text="班级课表" android:textSize="18sp" android:textStyle="bold"
         android:textColor="@color/widget_ink" android:includeFontPadding="false" android:maxLines="1" android:ellipsize="end" />
     <TextView android:id="@+id/widget_details" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="2dp" android:textColor="@color/widget_accent" android:textSize="13sp" android:includeFontPadding="false"
         android:maxLines="2" android:ellipsize="end" android:visibility="gone" />
+    </LinearLayout>
     <LinearLayout android:id="@+id/widget_list" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" />
 </LinearLayout>

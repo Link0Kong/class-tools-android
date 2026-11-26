@@ -193,28 +193,6 @@ fun DrawScreen(
                     contentPadding = PaddingValues(CtSpace.md),
                     verticalArrangement = Arrangement.spacedBy(CtSpace.sm),
                 ) {
-                    item(key = "parameters", contentType = "parameters") {
-                        DrawConfiguration(
-                            config = config,
-                            validation = validation,
-                            showOptions = showOptions,
-                            onToggleOptions = { showOptions = !showOptions },
-                            autoRedraw = autoRedraw,
-                            onAutoRedrawChange = { autoRedraw = it },
-                            rosterCount = rosterSeats.size,
-                            rosterLoading = loadMembers != null && loadedRoster == null && names.isEmpty(),
-                            onPickRoster = {
-                                if (names.isNotEmpty()) showRoster = true else rosterAttempt++
-                            },
-                            onConfigChange = { next ->
-                                if (next.sort != config.sort && result != null) {
-                                    applyTransition(DrawWorkflow.changeSort(workflow, next.sort, random))
-                                } else {
-                                    workflow = workflow.copy(config = next)
-                                }
-                            },
-                        )
-                    }
                     item(key = "result", contentType = "result") {
                         DrawResultHeader(
                             exporting = exporting,
@@ -237,7 +215,7 @@ fun DrawScreen(
                                     else applyTransition(DrawTransition.Next(workflow.copy(result = filled)))
                                 }
                             },
-                            onEdit = { scope.launch { listState.scrollToItem(0) } },
+                            onEdit = { scope.launch { listState.scrollToItem(1 + result?.entries.orEmpty().size) } },
                             onClear = { confirmClear = true },
                         )
                     }
@@ -253,6 +231,28 @@ fun DrawScreen(
                                 CtToastBus.show("已剔除，候选池中已无可补抽的号码")
                             }
                         }
+                    }
+                    item(key = "parameters", contentType = "parameters") {
+                        DrawConfiguration(
+                            config = config,
+                            validation = validation,
+                            showOptions = showOptions,
+                            onToggleOptions = { showOptions = !showOptions },
+                            autoRedraw = autoRedraw,
+                            onAutoRedrawChange = { autoRedraw = it },
+                            rosterCount = rosterSeats.size,
+                            rosterLoading = loadMembers != null && loadedRoster == null && names.isEmpty(),
+                            onPickRoster = {
+                                if (names.isNotEmpty()) showRoster = true else rosterAttempt++
+                            },
+                            onConfigChange = { next ->
+                                if (next.sort != config.sort && result != null) {
+                                    applyTransition(DrawWorkflow.changeSort(workflow, next.sort, random))
+                                } else {
+                                    workflow = workflow.copy(config = next)
+                                }
+                            },
+                        )
                     }
                     if (result != null && result.log.isNotEmpty()) {
                         item(key = "log", contentType = "log") {
@@ -292,7 +292,7 @@ fun DrawScreen(
                             applyTransition(transition, stamp)
                             if (transition is DrawTransition.Next) {
                                 showLog = false
-                                scope.launch { listState.scrollToItem(1) }
+                                scope.launch { listState.scrollToItem(0) }
                             }
                         },
                     ) {

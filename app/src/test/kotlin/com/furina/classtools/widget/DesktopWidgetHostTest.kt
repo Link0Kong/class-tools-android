@@ -155,19 +155,30 @@ class DesktopWidgetHostTest {
         }
     }
 
+    @Test fun primaryAndSecondaryRowsCarryIndependentIdsAndHeaderOpensOverview() {
+        val rows = listOf(WidgetLine("同名", destination = "hw", focus = "task/1"),
+            WidgetLine("同名", destination = "class-homework", focus = "作业?2"))
+        val model = WidgetContent("待办任务", rows.first(), rows.drop(1))
+        val view = host(WidgetViews.forHost(app, WidgetKind.TASKS, model, options(300, 245)), 300, 245)
+        for ((id, expected) in listOf(R.id.widget_primary to "task/1", R.id.widget_row to "作业?2", R.id.widget_header to "")) {
+            view.findViewById<View>(id).performClick()
+            assertEquals(expected, shadowOf(app).nextStartedActivity.getStringExtra(com.furina.classtools.MainActivity.CARD_FOCUS))
+        }
+    }
+
     @Test fun independentSizesChangeContentAndSignedOutRemovesPrivateRows() {
         val kind = WidgetKind.TASKS
         val content = widgetContent(kind, true, null, feed, 2)
         fun layout(w: Int, h: Int) = host(WidgetViews.forHost(app, kind, content, options(w,h)),w,h)
         val small = layout(125, 56)
-        assertEquals("报告 1", small.findViewById<TextView>(R.id.widget_course).text.toString())
+        assertEquals("待办 · 报告 1", small.findViewById<TextView>(R.id.widget_course).text.toString())
         assertEquals(View.GONE, small.findViewById<View>(R.id.widget_details).visibility)
         val banner = layout(300, 56)
         assertEquals("周五截止", banner.findViewById<TextView>(R.id.widget_details).text.toString())
         val tall = layout(130, 170)
-        assertEquals(2, tall.findViewById<LinearLayout>(R.id.widget_list).childCount)
+        assertEquals(1, tall.findViewById<LinearLayout>(R.id.widget_list).childCount)
         val large = layout(300, 245)
-        assertEquals(4, large.findViewById<LinearLayout>(R.id.widget_list).childCount)
+        assertEquals(2, large.findViewById<LinearLayout>(R.id.widget_list).childCount)
         assertEquals(View.VISIBLE, large.findViewById<View>(R.id.widget_row_detail).visibility)
         assertEquals(View.GONE, tall.findViewById<View>(R.id.widget_row_detail).visibility)
         large.updateAppWidget(parcelled(WidgetViews.forHost(app, kind, widgetContent(kind,false,null,feed,2), options(300,245))))
@@ -186,7 +197,7 @@ class DesktopWidgetHostTest {
         host.measure(View.MeasureSpec.makeMeasureSpec(300, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(245, View.MeasureSpec.EXACTLY))
         host.layout(0, 0, 300, 245)
-        assertEquals(4, host.findViewById<LinearLayout>(R.id.widget_list).childCount)
+        assertEquals(2, host.findViewById<LinearLayout>(R.id.widget_list).childCount)
     }
 
     @Test fun providerUpdatesBothBoundInstancesAndClearsPreviousAccount() = runBlocking {
@@ -202,9 +213,9 @@ class DesktopWidgetHostTest {
         assertNull(WidgetFeedStore.read(app, "99990001").tasks)
         DesktopWidgets.update(app, TasksWidget::class.java, false)
         fun root(index: Int) = registry.getViewFor(ids[index])
-        assertEquals("报告 1", root(0).findViewById<TextView>(R.id.widget_course).text.toString())
+        assertEquals("待办 · 报告 1", root(0).findViewById<TextView>(R.id.widget_course).text.toString())
         assertEquals(0, root(0).findViewById<LinearLayout>(R.id.widget_list).childCount)
-        assertEquals(4, root(1).findViewById<LinearLayout>(R.id.widget_list).childCount)
+        assertEquals(2, root(1).findViewById<LinearLayout>(R.id.widget_list).childCount)
         sessionStore.clear()
         DesktopWidgets.update(app, TasksWidget::class.java, false)
         assertEquals("登录后查看", root(1).findViewById<TextView>(R.id.widget_course).text.toString())

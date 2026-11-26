@@ -479,7 +479,7 @@ fun CloudSpaceContent(
                 ) {
                     item(key = "space") {
                         CtToolCard(
-                            title = "空间",
+                            title = "文件传输",
                             trailing = {
                                 Text(
                                     text = statusText,
@@ -492,24 +492,6 @@ fun CloudSpaceContent(
                                 )
                             },
                         ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                StatBlock(
-                                    value = snapshot.count.toString(),
-                                    label = "文件",
-                                    modifier = Modifier.weight(1f),
-                                )
-                                StatBlock(
-                                    value = snapshot.totalBytesText,
-                                    label = "已占用",
-                                    modifier = Modifier.weight(1f),
-                                )
-                                StatBlock(
-                                    value = "3 天",
-                                    label = "自动保留",
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(14.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -613,6 +595,27 @@ fun CloudSpaceContent(
                         }
                     }
 
+                    item(key = "storage-stats") {
+                        CtToolCard(title = "空间用量") {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                StatBlock(
+                                    value = snapshot.count.toString(),
+                                    label = "文件",
+                                    modifier = Modifier.weight(1f),
+                                )
+                                StatBlock(
+                                    value = snapshot.totalBytesText,
+                                    label = "已占用",
+                                    modifier = Modifier.weight(1f),
+                                )
+                                StatBlock(
+                                    value = "3 天",
+                                    label = "自动保留",
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    }
                     item(key = "note") {
                         CtToolCard(title = "说明") {
                             Text(

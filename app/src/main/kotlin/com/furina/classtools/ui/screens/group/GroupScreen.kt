@@ -402,8 +402,9 @@ private fun GroupContent(
                             .padding(horizontal = padding),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        if (state.result != null) resultArea()
                         configCard()
-                        resultArea()
+                        if (state.result == null) resultArea()
                         Spacer(modifier = Modifier.height(CtSpace.sm))
                     }
                     Box(modifier = Modifier.fillMaxWidth().padding(horizontal = padding)) {

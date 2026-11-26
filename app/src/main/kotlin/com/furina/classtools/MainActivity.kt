@@ -16,17 +16,12 @@ import com.furina.classtools.ui.platform.enableClassToolsEdgeToEdge
 
 class MainActivity : ComponentActivity() {
 
-    /**
-     * 通知点击带入的工具 id（hw/tt）。未登录时先停在身份页，登录后由 MainNavHost 消费跳转。
-     * 状态放 Activity，旋转/重组不重复跳转；消费后清空。
-     */
-    private val pendingToolId = mutableStateOf<String?>(null)
+    private val pendingRoute = mutableStateOf<String?>(null)
 
-    /**
-     * OPPO PUSH 通知点击带入的通知 id（服务端 `actionParameters={"noticeId":"<gid>"}`）。
-     * 冷启动（onCreate）/ 已运行（onNewIntent）都要处理；未登录时等登录进入主界面后消费。
-     */
-    private val pendingNoticeId = mutableStateOf<String?>(null)
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("pendingCardRoute", pendingRoute.value)
+        super.onSaveInstanceState(outState)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // 全透明系统栏：避免部分 ROM（ColorOS 等）在底部工具栏下画一条黑色导航栏色带。
@@ -37,18 +32,15 @@ class MainActivity : ComponentActivity() {
                 com.furina.classtools.widget.DesktopWidgets.publishPickerPreviews(applicationContext)
             }
         }
-        pendingToolId.value = toolIdFrom(intent)
-        pendingNoticeId.value = noticeIdFrom(intent)
+        pendingRoute.value = if (savedInstanceState == null) routeFrom(intent) else savedInstanceState.getString("pendingCardRoute")
         val container = (application as ClassToolsApp).container
         setContent {
             // 主题/外观/背景/系统栏与 ToolActivity 共用同一宿主，保证共享元素两端视觉一致。
             ClassToolsThemeHost(container) {
                 ClassToolsRoot(
                     container = container,
-                    pendingToolId = pendingToolId.value,
-                    onPendingToolConsumed = { pendingToolId.value = null },
-                    pendingNoticeId = pendingNoticeId.value,
-                    onPendingNoticeConsumed = { pendingNoticeId.value = null },
+                    pendingRoute = pendingRoute.value,
+                    onRouteConsumed = { pendingRoute.value = null },
                 )
             }
         }
@@ -57,8 +49,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        toolIdFrom(intent)?.let { pendingToolId.value = it }
-        noticeIdFrom(intent)?.let { pendingNoticeId.value = it }
+        routeFrom(intent)?.let { pendingRoute.value = it }
     }
 
     override fun onResume() {
@@ -82,15 +73,31 @@ class MainActivity : ComponentActivity() {
         return handled || super.onKeyDown(keyCode, event)
     }
 
-    private fun toolIdFrom(intent: Intent?): String? =
-        if (intent?.action == Intent.ACTION_VIEW &&
-            intent.dataString == com.furina.classtools.data.timetable.XiaobuCourseCard.TIMETABLE_LINK
-        ) "tt" else if (intent?.action == "com.furina.classtools.widget.OPEN.home") "home"
-        else ReminderIntentFactory.toolIdFromExtras(intent?.getStringExtra(ReminderIntentFactory.EXTRA_TOOL_ID))?.let {
-            val personalTask = intent?.action == "com.furina.classtools.widget.OPEN.hw" ||
-                intent?.getStringExtra(ReminderIntentFactory.EXTRA_REMINDER_KIND) == com.furina.classtools.data.reminder.ReminderKind.PERSONAL_TASK.name
-            if (it == "hw" && !personalTask) "class-homework" else it
+    private fun routeFrom(intent: Intent?): String? {
+        if (intent == null) return null
+        val routes = com.furina.classtools.ui.navigation.Routes
+        val widgetTool = intent.action?.removePrefix(WIDGET_ACTION)?.takeIf { intent.action == WIDGET_ACTION + it }
+        val focus = intent.getStringExtra(CARD_FOCUS)
+        when (widgetTool) {
+            "home" -> return routes.ROOT
+            "tt", "nt", "hw" -> return routes.tool(widgetTool, focus = focus)
+            "class-homework" -> return routes.tool("hw", pick = true, focus = focus)
         }
+        val notice = noticeIdFrom(intent)
+        if (notice != null) return routes.tool("nt", focus = notice)
+        if (intent.action == Intent.ACTION_VIEW && intent.dataString == com.furina.classtools.data.timetable.XiaobuCourseCard.TIMETABLE_LINK) {
+            return routes.tool("tt")
+        }
+        val id = ReminderIntentFactory.toolIdFromExtras(intent.getStringExtra(ReminderIntentFactory.EXTRA_TOOL_ID)) ?: return null
+        if (id == "vote") return routes.VOTE
+        return routes.tool(id, pick = id == "hw" && intent.getStringExtra(ReminderIntentFactory.EXTRA_REMINDER_KIND) !=
+            com.furina.classtools.data.reminder.ReminderKind.PERSONAL_TASK.name)
+    }
+
+    companion object {
+        internal const val WIDGET_ACTION = "com.furina.classtools.widget.OPEN."
+        internal const val CARD_FOCUS = "com.furina.classtools.card.FOCUS"
+    }
 
     /**
      * OPPO PUSH 点击参数解析：优先 intent extra `noticeId`，否则解析 extra `actionParameters` JSON。

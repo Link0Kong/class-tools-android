@@ -59,7 +59,7 @@ internal object DesktopWidgets {
     private const val REFRESH = "com.furina.classtools.widget.REFRESH"
     val refreshActions = setOf(REFRESH, AppWidgetManager.ACTION_APPWIDGET_UPDATE,
         AppWidgetManager.ACTION_APPWIDGET_OPTIONS_CHANGED, Intent.ACTION_DATE_CHANGED,
-        Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED)
+        Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_CONFIGURATION_CHANGED)
     private val lock = Mutex()
 
     private fun ids(context: Context, provider: Class<out DesktopWidgetProvider>) =

@@ -123,6 +123,7 @@ class AppSettingsStore(private val context: Context) {
     suspend fun setAppearanceMode(mode: AppearanceMode) {
         startupPrefs.edit().putString(STARTUP_KEY_APPEARANCE_MODE, mode.storageValue).apply()
         store.edit { prefs -> prefs[KEY_APPEARANCE_MODE] = mode.storageValue }
+        com.furina.classtools.widget.DesktopWidgets.refresh(appContext)
     }
 
     suspend fun setHideStatusBar(enabled: Boolean) {

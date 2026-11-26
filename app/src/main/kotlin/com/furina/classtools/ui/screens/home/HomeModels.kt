@@ -176,10 +176,12 @@ object HomeWorkbenchLogic {
                 nowMillis,
                 publishedTs = NoticeStatusMachine.publishedTsOf(entry.group, entry.items, nowMillis),
             ).label
+        val published = com.furina.classtools.ui.screens.notices.publishedAtOf(entry)
+        val posted = com.furina.classtools.ui.screens.notices.formatPosted(published, nowMillis)
         HomeRotationItem(
-            id = entry.id,
+            id = occurrence?.key ?: entry.id,
             title = entry.title,
-            sub = listOf(entry.cat, statusText).filter { it.isNotBlank() }.joinToString(" · "),
+            sub = listOf(entry.cat, posted, statusText).distinct().filter(String::isNotBlank).joinToString(" · "),
         )
     }
 

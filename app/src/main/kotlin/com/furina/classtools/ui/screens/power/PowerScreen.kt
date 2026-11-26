@@ -388,7 +388,9 @@ fun PowerScreen(
     val crossRangeRecharge = remember(history30, slowRoom) {
         if (slowRoom) null else PowerStats.lastRecharge(history30)
     }
-    val trend = remember(selectedHistory, range) { PowerStats.trendLine(selectedHistory, PowerStats.trendLimit(range)) }
+    val trend = remember(selectedHistory, range, sel) { PowerStats.trendLine(selectedHistory, PowerStats.trendLimit(range)).let { line ->
+        if (line.empty && selectedHistory.isEmpty() && sel.isNotBlank()) line.copy(note = "当前区间暂无采样") else line
+    } }
     val changeDots = remember(trend, slowRoom) {
         if (slowRoom) PowerStats.changeDots(trend.points) else emptyList()
     }
@@ -404,7 +406,7 @@ fun PowerScreen(
         )
     }
     val bill = remember(rangeStats) { PowerStats.billOf(rangeStats) }
-    val ringArc = remember(rowValue, estimate) { PowerStats.ringArc(rowValue, estimate) }
+    val ringArc = remember(rowValue, estimate) { if (estimate.valid) PowerStats.ringArc(rowValue, estimate) else 0f }
     val noUpdate = remember(range, selectedHistory) { PowerStats.noUpdateText(range, selectedHistory) }
 
     LaunchedEffect(trend) { cursorIndex = null }
@@ -443,7 +445,6 @@ fun PowerScreen(
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             ctTopBarRaw(
-                subtitle = PowerRooms.labelOf(sel).takeIf { it.isNotBlank() },
                 title = "宿舍电费",
                 onBack = onBack,
                 actions = {
@@ -680,13 +681,14 @@ private fun ReadyContent(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGap),
     ) {
-        PickRoomCard(sel = sel, onPick = onPickHouse)
+        PickRoomCard(label = row?.label.orEmpty().ifBlank { PowerRooms.labelOf(sel) }, onPick = onPickHouse)
         HeroCard(
             row = row,
             state = state,
             ringArc = ringArc,
             slowRoom = slowRoom,
         )
+        androidx.compose.material3.TextButton(onClick = onLowClick) { Text("设置低电量阈值") }
         TrendSection(
             range = range,
             slowRoom = slowRoom,
@@ -718,7 +720,7 @@ private fun ReadyContent(
 }
 
 @Composable
-private fun PickRoomCard(sel: String, onPick: () -> Unit) {
+private fun PickRoomCard(label: String, onPick: () -> Unit) {
     CtToolCard(
         modifier = Modifier
             .clip(RoundedCornerShape(CtRadius.hero))
@@ -741,7 +743,7 @@ private fun PickRoomCard(sel: String, onPick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = if (sel.isBlank()) "未选择" else PowerRooms.labelOf(sel),
+                text = label.ifBlank { "未选择" },
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -774,7 +776,7 @@ private fun HeroCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            RingGauge(progress = ringArc, accent = stateColor, diameter = 72.dp)
+            if (ringArc > 0f) RingGauge(progress = ringArc, accent = stateColor, diameter = 64.dp)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(CtSpace.xs)) {
                 Text(
                     text = "剩余电量",

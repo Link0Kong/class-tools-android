@@ -34,10 +34,16 @@ object Routes {
     const val TOOL_ARG = "toolId"
     const val TOOL_PICK_ARG = "pick"
     const val MAP_ROOM_ARG = "room"
-    const val TOOL = "tool/{$TOOL_ARG}?$TOOL_PICK_ARG={$TOOL_PICK_ARG}&$MAP_ROOM_ARG={$MAP_ROOM_ARG}"
+    const val FOCUS_ARG = "focus"
+    const val TOOL = "tool/{$TOOL_ARG}?$TOOL_PICK_ARG={$TOOL_PICK_ARG}&$MAP_ROOM_ARG={$MAP_ROOM_ARG}&$FOCUS_ARG={$FOCUS_ARG}"
 
-    fun tool(toolId: String, pick: Boolean = false): String =
-        if (pick) "tool/$toolId?$TOOL_PICK_ARG=true" else "tool/$toolId"
+    fun tool(toolId: String, pick: Boolean = false, focus: String? = null): String {
+        val query = listOfNotNull(
+            "pick=true".takeIf { pick },
+            focus?.takeIf(String::isNotBlank)?.let { "focus=" + Uri.encode(it) },
+        )
+        return "tool/$toolId" + if (query.isEmpty()) "" else query.joinToString("&", prefix = "?")
+    }
 
     fun campusMap(room: String?): String =
         if (room.isNullOrBlank()) tool("map") else "tool/map?$MAP_ROOM_ARG=${Uri.encode(room.trim())}"

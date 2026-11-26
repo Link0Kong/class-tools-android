@@ -209,24 +209,17 @@ fun CtGlassSurface(
     val c = rememberCtColors()
     val lightEnabled = LocalCtLight.current.enabled
     // 玻璃化开关关：实色 M3；开：走下方磨砂玻璃材质（beta1 风格）。
-    if (opaque && !lightEnabled) {
-        // M3 filled card：surfaceContainerHigh 实色，浅色/深色都由主题角色给出。
-        val container = MaterialTheme.colorScheme.surfaceContainerHigh
-        val border = if (c.dark) {
-            androidx.compose.foundation.BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-            )
-        } else {
-            null
-        }
+    if (body || (opaque && !lightEnabled)) {
+        val scheme = MaterialTheme.colorScheme
+        val container = if (darkRole == CtDarkGlassRole.HERO) scheme.surfaceContainerHigh else scheme.surfaceContainerLow
+        val border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = if (lightEnabled && frosted) 0.8f else 0.55f))
         if (onClick != null) {
             Surface(
                 onClick = onClick,
                 modifier = modifier.fillMaxWidth(),
                 shape = shape,
                 color = container,
-                contentColor = c.textPrimary,
+                contentColor = scheme.onSurface,
                 border = border,
                 shadowElevation = 0.dp,
             ) { content() }
@@ -235,7 +228,7 @@ fun CtGlassSurface(
                 modifier = modifier.fillMaxWidth(),
                 shape = shape,
                 color = container,
-                contentColor = c.textPrimary,
+                contentColor = scheme.onSurface,
                 border = border,
                 shadowElevation = 0.dp,
             ) { content() }

@@ -125,6 +125,10 @@ import com.furina.classtools.ui.theme.CtTokens
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import com.furina.classtools.data.tasks.*
+import com.furina.classtools.data.timetable.CourseFocus
+import androidx.compose.foundation.layout.heightIn
+import com.furina.classtools.data.homework.briefTitle
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -137,43 +141,7 @@ import kotlinx.serialization.json.intOrNull
 import com.furina.classtools.ui.components.ctRootPageEdgeFade
 import com.furina.classtools.ui.components.ctHeaderCollapseProgress
 
-/**
- * 工作台 v5（参考 HFUT-Schedule 卡片层次 + xiaoying 渐变 hero / 快捷图标行；只借鉴设计）。
- *
- * 结构（自上而下）：
- * 0. 「今日」hero：日期/星期 + 周次/角色 + 问候 + 上课中/下一节/已结束/无课 + 进度条；
- * 1. 今日课程卡：时间线（多节/上课中 pill/已结束）+「现在」时间线（H-05）+「课表 ›」；
- * 2. 宿舍电费卡：关注宿舍/剩余电量/状态 pill/更新时间；未关注只引导（**0 请求**）；
- * 3. 作业待交卡：待交数量 + 最新一条（每 5s 上浮淡出/下浮淡入轮换，页面不可见暂停）；
- * 4. 通知待处理卡：待处理数量 + 最新一条（轮换；同步中/失败/离线文案 + 行内重试）；
- * 5. 常用工具：xiaoying 式四图标行（无勾选空态引导去工具页/本页编辑；右上「全部 ›」）。
- *
- * 交互/无障碍：
- * - 首次进入逐块错峰淡入（系统「移除动画」/ 预览渲染时自动退化为无动画）；
- * - 快捷工具编辑保持原逻辑（点击加入/移出、最多 4 个、H-03 返回二次确认）；
- * - 四态（加载/空/失败/离线）全部保留（不再提供下拉刷新：与「卡片式 + 无多余手势」的统一动效语言一致）。
- *
- * 自适应：≥840dp 双栏（左：今日课程 + 电费；右：作业 + 通知 + 常用工具），hero 全宽；
- * 内容限宽居中（见 `ui/adaptive`）。
- *
- * 接线（Lead 在 MainNavHost；参数保持 v4 完全一致）：
- * ```kotlin
- * HomeScreen(
- *     session = session,
- *     quickToolIds = quickToolIds,
- *     onOpenTool = ::openTool,
- *     onHomeToolsChange = { ... },
- *     homeworkRepository = container.homeworkRepository,
- *     timetableRepository = container.timetableRepository,
- *     marksRepository = container.marksRepository,
- *     powerRepository = container.powerRepository,
- *     noticesRepository = container.noticesRepository,
- *     userDataRepository = container.userDataRepository,
- *     onOpenAll = { navController.navigate(Routes.ALL) },
- *     isPageActive = pagerState.currentPage == 0 && pagerState.isScrollInProgress.not(),
- * )
- * ```
- */
+/** 工作台按课程、宿舍、待办、班级作业、通知与常用工具展示当前账号可用的数据。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -197,7 +165,7 @@ fun HomeScreen(
     /** H-04：电量卡未关注宿舍时直接打开宿主的选择器（宿主通过路由参数让电费页首帧弹选择器）。 */
     onOpenPowerPicker: (() -> Unit)? = null,
     isPageActive: Boolean = true,
-    rotationEnabled: Boolean = true,
+    onCardOpen: ((String, String?) -> Unit)? = null,
     nowMillis: Long? = null,
     initialTtPlan: TtPlan? = null,
     initialHomeworkRows: List<HomeworkRow> = emptyList(),
@@ -211,7 +179,7 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val spec = rememberCtAdaptiveSpec()
     val zone = remember { ZoneId.systemDefault() }
-    // 页面可见（Lifecycle + 翻页 active）才轮换；不可见暂停
+    // 仅在工作台可见时按分钟更新课程及期限。
     var lifecycleResumed by remember { mutableStateOf(true) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { lifecycleResumed = true }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { lifecycleResumed = false }
@@ -289,7 +257,6 @@ fun HomeScreen(
 
     // 懒加载：作业
     LaunchedEffect(homeworkRepository, refreshToken) {
-        if (taskRepository != null) return@LaunchedEffect
         val repo = homeworkRepository ?: return@LaunchedEffect
         homeworkLoading = true
         homeworkFailed = false
@@ -311,7 +278,7 @@ fun HomeScreen(
         when (val result = runCatching { repo.load(force = refreshToken > 0) }.getOrNull()) {
             is NoticesLoadResult.Success -> {
                 noticesData = result.data
-                noticesState = NoticeHomeState.READY
+                noticesState = if (result.data.refreshError != null) NoticeHomeState.OFFLINE else NoticeHomeState.READY
             }
 
             is NoticesLoadResult.Failure -> {
@@ -338,19 +305,27 @@ fun HomeScreen(
         powerLoading = false
     }
 
-    // ---- 统计 / 轮换数据 ----------------------------------------------------
+    // ---- 卡片摘要与可定位条目 ----------------------------------------------------
     val hwOpenRows = remember(homeworkRows, marks, currentTime) {
         HomeWorkbenchLogic.openHomeworkRows(homeworkRows, marks, currentTime)
     }
     val personal = taskRepository?.snapshot?.collectAsState()?.value
     val taskStatus = taskRepository?.syncStatus?.collectAsState()?.value
     LaunchedEffect(taskRepository, refreshToken) { taskRepository?.sync() }
-    val hwItems = remember(personal, hwOpenRows, marks, currentTime) {
-        personal?.pendingTasks()
-            ?.map { HomeRotationItem(it.text("id"), it.text("title"), listOf(it.text("due"), it.text("dueTime")).filter(String::isNotEmpty).joinToString(" ")) }
-            ?: HomeWorkbenchLogic.homeworkRotation(homeworkRows, marks, currentTime)
+    val hwItems = remember(personal, today) {
+        personal?.pendingTasks().orEmpty().sortedWith(taskPriorityOrder(today.toString())).map {
+            HomeRotationItem(it.text("id"), it.text("title"), taskDueLabel(it, today.toString()).ifBlank { "未设置截止" })
+        }
     }
-    val ntEntries: List<NoticeEntry> = noticesData?.auto.orEmpty()
+    val classItems = remember(hwOpenRows, personal) {
+        val imported = personal?.importedHomeworkIds().orEmpty()
+        hwOpenRows.filterNot { it.id in imported }.map {
+            HomeRotationItem(it.id, it.briefTitle(), com.furina.classtools.data.homework.HomeworkDueCalculator.shortDueText(it)
+                .takeIf(String::isNotBlank)?.let { due -> "$due 截止" } ?: "未设置截止")
+        }
+    }
+    val pinnedCourse = ttPlan?.today?.firstOrNull { it.state == SessionState.ONGOING } ?: ttPlan?.next
+    val ntEntries: List<NoticeEntry> = noticesData?.auto.orEmpty().filter { session.isAdmin || !it.hidden }
     val ntItems = remember(ntEntries, marks, currentTime) {
         HomeWorkbenchLogic.noticeRotation(ntEntries, marks, currentTime)
     }
@@ -365,31 +340,7 @@ fun HomeScreen(
         HomeWorkbenchLogic.powerCard(effectivePowerSel, powerRow, powerLow)
     }
 
-    var hwIndex by remember { mutableIntStateOf(0) }
-    var ntIndex by remember { mutableIntStateOf(0) }
-
-    // G22：系统移除动画时停止卡内容自动轮换 + 首屏错峰淡入。
     val reduceMotion = rememberReduceMotion()
-    val rotationActive = rotationEnabled &&
-        !reduceMotion &&
-        isPageActive &&
-        lifecycleResumed &&
-        HomeWorkbenchLogic.rotationEnabled(maxOf(hwItems.size, ntItems.size), pageVisible = true)
-
-    LaunchedEffect(hwItems.size, hwItems.firstOrNull()?.id, rotationActive) {
-        if (!rotationActive || !HomeWorkbenchLogic.rotationEnabled(hwItems.size, true)) return@LaunchedEffect
-        while (true) {
-            delay(HomeWorkbenchLogic.ROTATION_INTERVAL_MS)
-            hwIndex = HomeWorkbenchLogic.nextRotationIndex(hwIndex, hwItems.size)
-        }
-    }
-    LaunchedEffect(ntItems.size, ntItems.firstOrNull()?.id, rotationActive) {
-        if (!rotationActive || !HomeWorkbenchLogic.rotationEnabled(ntItems.size, true)) return@LaunchedEffect
-        while (true) {
-            delay(HomeWorkbenchLogic.ROTATION_INTERVAL_MS)
-            ntIndex = HomeWorkbenchLogic.nextRotationIndex(ntIndex, ntItems.size)
-        }
-    }
 
     // ---- 常用工具编辑 -------------------------------------------------------
     var editing by rememberSaveable { mutableStateOf(false) }
@@ -449,6 +400,10 @@ fun HomeScreen(
         ToolCatalog.byId(id)?.let(onOpenTool)
     }
 
+    fun openCard(tool: String, focus: String? = null) {
+        if (onCardOpen != null) onCardOpen(tool, focus) else openToolId(if (tool == "class-homework") "hw" else tool)
+    }
+
     fun retry() {
         refreshToken += 1
         scope.launch { runCatching { marksRepository?.refresh(force = true) } }
@@ -498,7 +453,7 @@ fun HomeScreen(
                             CtRootHeader(
                                 title = "工作台",
                                 collapse = ctHeaderCollapseProgress(scrollState.value.toFloat()),
-                                eyebrow = "枫丹工具箱",
+                                eyebrow = "",
                                 subtitle = "$todayLabel · $greeting",
                                 actions = {
                                     CtGlassIconButton(
@@ -522,13 +477,11 @@ fun HomeScreen(
                         }
                         HomeReveal(enabled = animateEntrance, index = 1) {
                             HomeHeroCard(
-                                session = session,
                                 date = today,
                                 plan = ttPlan,
                                 loading = ttLoading,
                                 nowMillis = currentTime,
-                                reduceMotion = reduceMotion,
-                                onOpenTimetable = { openToolId("tt") },
+                                onOpenTimetable = { openCard("tt", pinnedCourse?.let { CourseFocus.of(it).encode() }) },
                             )
                         }
                         if (showNotificationPermissionBanner && onOpenPermissions != null) {
@@ -546,7 +499,9 @@ fun HomeScreen(
                                 plan = ttPlan,
                                 nowMillis = currentTime,
                                 loading = ttLoading,
-                                onOpen = { openToolId("tt") },
+                                pinnedCourse = pinnedCourse,
+                                onOpen = { openCard("tt", CourseFocus(today.toString()).encode()) },
+                                onCourse = { openCard("tt", CourseFocus.of(it).encode()) },
                             )
                         }
                         HomeReveal(enabled = animateEntrance, index = 4) {
@@ -563,22 +518,19 @@ fun HomeScreen(
                             )
                         }
                         HomeReveal(enabled = animateEntrance, index = 5) {
-                            HomeHomeworkCard(
-                                count = hwItems.size,
-                                item = hwItems.getOrNull(hwIndex % maxOf(1, hwItems.size)),
-                                loading = if (personal == null) homeworkLoading else taskStatus == "同步中…",
-                                failed = if (personal == null) homeworkFailed else taskStatus == "仅本机",
-                                onOpen = { openToolId("hw") },
-                            )
+                            HomeHomeworkCard("待办任务", hwItems, taskStatus == "同步中…", taskStatus == "仅本机",
+                                onOpen = { openCard("hw") }, onItem = { openCard("hw", it.id) })
                         }
+                        HomeHomeworkCard("班级作业", classItems, homeworkLoading, homeworkFailed,
+                            onOpen = { openCard("class-homework") }, onItem = { openCard("class-homework", it.id) })
                         HomeReveal(enabled = animateEntrance, index = 6) {
                             HomeNoticesCard(
-                                pendingCount = ntItems.size,
-                                item = ntItems.getOrNull(ntIndex % maxOf(1, ntItems.size)),
+                                items = ntItems,
                                 state = noticesState,
                                 errorText = noticesFailedMessage,
                                 updatedText = noticesUpdatedText,
-                                onOpen = { openToolId("nt") },
+                                onOpen = { openCard("nt") },
+                                onItem = { openCard("nt", it.id) },
                                 onRetry = ::retry,
                             )
                         }
@@ -644,13 +596,18 @@ private fun HomeTodayCoursesCard(
     plan: TtPlan?,
     nowMillis: Long,
     loading: Boolean,
+    pinnedCourse: SessionInfo?,
+    onCourse: (SessionInfo) -> Unit,
     onOpen: () -> Unit,
 ) {
-    val todayCount = plan?.today?.size ?: 0
-    val countBadge = if (plan?.hasData == true && todayCount > 0) "$todayCount 节" else null
+    val courses = plan?.today.orEmpty().filterNot { pinnedCourse != null &&
+        it.name == pinnedCourse.name && it.start == pinnedCourse.start && it.end == pinnedCourse.end &&
+        it.fullRoom == pinnedCourse.fullRoom && pinnedCourse.dayOffset == 0 }
+    val omitted = courses.size < plan?.today.orEmpty().size
+    val countBadge = if (plan?.hasData == true) "${courses.size} 节" else null
     HomeInfoCard(
         icon = Icons.Rounded.CalendarMonth,
-        title = "今日课程",
+        title = if (omitted) "今日其他课程" else "今日课程",
         accent = MaterialTheme.colorScheme.secondary,
         onClick = onOpen,
         badge = countBadge,
@@ -678,9 +635,10 @@ private fun HomeTodayCoursesCard(
 
             else -> {
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    plan.today.forEachIndexed { index, sessionInfo ->
+                    if (courses.isEmpty()) HomeMutedLine("今天只有上方这节课")
+                    courses.forEachIndexed { index, sessionInfo ->
                         if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        CourseRow(sessionInfo, nowMillis, isNext = sessionInfo.state == SessionState.NEXT &&
+                        CourseRow(sessionInfo, nowMillis, onClick = { onCourse(sessionInfo) }, isNext = sessionInfo.state == SessionState.NEXT &&
                             plan.next?.startAt == sessionInfo.startAt)
                     }
                 }
@@ -705,11 +663,11 @@ private fun HomeTodayCoursesCard(
 
 /** 单节课程行：时间、课程名、节次、教室和实时状态。 */
 @Composable
-private fun CourseRow(sessionInfo: SessionInfo, nowMillis: Long, isNext: Boolean) {
+private fun CourseRow(sessionInfo: SessionInfo, nowMillis: Long, isNext: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .clickable(onClick = onClick).heightIn(min = 48.dp).padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -756,7 +714,7 @@ private fun HomePowerCard(card: HomePowerCard?, loading: Boolean, onOpen: () -> 
     HomeInfoCard(
         icon = Icons.Rounded.Bolt,
         title = "宿舍电费",
-        accent = MaterialTheme.colorScheme.tertiary,
+        accent = stateColor(card?.stateKey.orEmpty()),
         onClick = onOpen,
         badge = if (card != null && card.hasReading) card.stateText else null,
     ) {
@@ -766,36 +724,17 @@ private fun HomePowerCard(card: HomePowerCard?, loading: Boolean, onOpen: () -> 
                 sub = "去选择关注宿舍 ›",
             )
 
-            else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = card.label,
-                        style = CtText.body,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = when {
-                            loading || !card.hasReading -> "读取电量…"
-                            card.updText.isNotBlank() -> "更新 ${card.updText}"
-                            else -> "点开查看趋势与充值"
-                        },
-                        style = CtText.caption,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            else -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("${card.qText} ${card.unit}", style = MaterialTheme.typography.headlineMedium,
+                    color = stateColor(card.stateKey))
+                val update = when {
+                    loading && !card.hasReading -> "读取电量…"
+                    !card.hasReading -> "暂缺读数，点开刷新"
+                    card.updText.isNotBlank() -> "更新 ${card.updText}"
+                    else -> ""
                 }
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = card.qText,
-                        style = CtText.title,
-                        color = stateColor(card.stateKey),
-                    )
-                    Text(
-                        text = " ${card.unit}",
-                        style = CtText.label,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 3.dp),
-                    )
-                }
+                Text(listOf(card.label, update).filter(String::isNotBlank).joinToString(" · "),
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -810,103 +749,58 @@ private fun stateColor(stateKey: String): Color = when (stateKey) {
 }
 
 // =============================================================================
-// 作业 / 通知（轮换卡）
+// 待办、班级作业与通知
 // =============================================================================
 
 @Composable
-private fun HomeHomeworkCard(
-    count: Int,
-    item: HomeRotationItem?,
-    loading: Boolean,
-    failed: Boolean,
-    onOpen: () -> Unit,
-) {
-    HomeInfoCard(
-        icon = Icons.AutoMirrored.Rounded.Assignment,
-        title = "待办任务",
-        accent = MaterialTheme.colorScheme.tertiary,
-        onClick = onOpen,
-        badge = count.takeIf { it > 0 }?.toString(),
-    ) {
-        when {
-            loading && count == 0 -> HomeLoadingRow("同步任务…")
-            failed && count == 0 -> HomeMutedLine("仅显示本机任务")
-            count == 0 -> HomeMutedLine("暂无待办任务")
-            item != null -> RotatingText(item)
-            else -> HomeMutedLine("暂无待办任务")
+internal fun HomeHomeworkCard(title: String, items: List<HomeRotationItem>, loading: Boolean, failed: Boolean,
+    onOpen: () -> Unit, onItem: (HomeRotationItem) -> Unit) {
+    HomeInfoCard(Icons.AutoMirrored.Rounded.Assignment, title, MaterialTheme.colorScheme.primary, onOpen,
+        badge = "${items.size} 项") {
+        if (items.isEmpty()) {
+            if (loading) HomeLoadingRow("正在同步…") else HomeMutedLine(if (failed) "同步失败，点开重试" else "暂无待完成事项")
+        } else {
+            items.take(2).forEach { CardItemRow(it) { onItem(it) } }
+            if (failed) HomeMutedLine("显示本机缓存")
         }
     }
 }
 
 @Composable
-private fun HomeNoticesCard(
-    pendingCount: Int,
-    item: HomeRotationItem?,
-    state: NoticeHomeState,
-    errorText: String,
-    onOpen: () -> Unit,
-    onRetry: () -> Unit = {},
-    updatedText: String = "",
-) {
-    HomeInfoCard(
-        icon = Icons.Rounded.Notifications,
-        title = "通知待处理",
-        accent = MaterialTheme.colorScheme.primary,
-        onClick = onOpen,
-        badge = pendingCount.takeIf { it > 0 }?.toString(),
-    ) {
+private fun HomeNoticesCard(items: List<HomeRotationItem>, state: NoticeHomeState, errorText: String,
+    onOpen: () -> Unit, onItem: (HomeRotationItem) -> Unit, onRetry: () -> Unit, updatedText: String) {
+    HomeInfoCard(Icons.Rounded.Notifications, "班级通知", MaterialTheme.colorScheme.primary, onOpen,
+        badge = "${items.size} 待处理") {
+        items.take(2).forEach { CardItemRow(it) { onItem(it) } }
         when (state) {
-            NoticeHomeState.LOADING -> HomeLoadingRow("通知同步中…")
-            NoticeHomeState.OFFLINE -> Row(verticalAlignment = Alignment.CenterVertically) {
-                HomeMutedLine("通知需联网同步（显示本机缓存）")
-                Spacer(Modifier.weight(1f))
+            NoticeHomeState.LOADING -> if (items.isEmpty()) HomeLoadingRow("通知同步中…")
+            NoticeHomeState.OFFLINE, NoticeHomeState.ERROR -> {
+                HomeMutedLine(if (state == NoticeHomeState.OFFLINE) "显示本机缓存 · $updatedText" else errorText.ifBlank { "通知同步失败" })
                 TextButton(onClick = onRetry) { Text("重试") }
             }
-
-            NoticeHomeState.ERROR -> Row(verticalAlignment = Alignment.CenterVertically) {
-                HomeMutedLine(errorText.ifBlank { "通知同步失败" })
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onRetry) { Text("重试") }
-            }
-
-            NoticeHomeState.READY -> when {
-                pendingCount == 0 -> HomeMutedLine("暂无待处理通知")
-                item != null -> RotatingText(item)
-                else -> HomeMutedLine("暂无待处理通知")
-            }
-        }
-        if (state == NoticeHomeState.READY && updatedText.isNotBlank()) {
-            Text(
-                text = "更新 $updatedText",
-                style = CtText.caption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            NoticeHomeState.READY -> if (items.isEmpty()) HomeMutedLine("暂无待处理通知")
         }
     }
 }
 
-/** 卡内最新一条：每 5s 上浮淡出 → 下浮淡入（内容很短，无内置滚动）。 */
 @Composable
-private fun RotatingText(item: HomeRotationItem) {
-    AnimatedContent(
-        targetState = item,
-        transitionSpec = {
-            (slideInVertically { height -> height / 2 } + fadeIn(CtMotion.fadeIn))
-                .togetherWith(
-                    slideOutVertically { height -> -height / 2 } +
-                        fadeOut(CtMotion.fadeOut),
-                )
-        },
-        label = "homeRotation",
-    ) { current ->
-        Text(
-            text = buildString {
-                append(current.title)
-                if (current.sub.isNotBlank()) append(" · ").append(current.sub)
-            },
-            style = CtText.body,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+private fun CardItemRow(item: HomeRotationItem, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val scale = LocalDensity.current.fontScale
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().clickable(onClick = onClick)
+        .heightIn(min = 48.dp).padding(vertical = 6.dp), contentAlignment = Alignment.CenterStart) {
+        if (maxWidth < 300.dp * scale) {
+            Column {
+                Text(item.title, style = MaterialTheme.typography.titleSmall, color = scheme.onSurface)
+                Text(item.sub, style = CtText.caption, color = scheme.onSurfaceVariant)
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(item.title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = scheme.onSurface)
+                Text(item.sub, Modifier.widthIn(max = this@BoxWithConstraints.maxWidth * 0.42f), style = CtText.caption,
+                    color = scheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.End)
+            }
+        }
     }
 }
 
@@ -945,22 +839,12 @@ private fun HomeQuickToolsSection(
                 )
                 Spacer(modifier = Modifier.width(CtTokens.Spacing.elementGap))
             }
-            Text(
-                text = if (editing) "完成" else "编辑",
-                style = CtText.label,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .clickable { if (editing) onFinishEdit() else onStartEdit() }
-                    .padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-            )
-            Text(
-                text = "全部 ›",
-                style = CtText.label,
-                color = com.furina.classtools.ui.theme.HarmonyTokens.SlateBlue,
-                modifier = Modifier
-                    .clickable { onOpenAll() }
-                    .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
-            )
+            TextButton(onClick = { if (editing) onFinishEdit() else onStartEdit() }) {
+                Text(if (editing) "完成" else "编辑", style = CtText.label)
+            }
+            TextButton(onClick = onOpenAll) {
+                Text("全部 ›", style = CtText.label)
+            }
         }
 
         if (editing) {

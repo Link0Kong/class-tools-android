@@ -99,6 +99,8 @@ fun TaskScreen(
     onReminderSettings: () -> Unit = {},
     openTaskId: String? = null,
     onTaskOpened: () -> Unit = {},
+    onCloseFocused: (() -> Unit)? = null,
+    sessionSid: String? = null,
 ) {
     val context = LocalContext.current
     val snapshot by repository.snapshot.collectAsState()
@@ -111,7 +113,8 @@ fun TaskScreen(
     val filters = viewOrder.map { it to taskViews.getValue(it) } +
         groups.map { "group-" + it.text("id") to it.text("name") }
     val pageKeys = filters.map { it.first }
-    var savedView by rememberSaveable { mutableStateOf("all") }
+    val tabs = com.furina.classtools.ui.components.rememberListTabs(sessionSid)
+    var savedView by rememberSaveable(sessionSid) { mutableStateOf(tabs?.getString("task", "all") ?: "all") }
     val allPage = pageKeys.indexOf("all")
     val pager = rememberPagerState(initialPage = pageKeys.indexOf(savedView).takeIf { it >= 0 } ?: allPage) { pageKeys.size }
     val view = pageKeys.getOrNull(pager.currentPage) ?: "all"
@@ -124,7 +127,7 @@ fun TaskScreen(
     LaunchedEffect(pageKeys) {
         val target = pageKeys.indexOf(savedView).takeIf { it >= 0 } ?: allPage
         pager.scrollToPage(target)
-        snapshotFlow { pager.settledPage }.collect { index -> pageKeys.getOrNull(index)?.let { savedView = it } }
+        snapshotFlow { pager.settledPage }.collect { index -> pageKeys.getOrNull(index)?.let { savedView = it; tabs?.edit()?.putString("task", it)?.apply() } }
     }
     LaunchedEffect(view, pageKeys, reduceMotion) {
         val index = pageKeys.indexOf(view)
@@ -151,9 +154,15 @@ fun TaskScreen(
     var addGroup by rememberSaveable { mutableStateOf(false) }
     var groupName by rememberSaveable { mutableStateOf("") }
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(openTaskId, all) {
+    var firstSyncComplete by remember(repository) { mutableStateOf(false) }
+    var openedFromCard by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(openTaskId, all, firstSyncComplete) {
         if (openTaskId != null && all.any { it.text("id") == openTaskId }) {
             detail = openTaskId
+            openedFromCard = openTaskId
+            onTaskOpened()
+        } else if (openTaskId != null && firstSyncComplete) {
+            com.furina.classtools.ui.components.CtToastBus.show("当前任务列表中找不到这项任务")
             onTaskOpened()
         }
     }
@@ -182,7 +191,7 @@ fun TaskScreen(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle, repository) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            launch { while (true) { repository.sync(); delay(60_000L) } }
+            launch { while (true) { repository.sync(); firstSyncComplete = true; delay(60_000L) } }
             while (true) { clock = System.currentTimeMillis(); delay(15_000L) }
         }
     }
@@ -371,7 +380,11 @@ fun TaskScreen(
     }
     if (manage) TaskManagement(repository, snapshot, viewOrder) { manage = false }
     all.find { it.text("id") == detail && editing == null }?.let { task ->
-        TaskDetail(task, repository, groups, { editing = detail }, { detail = null },
+        TaskDetail(task, repository, groups, { editing = detail }, {
+            if (openedFromCard == detail) onCloseFocused?.invoke()
+            openedFromCard = null
+            detail = null
+        },
             onSource, { onShare(taskShareCard(listOf(task), true)) }) { direction ->
             repository.edit { list, now ->
                 val ordered = list.filterNot { it.flag("done") }.sortedBy { it.text("order").toDoubleOrNull() ?: 0.0 }.toMutableList()

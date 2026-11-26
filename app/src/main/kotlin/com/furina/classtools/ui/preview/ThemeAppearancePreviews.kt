@@ -66,12 +66,10 @@ private fun AppearanceFrame(
 private fun HomeHeroPreview(dark: Boolean) {
     AppearanceFrame(dark = dark) {
         HomeHeroCard(
-            session = appearancePreviewSession,
             date = java.time.LocalDate.of(2026, 11, 15),
             plan = null,
             loading = false,
             nowMillis = appearancePreviewNow,
-            reduceMotion = true,
             onOpenTimetable = {},
         )
     }

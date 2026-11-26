@@ -280,8 +280,9 @@ fun FitScreen(
                                     .padding(horizontal = padding),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
+                                if (calc.wtDone > 0) ScoreCard(calc = calc)
                                 InputCard(input = input, onInput = { input = it })
-                                ScoreCard(calc = calc)
+                                if (calc.wtDone == 0) ScoreCard(calc = calc)
                                 HistoryCard(
                                     history = history,
                                     onRestore = { index ->

@@ -567,7 +567,7 @@ private fun VoteDetailHero(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (!closed && poll.deadline > 0L) {
+            if (poll.deadline > 0L) {
                 Text(
                     text = voteDeadlineText(poll.deadline),
                     style = MaterialTheme.typography.bodySmall,

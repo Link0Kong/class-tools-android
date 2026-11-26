@@ -37,7 +37,7 @@ private const val HOME_NOW_FRIDAY_1000: Long = 1_793_930_400_000L // 2026-11-06 
 private const val HOME_NOW_FRIDAY_0830: Long = 1_793_925_000_000L // 2026-11-06 08:30 +08
 
 private val homePreviewSession = Session(
-    sid = "2024000001",
+    sid = "3260799999",
     name = "陈同学",
     token = "preview-token",
     role = "副团支部书记",
@@ -47,7 +47,7 @@ private val homePreviewSession = Session(
 private val homePreviewSnapshot: TtSnapshot = TtSnapshot(
     c = listOf(
         Course("数据结构", "王老师", "明理楼(教室02201)", day = 4, start = 1, end = 2, weeks = "1-16"),
-        Course("大学英语", "王老师", "明理楼(教室02301)", day = 4, start = 6, end = 7, weeks = "1-16"),
+        Course("跨学科设计实践与研究方法", "王老师", "明理楼(教室02301)", day = 4, start = 6, end = 7, weeks = "1-16"),
         Course("晚间选修", "李老师", "综合楼(教室04102)", day = 4, start = 10, end = 11, weeks = "1-16"),
         Course("高等数学", "刘老师", "自强楼(教室01104)", day = 0, start = 1, end = 2, weeks = "1-16"),
         Course("大学物理", "陈老师", "格物楼(教室03201)", day = 2, start = 3, end = 4, weeks = "1-16"),
@@ -355,4 +355,10 @@ private fun AllToolsTabletDraggingDarkPreview() {
             previewDragOffset = Offset(500f, 360f),
         )
     }
+}
+
+@Preview(name = "工作台 · 窄屏大字与长课程名", widthDp = 320, heightDp = 830, fontScale = 1.6f)
+@Composable
+private fun NarrowWorkbenchPreview() {
+    HomePreviewFrame(HOME_NOW_FRIDAY_1000, true, homePreviewPlan(homePreviewSnapshot, HOME_NOW_FRIDAY_1000))
 }

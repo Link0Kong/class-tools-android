@@ -1,7 +1,7 @@
 <resources>
-    <color name="widget_ink">#17352E</color>
-    <color name="widget_accent">#386052</color>
-    <color name="widget_paper">#EDF5EF</color>
+    <color name="widget_ink">#1C2629</color>
+    <color name="widget_accent">#24695C</color>
+    <color name="widget_paper">#FFFFFF</color>
     <color name="widget_blue_bg">#EBF3FF</color>
     <color name="widget_blue_accent">#315985</color>
     <color name="widget_blue_ink">#142E49</color>
@@ -11,7 +11,7 @@
     <color name="widget_lilac_bg">#F3EEFF</color>
     <color name="widget_lilac_accent">#69478C</color>
     <color name="widget_lilac_ink">#382544</color>
-    <color name="widget_green_highlight">#F8FCF9</color>
+    <color name="widget_green_highlight">#FFFFFF</color>
     <color name="widget_blue_highlight">#F9FBFF</color>
     <color name="widget_amber_highlight">#FFFCF5</color>
     <color name="widget_lilac_highlight">#FAF8FF</color>

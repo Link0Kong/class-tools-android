@@ -351,7 +351,7 @@ internal val noticePrimaryComparator: Comparator<NoticeUiItem> = Comparator { a,
 }
 
 /** 已过期 / 资料栏排序：发布时间倒序（稳定）。 */
-private val noticePostedDescComparator: Comparator<NoticeUiItem> =
+internal val noticePostedDescComparator: Comparator<NoticeUiItem> =
     compareByDescending<NoticeUiItem> { it.publishedMillis.takeIf { ts -> ts > 0L } ?: it.ts }
         .thenBy { it.key }
 

@@ -66,20 +66,9 @@ fun CtToolCard(
     ),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val colors = rememberHarmonyColors()
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = HarmonyTokens.CardShadowElevation,
-                shape = RoundedCornerShape(HarmonyTokens.RadiusCard),
-                clip = false,
-                ambientColor = HarmonyTokens.CardShadowColor,
-                spotColor = HarmonyTokens.CardShadowColor,
-            ),
-        shape = RoundedCornerShape(HarmonyTokens.RadiusCard),
-        color = colors.card,
-        contentColor = colors.textPrimary,
+    val scheme = MaterialTheme.colorScheme
+    com.furina.classtools.ui.components.background.CtGlassSurface(
+        modifier = modifier, shape = RoundedCornerShape(HarmonyTokens.RadiusCard),
     ) {
         Column(modifier = Modifier.padding(contentPadding)) {
             if (title != null) {
@@ -91,13 +80,13 @@ fun CtToolCard(
                         Text(
                             text = title,
                             style = CtText.bodyMedium,
-                            color = colors.textPrimary,
+                            color = scheme.onSurface,
                         )
                         if (subtitle != null) {
                             Text(
                                 text = subtitle,
                                 style = CtText.caption,
-                                color = colors.textSecondary,
+                                color = scheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -155,7 +144,7 @@ fun CtToolPrimaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 40.dp),
+            .heightIn(min = 48.dp),
         enabled = enabled,
         shape = CtShapeTokens.pill,
         colors = ButtonDefaults.buttonColors(

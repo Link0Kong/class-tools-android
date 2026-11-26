@@ -426,7 +426,7 @@ class DefaultNoticesRepository(
     private fun fallbackOrFailure(message: String): NoticesLoadResult {
         val cachedData = cache
         return if (cachedData != null) {
-            NoticesLoadResult.Success(cachedData.copy(fromCache = true))
+            NoticesLoadResult.Success(cachedData.copy(fromCache = true, refreshError = message))
         } else {
             NoticesLoadResult.Failure(message)
         }

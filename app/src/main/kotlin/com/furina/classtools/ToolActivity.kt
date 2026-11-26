@@ -22,7 +22,8 @@ import com.furina.classtools.ui.components.CtToastHost
 import com.furina.classtools.ui.motion.SharedViewMotion
 import com.furina.classtools.ui.navigation.MainNavHost
 import com.furina.classtools.ui.platform.enableClassToolsEdgeToEdge
-import kotlinx.coroutines.flow.first
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 
 /**
  * 工具页独立宿主（只由金标 SharedView 的「工具卡 → 工具页」路径启动）。
@@ -52,14 +53,18 @@ class ToolActivity : ComponentActivity() {
                     it.sid == launch.session.sid && it.isLikelyValid() && container.isSessionPrepared(it)
                 },
             ) {
-                if (value != null) return@produceState
-                // 从进程重建恢复工具时，以本机保存的有效会话为准。
-                val saved = (container.sessionStore.state.first() as? SessionState.SignedIn)?.session
-                if (saved == null || !saved.isLikelyValid() || saved.sid != launch.session.sid) {
-                    finish()
-                } else {
-                    container.prepareSession(saved)
-                    value = saved
+                lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                    container.sessionStore.state.collect { state ->
+                        val saved = (state as? SessionState.SignedIn)?.session
+                        if (saved == null || !saved.isLikelyValid() || saved.sid != launch.session.sid ||
+                            (ToolCatalog.byId(launch.toolId)?.adminOnly == true && !saved.isAdmin)) {
+                            value = null
+                            finish()
+                        } else {
+                            container.prepareSession(saved)
+                            value = saved
+                        }
+                    }
                 }
             }
             ClassToolsThemeHost(container) {

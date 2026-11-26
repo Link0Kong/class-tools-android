@@ -179,6 +179,7 @@ fun HomeworkScreen(
     var fromCache by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     var reloadToken by remember { mutableIntStateOf(0) }
+    var loadComplete by remember { mutableStateOf(skipLoad) }
     var detailId by rememberSaveable(initialDetailId) { mutableStateOf(initialDetailId) }
 
     fun notify(message: String) {
@@ -201,6 +202,7 @@ fun HomeworkScreen(
     }
 
     suspend fun applyResult(result: HomeworkLoadResult) {
+        loadComplete = true
         when (result) {
             is HomeworkLoadResult.Success -> {
                 rows = result.rows
@@ -231,6 +233,8 @@ fun HomeworkScreen(
             phase = Phase.READY
             return@LaunchedEffect
         }
+        val cached = repository.cached()
+        if (cached.isNotEmpty()) { rows = cached; fromCache = true; phase = Phase.READY }
         applyResult(repository.load(force = reloadToken > 0))
         runCatching { marksRepository?.refresh() }
     }
@@ -287,10 +291,16 @@ fun HomeworkScreen(
             HomeworkDueCalculator.sort(HomeworkDueCalculator.filter(allItems, filter))
         }
     }
+    val tabs = com.furina.classtools.ui.components.rememberListTabs(session?.sid)
+    val lastTab = remember(tabs) { HomeworkFilter.entries.firstOrNull { it.name == tabs?.getString("homework", null) } ?: initialFilter }
     val pagerState = rememberPagerState(
-        initialPage = initialFilter.ordinal.coerceIn(0, HomeworkFilter.entries.size - 1),
+        initialPage = lastTab.ordinal.coerceIn(0, HomeworkFilter.entries.size - 1),
         pageCount = { HomeworkFilter.entries.size },
     )
+
+    LaunchedEffect(pagerState.settledPage) {
+        tabs?.edit()?.putString("homework", HomeworkFilter.entries[pagerState.settledPage].name)?.apply()
+    }
 
     val subtitle = buildString {
         if (allItems.isNotEmpty()) append("未完成 $unfinishedCount · 已完成 $doneCount")
@@ -427,7 +437,7 @@ fun HomeworkScreen(
             onAddTask = onAddTask?.let { add -> { add(selected.row) } },
             onDismiss = { if (initialDetailId == selected.id) onBack() else detailId = null },
         )
-    } else if (detailId != null && phase == Phase.READY && !fromCache && errorMessage == null) {
+    } else if (detailId != null && phase == Phase.READY && loadComplete) {
         LaunchedEffect(detailId) {
             detailId = null
             snackbar.showSnackbar("找不到这项班级作业，可能已归档")
@@ -701,7 +711,7 @@ private fun HomeworkDetailPage(
 ) {
     val row = item.row
     val firstLine = row.briefTitle()
-    val title = if (firstLine.length <= 70) firstLine else row.subject.trim().ifBlank { "班级作业" }
+    val title = firstLine
     val fullText = row.content.trim()
     val body = if (fullText.lineSequence().firstOrNull()?.trim() == title) {
         fullText.lineSequence().drop(1).joinToString("\n").trim()
@@ -722,8 +732,8 @@ private fun HomeworkDetailPage(
         }
         Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (row.subject.isNotBlank() && row.subject.trim() != title) DetailFact("科目", row.subject)
                 DetailFact("截止时间", exactDue ?: row.due.ifBlank { "未设置" })
+                if (row.subject.isNotBlank() && row.subject.trim() != title) DetailFact("科目", row.subject)
                 if (exactDue != null && row.due.isNotBlank() && row.due.trim() !in listOf(exactDue, row.date, HomeworkDueCalculator.dueText(row))) {
                     DetailFact("截止说明", row.due)
                 }

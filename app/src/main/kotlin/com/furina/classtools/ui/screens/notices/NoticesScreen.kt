@@ -380,6 +380,7 @@ fun NoticesScreen(
      */
     initialFocusNoticeId: String? = null,
     onFocusConsumed: () -> Unit = {},
+    onCloseFocused: (() -> Unit)? = null,
     /** 预览：列表错峰入场帧（0..1；null = 正常动画）。 */
     previewEntranceProgress: Float? = null,
     /** 预览：强制指定通知卡处于按压态（NoticeUiItem.key）。 */
@@ -434,20 +435,21 @@ fun NoticesScreen(
     var loadMoreError by remember { mutableStateOf<String?>(null) }
     // 2026-11-19 P0 收口：取消「后台自动翻完所有页」。
     // light meta 一次拿全量（hasMore=false）；只有旧分页兜底链路才需要用户按需「加载更早的通知」。
-    var filterKey by rememberSaveable { mutableStateOf(initialFilter.name) }
+    val tabs = com.furina.classtools.ui.components.rememberListTabs(session?.sid)
+    var filterKey by rememberSaveable(session?.sid) { mutableStateOf(tabs?.getString("notice", null) ?: initialFilter.name) }
     // 顶部 5 张可点数据卡的筛选口径（null = 未激活；与 chips 互斥，契约 §2.1）
     var cardFilterKey by rememberSaveable { mutableStateOf<String?>(null) }
     val isAdmin = session?.isAdmin == true
     val noticeFilterOptions = NoticeFilter.entries.filter { it != NoticeFilter.HIDDEN || isAdmin }
     // 左右滑动切筛选（跟手 + spring 吸附；reduceMotion 时禁用拖拽并直接用总开关的瞬时切换）
     val noticePagerState = rememberPagerState(
-        initialPage = noticeFilterOptions.indexOf(initialFilter).coerceAtLeast(0),
+        initialPage = noticeFilterOptions.indexOfFirst { it.name == filterKey }.coerceAtLeast(0),
         initialPageOffsetFraction = (previewPagerOffset ?: 0f).coerceIn(-0.5f, 0.5f),
     ) { noticeFilterOptions.size }
     LaunchedEffect(noticePagerState) {
         snapshotFlow { noticePagerState.currentPage to noticePagerState.isScrollInProgress }
             .collect { (page, scrolling) ->
-                noticeFilterOptions.getOrNull(page)?.let { filterKey = it.name }
+                noticeFilterOptions.getOrNull(page)?.let { filterKey = it.name; if (!scrolling) tabs?.edit()?.putString("notice", it.name)?.apply() }
                 // 滑动/程序化滚动停稳到非「全部」chips 页 → 顶部卡筛选取消（chips 与顶部卡互斥）
                 if (!scrolling && page != noticeFilterOptions.indexOf(NoticeFilter.ALL)) {
                     cardFilterKey = null
@@ -494,11 +496,13 @@ fun NoticesScreen(
         scope.launch { snackbar.showSnackbar(message) }
     }
 
+    var firstLoadComplete by remember { mutableStateOf(skipLoad || noticesRepository == null) }
     fun applyResult(result: NoticesLoadResult) {
+        firstLoadComplete = true
         when (result) {
             is NoticesLoadResult.Success -> {
                 data = result.data
-                errorMessage = null
+                errorMessage = result.data.refreshError
                 phase = Phase.READY
             }
 
@@ -662,36 +666,38 @@ fun NoticesScreen(
     // §2.4 统计口径（5 张数据卡 / 与工作台同口径）：复用数据层 statsOf（期次 / until / 资料无时间）
     val overview = remember(data, marks, nowMillis) { buildOverview(data, marks, nowMillis) }
     val pendingCount = overview.pending
-    val selectedItem = remember(allItems, selectedKey) {
-        selectedKey?.let { key -> allItems.firstOrNull { it.key == key } }
+    val selectedItem = remember(allItems, selectedKey, isAdmin) {
+        selectedKey?.let { key -> allItems.firstOrNull { it.key == key && (!it.hidden || isAdmin) } }
     }
     val twoColumn = spec.widthDp >= 600 && LocalDensity.current.fontScale <= 1.3f
 
     // OPPO PUSH 点击定位：数据就绪后按组 id / rowId / 期次 key 找卡片 → 打开详情；
     // 仍未命中且旧分页链路还有更多时，**只按需加载一页**（不再后台翻完所有页），
-    // 加载后本 effect 会重跑再找一次，仍找不到则静默放弃（停留在通知页）。
-    var focusLoadMoreTried by remember(initialFocusNoticeId) { mutableStateOf(false) }
-    LaunchedEffect(initialFocusNoticeId, phase, allItems, data?.hasMore) {
-        val target = initialFocusNoticeId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
-        if (phase != Phase.READY) return@LaunchedEffect
+    // 加载后本 effect 会重跑再找一次，仍找不到则提示并保留通知列表。
+    var focusLoadMoreTried by rememberSaveable(initialFocusNoticeId) { mutableStateOf(false) }
+    var focusConsumed by rememberSaveable(initialFocusNoticeId) { mutableStateOf(false) }
+    var focusedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(initialFocusNoticeId, phase, allItems, firstLoadComplete, isLoadingMore, isRefreshing) {
+        val target = initialFocusNoticeId?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
+        if (focusConsumed || phase != Phase.READY) return@LaunchedEffect
         val match = allItems.firstOrNull { item ->
-            item.key == target ||
-                item.occurrenceKey == target ||
-                item.auto?.id == target.substringBefore("@occ:") ||
-                item.auto?.rowId == target ||
-                item.manual?.id == target
+            (!item.hidden || isAdmin) && (item.key == target || item.occurrenceKey == target ||
+                item.auto?.id == target || item.auto?.rowId == target || item.manual?.id == target)
         }
         if (match != null) {
             selectedKey = match.key
-            onFocusConsumed()
-            return@LaunchedEffect
-        }
-        if (!focusLoadMoreTried && data?.hasMore == true) {
-            focusLoadMoreTried = true
-            loadMoreOnce()
+            focusedKey = match.key
         } else {
-            onFocusConsumed()
+            if (!firstLoadComplete || isLoadingMore || isRefreshing) return@LaunchedEffect
+            if (!focusLoadMoreTried && data?.hasMore == true && !skipLoad) {
+                focusLoadMoreTried = true
+                loadMoreOnce()
+                return@LaunchedEffect
+            }
+            notify("当前可见的通知中找不到这条内容")
         }
+        focusConsumed = true
+        onFocusConsumed()
     }
 
     var adminAction by remember(selectedKey) { mutableStateOf<NoticeAdminAction?>(null) }
@@ -746,7 +752,7 @@ fun NoticesScreen(
                     contentAlignment = Alignment.TopCenter,
                 ) {
                     // TTL 内的正常缓存不是「离线」：只有真的刷新失败且还有旧数据时才提示本机缓存。
-        val offline = errorMessage != null && data != null
+                    val offline = errorMessage != null && data != null
                     val offlineMessage = errorMessage?.let { "刷新失败，显示本机缓存" }
                         ?: ("本机缓存 · 更新于 ${formatTs(data?.fetchedAt ?: 0L)}")
                     Column(
@@ -969,12 +975,14 @@ fun NoticesScreen(
         } else {
             NoticeDetailSheet(
                 item = item,
+                loadError = if (data?.refreshError != null || errorMessage != null) "刷新失败，显示本机缓存" else null,
+                onRetry = ::refresh,
                 rawAttachmentLoader = remember(item.key, session) { rawAttachmentLoader?.forDetail() },
                 imageLoader = imageLoader,
                 onAddToCalendar = onAddToCalendar,
                 onRemindNotice = onRemindNotice,
                 onAddTask = addTaskFromNotice?.let { add -> { add(item) } },
-                onDismiss = { selectedKey = null },
+                onDismiss = { if (focusedKey == selectedKey) onCloseFocused?.invoke(); focusedKey = null; selectedKey = null },
                 onToggleDone = { toggleDone(item) },
                 onTogglePin = { togglePin(item) },
                 onShare = onShareNotice,

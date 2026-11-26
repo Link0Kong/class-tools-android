@@ -376,6 +376,7 @@ data class NoticesData(
     val remainingCount: Int = 0,
     /** 已加载的原始行数（分页 offset 用；= 已拉取行数，含被 hidden 过滤的）。 */
     val loadedRawCount: Int = 0,
+    val refreshError: String? = null,
 ) {
     val isEmpty: Boolean get() = auto.isEmpty() && manual.isEmpty()
 }

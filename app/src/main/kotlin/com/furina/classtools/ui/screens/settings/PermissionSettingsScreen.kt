@@ -123,24 +123,6 @@ fun PermissionSettingsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
             ) {
-                CtGlassCard(
-                    shape = CtShapeTokens.hero,
-                ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Text(
-                            "权限只用于本地功能",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "通知用于作业截止与上课提醒；日历用于把课表/通知写成日程。数据均在本机处理，不上传，可随时关闭。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
                 PermissionCard(
                     type = PermissionType.NOTIFICATIONS,
                     state = snapshot.notifications,
@@ -161,6 +143,24 @@ fun PermissionSettingsScreen(
                     horizontalArrangement = Arrangement.End,
                 ) {
                     TextButton(onClick = { refreshTick++ }) { Text("重新检测权限状态") }
+                }
+
+                CtGlassCard(
+                    shape = CtShapeTokens.hero,
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text(
+                            "权限只用于本地功能",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "通知用于作业截止与上课提醒；日历用于把课表/通知写成日程。数据均在本机处理，不上传，可随时关闭。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
                 // 实时活动通知渠道：跳系统「通知类别」设置（Android 16 实时更新 / ColorOS 流体云）。

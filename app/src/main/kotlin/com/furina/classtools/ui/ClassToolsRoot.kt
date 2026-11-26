@@ -2,6 +2,7 @@ package com.furina.classtools.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,10 +52,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun ClassToolsRoot(
     container: AppContainer,
-    pendingToolId: String? = null,
-    onPendingToolConsumed: () -> Unit = {},
-    pendingNoticeId: String? = null,
-    onPendingNoticeConsumed: () -> Unit = {},
+    pendingRoute: String? = null,
+    onRouteConsumed: () -> Unit = {},
 ) {
     val sessionState by container.sessionStore.state.collectAsStateWithLifecycle(
         initialValue = SessionState.Loading,
@@ -124,7 +123,7 @@ fun ClassToolsRoot(
     Box(modifier = Modifier.fillMaxSize()) {
         CtContainerTransformHost {
         when (val state = sessionState) {
-            SessionState.Loading -> BootSplash()
+            SessionState.Loading -> BootSplash(pendingRoute)
 
             SessionState.SignedOut -> IdentityScreen(
                 authRepository = container.authRepository,
@@ -184,15 +183,13 @@ fun ClassToolsRoot(
                 if (!state.session.isLikelyValid() ||
                     (preparedSession != state.session && !container.isSessionPrepared(state.session))
                 ) {
-                    BootSplash()
+                    BootSplash(pendingRoute)
                 } else {
                     MainNavHost(
                         container = container,
                         session = state.session,
-                        initialToolId = pendingToolId,
-                        onInitialToolConsumed = onPendingToolConsumed,
-                        initialNoticeId = pendingNoticeId,
-                        onInitialNoticeConsumed = onPendingNoticeConsumed,
+                        pendingRoute = pendingRoute,
+                        onRouteConsumed = onRouteConsumed,
                         onSignOut = {
                             scope.launch {
                                 container.authRepository.logout()
@@ -238,7 +235,23 @@ fun ClassToolsRoot(
 }
 
 @Composable
-private fun BootSplash() {
+private fun BootSplash(route: String?) {
+    val tool = route?.substringBefore('?')?.removePrefix("tool/")
+    val title = when (tool) {
+        "hw" -> if (route.contains("pick=true")) "班级作业" else "待办任务"
+        "nt" -> "班级通知"
+        "tt" -> "班级课表"
+        "root" -> "工作台"
+        else -> tool?.let { com.furina.classtools.data.tool.ToolCatalog.byId(it)?.name }
+    }
+    if (title != null) {
+        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)
+            .statusBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            androidx.compose.material3.LinearProgressIndicator()
+        }
+        return
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()

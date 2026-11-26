@@ -83,132 +83,26 @@ internal val HomeHeroShape = RoundedCornerShape(HarmonyTokens.RadiusHero)
  */
 @Composable
 internal fun HomeHeroCard(
-    session: Session,
     date: LocalDate,
     plan: TtPlan?,
     loading: Boolean,
     nowMillis: Long,
-    reduceMotion: Boolean,
     onOpenTimetable: () -> Unit,
 ) {
-    val colors = rememberHarmonyColors()
-    val zone = remember { ZoneId.systemDefault() }
-    val hour = remember(nowMillis) { Instant.ofEpochMilli(nowMillis).atZone(zone).hour }
-    val greeting = HomeWorkbenchLogic.greeting(hour)
-    val hero = remember(plan, loading, nowMillis) {
-        HomeWorkbenchLogic.heroState(plan, loading, nowMillis)
-    }
-    val dateText = remember(date) { HomeWorkbenchLogic.dateText(date) }
-    val weekText = remember(plan?.week, plan?.hasData, loading) {
-        HomeWorkbenchLogic.weekText(plan?.week).ifBlank {
-            when {
-                plan?.hasData == true -> "尚未开学"
-                loading -> "读取中"
-                else -> "课表未同步"
-            }
-        }
-    }
-    val roleText = session.role.trim()
-    val subLine = remember(dateText, roleText, plan?.hasData) {
-        buildList {
-            add(dateText)
-            if (roleText.isNotBlank()) add(roleText)
-            if (plan?.hasData != true) add("课表未同步")
-        }.joinToString(" · ")
-    }
-    val summary = remember(hero, plan) {
-        when {
-            plan == null || !plan.hasData -> "打开课表即可拉取本周课程"
-            plan.today.isEmpty() -> "今天没课" + (plan.next?.let { " · 下次 ${it.label} ${it.name}" } ?: "")
-            else -> buildString {
-                if (hero.tag.isNotBlank()) append(hero.tag).append(" · ")
-                append(hero.title)
-                if (hero.detail.isNotBlank()) append(" · ").append(hero.detail)
-            }
-        }
-    }
-    val int = remember { MutableInteractionSource() }
-    val pressed by int.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.99f else 1f,
-        animationSpec = if (reduceMotion) snap() else CtMotion.spatialFast,
-        label = "homeHeroPress",
-    )
-
-    CtGlassSurface(
-        onClick = onOpenTimetable,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp, bottom = HarmonyTokens.Gap)
-            .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-            },
-        shape = RoundedCornerShape(16.dp),
-        darkRole = CtDarkGlassRole.HERO,
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = CircleShape,
-                    color = colors.heroPill,
-                    contentColor = colors.heroAccent,
-                ) {
-                    Text(
-                        text = "今日",
-                        style = CtText.caption,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = weekText,
-                    style = CtText.caption,
-                    color = colors.heroSub,
-                )
-            }
-            Text(
-                text = "$greeting，${session.name.trim().ifBlank { "同学" }}",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-            Text(
-                text = subLine,
-                style = CtText.caption,
-                color = colors.heroSub,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-            // 摘要分割线（#D8E4DE；鸿蒙 heroCard 摘要行上边框）
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp)
-                    .height(0.5.dp)
-                    .background(colors.heroDivider),
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = summary,
-                        style = CtText.label,
-                        color = colors.heroTitle,
-                    )
-                }
-                Text(
-                    text = "课表 ›",
-                    style = CtText.caption,
-                    color = colors.heroLink,
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .clickable { onOpenTimetable() },
-                )
-            }
+    val scheme = MaterialTheme.colorScheme
+    val course = plan?.today?.firstOrNull { it.state == com.furina.classtools.data.timetable.SessionState.ONGOING } ?: plan?.next
+    val ongoing = course?.state == com.furina.classtools.data.timetable.SessionState.ONGOING
+    val empty = HomeWorkbenchLogic.heroState(plan, loading, nowMillis)
+    val day = course?.let { Instant.ofEpochMilli(it.startAt).atZone(ZoneId.systemDefault()).toLocalDate() } ?: date
+    CtGlassSurface(onClick = onOpenTimetable, shape = CtShape.card, darkRole = CtDarkGlassRole.HERO) {
+        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(listOf(if (course == null) empty.tag else if (ongoing) "正在上课" else "下一节课",
+                HomeWorkbenchLogic.dateText(day)).joinToString(" · "), style = MaterialTheme.typography.labelLarge, color = scheme.primary)
+            Text(course?.name ?: empty.title, style = MaterialTheme.typography.headlineSmall, color = scheme.onSurface)
+            Text(if (course == null) empty.detail else listOf(
+                if (ongoing) "${course.endText} 下课" else "${course.startText} 开始",
+                course.fullRoom, course.span).filter(String::isNotBlank).joinToString(" · "),
+                style = MaterialTheme.typography.bodyLarge, color = scheme.onSurfaceVariant)
         }
     }
 }
@@ -306,7 +200,6 @@ internal fun QuickToolTile(
     reduceMotion: Boolean = false,
 ) {
     val c = rememberCtColors()
-    val accent = uiAccentOf(tool)
     val interaction = remember { MutableInteractionSource() }
     val press = ctPressFeedback(interaction, reduceMotion)
     val transitionSource = Modifier.ctToolTransitionSource(tool.id, CtRadius.input)
@@ -331,25 +224,25 @@ internal fun QuickToolTile(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(CtSpace.xs),
             ) {
-                val monet = com.furina.classtools.ui.theme.monetToneOf(tool)
+                val scheme = MaterialTheme.colorScheme
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = monet.container,
-                    contentColor = monet.content,
+                    color = scheme.primaryContainer,
+                    contentColor = scheme.onPrimaryContainer,
                 ) {
                     Box(modifier = Modifier.size(CtSpace.huge + CtSpace.xs), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = tool.icon,
                             contentDescription = null,
-                            tint = monet.content,
+                            tint = scheme.onPrimaryContainer,
                             modifier = Modifier.size(CtSize.icon),
                         )
                     }
                 }
                 Text(
                     text = tool.name,
-                    style = CtTypeScale.caption,
-                    color = c.textPrimary,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
             CtPressLayer(alpha = press.overlayAlpha, modifier = Modifier.clip(CtShape.input))

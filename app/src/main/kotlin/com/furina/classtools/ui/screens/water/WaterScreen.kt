@@ -914,6 +914,11 @@ private fun WaterHeroCard(stats: WaterMonthStats, latestStats: WaterMonthStats?)
                     )
                 }
             }
+            if (record.ts > 0L) {
+                val stamp = java.time.Instant.ofEpochMilli(record.ts).atZone(java.time.ZoneId.systemDefault())
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                Text("抄表记录更新于 $stamp", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             if (usage != null) {
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {

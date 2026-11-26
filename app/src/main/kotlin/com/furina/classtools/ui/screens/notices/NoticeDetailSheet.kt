@@ -172,20 +172,6 @@ internal fun NoticeDetailSheetContent(
                 .padding(bottom = CtSpace.md),
             verticalArrangement = Arrangement.spacedBy(CtSpace.sm),
         ) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(CtSpace.xs),
-                verticalArrangement = Arrangement.spacedBy(CtSpace.xs),
-            ) {
-                NoticeCatPill(cat = item.cat, tone = item.tone)
-                item.status?.let { NoticeStatusLabel(it) }
-                if (item.done) {
-                    CtPill(
-                        text = "已处理",
-                        containerColor = scheme.primaryContainer,
-                        contentColor = scheme.onPrimaryContainer,
-                    )
-                }
-            }
             Text(
                 text = item.title.ifBlank { "通知" },
                 style = MaterialTheme.typography.titleLarge,
@@ -196,7 +182,6 @@ internal fun NoticeDetailSheetContent(
             if (metadata.isNotBlank()) {
                 Text(metadata, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             }
-            DetailTagLine(item = item, nowMillis = nowMillis)
             HorizontalDivider()
 
             if (loading) {
@@ -225,6 +210,21 @@ internal fun NoticeDetailSheetContent(
             }
 
             HorizontalDivider()
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(CtSpace.xs),
+                verticalArrangement = Arrangement.spacedBy(CtSpace.xs),
+            ) {
+                NoticeCatPill(cat = item.cat, tone = item.tone)
+                item.status?.let { NoticeStatusLabel(it) }
+                if (item.done) {
+                    CtPill(
+                        text = "已处理",
+                        containerColor = scheme.primaryContainer,
+                        contentColor = scheme.onPrimaryContainer,
+                    )
+                }
+            }
+            DetailTagLine(item = item, nowMillis = nowMillis)
             DetailActions(
                 item = item,
                 onAddToCalendar = onAddToCalendar,

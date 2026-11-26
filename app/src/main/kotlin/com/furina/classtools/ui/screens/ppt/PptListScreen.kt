@@ -691,7 +691,7 @@ private fun PptDeckCard(
                     }
                 }
                 when {
-                    statusKind == PptStatusTexts.Kind.READY -> Unit // 就绪不显示状态胶囊（DESIGN §4.1）
+                    statusKind == PptStatusTexts.Kind.READY -> Text("已就绪 · 打开演示", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     uploading -> Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
