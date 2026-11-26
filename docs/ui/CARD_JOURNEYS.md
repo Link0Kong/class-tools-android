@@ -83,3 +83,5 @@ Android 12 及以上默认读取系统壁纸生成的 Material 配色。主操�
 参考了用户提供的四象限待办、彩色任务清单和双日程截图，以及 Google Tasks 的新增入口、Google Calendar 的日程组件。组件使用系统圆角，保留真实数据、稳定 ID 和登录后的导航。字号放大时相应提高多列布局门槛。
 
 [Google Tasks 桌面组件](https://support.google.com/tasks/answer/10478781) · [Google Calendar 桌面组件](https://support.google.com/calendar/answer/10249848)
+
+在 API 36 模拟器分别应用绿色、梅紫色壁纸，并切换深色。真实任务详情的底面、操作与默认组件同时变化。模拟器系统桌面的待办组件点击加号进入新建表单，点个人任务和班级作业分别进入各自的详情。截图使用虚构内容，位于工作区 `releases/android/monet-widgets/`。其中 `monet-comparison.png` 对照三种外观，`widgets-mint.png` 和 `widgets-dark.png` 展开四个组件。
