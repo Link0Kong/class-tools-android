@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +61,8 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 
 internal val repeats = mapOf("" to "不重复", "daily" to "每天", "weekday" to "工作日", "weekly" to "每周", "monthly" to "每月", "yearly" to "每年")
+
+private data class SelectedAiTask(val index: Int, val task: JsonObject)
 
 private fun tasksForView(
     all: List<JsonObject>,
@@ -104,6 +107,7 @@ fun TaskScreen(
     onCloseFocused: (() -> Unit)? = null,
     sessionSid: String? = null,
     createFromWidget: Boolean = false,
+    taskAiClient: TaskAiClient? = null,
 ) {
     val context = LocalContext.current
     val snapshot by repository.snapshot.collectAsState()
@@ -151,6 +155,11 @@ fun TaskScreen(
     var manage by rememberSaveable { mutableStateOf(false) }
     var detail by rememberSaveable { mutableStateOf<String?>(null) }
     var newDraft by rememberSaveable { mutableStateOf<String?>(null) }
+    var aiOpen by remember(sessionSid) { mutableStateOf(false) }
+    var aiText by remember(sessionSid) { mutableStateOf("") }
+    var aiDrafts by remember(sessionSid) { mutableStateOf(emptyList<TaskAiDraft>()) }
+    var aiReachedLimit by remember(sessionSid) { mutableStateOf(false) }
+    var aiSelection by remember(sessionSid) { mutableStateOf<SelectedAiTask?>(null) }
     var importLink by rememberSaveable { mutableStateOf(false) }
     var sharedContext by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
@@ -190,6 +199,15 @@ fun TaskScreen(
     fun resetQuick() {
         quick = ""; quickDue = ""; quickTime = ""; quickStar = false; quickGroup = null; query = ""
         if (view == "done") selectPage(allPage)
+    }
+    fun selectAiDraft(index: Int) {
+        val candidate = aiDrafts.getOrNull(index) ?: return
+        val task = candidate.fill(draft(candidate.title, System.currentTimeMillis(), all)).withFields {
+            put("remindMode", if (candidate.due.isBlank()) "none" else snapshot.prefs().text("defaultRemind").ifBlank { "none" })
+            put("remindAt", 0)
+        }
+        aiSelection = SelectedAiTask(index, task)
+        aiOpen = false
     }
     fun create() {
         val title = quick.trim()
@@ -360,13 +378,19 @@ fun TaskScreen(
             }
             Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                    OutlinedTextField(quick, { quick = it.take(200) }, Modifier.fillMaxWidth(),
-                        label = { Text("添加任务") }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { create() }),
-                        trailingIcon = { IconButton(onClick = ::create, enabled = quick.isNotBlank()) {
-                            Icon(Icons.Rounded.Add, "保存任务")
-                        } })
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedTextField(quick, { quick = it.take(200) }, Modifier.weight(1f),
+                            label = { Text("添加任务") }, singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { create() }),
+                            trailingIcon = { IconButton(onClick = ::create, enabled = quick.isNotBlank()) {
+                                Icon(Icons.Rounded.Add, "保存任务")
+                            } })
+                        if (taskAiClient != null) TextButton(onClick = { aiOpen = true }) {
+                            Text(if (aiDrafts.isEmpty()) "AI 整理" else "继续整理 · ${aiDrafts.size}")
+                        }
+                    }
                     if (quick.isNotBlank()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(today to "今天截止", LocalDate.now().plusDays(1).toString() to "明天截止").forEach { (date, label) ->
                             FilterChip(quickDue == date, { quickDue = if (quickDue == date) "" else date; if (quickDue.isBlank()) quickTime = "" }, { Text(label) })
@@ -382,7 +406,18 @@ fun TaskScreen(
             }
         }
     }
-    val selected = newDraft?.let { Json.parseToJsonElement(it).jsonObject } ?: all.find { it.text("id") == editing }
+    val selectedAi = aiSelection
+    val selected = selectedAi?.task ?: newDraft?.let { Json.parseToJsonElement(it).jsonObject } ?: all.find { it.text("id") == editing }
+    if (aiOpen && taskAiClient != null) key(sessionSid) {
+        TaskAiPanel(taskAiClient, aiText, { aiText = it }, aiDrafts, aiReachedLimit,
+            onDrafts = { results ->
+                aiDrafts = results
+                aiReachedLimit = results.size == TASK_AI_DRAFT_LIMIT
+                if (results.size == 1) selectAiDraft(0)
+            }, onChoose = ::selectAiDraft,
+            onReset = { aiDrafts = emptyList(); aiText = ""; aiReachedLimit = false },
+            onClose = { aiOpen = false })
+    }
     if (importLink) ImportSharedTask({ importLink = false }) { shared ->
         importLink = false
         sharedContext = listOf(shared.groupLabel, shared.dueLabel).filter(String::isNotBlank).joinToString(" · ")
@@ -415,34 +450,47 @@ fun TaskScreen(
             addGroup = false
         }) { Text("创建") } }, dismissButton = { TextButton(onClick = { addGroup = false }) { Text("取消") } })
     if (selected != null) key(selected.text("id")) {
-        TaskEditor(selected, groups, isNew = newDraft != null, sharedContext = sharedContext,
-            onClose = { editing = null; newDraft = null; sharedContext = null }, onDelete = {
-            repository.edit { list, _ -> list.filterNot { it.text("id") == selected.text("id") } }
-            if (detail == editing) detail = null
-            editing = null
-        }, onSave = { patch ->
-            repository.edit { list, now ->
-                val creating = newDraft != null
-                val updated = (if (creating) list + selected else list).map { original ->
-                    if (original.text("id") != selected.text("id") || patch.isEmpty()) original else JsonObject(original + (patch - "done")).let { edited ->
-                        edited.withFields {
-                            put("updatedAt", now)
-                            val alarm = reminderAt(edited)
-                            put("remindAt", alarm)
-                            if (alarm != original.number("remindAt")) {
-                                put("snoozeUntil", 0)
-                                put("lastNotifyAt", 0)
+        val saveableRegistry = if (selectedAi == null) LocalSaveableStateRegistry.current else null
+        CompositionLocalProvider(LocalSaveableStateRegistry provides saveableRegistry) {
+            TaskEditor(selected, groups, isNew = newDraft != null || selectedAi != null, sharedContext = sharedContext,
+                onClose = {
+                    if (selectedAi != null) { aiSelection = null; aiOpen = true }
+                    editing = null; newDraft = null; sharedContext = null
+                }, onDelete = {
+                    repository.edit { list, _ -> list.filterNot { it.text("id") == selected.text("id") } }
+                    if (detail == editing) detail = null
+                    editing = null
+                }, onSave = save@{ patch ->
+                if (selectedAi != null && aiSelection != selectedAi) return@save
+                repository.edit { list, now ->
+                    val creating = newDraft != null || selectedAi != null
+                    val updated = (if (creating) list + selected else list).map { original ->
+                        if (original.text("id") != selected.text("id") || patch.isEmpty()) original else JsonObject(original + (patch - "done")).let { edited ->
+                            edited.withFields {
+                                put("updatedAt", now)
+                                val alarm = reminderAt(edited)
+                                put("remindAt", alarm)
+                                if (alarm != original.number("remindAt")) {
+                                    put("snoozeUntil", 0)
+                                    put("lastNotifyAt", 0)
+                                }
                             }
                         }
                     }
+                    if ("done" in patch) changeCompletion(updated, selected.text("id"), patch.flag("done"), now) else updated
                 }
-                if ("done" in patch) changeCompletion(updated, selected.text("id"), patch.flag("done"), now) else updated
-            }
-            if (newDraft != null) resetQuick()
-            newDraft = null
-            sharedContext = null
-            editing = null
-        })
+                if (selectedAi != null) {
+                    aiDrafts = aiDrafts.filterIndexed { index, _ -> index != selectedAi.index }
+                    aiSelection = null
+                    aiOpen = aiDrafts.isNotEmpty()
+                    if (!aiOpen) { aiText = ""; aiReachedLimit = false }
+                }
+                if (newDraft != null) resetQuick()
+                newDraft = null
+                sharedContext = null
+                editing = null
+            })
+        }
     }
 }
 

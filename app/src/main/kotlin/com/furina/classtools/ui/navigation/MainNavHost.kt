@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import com.furina.classtools.data.tasks.importedHomeworkIds
+import com.furina.classtools.data.tasks.TaskAiClient
 import com.furina.classtools.data.tasks.objects
 import com.furina.classtools.data.tasks.text
 import com.furina.classtools.data.reminder.OneShotTargetKind
@@ -711,7 +712,8 @@ fun MainNavHost(
                         val brief = com.furina.classtools.ui.screens.tasks.rememberHomeworkBrief(
                             container.homeworkRepository, container.marksRepository, tasks, session.sid, revision,
                         )
-                        TaskScreen(tasks, sessionSid = session.sid, createFromWidget = entry.arguments?.getBoolean(Routes.CREATE_TASK_ARG) == true, openTaskId = openTaskId, onTaskOpened = { openTaskId = null },
+                        val taskAiClient = remember(session) { TaskAiClient { session.token } }
+                        TaskScreen(tasks, sessionSid = session.sid, createFromWidget = entry.arguments?.getBoolean(Routes.CREATE_TASK_ARG) == true, openTaskId = openTaskId, onTaskOpened = { openTaskId = null }, taskAiClient = taskAiClient,
                             onCloseFocused = focus?.takeUnless { pickInTool }?.let { { popTool(toolId) } },
                             onBack = { popTool(toolId) }, onHomework = { showHomework = true },
                             onSource = { task ->

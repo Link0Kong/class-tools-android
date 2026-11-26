@@ -13,7 +13,7 @@ import com.furina.classtools.BuildConfig
  * 法律文本（隐私政策 / 用户协议）**完整版**入口（2026-11-19 用户要求）。
  *
  * 背景：端内 [PrivacyTexts] 是合规摘要（弹层展示，离线可用）；正式全文由网页仓维护并部署在 ECS：
- * `legal/android/privacy.html` / `legal/android/terms.html`（文档版本 V1.0 · 生效 2026-11-17）。
+ * `legal/android/privacy.html` / `legal/android/terms.html`。
  *
  * 本对象只做**纯字符串拼装**（可单测），网络与 Intent 由 [LegalLinkOpener] 负责：
  * - 基址复用 `BuildConfig.WEB_BASE_URL`（debug = `http://121.196.47.2`，release = `https://tool.furina.fun`），
@@ -24,10 +24,10 @@ import com.furina.classtools.BuildConfig
 object LegalLinks {
 
     /** 全文文档版本（与 legal/android/&ast;.html 页头「文档版本 / 生效日期」一致）。 */
-    const val DOC_VERSION: String = "V1.0"
+    const val DOC_VERSION: String = "V1.1"
 
-    /** 全文生效日期（网页原文：2026年11月17日）。 */
-    const val EFFECTIVE_DATE: String = "2026-11-17"
+    /** 全文生效日期。 */
+    const val EFFECTIVE_DATE: String = "2026-11-26"
 
     /** 隐私政策全文路径（相对网页站根）。 */
     const val PATH_PRIVACY: String = "legal/android/privacy.html"

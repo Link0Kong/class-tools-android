@@ -8,7 +8,7 @@ import org.junit.Test
 /**
  * 法律文本完整版入口（2026-11-19）纯逻辑测试：
  * - 全文 URL 拼接口径（基址带/不带末尾 `/`、路径带/不带前导 `/`）；
- * - 版本口径与网页全页一致（V1.0 · 生效 2026-11-17）；
+ * - 版本口径与网页全文一致；
  * - 端内摘要不出现与全文冲突的旧版本日期，且明确指向「查看完整版」。
  */
 class LegalLinksTest {
@@ -51,13 +51,13 @@ class LegalLinksTest {
     }
 
     @Test
-    fun `版本口径与网页全文一致：V1_0 生效 2026-11-17`() {
-        assertEquals("V1.0", LegalLinks.DOC_VERSION)
-        assertEquals("2026-11-17", LegalLinks.EFFECTIVE_DATE)
-        assertEquals("V1.0 · 生效 2026-11-17", LegalLinks.VERSION_LABEL)
-        // UI 里「完整版 " + VERSION_LABEL」不能出现重复的 V（真机截图曾出现 "VV1.0"）。
+    fun `版本口径与网页全文一致`() {
+        assertEquals("V1.1", LegalLinks.DOC_VERSION)
+        assertEquals("2026-11-26", LegalLinks.EFFECTIVE_DATE)
+        assertEquals("V1.1 · 生效 2026-11-26", LegalLinks.VERSION_LABEL)
+        // UI 里的 VERSION_LABEL 自带版本前缀。
         assertFalse(LegalLinks.VERSION_LABEL.startsWith("VV"))
-        assertFalse(PrivacyTexts.PRIVACY_POLICY.contains("VV1.0"))
+        assertFalse(PrivacyTexts.PRIVACY_POLICY.contains("V${LegalLinks.DOC_VERSION}"))
         // 端内摘要的版本日期与全文对齐（之前是 2026-11-08）。
         assertEquals(LegalLinks.EFFECTIVE_DATE, PrivacyTexts.VERSION)
         assertEquals(LegalLinks.VERSION_LABEL, PrivacyTexts.VERSION_LABEL)
@@ -69,8 +69,8 @@ class LegalLinksTest {
         assertFalse(PrivacyTexts.USER_AGREEMENT.contains("2026-11-08"))
         assertTrue(PrivacyTexts.PRIVACY_POLICY.contains("查看完整版"))
         assertTrue(PrivacyTexts.USER_AGREEMENT.contains("查看完整版"))
-        assertTrue(PrivacyTexts.PRIVACY_POLICY.contains("2026-11-17"))
-        assertTrue(PrivacyTexts.USER_AGREEMENT.contains("2026-11-17"))
+        assertTrue(PrivacyTexts.PRIVACY_POLICY.contains(LegalLinks.EFFECTIVE_DATE))
+        assertTrue(PrivacyTexts.USER_AGREEMENT.contains(LegalLinks.EFFECTIVE_DATE))
     }
 
     @Test
@@ -83,6 +83,7 @@ class LegalLinksTest {
         assertTrue(privacy.contains("CloudBase"))
         assertTrue(privacy.contains("保存期限"))
         assertTrue(privacy.contains("OPPO"))
+        assertTrue(privacy.contains("发送给云端 AI"))
         // 不得把真实手机号/身份证号等写成示例（合规硬线）。
         assertFalse(privacy.contains("138"))
         assertTrue(PrivacyTexts.USER_AGREEMENT.contains("陈子麒"))
