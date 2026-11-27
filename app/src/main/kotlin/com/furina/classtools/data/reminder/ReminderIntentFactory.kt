@@ -35,7 +35,7 @@ object ReminderIntentFactory {
         toolId?.trim()?.takeIf { it in TOOL_IDS }
 
     /** 可被通知点击直达的工具 id（与 [ReminderKind.toolId] 一致；`""` = 测试通知不跳转）。 */
-    val TOOL_IDS: Set<String> = setOf("hw", "tt", "nt", "vote", "water")
+    val TOOL_IDS: Set<String> = setOf("hw", "tt", "nt", "vote", "water", "ppt", "file")
 
     fun focusFor(key: String): String? {
         val prefix = listOf("oneshot:homework:", "oneshot:notice:", "task:", "hw-due:", "hw-new:",

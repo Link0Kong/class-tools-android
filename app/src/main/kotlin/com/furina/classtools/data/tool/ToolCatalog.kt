@@ -18,7 +18,6 @@ import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.School
-import androidx.compose.material.icons.rounded.Slideshow
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -125,7 +124,7 @@ object ToolCatalog {
         AppTool(
             id = "file",
             name = "文件传输",
-            subtitle = "临时云空间 · 保留 3 天",
+            subtitle = "临时文件 · PPT 转换 · 班级课件",
             icon = Icons.Rounded.Cloud,
             accentFamily = "teal",
             category = ToolCategory.CLASS,
@@ -157,19 +156,6 @@ object ToolCatalog {
             accentFamily = "teal",
             category = ToolCategory.STUDY,
             features = listOf("校园 2.5D 地图与楼栋楼层", "按道路步行导航", "与课表下一节联动"),
-        ),
-        AppTool(
-            id = "ppt",
-            name = "演示",
-            subtitle = "PPT 自动转换 · 分步播放",
-            icon = Icons.Rounded.Slideshow,
-            accentFamily = "blue",
-            category = ToolCategory.CLASS,
-            features = listOf(
-                "上传 .ppt/.pptx 自动转换（分步图片 + 视频）",
-                "沉浸式全屏播放（点击/滑动/音量键翻步）",
-                "缩略图跳页 / 备注 / 下载原件",
-            ),
         ),
         AppTool(
             id = "water",
@@ -252,7 +238,10 @@ object ToolCatalog {
     /** 默认「常用工具」：与网页首页前 4 个默认工具对齐，后续从 userdata.homeTools 读取。 */
     val defaultQuickIds: List<String> = listOf("draw", "group", "fit", "hw")
 
-    fun byId(id: String): AppTool? = tools.firstOrNull { it.id == id }
+    fun byId(id: String): AppTool? {
+        val toolId = if (id == "ppt") "file" else id
+        return tools.firstOrNull { it.id == toolId }
+    }
 
     // ---------------------------------------------------------------------
     // userdata v6 跨端工具 id（2026-11-22）
@@ -268,6 +257,7 @@ object ToolCatalog {
 
     /** 本机工具 id → 同步 canonical id（与网页 TOOLS / 小程序 toSyncKeys 一致）。 */
     fun syncIdOf(localId: String): String = when (localId) {
+        "ppt" -> "file"
         "fit" -> "ft"
         "roster" -> "committee"
         else -> localId
@@ -275,6 +265,7 @@ object ToolCatalog {
 
     /** 同步 id → 本机工具 id；兼容历史 fit/roster 与小程序 bz。未知 id 原样返回（由调用方按目录过滤）。 */
     fun localIdOf(syncId: String): String = when (syncId) {
+        "ppt" -> "file"
         "ft", "fit" -> "fit"
         "roster", "committee", "bz" -> "roster"
         else -> syncId
@@ -317,6 +308,6 @@ object ToolCatalog {
     )
 
     fun quickTools(ids: List<String> = defaultQuickIds): List<AppTool> =
-        ids.mapNotNull { byId(it)?.takeUnless { tool -> tool.adminOnly } }
+        ids.mapNotNull { byId(it)?.takeUnless { tool -> tool.adminOnly } }.distinctBy { it.id }
             .ifEmpty { defaultQuickIds.mapNotNull { byId(it) } }
 }

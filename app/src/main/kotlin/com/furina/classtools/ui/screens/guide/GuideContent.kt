@@ -4,7 +4,7 @@ package com.furina.classtools.ui.screens.guide
  * 使用说明「卡片化」内容数据（**纯 Kotlin，无 Compose / Android 依赖**，可直接单测）。
  *
  * 信息架构与三端共享契约 `web/使用说明_卡片化重构契约_20261112.md` 一致：
- * 5 个分类（入门 / 学习 / 生活 / 协作 / 更多）、24 张卡、一屏一张左右滑动。
+ * 5 个分类（入门 / 学习 / 生活 / 协作 / 更多）、23 张卡、一屏一张左右滑动。
  *
  * 文案硬规则（契约 §0）：
  * - 标题 ≤ 8 字；一句话作用 ≤ 20 字；每条步骤 ≤ 24 字；提示 ≤ 30 字；
@@ -18,7 +18,7 @@ package com.furina.classtools.ui.screens.guide
 object UserGuideContent {
 
     /** 内容版本（内容较上一版有实质变化时递增；供设置页/关于页展示）。 */
-    const val VERSION: String = "2026-11-16.2"
+    const val VERSION: String = "2026-11-27.1"
 
     /** 轮播顺序即本列表顺序（契约 §5.2）。 */
     val cards: List<GuideCard> = listOf(
@@ -236,28 +236,14 @@ object UserGuideContent {
             id = "file",
             category = GuideCategory.TEAM,
             title = "文件传输",
-            subtitle = "临时云空间 · 保留 3 天",
+            subtitle = "跨设备取文件，打开班级课件",
             steps = listOf(
-                "点「文件传输」进临时云空间",
-                "同一班级身份跨设备自动互通",
-                "上传下载删除，文件保留 3 天",
+                "在我的临时文件中上传或下载原件",
+                "点文件上的转换按钮获取兼容版和 PDF",
+                "点「班级课件」上传、查看或播放共享课件",
             ),
-            tip = "任意大小分片上传；到期自动清理",
-            scene = GuideScene.GRID,
-            tone = GuideTone.BLUE,
-        ),
-        GuideCard(
-            id = "ppt",
-            category = GuideCategory.TEAM,
-            title = "演示",
-            subtitle = "上传 PPT，转兼容包与分步播放",
-            steps = listOf(
-                "上传 .ppt / .pptx 自动转换",
-                "下载兼容版、PDF 或原始文件",
-                "旧课件可预览或单下视频",
-            ),
-            tip = "兼容包只做兼容处理，不改内容",
-            scene = GuideScene.SLIDES,
+            tip = "个人临时文件保留 3 天，仅同账号可取",
+            scene = GuideScene.TRANSFER,
             tone = GuideTone.BLUE,
         ),
         GuideCard(

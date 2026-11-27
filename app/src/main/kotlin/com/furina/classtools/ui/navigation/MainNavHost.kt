@@ -212,6 +212,7 @@ fun MainNavHost(
         array
             ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
             ?.mapNotNull { ToolCatalog.bySyncId(it)?.id }
+            ?.distinct()
             .orEmpty()
     }
     // 本机乐观值：AllTools/Home 编辑后立即同步到「工作台」，不等待 updateCurrent 回写 Flow。
@@ -922,7 +923,11 @@ fun MainNavHost(
                 )
 
                 "file" -> androidx.compose.runtime.key(container.cloudSpaceRepository) {
-                    CloudSpaceScreen(onBack = { popTool(toolId) }, repository = container.cloudSpaceRepository)
+                    CloudSpaceScreen(
+                        onBack = { popTool(toolId) },
+                        onOpenClassDecks = { navController.navigate(Routes.tool("ppt")) { launchSingleTop = true } },
+                        repository = container.cloudSpaceRepository,
+                    )
                 }
 
                 "express" -> ExpressScreen(

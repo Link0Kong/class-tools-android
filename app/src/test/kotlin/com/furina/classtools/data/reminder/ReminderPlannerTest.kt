@@ -794,6 +794,8 @@ class ReminderPlannerTest {
         assertEquals("hw", ReminderIntentFactory.toolIdFromExtras("hw"))
         assertEquals("vote", ReminderIntentFactory.toolIdFromExtras("vote"))
         assertEquals("water", ReminderIntentFactory.toolIdFromExtras("water"))
+        assertEquals("ppt", ReminderIntentFactory.toolIdFromExtras("ppt"))
+        assertEquals("file", ReminderIntentFactory.toolIdFromExtras("file"))
         assertNull(ReminderIntentFactory.toolIdFromExtras("power"))
         assertNull(ReminderIntentFactory.toolIdFromExtras(""))
         assertEquals("2026-11-09", ReminderPlanner.formatDate(now, zone))

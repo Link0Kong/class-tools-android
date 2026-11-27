@@ -14,6 +14,17 @@ import org.junit.Test
 class ToolCatalogSyncIdTest {
 
     @Test
+    fun retiredPptToolResolvesToOneFileShortcut() {
+        assertEquals(0, ToolCatalog.tools.count { it.id == "ppt" })
+        assertEquals("file", ToolCatalog.byId("ppt")?.id)
+        val oldOrder = listOf("ppt", "hw", "file")
+        val migrated = listOf("file", "hw")
+        assertEquals(migrated, ToolCatalog.quickTools(oldOrder).map { it.id })
+        assertEquals(migrated, ToolCatalog.fromSyncIds(oldOrder))
+        assertEquals(migrated, ToolCatalog.toSyncIds(oldOrder))
+    }
+
+    @Test
     fun syncIdOf_mapsLocalIdsToCanonical() {
         assertEquals("ft", ToolCatalog.syncIdOf("fit"))
         assertEquals("committee", ToolCatalog.syncIdOf("roster"))

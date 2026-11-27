@@ -119,6 +119,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun CloudSpaceScreen(
     onBack: () -> Unit,
+    onOpenClassDecks: () -> Unit,
     repository: CloudSpaceRepository,
     modifier: Modifier = Modifier,
 ) {
@@ -423,6 +424,7 @@ fun CloudSpaceScreen(
         downloadedIds = downloadedFiles.keys,
         nowMillis = nowMillis,
         onBack = onBack,
+        onOpenClassDecks = onOpenClassDecks,
         onRefresh = ::manualRefresh,
         onUpload = { pickFiles.launch(arrayOf("*/*")) },
         onClear = { showClearConfirm = true },
@@ -492,6 +494,7 @@ fun CloudSpaceContent(
     onClear: () -> Unit,
     onDownload: (CloudSpaceFile) -> Unit,
     onConvert: (CloudSpaceFile) -> Unit = {},
+    onOpenClassDecks: () -> Unit = {},
     onDelete: (CloudSpaceFile) -> Unit,
     onCancelUpload: (String) -> Unit,
     onRetry: () -> Unit,
@@ -515,10 +518,11 @@ fun CloudSpaceContent(
                     .statusBarsPadding(),
             ) {
                 ctTopBarRaw(
-                    subtitle = "同账号 · 跨设备 · 文件保留 3 天",
-                    title = "临时云空间",
+                    subtitle = "个人文件与班级课件",
+                    title = "文件传输",
                     onBack = onBack,
                     actions = {
+                        TextButton(onClick = onOpenClassDecks) { Text("班级课件") }
                         CtIconAction(
                             icon = Icons.Rounded.Refresh,
                             contentDescription = "刷新云空间",
@@ -541,7 +545,7 @@ fun CloudSpaceContent(
                 ) {
                     item(key = "space") {
                         CtToolCard(
-                            title = "文件传输",
+                            title = "我的临时文件",
                             trailing = {
                                 Text(
                                     text = statusText,

@@ -410,7 +410,7 @@ fun PptListContent(
         ) {
             ctTopBarRaw(
                 subtitle = null,
-                title = "演示",
+                title = "班级课件",
                 onBack = onBack,
                 actions = {
                     // 空态卡片里已经有 filled「上传 PPT」；顶栏这里只保留一个次要的图标入口，
