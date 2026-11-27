@@ -70,7 +70,13 @@ internal data class WidgetContent(
     val compactDetail: String = first.detail,
 )
 
-internal data class WidgetSection(val title: String, val link: WidgetLine, val lines: List<WidgetLine>, val empty: String)
+internal data class WidgetSection(
+    val title: String,
+    val link: WidgetLine,
+    val lines: List<WidgetLine>,
+    val empty: String,
+    val status: String = "",
+)
 
 internal fun quadrantOf(line: WidgetLine, tomorrow: Long): Int {
     val urgent = line.deadlineAt?.let { it < tomorrow } == true
@@ -135,8 +141,8 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
         WidgetKind.WORKBENCH -> {
             val tasks = feed.tasks
             val notices = feed.notices
-            val overview = listOf(tasks?.let { "${it.count} 待办" } ?: "任务待同步",
-                notices?.let { "${it.count} 待处理通知" } ?: "通知待同步")
+            val overview = listOf(tasks?.let { "${it.count} 待办" } ?: "待办待同步",
+                notices?.let { "${it.count} 待处理" } ?: "通知待同步")
             val assignments = feed.homework?.current(now, tasks?.importedHomeworkIds.orEmpty())
             val highlights = buildList {
                 assignments?.rows?.firstOrNull()?.let { add(it) }
@@ -145,14 +151,20 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
                 if (course != null) add(courseLine.copy(title = courseLabel + " · " + courseLine.title,
                     priority = if (course.startAt in now..(now + 15 * 60_000L)) 2 else 6))
             }.sortedBy { it.priority }
-            fun section(title: String, dest: String, line: WidgetLine?, empty: String) =
-                WidgetSection(title, WidgetLine("", destination = dest), listOfNotNull(line), empty)
-            val tiles = listOf(section("课程", "tt", courseLine.takeIf { course != null }, if (plan?.hasData == true) "暂无课程" else "待同步"),
-                section("个人待办", "hw", tasks?.rows?.firstOrNull()?.copy(destination = "hw"), if (tasks == null) "待同步" else "暂无待办"),
-                section("班级作业", "class-homework", assignments?.rows?.firstOrNull(), if (assignments == null) "待同步" else "暂无作业"),
-                section("班级通知", "nt", notices?.rows?.firstOrNull()?.copy(destination = "nt"), if (notices == null) "待同步" else "暂无待处理"))
+            fun section(title: String, dest: String, list: WidgetList?, empty: String) =
+                WidgetSection(title, WidgetLine("", destination = dest),
+                    listOfNotNull(list?.rows?.firstOrNull()?.copy(destination = dest)),
+                    if (list == null) "待同步" else empty, list?.count?.takeIf { it > 0 }?.toString().orEmpty())
+            val tiles = listOf(
+                WidgetSection("课程", WidgetLine("", destination = "tt"), listOfNotNull(courseLine.takeIf { course != null }),
+                    if (plan?.hasData == true) "暂无课程" else "待同步",
+                    if (active != null) "上课中" else if (course != null) "下一节" else ""),
+                section("个人待办", "hw", tasks, "暂无待办"),
+                section("班级作业", "class-homework", assignments, "暂无作业"),
+                section("班级通知", "nt", notices, "暂无待处理"),
+            )
             WidgetContent("${tiles.size} 个入口", WidgetLine(overview.joinToString(" · "),
-                highlights.firstOrNull()?.title.orEmpty()), highlights, overview.joinToString(" · "), tiles)
+                highlights.firstOrNull()?.title.orEmpty()), highlights, "${localDay.monthValue}月${localDay.dayOfMonth}日", tiles)
         }
         WidgetKind.NOTICES, WidgetKind.TASKS -> {
             val tasks = kind == WidgetKind.TASKS

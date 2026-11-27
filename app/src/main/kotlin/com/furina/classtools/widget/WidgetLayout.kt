@@ -38,7 +38,7 @@ internal data class WidgetLayout(
                     sideDetails = availableWidth >= 48 + 218 * fontWidth,
                     grouped = roomy && availableWidth >= 290 * fontWidth,
                     excerpt = roomy && availableWidth >= 48 + 235 * fontWidth,
-                    twoColumns = availableWidth >= 2 * (48 + 108 * fontWidth) + 4,
+                    twoColumns = availableWidth >= 2 * (48 + 98 * fontWidth) + 4,
                     check = availableWidth >= 48 + 67 * fontWidth,
                     tileOverview = availableWidth >= 48 + 72 * fontWidth,
                     tileCheck = availableWidth >= 96 + 106 * fontWidth,

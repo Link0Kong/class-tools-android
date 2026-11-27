@@ -242,15 +242,21 @@ class DesktopWidgetHostTest {
         assertEquals(View.VISIBLE, banner.findViewById<View>(R.id.widget_summary_add).visibility)
         assertEquals(View.GONE, layout(180, 99).findViewById<View>(R.id.widget_list).visibility)
         val first = layout(180, 100).findViewById<ListView>(R.id.widget_list)
-        assertEquals(52, first.height)
+        val legacy = android.os.Build.VERSION.SDK_INT < 31
+        assertEquals(if (legacy) 48 else 52, first.height)
         for ((w, h) in listOf(180 to 112, 132 to 260, 375 to 280)) {
             val widget = layout(w, h)
+            val surface = widget.findViewById<View>(R.id.widget_root)
+            assertEquals(!legacy, surface.clipToOutline)
+            assertTrue(surface.background is android.graphics.drawable.GradientDrawable)
             assertEquals(h, widget.findViewById<View>(R.id.widget_backplate).height)
             assertEquals(w, widget.findViewById<View>(R.id.widget_backplate).width)
             val list = widget.findViewById<ListView>(R.id.widget_list)
             assertEquals(View.VISIBLE, list.visibility)
-            assertEquals(h, list.bottom)
-            assertEquals(h - widget.findViewById<View>(R.id.widget_header).height, list.height)
+            assertEquals(View.OVER_SCROLL_NEVER, list.overScrollMode)
+            val safeBottom = if (legacy) { if (w < 148) 8 else 4 } else 0
+            assertEquals(h - safeBottom, list.bottom)
+            assertEquals(h - safeBottom - widget.findViewById<View>(R.id.widget_header).height, list.height)
         }
         val defaults = host(WidgetViews.forHost(app, kind, model, Bundle()), 180, 112)
         assertEquals(View.VISIBLE, defaults.findViewById<View>(R.id.widget_list).visibility)
@@ -302,6 +308,32 @@ class DesktopWidgetHostTest {
             val fewer = WidgetRows.entries(kind, fewerSections, style).filterIsInstance<WidgetEntry.Tiles>()
             assertEquals(expected.take(3), fewer.flatMap { it.sections }.map { it.link.destination })
         }
+    }
+
+    @Test fun workbenchTwoColumnCardsAlignWithDifferentTitleLengthsAndKeepSeparateListEntry() {
+        val kind = WidgetKind.WORKBENCH
+        val style = WidgetLayout.fit(375f, 220f, app.resources.displayMetrics).rows
+        val longTitle = "数字媒体教学实践项目场地调整与展板材料提交"
+        val sections = listOf(
+            WidgetSection("课程", WidgetLine("", destination = "tt"), emptyList(), "暂无课程"),
+            WidgetSection("班级通知", WidgetLine("", destination = "nt"),
+                listOf(WidgetLine(longTitle, "今天发布", destination = "nt", focus = "t1")), "暂无待处理", "12"),
+        )
+        val remote = WidgetRows.render(app, WidgetPaint.resolve(app, WidgetPalette.SYSTEM), kind,
+            WidgetEntry.Tiles(0, sections), style, null, interactive = false)
+        val row = remote.apply(app, android.widget.FrameLayout(app))
+        row.measure(View.MeasureSpec.makeMeasureSpec(359, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        row.layout(0, 0, row.measuredWidth, row.measuredHeight)
+        val left = row.findViewById<View>(R.id.widget_tile_left)
+        val right = row.findViewById<View>(R.id.widget_tile_right)
+        assertEquals(left.height, right.height)
+        assertEquals(left.findViewById<View>(R.id.widget_tile_fill).height, right.findViewById<View>(R.id.widget_tile_fill).height)
+        assertEquals(left.findViewById<View>(R.id.widget_tile_caption).top, right.findViewById<View>(R.id.widget_tile_caption).top)
+        assertTrue(left.height >= 48)
+        assertEquals("班级通知 · 12", right.findViewById<TextView>(R.id.widget_tile_caption).text.toString())
+        assertEquals("打开班级通知列表", right.findViewById<View>(R.id.widget_tile_open).contentDescription)
+        assertEquals(View.GONE, left.findViewById<View>(R.id.widget_tile_open).visibility)
     }
 
     @Test fun restoredWidgetIdsKeepTheirOwnPaletteEvenWhenIdsOverlap() {

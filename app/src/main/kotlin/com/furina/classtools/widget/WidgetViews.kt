@@ -12,7 +12,9 @@ import android.view.View
 import android.widget.RemoteViews
 import com.furina.classtools.R
 import com.furina.classtools.data.settings.AppSettingsStore
+import kotlin.math.ceil
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 internal object WidgetViews {
     @Suppress("DEPRECATION")
@@ -56,12 +58,19 @@ internal object WidgetViews {
         val views = RemoteViews(context.packageName, R.layout.widget_collection)
         colors.paintPaper(views)
         val inset = (layout.inset * context.resources.displayMetrics.density).roundToInt()
-        views.setViewPadding(R.id.widget_body, inset, 0, inset, 0)
         val overview = WidgetIntents.open(context, kind.destination, owner = owner)
         val primary = model.first
         val refresh = owner != null && kind == WidgetKind.NOTICES && layout.extraControl
         val create = model.createTask && layout.extraControl
         val collection = layout.collection && model.hasRecords
+        // Android 11 and earlier do not inflate clipToOutline. Leave just enough
+        // room at the bottom for the round corner at the list's horizontal inset.
+        val bottomInset = if (collection && Build.VERSION.SDK_INT < 31) {
+            val radius = context.resources.getDimension(R.dimen.ct_widget_radius)
+            val offset = (radius - inset).coerceAtLeast(0f)
+            ceil(radius - sqrt(radius * radius - offset * offset)).toInt()
+        } else 0
+        views.setViewPadding(R.id.widget_body, inset, 0, inset, bottomInset)
         views.setOnClickPendingIntent(R.id.widget_root, overview)
         views.setViewVisibility(R.id.widget_header, visible(collection))
         views.setViewVisibility(R.id.widget_summary_row, visible(!collection))
@@ -75,7 +84,8 @@ internal object WidgetViews {
                 layout.headerDetails -> model.summary
                 else -> model.compactStatus
             }
-            val heading = if (layout.headerDetails && model.cachedRemainder == 0) kind.label else model.compactStatus
+            val heading = if (kind == WidgetKind.WORKBENCH || layout.headerDetails && model.cachedRemainder == 0)
+                kind.label else model.compactStatus
             label(views, colors, R.id.widget_heading, heading, accent = true)
             label(views, colors, R.id.widget_header_status, caption.takeUnless { it == heading }.orEmpty())
             views.setOnClickPendingIntent(R.id.widget_header_copy, overview)

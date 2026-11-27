@@ -51,33 +51,50 @@ internal object WidgetRows {
             if (interactive) setOnClickFillInIntent(R.id.widget_section_title, WidgetIntents.line(entry.section.link, kind, owner))
         }
         is WidgetEntry.Tiles -> {
-            fun tile(section: WidgetSection, index: Int): RemoteViews {
-                val lead = section.lines.firstOrNull()
-                val separateOverview = lead != null && style.tileOverview
-                val line = if (separateOverview) requireNotNull(lead) else section.link.copy(
-                    title = lead?.title ?: section.empty, detail = lead?.detail.orEmpty(),
-                )
-                return row(context, colors, kind, line, style.copy(sideDetails = false, check = !style.twoColumns && style.tileCheck),
-                    owner, interactive, colors.tones[index % colors.tones.size], section.title,
-                    section.link.takeIf { separateOverview })
-            }
-            if (!style.twoColumns) tile(entry.sections.single(), entry.startIndex)
+            fun renderTile(section: WidgetSection, index: Int) =
+                tile(context, colors, kind, section, style, owner, interactive, colors.tones[index % colors.tones.size])
+            if (!style.twoColumns) renderTile(entry.sections.single(), entry.startIndex)
             else RemoteViews(context.packageName, R.layout.widget_grid_row).apply {
                 val slots = listOf(R.id.widget_tile_left, R.id.widget_tile_right)
                 for ((column, slot) in slots.withIndex()) {
                     removeAllViews(slot)
-                    entry.sections.getOrNull(column)?.let { addView(slot, tile(it, entry.startIndex + column)) }
+                    entry.sections.getOrNull(column)?.let { addView(slot, renderTile(it, entry.startIndex + column)) }
                 }
             }
         }
     }
 
+    private fun tile(
+        context: Context, colors: WidgetPaint, kind: WidgetKind, section: WidgetSection, style: WidgetRowStyle,
+        owner: String?, interactive: Boolean, tone: Int,
+    ) = RemoteViews(context.packageName, R.layout.widget_workbench_tile).apply {
+        val lead = section.lines.firstOrNull()
+        val separateOverview = lead != null && style.tileOverview
+        val line = if (separateOverview) requireNotNull(lead) else section.link
+        val caption = listOf(section.title, section.status).filter(String::isNotBlank).joinToString(" · ")
+        setInt(R.id.widget_tile_fill, "setColorFilter", colors.fill(tone))
+        setTextViewText(R.id.widget_tile_caption, caption)
+        colors.text(this, R.id.widget_tile_caption, tone)
+        val title = lead?.title ?: section.empty
+        WidgetViews.label(this, colors, R.id.widget_tile_title,
+            if (section.link.destination == "class-homework") title.removePrefix("作业 · ") else title)
+        WidgetViews.label(this, colors, R.id.widget_tile_detail, lead?.detail.orEmpty())
+        setInt(R.id.widget_tile_detail, "setMaxLines", if (section.link.destination == "tt" && !style.twoColumns) 2 else 1)
+        if (interactive) setOnClickFillInIntent(R.id.widget_tile_primary, WidgetIntents.line(line, kind, owner))
+        setViewVisibility(R.id.widget_tile_open, WidgetViews.visible(separateOverview))
+        if (separateOverview) {
+            colors.text(this, R.id.widget_tile_open, colors.accent)
+            setContentDescription(R.id.widget_tile_open, "打开${section.title}列表")
+            if (interactive) setOnClickFillInIntent(R.id.widget_tile_open, WidgetIntents.line(section.link, kind, owner))
+        }
+        bindCheck(this, colors, line, owner, interactive, !style.twoColumns && style.tileCheck)
+    }
+
     private fun row(
         context: Context, colors: WidgetPaint, kind: WidgetKind, line: WidgetLine, style: WidgetRowStyle,
-        owner: String?, interactive: Boolean, tone: Int, caption: String = "", overview: WidgetLine? = null,
+        owner: String?, interactive: Boolean, tone: Int,
     ) = RemoteViews(context.packageName, R.layout.widget_line).apply {
         colors.band(this, R.id.widget_row_fill, R.id.widget_row_rule, tone)
-        WidgetViews.label(this, colors, R.id.widget_row_caption, caption, accent = true)
         WidgetViews.label(this, colors, R.id.widget_row_title, line.title)
         val side = style.sideDetails && line.detail.isNotBlank()
         WidgetViews.label(this, colors, R.id.widget_row_detail, line.detail.takeUnless { side }.orEmpty())
@@ -86,17 +103,15 @@ internal object WidgetRows {
         WidgetViews.label(this, colors, R.id.widget_row_side_detail, line.detail.takeIf { side }.orEmpty())
         WidgetViews.label(this, colors, R.id.widget_row_excerpt, line.excerpt.takeIf { side && style.excerpt }.orEmpty())
         if (interactive) setOnClickFillInIntent(R.id.widget_row, WidgetIntents.line(line, kind, owner))
-        setViewVisibility(R.id.widget_row_open, WidgetViews.visible(overview != null))
-        if (overview != null) {
-            colors.text(this, R.id.widget_row_open, colors.accent)
-            setContentDescription(R.id.widget_row_open, "打开" + caption)
-            if (interactive) setOnClickFillInIntent(R.id.widget_row_open, WidgetIntents.line(overview, kind, owner))
-        }
-        val check = owner != null && style.check && line.destination == "hw" && line.canComplete && line.focus.isNotBlank()
-        setViewVisibility(R.id.widget_row_check, WidgetViews.visible(check))
+        bindCheck(this, colors, line, owner, interactive, style.check)
+    }
+
+    private fun bindCheck(views: RemoteViews, colors: WidgetPaint, line: WidgetLine, owner: String?, interactive: Boolean, fits: Boolean) {
+        val check = owner != null && fits && line.destination == "hw" && line.canComplete && line.focus.isNotBlank()
+        views.setViewVisibility(R.id.widget_row_check, WidgetViews.visible(check))
         if (check) {
-            WidgetViews.paintCheck(this, R.id.widget_row_check, line, colors)
-            if (interactive) setOnClickFillInIntent(R.id.widget_row_check, Intent().setData(
+            WidgetViews.paintCheck(views, R.id.widget_row_check, line, colors)
+            if (interactive) views.setOnClickFillInIntent(R.id.widget_row_check, Intent().setData(
                 WidgetCommandReceiver.commandUri(requireNotNull(owner), WidgetCommandReceiver.COMPLETE, line.focus)))
         }
     }

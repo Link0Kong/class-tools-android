@@ -44,7 +44,7 @@ internal class WidgetCollectionFactory(
         current.entries.getOrNull(position)?.let { WidgetRows.render(context, current.colors, kind, it, style, current.owner) }
     }
     override fun getLoadingView(): RemoteViews? = null
-    override fun getViewTypeCount() = 3
+    override fun getViewTypeCount() = 4
     override fun hasStableIds() = true
     override fun getItemId(position: Int): Long =
         rows?.entries?.getOrNull(position)?.key?.fold(0L) { hash, char -> 31 * hash + char.code } ?: -1L
