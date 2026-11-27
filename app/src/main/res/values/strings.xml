@@ -5,5 +5,5 @@
     <string name="identity_hint_sid">学号</string>
     <string name="identity_hint_name">姓名</string>
     <string name="identity_submit">进入工具站</string>
-    <string name="previous_version_release_notes">新增工作台、班级通知和待办任务桌面卡片。四种卡片可分别添加，并会随卡片大小调整显示内容。</string>
+    <string name="release_notes">1.0.1 相比 1.0.0\n\n• 工作台加入天气、今日课程和进行中的活动，桌面组件可查看通知、课表并勾选待办。\n• 课表记住周／日视图，可从课次打开离线校园地图；平板可并排查看日程和任务详情。\n• 个人任务支持跨端同步、AI 整理、步骤与分享导入。班级作业和通知可转成任务。\n• 新增精确提醒、报名倒计时与实时活动；文件传输支持个人 PPT 转换和班级课件。\n• 新增投票、独立点名、扫码登录和抽签核验。水量支持宿舍共享，电费支持同期对比。\n• 更新深浅色外观，改善大字号、通知离线缓存、账号隔离与应用内更新。</string>
 </resources>

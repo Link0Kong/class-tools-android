@@ -1025,7 +1025,7 @@ private fun AboutSection(
         ) {
             Text("更新说明", style = CtText.body)
             Text(
-                stringResource(R.string.previous_version_release_notes),
+                stringResource(R.string.release_notes),
                 style = CtText.body,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
