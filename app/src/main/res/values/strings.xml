@@ -5,4 +5,5 @@
     <string name="identity_hint_sid">学号</string>
     <string name="identity_hint_name">姓名</string>
     <string name="identity_submit">进入工具站</string>
+    <string name="previous_version_release_notes">新增工作台、班级通知和待办任务桌面卡片。四种卡片可分别添加，并会随卡片大小调整显示内容。</string>
 </resources>

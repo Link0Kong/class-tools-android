@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.profile
 
+import androidx.compose.ui.res.stringResource
+import com.furina.classtools.R
 import com.furina.classtools.ui.components.CtToastBus
 
 import androidx.compose.ui.platform.LocalDensity
@@ -1002,6 +1004,20 @@ private fun AboutSection(
             // v4.57.0-test1（测试版本 1）；Debug 的 -debug 后缀不展示。
             value = UpdateTestVersion.versionDisplay(BuildConfig.VERSION_NAME),
         )
+        RowDivider()
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(
+                horizontal = HarmonyTokens.PagePadding,
+                vertical = HarmonyTokens.ElementGap,
+            ),
+        ) {
+            Text("更新说明", style = CtText.body)
+            Text(
+                stringResource(R.string.previous_version_release_notes),
+                style = CtText.body,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
