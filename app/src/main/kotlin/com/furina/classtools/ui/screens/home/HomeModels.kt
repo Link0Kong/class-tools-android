@@ -16,7 +16,7 @@ import com.furina.classtools.data.timetable.TtPlan
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
-/** 工作台卡片内可轮换的个人待办或待处理通知。 */
+/** 工作台卡片内可点开的个人待办或待处理通知。 */
 data class HomeRotationItem(
     val id: String,
     val title: String,

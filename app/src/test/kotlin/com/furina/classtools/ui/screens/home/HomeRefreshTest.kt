@@ -91,6 +91,30 @@ class HomeRefreshTest {
     }
 
     @Test
+    fun backgroundRefreshKeepsThePreviousErrorVisibleUntilItHasAResult() = runTest {
+        val response = CompletableDeferred<HomeLoadResult<Unit>>()
+        val refresh = HomeRefresh(backgroundScope)
+        val tasks = HomeLoad(initial = Unit, keepErrorWhileLoading = true) { force ->
+            if (force) response.await() else HomeLoadResult(error = "网络不可用")
+        }
+
+        refresh.prefetch(tasks)
+        runCurrent()
+        assertEquals("网络不可用", tasks.state.error)
+
+        refresh.retry(tasks)
+        runCurrent()
+        assertTrue(tasks.state.loading)
+        assertEquals("网络不可用", tasks.state.error)
+        assertEquals(Unit, tasks.state.data)
+
+        response.complete(HomeLoadResult(Unit))
+        runCurrent()
+        assertFalse(tasks.state.loading)
+        assertNull(tasks.state.error)
+    }
+
+    @Test
     fun supersededPrefetchCannotPublishAnOlderResult() = runTest {
         val refresh = HomeRefresh(backgroundScope)
         val finishOld = CompletableDeferred<Unit>()

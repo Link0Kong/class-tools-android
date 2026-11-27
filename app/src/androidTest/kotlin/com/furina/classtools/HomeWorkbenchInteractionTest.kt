@@ -10,6 +10,8 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.furina.classtools.data.network.ApiClient
+import com.furina.classtools.data.network.ApiResponse
+import com.furina.classtools.data.network.HttpTransport
 import com.furina.classtools.data.notices.NoticeEntry
 import com.furina.classtools.data.notices.NoticeGroupDto
 import com.furina.classtools.data.notices.NoticeRow
@@ -17,8 +19,11 @@ import com.furina.classtools.data.notices.NoticesData
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tasks.TaskRepository
 import com.furina.classtools.data.tasks.TaskStorage
+import com.furina.classtools.data.tasks.changeCompletion
+import com.furina.classtools.data.tasks.emptyTasks
 import com.furina.classtools.data.tasks.newTask
 import com.furina.classtools.data.tasks.text
+import com.furina.classtools.data.tasks.withFields
 import com.furina.classtools.data.timetable.Course
 import com.furina.classtools.data.timetable.CourseFocus
 import com.furina.classtools.data.timetable.TtCalendar
@@ -29,10 +34,16 @@ import com.furina.classtools.ui.screens.home.HomeWorkbenchLogic
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.isReduceMotion
 import java.time.ZonedDateTime
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -40,7 +51,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class HomeWorkbenchInteractionTest {
-    @Test fun rotatesThroughNoticesAndTasksAndKeepsCourseDetailsInTheTimetableCard() {
+    @Test fun keepsTasksInPlaceDuringSyncAndNoticeRotation() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         assumeTrue(InstrumentationRegistry.getArguments().getString("interactionReview") == "yes")
         val context = instrumentation.targetContext
@@ -65,16 +76,39 @@ class HomeWorkbenchInteractionTest {
             )
         }
         val notices = NoticesData(entries, emptyList(), 0, now, false)
-        val tasks = (1..3).map { newTask("轮播测试待办 $it", now, it.toDouble()) }
+        val tasks = (1..3).map { newTask("测试待办 $it", now, it.toDouble()) }
+        val cached = emptyTasks.withFields { put("items", JsonArray(tasks)) }
+        val updatedTasks = changeCompletion(tasks, tasks.first().text("id"), done = true, now = now + 1)
+        val remote = cached.withFields {
+            put("items", JsonArray(updatedTasks))
+            put("updatedAt", now + 1)
+        }
+        val syncStarted = CompletableDeferred<Unit>()
+        val finishSync = CompletableDeferred<Unit>()
         val scope = CoroutineScope(Dispatchers.Main)
         val storage = object : TaskStorage {
-            override fun read(key: String): String? = null
+            override fun read(key: String): String? = when (key) {
+                "local", "base" -> cached.toString()
+                else -> null
+            }
             override fun save(local: JsonObject, base: JsonObject?, metadata: Map<String, String?>) = Unit
             override fun checkpointAttempt(value: String?): Boolean = true
         }
-        val session = Session("3260799999", "测试账号", token = "", debug = true)
-        val repository = TaskRepository(session.sid, storage, ApiClient("https://example.invalid", ""), scope, canSync = { false })
-        repository.edit { _, _ -> tasks }
+        val session = Session("3260799999", "测试账号", token = "")
+        val cloudRow = buildJsonObject {
+            put("id", session.sid)
+            put("ts", now + 1)
+            put("blob", remote.toString())
+        }
+        val transport = HttpTransport {
+            syncStarted.complete(Unit)
+            finishSync.await()
+            ApiResponse(200, JsonArray(listOf(cloudRow)).toString())
+        }
+        val repository = TaskRepository(
+            session.sid, storage, ApiClient("https://example.invalid", "test-key", transport = transport), scope,
+            canSync = { true },
+        )
         val active = mutableStateOf(false)
         var opened: Pair<String, String?>? = null
         val rotationTimeout = HomeWorkbenchLogic.ROTATION_INTERVAL_MS * 3
@@ -102,6 +136,7 @@ class HomeWorkbenchInteractionTest {
                         }
                     }
                 }
+                device.waitForIdle(3_000)
                 val noticesHeader = node("班级通知").visibleCenter
                 val tasksHeader = node("待办任务").visibleCenter
                 val timetableHeader = node("今日课程").visibleCenter
@@ -117,22 +152,34 @@ class HomeWorkbenchInteractionTest {
                 scenario.onActivity { assertEquals("tt" to CourseFocus.of(plan.next!!).encode(), opened) }
 
                 node("轮播测试通知 1")
-                node("轮播测试待办 1")
+                val firstTaskBounds = node("测试待办 1").visibleBounds
+                val secondTaskBounds = node("测试待办 2").visibleBounds
+                node("3 项")
+                assertFalse(device.hasObject(By.text("测试待办 3")))
                 device.waitForIdle(3_000)
                 scenario.onActivity { active.value = true }
+                runBlocking { withTimeout(8_000) { syncStarted.await() } }
                 node("轮播测试通知 2", rotationTimeout)
-                node("轮播测试待办 2", rotationTimeout)
                 node("轮播测试通知 3", rotationTimeout).click()
                 scenario.onActivity { assertEquals("nt" to entries.last().id, opened) }
-                node("轮播测试待办 3", rotationTimeout).click()
+                assertEquals(firstTaskBounds, node("测试待办 1").visibleBounds)
+                assertEquals(secondTaskBounds, node("测试待办 2").visibleBounds)
+                assertEquals(timetableHeader, node("今日课程").visibleCenter)
+                assertFalse(device.hasObject(By.text("更新个人待办…")))
+                assertFalse(device.hasObject(By.text("测试待办 3")))
+
+                finishSync.complete(Unit)
+                node("2 项")
+                assertFalse(device.hasObject(By.text("测试待办 1")))
+                node("测试待办 3").click()
                 scenario.onActivity { assertEquals("hw" to tasks.last().text("id"), opened) }
 
                 node("轮播测试通知 1", rotationTimeout)
-                node("轮播测试待办 1", rotationTimeout)
                 scenario.onActivity { active.value = false }
                 SystemClock.sleep(HomeWorkbenchLogic.ROTATION_INTERVAL_MS + 500)
                 assertTrue(device.hasObject(By.text("轮播测试通知 1")))
-                assertTrue(device.hasObject(By.text("轮播测试待办 1")))
+                assertTrue(device.hasObject(By.text("测试待办 2")))
+                assertTrue(device.hasObject(By.text("测试待办 3")))
             }
         } finally {
             scope.cancel()

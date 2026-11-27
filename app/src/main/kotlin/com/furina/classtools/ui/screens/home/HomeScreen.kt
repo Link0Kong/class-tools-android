@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -378,8 +379,6 @@ fun HomeScreen(
                                         items = hwItems,
                                         task = taskState,
                                         homework = homeworkState,
-                                        pageActive = pageActive,
-                                        animate = animateEntrance,
                                         onOpen = { openCard("hw") },
                                         onItem = { openCard("hw", it.id) },
                                         onRetryTasks = { loads.retry(loads.tasks) },
@@ -661,25 +660,31 @@ private fun HomeHomeworkCard(
     items: List<HomeRotationItem>,
     task: HomeLoadState<Unit>?,
     homework: HomeLoadState<*>?,
-    pageActive: Boolean,
-    animate: Boolean,
     onOpen: () -> Unit,
     onItem: (HomeRotationItem) -> Unit,
     onRetryTasks: () -> Unit,
     onRetryHomework: () -> Unit,
 ) {
-    val loading = task?.loading == true
     HomeInfoCard(Icons.AutoMirrored.Rounded.Assignment, "待办任务", MaterialTheme.colorScheme.primary, onOpen,
         badge = "${items.size} 项") {
         if (items.isEmpty()) {
-            if (loading) HomeLoadingRow("同步个人待办…")
-            else if (task?.error == null) HomeMutedLine("暂无待完成事项")
+            HomeMutedLine("暂无待完成事项")
         } else {
-            HomeRotatingItems(items, pageActive, animate, onItem)
+            items.take(2).forEach { item ->
+                key(item.id) {
+                    CardItemRow(item, Modifier.clickable { onItem(item) })
+                }
+            }
         }
-        HomeModuleStatus("个人待办", loading && items.isNotEmpty(), task?.error, task?.data != null, onRetryTasks)
-        HomeModuleStatus("班级作业", homework?.loading == true, homework?.error, homework?.data != null, onRetryHomework,
-            cacheMessage = "已保留上次作业数据")
+        HomeModuleStatus("个人待办", loading = false, task?.error, task?.data != null, onRetryTasks)
+        HomeModuleStatus(
+            label = "班级作业",
+            loading = homework?.loading == true && homework.data == null && homework.error == null,
+            error = homework?.error,
+            hasCache = homework?.data != null,
+            onRetry = onRetryHomework,
+            cacheMessage = "已保留上次作业数据",
+        )
     }
 }
 

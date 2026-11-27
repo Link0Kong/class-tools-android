@@ -53,6 +53,7 @@ internal data class HomeLoadResult<T>(
 internal class HomeLoad<T>(
     initial: T? = null,
     private val cached: suspend () -> T? = { null },
+    private val keepErrorWhileLoading: Boolean = false,
     private val load: suspend (force: Boolean) -> HomeLoadResult<T>,
 ) {
     var state by mutableStateOf(HomeLoadState(initial, loading = true))
@@ -65,7 +66,7 @@ internal class HomeLoad<T>(
         val running = inFlight?.takeIf { it.isActive }
         if (running != null && (!force || inFlightForced)) return running
         running?.cancel()
-        state = state.copy(loading = true, error = null)
+        state = state.copy(loading = true, error = state.error.takeIf { keepErrorWhileLoading })
         inFlightForced = force
 
         val job = scope.launch(start = CoroutineStart.LAZY) {
@@ -198,12 +199,15 @@ private fun TimetableRepository.homeLoad() = HomeLoad(cached = { cached() }) { f
     }
 }
 
-private fun TaskRepository.homeLoad() = HomeLoad(initial = Unit) {
+private fun TaskRepository.homeLoad() = HomeLoad(initial = Unit, keepErrorWhileLoading = true) {
     if (syncSnapshot() != null) HomeLoadResult(Unit)
     else HomeLoadResult(Unit, error = syncStatus.value)
 }
 
-private fun HomeworkRepository.homeLoad() = HomeLoad(cached = { cachedSnapshot() }) { force ->
+private fun HomeworkRepository.homeLoad() = HomeLoad(
+    cached = { cachedSnapshot() },
+    keepErrorWhileLoading = true,
+) { force ->
     when (val result = load(force)) {
         is HomeworkLoadResult.Success -> HomeLoadResult(result.rows, result.refreshError)
         is HomeworkLoadResult.Failure -> HomeLoadResult(error = result.message)
