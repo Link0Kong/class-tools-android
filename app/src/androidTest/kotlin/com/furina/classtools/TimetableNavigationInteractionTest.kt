@@ -6,7 +6,6 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.InputDevice
 import android.view.MotionEvent
-import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -156,12 +155,9 @@ class TimetableNavigationInteractionTest {
         ActivityScenario.launch<MainActivity>(desktop(destination = "home", cold = true)).use {
             expectWorkbenchAfterLoading()
             val source = scrollTo(By.text(courseA.name))
-            device.waitForIdle(3_000)
-            val sourceY = source.visibleCenter.y
-            val label = instrumentation.uiAutomation.rootInActiveWindow.findAccessibilityNodeInfosByText(courseA.name)
-                .first { it.text?.toString() == courseA.name }
-            val courseAction = generateSequence(label) { it.parent }.first { it.isClickable }
-            assertTrue(courseAction.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            val sourceCenter = source.visibleCenter
+            val sourceY = sourceCenter.y
+            assertTrue(device.click(sourceCenter.x, sourceY))
             expectDetails(courseA)
             node(mapFromDetail).click()
             val mapTitle = By.text("校内地图")
@@ -315,15 +311,20 @@ class TimetableNavigationInteractionTest {
     }
 
     private fun scrollTo(selector: BySelector): androidx.test.uiautomator.UiObject2 {
-        // Accessibility can report a course while the floating dock still covers its tap target.
-        val aboveDock = device.displayHeight - (106 * app.resources.displayMetrics.density).toInt()
+        // Place the tap target in the middle of the scroll viewport, clear of both overlays.
+        val middle = device.displayHeight / 2
+        val step = device.displayHeight / 6
+        val x = device.displayWidth * 2 / 3
         repeat(5) {
-            device.wait(Until.findObject(selector), 1_000)?.let {
-                if (it.visibleCenter.y < aboveDock) return it
-            }
-            val x = device.displayWidth * 2 / 3
-            device.swipe(x, device.displayHeight * 3 / 4, x, device.displayHeight / 3, 25)
+            val target = device.wait(Until.findObject(selector), 1_000)
+            val y = target?.visibleCenter?.y ?: device.displayHeight
+            if (target != null && y in middle - step..middle + step) return target
+            val distance = if (y > middle) step else -step
+            device.swipe(x, middle + distance, x, middle, 60)
+            device.waitForIdle(3_000)
         }
-        return node(selector).also { assertTrue("Course must be above the floating dock", it.visibleCenter.y < aboveDock) }
+        return node(selector).also {
+            assertTrue("Course must be visible between the overlays", it.visibleCenter.y in step..device.displayHeight - step)
+        }
     }
 }
