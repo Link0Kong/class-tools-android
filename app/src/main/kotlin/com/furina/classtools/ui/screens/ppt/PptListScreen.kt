@@ -657,7 +657,7 @@ private fun PptDeckCard(
                         Text(
                             text = "上传中 $percent%",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                         TextButton(
                             onClick = { onCancelUpload?.invoke() },

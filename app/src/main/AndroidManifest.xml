@@ -81,6 +81,30 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 统一 HTTPS 内容链接（docs/app-links/CONTRACT.md）：只接管 /l/ 下客户端真正能处理的业务路径。
+                 验证依赖 https://tool.furina.fun/.well-known/assetlinks.json（package_name + 发行证书 SHA-256）。
+                 未接管的 /l/file/ 留在浏览器由网页承接；同域主页、API、下载、法律页与关联文件都不匹配。 -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="tool.furina.fun"
+                    android:pathPrefix="/l/draw/"
+                    android:scheme="https" />
+                <data
+                    android:host="tool.furina.fun"
+                    android:pathPrefix="/l/notice/"
+                    android:scheme="https" />
+                <data
+                    android:host="tool.furina.fun"
+                    android:path="/l/task-share"
+                    android:scheme="https" />
+                <data
+                    android:host="tool.furina.fun"
+                    android:pathPrefix="/l/course/"
+                    android:scheme="https" />
+            </intent-filter>
             <!-- vivo 推送点击跳转（服务端 skipType=4 + intent URI）：
                  intent://com.furina.classtools/notice#Intent;scheme=classtools;S.noticeId=<gid>;end -->
             <intent-filter>

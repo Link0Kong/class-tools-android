@@ -45,6 +45,12 @@ fun CtNavigationRail(
         destinations.forEachIndexed { index, destination ->
             NavigationRailItem(
                 selected = index == selectedIndex,
+                colors = if (com.furina.classtools.ui.theme.LocalCtDarkTheme.current) {
+                    androidx.compose.material3.NavigationRailItemDefaults.colors(
+                        indicatorColor = MaterialTheme.colorScheme.primary,
+                        selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else androidx.compose.material3.NavigationRailItemDefaults.colors(),
                 onClick = { onSelect(index) },
                 icon = {
                     Icon(

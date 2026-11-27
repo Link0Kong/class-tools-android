@@ -31,20 +31,17 @@ cd <项目根>
 .\gradlew.bat :app:testDebugUnitTest --console=plain
 ```
 
-### 2.1 每次任务完成后合并发布测试版
+### 2.1 合并更新与准备发布
 
-每次任务完成时，检查上一个线上测试版以来的安卓改动。有待发布改动时，将本次任务及之前尚未发布的安卓修复合成一个测试版。统一递增版本号、运行单测、核验签名包并推送源码，然后将一份合并的更新说明随新版推送到更新渠道。
+将待交付改动整理到同一份版本记录，按本次正式版与上一正式版对比。版本名、内部安装号及发布动作按用户确认的版本计划执行。内部安装号须高于已分发的安装包，保证覆盖升级。
 
-```powershell
-.\gradlew.bat :app:assembleRelease --project-prop "ct.updateChannel=beta" --project-prop "ct.updateNotes=本次合并的更新摘要"
-```
+普通构建用于生成待上传 APK，运行单测并验证签名与包内版本。
 
-普通 `assembleRelease` 用于本地构建。上述命令显式指定更新渠道，构建成功后将 APK 和 `latest.json` 自动上传到 ECS 与 OSS，并回读校验 SHA-256。已有脚本仍可用 `--project-prop "ct.skipUpdateChannel=true"` 跳过上传。
+~~~powershell
+.\gradlew.bat :app:testDebugUnitTest :app:assembleRelease --project-prop ct.skipUpdateChannel=true
+~~~
 
-- 上传脚本：`web/deploy/android_release.py`（凭据仍只在 `web/deploy/creds.env` / 环境变量，不入库）
-- 发布后核对：`https://tool.furina.fun/android/latest.json`、`.../android/classtools-<version>.apk`、OSS `android/latest.json`
-  （release 不再依赖明文 IP；`latest.json` 里的 `apkUrl` 必须是 https 正式域名）
-- **同 versionCode 不会静默覆盖渠道**：若渠道已有同 vc 但 sha 不同，脚本会提示 `bump versionCode` 并跳过；发新版必须先提升 versionCode（`--force` 仅用于人工补救）。
+用户确认发布到应用内更新渠道后，方可通过 ct.updateChannel 和 ct.updateNotes 指定渠道和已整理的说明。上传脚本为 web/deploy/android_release.py。发布后用正式域名回读 latest.json，并校验 APK 的 SHA-256。
 
 ## 3. Release 验证（已实测）
 

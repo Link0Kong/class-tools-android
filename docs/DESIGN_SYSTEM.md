@@ -1,7 +1,7 @@
 # 班级工具站 · Android 统一设计规范（DESIGN_SYSTEM）
 
 > 版本：v1.0（2026-11-19「系统性视觉/动效重构」）　适用：`android-class-tools` 全部页面
-> 唯一令牌源：`app/src/main/kotlin/com/furina/classtools/ui/theme/CtDesign.kt`
+> 品牌与基础令牌在 `ui/theme/CtDesign.kt`。深色最终值由 `ui/theme/DarkComfort.kt` 解析。[九套预设、材质与验收记录](../design/DARK_COMFORT_2026-11-26.md)
 > 组件库：`ui/components/CtLayout.kt`（卡片/区块标题/列表行/按钮/输入/空态/骨架/弹层容器）
 > 参考资料：Material 3 Expressive（motion physics / 形状变形 / 扩展色板 / 可变字体轴）、
 > Android 官方 design/ui 指南、HarmonyOS「One Harmonious Universe」（以人为本、轻拟物、卡片式、引力动效、多设备一致）、
@@ -18,8 +18,7 @@
    区块标题 = `CtSectionTitle`（13 Medium 次级色）；列表行 = `CtListRow`；按钮 = `CtButton`（Filled 56 胶囊 / Tonal / Text）；
    输入 = `CtTextField`（14 圆角 tonal 底无边框）；空态 = `CtEmptyState`（48dp 线性图标 + 标题 + 说明 + 主操作）；
    加载 = `HarmonySkeleton*` / `CtSkeletonPage`（三档灰 + 900ms 呼吸）。
-3. **禁止风格化残留**：玻璃（半透明 + 折射高光 + 内阴影）、渐变（hero 渐变、按钮渐变）、噪点、暗角全部移除；
-   背景就是纯色 `CtPalette.Bg`（深色 `DarkBg`），层次只靠「卡片 + 描边 + 极浅投影 + 间距」。
+3. **深色材质默认实色**。仅开启玻璃时，共享卡片才按文字对比度调整底色不透明度和背景模糊。弹窗、输入和吸顶栏使用实色。卡片内容保持独立绘制。
 4. **动效统一**：时长 120 / 200 / 300 / 400ms；弹簧由 `CtMotion` 提供；系统「移除动画」时全部降级为瞬时
    （`rememberReduceMotion()` / `rememberStaggeredEntry` / `ctPressFeedback` 已内置）。
 5. **深色完整且 AA**：所有正文/次级/说明文字对所在底色 ≥4.5:1（§2.4 有逐对实测值，`CtDesignTokensTest` 锁定）。
@@ -52,27 +51,27 @@ ui/theme/
 
 ### 2.1 颜色 · 明/暗语义槽位（`CtColor`）
 
-| 槽位 | 浅色 | 深色 | 用途 |
+| 槽位 | 浅色 | 深色（默认预设、关闭动态色） | 用途 |
 |---|---|---|---|
-| background | `#F2F3F4` | `#121517` | 页面底（唯一背景） |
-| surface | `#FFFFFF` | `#1A1E21` | 卡片/弹层底 |
-| containerLow | `#FFFFFF` | `#1A1E21` | 卡片（surfaceContainerLow） |
-| container | `#F4F6F6` | `#1E2326` | 输入框、编号/胶囊底 |
-| containerHigh | `#EDF0F1` | `#232A2E` | 选中项底、内嵌块 |
-| containerHighest | `#E6EAEC` | `#2B3338` | 最高一层（对话框/菜单） |
-| bar | `#FBFCFC` | `#171C1F` | 浮岛底栏 |
-| textPrimary | `#1C2629` | `#E7ECEB` | 正文/标题 |
-| textSecondary | `#4F5A5D` | `#A8B4B7` | 次级文字、区块标题 |
-| textTertiary | `#61696C` | `#96A3A6` | 说明文字、图标 |
-| divider | `#E2E7E8` | `#2C353A` | 1dp 描边、分割线 |
-| outline | `#98A4A8` | `#6E7B7F` | 控件边框（focus 前的弱边） |
-| primary / onPrimary | `#24695C` / `#FFFFFF` | `#90D3C4` / `#00382F` | 主操作、选中态（M3 品牌雾青） |
-| error / onError | `#9A433E` / `#FFFFFF` | `#FFB4AB` / `#690005` | 危险操作 |
-| heroPaper | `#F1F6F2` | `#1C2427` | 工作台 hero / 身份卡（鸿蒙纸面） |
-| heroBorder / heroDivider | `#DCE7E2` / `#D8E4DE` | `#334044` / `#364448` | hero 发丝边/分割线 |
-| heroTitle / heroSub | `#303A35` / `#5C6860` | `#E7ECEB` / `#A8B4B7` | hero 主/副文字 |
-| heroAccent / heroLink | `#3F6F66` / `#4E6D8C` | `#8FD0C3` / `#A9C4DA` | 「今日」胶囊文字 / 文字链接 |
-| stateLayer | `#1C2629`（8%） | `#E7ECEB`（8%） | M3 按压层 |
+| background | `#F2F3F4` | `#181D20` | 页面底（唯一背景） |
+| surface | `#FFFFFF` | `#202629` | 卡片/弹层底 |
+| containerLow | `#FFFFFF` | `#232C2E` | 卡片（surfaceContainerLow） |
+| container | `#F4F6F6` | `#283133` | 输入框、编号/胶囊底 |
+| containerHigh | `#EDF0F1` | `#2D383A` | 选中项底、内嵌块 |
+| containerHighest | `#E6EAEC` | `#354043` | 最高一层（对话框/菜单） |
+| bar | `#FBFCFC` | `#1D2427` | 浮岛底栏 |
+| textPrimary | `#1C2629` | `#DCE5E3` | 正文/标题 |
+| textSecondary | `#4F5A5D` | `#CEDAD7` | 次级文字、区块标题 |
+| textTertiary | `#61696C` | `#C5D2CF` | 说明文字、图标 |
+| divider | `#E2E7E8` | `#3B4A4B` | 1dp 描边、分割线 |
+| outline | `#98A4A8` | `#9CAEAC` | 控件边框（focus 前的弱边） |
+| primary / onPrimary | `#24695C` / `#FFFFFF` | `#B0D8CE` / `#162E29` | 主操作、选中态（M3 品牌雾青） |
+| error / onError | `#9A433E` / `#FFFFFF` | `#FFC3BB` / `#690005` | 危险操作 |
+| heroPaper | `#F1F6F2` | `#2D383A` | 工作台 hero / 身份卡（鸿蒙纸面） |
+| heroBorder / heroDivider | `#DCE7E2` / `#D8E4DE` | `#3B4A4B` / `#3B4A4B` | hero 发丝边/分割线 |
+| heroTitle / heroSub | `#303A35` / `#5C6860` | `#DCE5E3` / `#CEDAD7` | hero 主/副文字 |
+| heroAccent / heroLink | `#3F6F66` / `#4E6D8C` | `#B0D8CE` / `#B5D5DF` | 「今日」胶囊文字 / 文字链接 |
+| stateLayer | `#1C2629`（8%） | `#DCE5E3`（8%） | M3 按压层 |
 
 ### 2.2 扩展色板 · 强调色（`CtAccents`，tintRef 图形档 / textRef 文字档）
 
@@ -280,8 +279,8 @@ M3 Typography（`MaterialTheme.typography`）已按同一张表重建（displayL
 
 ## 6. 深色模式
 
-- 完整色板见 §2.1；深色不是「浅色反相」，而是中性深板岩（`#121517 / #1A1E21 / #232A2E`）+ 抬升的容器层级；
-- 品牌绿只做小面积强调（主按钮、选中胶囊、图标 tint），不铺大面积；
+- 默认深色的背景、低层卡片与最高层容器依次为 `#181D20`、`#232C2E`、`#354043`。九套预设与系统动态色均经过交互状态对比度校正。
+- 预设强调色用于主按钮、选中胶囊与图标。
 - 深色下阴影 = 0（深底投影不可见），层次靠 1dp 描边 + 容器明度差；
 - 系统栏图标随主题切换（`ClassToolsTheme` 内设置 `isAppearanceLightStatusBars`）；
 - 外观三档（跟随系统 / 浅色 / 深色）由「我的 → 外观」控制（`AppearanceMode`）。
@@ -400,6 +399,8 @@ pwsh -File docs/design/grep_hardcode.ps1 -Verbose   # 逐条列出
 
 ## 11. 自定义背景（Custom Background，2026-11-19）
 
+> 以下记录保留当时的预设与存储设计。当前界面使用随主题取色的预设缩略图和 0–40 dp 照片模糊滑块。[当前深色规范](../design/DARK_COMFORT_2026-11-26.md)
+
 参考：鸿蒙「个性化 · 背景」与官方沉浸光感（背景可模糊、前景绝不模糊）。
 入口：**我的 → 背景**（位于「外观」之上，紧邻身份/同步信息，一屏可达）。
 
@@ -475,6 +476,8 @@ ExpressiveBackground
 ---
 
 ## 12. 磨砂玻璃卡片（Frosted Glass Card，2026-11-19）
+
+> 本节记录早期绘制器的实现。当前深色卡片的材质、亮度保护和降级采用 2026-11-26 验收表。[当前深色规范](../design/DARK_COMFORT_2026-11-26.md)
 
 **所有卡片一个材质来源**：`ui/components/background/CtGlassSurface.kt`（`CtGlassTokens` 为唯一映射表）。
 
@@ -614,6 +617,8 @@ headline 行高 27→28、title 行高 32→36。
 ---
 
 ## 14. 2026-11-19 深色工具栏优化（Dark Toolbars）
+
+> 本节保留 2026-11-19 的版本记录。当前深色吸顶栏使用不透明栏色。[当前深色规范](../design/DARK_COMFORT_2026-11-26.md)
 
 用户反馈「深色下工具栏灰糊」。根因：浮岛 dock 与顶栏在深色里都用 `surfaceContainerLow`/`DarkContainer`，
 与页面底 `DarkBg` 只差 3–4 个色阶，材质又半透明 → 轮廓消失。

@@ -595,9 +595,9 @@ private fun HomeworkCard(
                     val shortDue = HomeworkDueCalculator.shortDueText(item.row)
                     if (shortDue.isNotBlank()) {
                         Text(
-                            text = shortDue,
+                            text = "截止 $shortDue",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                     if (item.row.author.isNotBlank()) {

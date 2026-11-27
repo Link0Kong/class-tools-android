@@ -24,7 +24,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import com.furina.classtools.ui.components.ctFilledFieldColors
+import com.furina.classtools.ui.components.background.actionFill
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,13 +65,14 @@ fun CtToolCard(
         horizontal = HarmonyTokens.CardPadding,
         vertical = HarmonyTokens.CardPadding,
     ),
+    stateLayer: Color = Color.Transparent,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     com.furina.classtools.ui.components.background.CtGlassSurface(
         modifier = modifier, shape = RoundedCornerShape(HarmonyTokens.RadiusCard),
     ) {
-        Column(modifier = Modifier.padding(contentPadding)) {
+        Column(modifier = Modifier.background(stateLayer).padding(contentPadding)) {
             if (title != null) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -148,7 +150,7 @@ fun CtToolPrimaryButton(
         enabled = enabled,
         shape = CtShapeTokens.pill,
         colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
+            containerColor = actionFill(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary, true),
             contentColor = MaterialTheme.colorScheme.onPrimary,
         ),
     ) {
@@ -175,7 +177,7 @@ fun CtToolSegmented(
         selectedKey = selectedIndex.toString(),
         onSelect = { key -> key.toIntOrNull()?.let(onSelect) },
         modifier = modifier.fillMaxWidth(),
-        showCheckIcon = false,
+        showCheckIcon = true,
         enabledOptions = enabledOptions,
     )
 }
@@ -258,6 +260,7 @@ fun CtToolField(
 ) {
     // M3 filled text field：4dp 顶圆角、surfaceContainerHighest、底部指示线；标签由 M3 浮动。
     androidx.compose.material3.TextField(
+        colors = ctFilledFieldColors(),
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.widthIn(min = 0.dp).fillMaxWidth(),

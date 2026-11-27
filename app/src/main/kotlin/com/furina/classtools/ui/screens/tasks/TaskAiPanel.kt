@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.screens.tasks
 
+import com.furina.classtools.ui.components.ctOutlinedFieldColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -80,7 +81,7 @@ internal fun TaskAiPanel(
                     },
                         modifier = Modifier.fillMaxWidth(), label = { Text("粘贴或输入任务文字") },
                         minLines = 3, maxLines = 6, readOnly = busy,
-                        supportingText = { Text("${source.length} / $TASK_AI_INPUT_LIMIT") })
+                        supportingText = { Text("${source.length} / $TASK_AI_INPUT_LIMIT") }, colors = ctOutlinedFieldColors())
                     if (busy) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text("正在整理…", Modifier.semantics { liveRegion = LiveRegionMode.Polite })

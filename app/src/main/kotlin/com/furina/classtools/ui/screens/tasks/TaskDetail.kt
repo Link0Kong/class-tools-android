@@ -1,6 +1,7 @@
 package com.furina.classtools.ui.screens.tasks
 
 import com.furina.classtools.ui.components.CtToastBus
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -136,7 +137,7 @@ internal fun TaskDetail(task: JsonObject, repository: TaskRepository, groups: Li
             Text(task.text("title").ifBlank { "未命名任务" }, style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() })
         }
-        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        CtGlassSurface(shape = MaterialTheme.shapes.large) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 DetailFact("截止时间", task.text("due").takeIf { it.isNotBlank() }?.let {
                     it + " " + task.text("dueTime").ifBlank { "全天" }

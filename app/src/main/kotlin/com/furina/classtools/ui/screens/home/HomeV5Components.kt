@@ -98,7 +98,7 @@ internal fun HomeCourseHighlight(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = scheme.primary)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = scheme.onSurface)
         Text(course.name, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
         Text(details, style = CtText.caption, color = scheme.onSurfaceVariant)
     }

@@ -35,9 +35,9 @@ import kotlin.math.roundToInt
 /** 网页端的奶油、雾青与深绿灰映射为 Material 3 色阶。文字和操作色采用可读的深浅档。 */
 object CtPalette {
     // ---- 品牌三色（与网页 / 小程序 / 鸿蒙共用；图形/图标/大面积色块使用） ----
-    val MistTeal = Color(0xFF5E8F87)
-    val SlateBlue = Color(0xFF7D9EBB)
-    val WarmSand = Color(0xFFC6A475)
+    val MistTeal = Color(0xFF4E9082)
+    val SlateBlue = Color(0xFF6E8CA8)
+    val WarmSand = Color(0xFFB98F63)
 
     // ---- 浅色中性（M3 tonal 扩展：surface container 5 级） ----
     val Bg = Color(0xFFF4F0E6)
@@ -60,18 +60,18 @@ object CtPalette {
     val Danger = Color(0xFFB4553F)
 
     // ---- 深色中性（中性深板岩；hero/pill 同族更深一档） ----
-    val DarkBg = Color(0xFF111614)
-    val DarkSurface = Color(0xFF1A211E)
-    val DarkContainerLow = Color(0xFF1A211E)
-    val DarkContainer = Color(0xFF222A25)
-    val DarkContainerHigh = Color(0xFF29332D)
-    val DarkContainerHighest = Color(0xFF323D35)
-    val DarkBar = Color(0xFF1A201D)
-    val DarkTextPrimary = Color(0xFFE9F0EC)
-    val DarkTextSecondary = Color(0xFFB4C1BB)
-    val DarkTextTertiary = Color(0xFFA2AFA7)
-    val DarkDivider = Color(0xFF35413A)
-    val DarkOutline = Color(0xFF839289)
+    val DarkBg = Color(0xFF181D20)
+    val DarkSurface = Color(0xFF202629)
+    val DarkContainerLow = Color(0xFF232C2E)
+    val DarkContainer = Color(0xFF283133)
+    val DarkContainerHigh = Color(0xFF2D383A)
+    val DarkContainerHighest = Color(0xFF354043)
+    val DarkBar = Color(0xFF1D2427)
+    val DarkTextPrimary = Color(0xFFDCE5E3)
+    val DarkTextSecondary = Color(0xFFBACAC7)
+    val DarkTextTertiary = Color(0xFFADBFBC)
+    val DarkDivider = Color(0xFF3B4A4B)
+    val DarkOutline = Color(0xFF849A98)
 
     // ---- 浅色「莫奈纸面」hero（鸿蒙 HomeScreen.heroCard 实测值） ----
     val HeroPaper = Color(0xFFF1F6F2)
@@ -85,9 +85,9 @@ object CtPalette {
 
     // ---- 深色 hero（中性 tonal，不含大面积品牌绿） ----
     val HeroDarkPaper = Color(0xFF1C2A25)
-    val HeroDarkBorder = Color(0xFF35413A)
+    val HeroDarkBorder = Color(0xFF3B4A4B)
     val HeroDarkPill = Color(0xFF222F28)
-    val HeroDarkDivider = Color(0xFF35413A)
+    val HeroDarkDivider = Color(0xFF3B4A4B)
     val HeroDarkAccent = Color(0xFFA2CCC2)
     val HeroDarkLink = Color(0xFFB1CCDF)
 
@@ -695,6 +695,22 @@ val CtColorDark: CtColor = CtColor(
     heroLink = CtPalette.HeroDarkLink,
     dark = true,
 )
+
+// Neutral strategies are display inputs. Only CtBackgroundPreset.id is stored.
+internal val CtDarkSand by lazy { CtColorDark.copy(
+    background = Color(0xFF1E1C1A), surface = Color(0xFF272420), containerLow = Color(0xFF2B2824),
+    container = Color(0xFF302D28), containerHigh = Color(0xFF36322D), containerHighest = Color(0xFF403B35),
+    bar = Color(0xFF24211E), textPrimary = Color(0xFFE5DED4), textSecondary = Color(0xFFCDC2B4),
+    textTertiary = Color(0xFFC0B3A3), divider = Color(0xFF49423A), outline = Color(0xFF9B8E7E),
+    primary = Color(0xFFD5BA93), onPrimary = Color(0xFF382C1E),
+) }
+internal val CtDarkBlue by lazy { CtColorDark.copy(
+    background = Color(0xFF171D26), surface = Color(0xFF202936), containerLow = Color(0xFF242E3B),
+    container = Color(0xFF293544), containerHigh = Color(0xFF303D4D), containerHighest = Color(0xFF364657),
+    bar = Color(0xFF1C2430), textPrimary = Color(0xFFE0E6EF), textSecondary = Color(0xFFC4D1E0),
+    textTertiary = Color(0xFFB8C8DB), divider = Color(0xFF405064), outline = Color(0xFF8C9EB4),
+    primary = Color(0xFFA9C8E8), onPrimary = Color(0xFF20344A),
+) }
 
 /** 纯函数：按明暗取语义色（预览/单测直接调用）。 */
 fun ctColorOf(dark: Boolean): CtColor = if (dark) CtColorDark else CtColorLight

@@ -32,7 +32,7 @@ fun ClassToolsThemeHost(
     content: @Composable () -> Unit,
 ) {
     val backgroundStore = container.backgroundStore
-    val selection by backgroundStore.selection.collectAsStateWithLifecycle()
+    val background by backgroundStore.selection.collectAsStateWithLifecycle()
     LaunchedEffect(container) {
         withFrameNanos { }
         container.refreshRemoteConfig()
@@ -57,8 +57,8 @@ fun ClassToolsThemeHost(
 
     ClassToolsTheme(
         darkTheme = darkTheme,
-        preset = selection.preset,
         dynamicColor = dynamicColor,
+        preset = background.preset,
         immersiveLight = immersiveLight,
     ) {
         // 「我的 → 外观」直接读写本机设置；背景 Store 同层提供（全局背景层订阅）。

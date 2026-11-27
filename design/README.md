@@ -2,6 +2,7 @@
 
 | 文件 | 内容 | 面向 |
 |---|---|---|
+| [深色舒适度与玻璃验收](DARK_COMFORT_2026-11-26.md) | 九套预设的最终令牌、合成对比度、四档材质及手机和平板前后图 | 设计/开发/验收 |
 | [`M3_EMULATOR_AUDIT_2026-11-22.md`](M3_EMULATOR_AUDIT_2026-11-22.md) | 模拟器逐页 M3 审计：共享控件/页面/200% 字号/平板 Rail | 设计/验收 |
 | [`PROFILE_SHARED_TRANSITION_2026-11-22.md`](PROFILE_SHARED_TRANSITION_2026-11-22.md) | 我的选项 → 详情页一镜到底：SharedViewKit 能力边界与 Compose 等价实现 | 设计/评审 |
 | [`M3_STANDARD_2026-11-21.md`](M3_STANDARD_2026-11-21.md) | beta28：M3 标准 app bar、课表一屏周视图、通知缓存修复、沉浸光感移除、远程配置热更 | 设计/评审 |

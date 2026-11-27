@@ -1,6 +1,9 @@
 package com.furina.classtools.ui.theme
 
+import com.furina.classtools.data.background.CtBackgroundPalette
+import androidx.compose.ui.graphics.lerp
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
@@ -11,9 +14,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.ui.graphics.lerp
-import com.furina.classtools.data.background.CtBackgroundPalette
-import com.furina.classtools.data.background.CtBackgroundPreset
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -22,7 +22,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
-import com.furina.classtools.ui.theme.LocalCtLight
+import com.furina.classtools.data.background.BackgroundStore
+import com.furina.classtools.data.background.CtBackgroundPreset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -181,9 +182,15 @@ val CtThemeColorSchemes: Pair<ColorScheme, ColorScheme> = CtLightColorScheme to 
 
 /** The same surface and content roles are used by Compose and the desktop widgets. */
 internal fun appColorScheme(context: Context, dark: Boolean, monet: Boolean): ColorScheme =
-    if (monet && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    resolvedAppColors(context, dark, monet, BackgroundStore.readSelection(context).preset).scheme
+
+private fun resolvedAppColors(context: Context, dark: Boolean, monet: Boolean, preset: CtBackgroundPreset): CtResolvedColors {
+    val wallpaper = if (monet && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else if (dark) CtDarkColorScheme else CtLightColorScheme
+    } else null
+    val palette = if (dark && wallpaper != null) darkBrandCards(wallpaper, preset) else wallpaper
+    return resolveThemeColors(dark, preset, palette)
+}
 
 /** Keep brand card surfaces paired with their content across presets and system wallpaper palettes. */
 internal fun darkBrandCards(platform: ColorScheme, preset: CtBackgroundPreset): ColorScheme {
@@ -199,7 +206,7 @@ internal fun darkBrandCards(platform: ColorScheme, preset: CtBackgroundPreset): 
     )
 }
 
-private fun ColorScheme.semanticColors(dark: Boolean) = ctColorOf(dark).copy(
+internal fun ColorScheme.semanticColors(dark: Boolean) = ctColorOf(dark).copy(
     background = surface, surface = surface, containerLow = surfaceContainerLow,
     container = surfaceContainer, containerHigh = surfaceContainerHigh, containerHighest = surfaceContainerHighest,
     bar = surfaceContainer, textPrimary = onSurface, textSecondary = onSurfaceVariant,
@@ -226,7 +233,7 @@ private fun ColorScheme.toolAccents(dark: Boolean): CtAccentColors {
  * @param darkTheme 是否深色（默认跟随系统；调用方按「外观模式」用 [AppearanceMode.resolveDark] 解析）。
  * @param dynamicColor 是否跟随系统壁纸取色（Material You）。未开启时使用网页品牌配色。
  * @param spacing 语义间距（默认 [CtSpacing]；大屏可由调用方覆盖）。
- * @param immersiveLight 沉浸光感设置（强 / 均衡 / 弱 / 关闭；默认 [CtLightSetting.Default]）。
+ * @param immersiveLight 沉浸光感设置（强 / 均衡 / 弱 / 关闭；默认 [CtLightSetting.Off]）。
  * @param lightCapabilityOverride 光感能力档覆盖（预览/测试注入；null = 按 Build.VERSION.SDK_INT + 硬件加速推导）。
  */
 @Composable
@@ -234,7 +241,7 @@ fun ClassToolsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     spacing: CtSpacing = CtSpacing(),
-    immersiveLight: CtLightSetting = CtLightSetting.Default,
+    immersiveLight: CtLightSetting = CtLightSetting.Off,
     lightCapabilityOverride: CtLightCapability? = null,
     preset: CtBackgroundPreset = CtBackgroundPreset.DEFAULT,
     content: @Composable () -> Unit,
@@ -242,12 +249,12 @@ fun ClassToolsTheme(
     val context = LocalContext.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val monet = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val colorScheme = remember(context, configuration, darkTheme, monet, preset) {
-        val platform = appColorScheme(context, darkTheme, monet)
-        if (darkTheme) darkBrandCards(platform, preset) else platform
+    val (colorScheme, semantic) = remember(context, configuration, darkTheme, monet, preset) {
+        resolvedAppColors(context, darkTheme, monet, preset)
     }
-    val semantic = remember(colorScheme, darkTheme, monet) { if (monet || darkTheme) colorScheme.semanticColors(darkTheme) else ctColorOf(darkTheme) }
-    val accents = remember(colorScheme, darkTheme, monet) { if (monet) colorScheme.toolAccents(darkTheme) else ctAccentsOf(darkTheme) }
+    val accents = remember(colorScheme, darkTheme, monet) {
+        if (monet) colorScheme.toolAccents(darkTheme) else ctAccentsOf(darkTheme)
+    }
 
     // 系统栏图标随主题切换：深色模式状态栏/导航栏图标用浅色，避免「黑字压暗底」不可读。
     LaunchedEffect(darkTheme) {
@@ -263,7 +270,8 @@ fun ClassToolsTheme(
     val density = LocalDensity.current
     val statusBarHeight = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
     val navigationBarHeight = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
-    val hardwareAccelerated = remember(view) { runCatching { view.isHardwareAccelerated }.getOrDefault(true) }
+    val hardwareAccelerated = view.isHardwareAccelerated &&
+        !remember(context) { context.getSystemService(ActivityManager::class.java)?.isLowRamDevice == true }
     val sdkInt = remember { Build.VERSION.SDK_INT }
     val capability = lightCapabilityOverride ?: ctLightCapabilityOf(sdkInt, hardwareAccelerated, immersiveLight)
     val lightContext = remember(immersiveLight, capability, statusBarHeight, navigationBarHeight) {
@@ -305,7 +313,7 @@ fun ClassToolsTheme(
     appearance: AppearanceMode,
     dynamicColor: Boolean = false,
     spacing: CtSpacing = CtSpacing(),
-    immersiveLight: CtLightSetting = CtLightSetting.Default,
+    immersiveLight: CtLightSetting = CtLightSetting.Off,
     content: @Composable () -> Unit,
 ) {
     ClassToolsTheme(

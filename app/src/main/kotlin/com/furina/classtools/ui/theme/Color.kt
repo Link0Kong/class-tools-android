@@ -89,8 +89,8 @@ val LightOnTertiaryFixedVariant = Color(0xFF51412B)
 // ---------------------------------------------------------------------------
 // 深色 · 48 角色（surface #121517 / container #1A1E21 / high #232A2E）
 // ---------------------------------------------------------------------------
-val DarkPrimary = Color(0xFFA4CEC4)
-val DarkOnPrimary = Color(0xFF00382F)
+val DarkPrimary = Color(0xFF9BCDC1)
+val DarkOnPrimary = Color(0xFF19352F)
 val DarkPrimaryContainer = Color(0xFF304D44)
 val DarkOnPrimaryContainer = Color(0xFFDCEDE5)
 val DarkInversePrimary = Color(0xFF346259)

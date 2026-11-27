@@ -6,11 +6,15 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
+import com.furina.classtools.data.applink.AppLink
+import com.furina.classtools.data.applink.AppLinkResult
 import com.furina.classtools.data.push.OppPushClick
 import com.furina.classtools.data.reminder.ReminderIntentFactory
 import com.furina.classtools.data.reminder.ReminderRuntime
+import com.furina.classtools.data.timetable.CourseFocus
 import com.furina.classtools.ui.ClassToolsRoot
 import com.furina.classtools.ui.ClassToolsThemeHost
+import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.navigation.IncomingNavigation
 import com.furina.classtools.ui.navigation.Routes
 import com.furina.classtools.ui.navigation.navigationAccount
@@ -86,14 +90,42 @@ class MainActivity : ComponentActivity() {
         val focus = intent.getStringExtra(CARD_FOCUS)?.takeIf(String::isNotBlank)?.let { if (it.length <= 4096) it else "invalid" }
         val owner = (application as ClassToolsApp).container.currentSession
         val account = intent.getStringExtra(CARD_ACCOUNT) ?: owner?.navigationAccount
-        fun request(route: String, courseFocus: String? = null) =
-            IncomingNavigation(route, courseFocus, account, issuedAt = owner?.issuedAt)
+        fun request(route: String, courseFocus: String? = null, taskShare: String? = null) =
+            IncomingNavigation(
+                route = route,
+                courseFocus = courseFocus,
+                account = account,
+                issuedAt = owner?.issuedAt,
+                taskShare = taskShare,
+            )
         when (widgetTool) {
             "home" -> return request(Routes.ROOT)
             "tt" -> return request(Routes.tool("tt"), focus)
             "nt", "hw" -> return request(Routes.tool(widgetTool, focus = focus))
             "new-task" -> return request(Routes.tool("hw", createTask = true))
             "class-homework" -> return request(Routes.tool("hw", pick = true, focus = focus))
+        }
+        /* 统一 HTTPS 内容链接（docs/app-links/CONTRACT.md）：只认 https://tool.furina.fun/l/ 下已接管的路径。
+           其余（主页、API、下载、法律页、/l/file/、classtools:// 旧链接）保持原有处理。 */
+        if (intent.action == Intent.ACTION_VIEW) {
+            when (val link = AppLink.parse(intent.dataString)) {
+                is AppLinkResult.Draw -> return request(Routes.drawVerify(link.recordId))
+                is AppLinkResult.Notice -> return request(Routes.tool("nt", focus = link.noticeId))
+                is AppLinkResult.Course -> {
+                    val courseFocus = CourseFocus(link.date, link.start, link.end, link.name.orEmpty()).encode()
+                    return request(Routes.tool("tt"), courseFocus)
+                }
+                is AppLinkResult.TaskShare -> {
+                    // 快照在片段里；原样交给任务页预览后确认导入，不进入导航参数。
+                    intent.dataString?.takeIf(String::isNotBlank)?.let { return request(Routes.tool("hw"), taskShare = it) }
+                }
+                is AppLinkResult.Invalid -> {
+                    CtToastBus.show("内容链接无法打开：" + invalidLinkText(link.reason))
+                    return null
+                }
+                is AppLinkResult.File -> Unit
+                AppLinkResult.NotLink -> Unit
+            }
         }
         val notice = noticeIdFrom(intent)
         if (notice != null) return request(Routes.tool("nt", focus = notice))
@@ -130,4 +162,14 @@ class MainActivity : ComponentActivity() {
         actionParametersJson = intent?.getStringExtra(OppPushClick.EXTRA_ACTION_PARAMETERS),
         directNoticeId = intent?.getStringExtra(OppPushClick.EXTRA_NOTICE_ID),
     )
+
+    /** 链接被系统交给我们、但参数不合法时的提示（不导航到错误目标）。 */
+    private fun invalidLinkText(reason: String): String = when (reason) {
+        "bad_version" -> "链接版本不受支持，请稍后在网页打开"
+        "bad_id" -> "链接里的内容标识不合法"
+        "bad_date", "bad_range" -> "课程链接参数不正确"
+        "bad_payload" -> "任务分享内容不完整，请在网页打开链接"
+        "too_long" -> "链接过长"
+        else -> "链接格式不正确"
+    }
 }

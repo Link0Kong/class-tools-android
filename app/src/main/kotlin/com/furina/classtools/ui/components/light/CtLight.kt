@@ -170,6 +170,14 @@ fun Modifier.ctLightMaterial(
 ): Modifier {
     val light = LocalCtLight.current
     val c = LocalCtColors.current
+    if (c.dark) {
+        val base = when (scene) {
+            CtLightScene.TOP_BAR, CtLightScene.BOTTOM_DOCK, CtLightScene.TOOL_STRIP -> c.bar
+            CtLightScene.DIALOG, CtLightScene.MENU, CtLightScene.SNACKBAR, CtLightScene.TOAST -> c.containerHigh
+            else -> c.containerLow
+        }
+        return clip(shape).background(base)
+    }
     if (!light.enabled) {
         // 关闭 / 不支持：不透明实色（既有规范），不参与模糊预算。
         return this.clip(shape).background(c.containerLow)

@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.screens.notices
 
+import com.furina.classtools.ui.components.ctOutlinedFieldColors
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
@@ -95,7 +96,7 @@ internal fun SignupCountdownControl(owner: String, item: NoticeUiItem) {
                 if (custom != null) OutlinedTextField(value = seconds, onValueChange = { seconds = it.take(6) },
                     modifier = Modifier.fillMaxWidth(), singleLine = true, isError = offset == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    label = { Text("开抢秒数（0–59.999）") })
+                    label = { Text("开抢秒数（0–59.999）") }, colors = ctOutlinedFieldColors())
                 Text("提前显示实时活动", style = MaterialTheme.typography.labelLarge)
                 for (minutes in listOf(1, 5, 15, 30)) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).selectable(lead == minutes,

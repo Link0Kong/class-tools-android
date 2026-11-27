@@ -26,6 +26,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.furina.classtools.ui.components.background.darkGlassBlur
+import com.furina.classtools.ui.components.background.rememberDarkGlass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -81,12 +83,9 @@ fun CtFloatingDock(
     val scheme = MaterialTheme.colorScheme
     val glass = LocalCtLight.current.enabled
     val darkGlass = glass && LocalCtDarkTheme.current
-    val indicatorColor = if (darkGlass) {
-        lerp(scheme.primary, scheme.surfaceContainerHigh, 0.16f)
-    } else {
-        scheme.secondaryContainer
-    }
-    val selectedIconColor = if (darkGlass) scheme.onPrimary else scheme.onSecondaryContainer
+    val dockMaterial = if (darkGlass) rememberDarkGlass(com.furina.classtools.ui.theme.LocalCtColors.current.bar) else null
+    val indicatorColor = if (LocalCtDarkTheme.current) scheme.primary else scheme.secondaryContainer
+    val selectedIconColor = if (LocalCtDarkTheme.current) scheme.onPrimary else scheme.onSecondaryContainer
 
     // 松手吸附：仅当不在拖动中时用 spring 动画；拖动中直接跟手。
     val dragging = abs(pagerOffsetFraction) > 0.01f
@@ -152,7 +151,9 @@ fun CtFloatingDock(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (glass) {
+                    if (dockMaterial != null) {
+                        Modifier.darkGlassBlur(animatedShape, dockMaterial, hazeState)
+                    } else if (glass) {
                         Modifier.ctGlass(
                             level = CtLightLevel.THIN,
                             shape = animatedShape,
@@ -164,7 +165,7 @@ fun CtFloatingDock(
                         Modifier
                     },
                 ),
-            color = if (glass) Color.Transparent else scheme.surfaceContainer,
+            color = dockMaterial?.fill ?: if (glass) Color.Transparent else scheme.surfaceContainer,
             shape = animatedShape,
         ) {
             androidx.compose.foundation.layout.BoxWithConstraints(

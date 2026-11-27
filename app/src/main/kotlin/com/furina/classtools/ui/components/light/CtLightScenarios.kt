@@ -182,11 +182,17 @@ fun CtLightTopBarSurface(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (p <= 0.001f) Modifier else Modifier.ctLightMaterial(CtLightScene.TOP_BAR, bodySafe = false))
+            .then(when {
+                c.dark -> Modifier.background(c.bar)
+                p <= 0.001f -> Modifier
+                else -> Modifier.ctLightMaterial(CtLightScene.TOP_BAR, bodySafe = false)
+            })
             .graphicsLayer { if (p <= 0.001f) alpha = 1f },
     ) {
         // 底部渐变融合带：材质向下淡出到页面（官方「渐变模糊延展顶部」），随进度渐显。
-        if (p > 0.001f && light.enabled) {
+        if (c.dark && p > 0.001f && light.enabled) {
+            androidx.compose.foundation.layout.Spacer(Modifier.height(light.spec(CtLightScene.TOP_BAR).gradientFade))
+        } else if (p > 0.001f && light.enabled) {
             val spec = light.spec(CtLightScene.TOP_BAR)
             Box(
                 modifier = Modifier
@@ -279,9 +285,10 @@ fun CtLightBackdrop(modifier: Modifier = Modifier, baseColor: Color? = null) {
     // 根级光场（App 根 drawBehind 绘制）已铺满全屏时，这里不能再画不透明底色 ——
     // 否则会把光场整片盖住（2026-11-20 实测：只剩顶部 63dp 一条可见）。
     val rootAurora = com.furina.classtools.ui.components.background.LocalCtRootAuroraActive.current
+    if (c.dark && rootAurora) return
     val base = if (rootAurora) Color.Transparent else (baseColor ?: c.background)
     val strength = when {
-        !light.enabled -> 0f
+        c.dark || !light.enabled -> 0f
         else -> when (light.setting.intensity) {
             CtLightIntensity.STRONG -> 0.20f
             CtLightIntensity.BALANCED -> 0.14f

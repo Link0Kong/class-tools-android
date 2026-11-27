@@ -200,11 +200,12 @@ fun AllToolsScreen(
         }
     }
 
-    // 大字号：卡片高度随 fontScale 增长，避免 200% 下标题/副标题被固定高度裁切。
-    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
-    val itemHeightDp = (HarmonyTokens.TileMinHeight.value * fontScale.coerceIn(1f, 1.8f)).dp
+    // Use the same measured tile height for placement, the drag preview and hit testing.
+    val enlargedText = density.fontScale > 1f
+    val minimumHeightPx = with(density) { HarmonyTokens.TileMinHeight.roundToPx() }
+    var itemHeightPx by remember(minimumHeightPx) { mutableFloatStateOf(minimumHeightPx.toFloat()) }
+    val itemHeightDp = with(density) { itemHeightPx.toDp() }
     val spacingDp = HarmonyTokens.Gap
-    val itemHeightPx = with(density) { itemHeightDp.toPx() }
     val spacingPx = with(density) { spacingDp.toPx() }
     val autoScrollTopEdgePx = with(density) { AllToolsDragGeometry.AUTO_SCROLL_TOP_EDGE_DP.dp.toPx() }
     val autoScrollBottomInsetPx = with(density) { AllToolsDragGeometry.AUTO_SCROLL_BOTTOM_INSET_DP.dp.toPx() }
@@ -477,11 +478,16 @@ fun AllToolsScreen(
                             val width = constraints.maxWidth
                             val cols = columns.coerceAtLeast(1)
                             itemWidthPx = ((width - spacingPx * (cols - 1)) / cols).coerceAtLeast(1f)
+                            val tileWidth = itemWidthPx.roundToInt().coerceAtLeast(1)
+                            val tileHeight = if (enlargedText) {
+                                maxOf(minimumHeightPx, measurables.maxOfOrNull { it.maxIntrinsicHeight(tileWidth) } ?: 0)
+                            } else minimumHeightPx
+                            itemHeightPx = tileHeight.toFloat()
                             val placeables = measurables.map { measurable ->
                                 measurable.measure(
                                     Constraints.fixed(
-                                        width = itemWidthPx.roundToInt().coerceAtLeast(1),
-                                        height = itemHeightPx.roundToInt(),
+                                        width = tileWidth,
+                                        height = tileHeight,
                                     ),
                                 )
                             }

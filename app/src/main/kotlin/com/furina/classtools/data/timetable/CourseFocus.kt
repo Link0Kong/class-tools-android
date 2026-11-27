@@ -17,11 +17,13 @@ data class CourseFocus(val date: String, val start: Int = 0, val end: Int = 0, v
         if (isDateOnly || day.toString() != date) return null
         val termStart = TtCalendar.parseTermStart(snapshot.termStart) ?: return null
         val week = TtCalendar.weekOf(termStart, day) ?: return null
-        return snapshot.c.singleOrNull {
+        val candidates = snapshot.c.filter {
             it.day == TtCalendar.dayIndex(day) && TtCalendar.isActive(it, week) &&
-                it.start == start && it.end == end && it.name.ifBlank { "课程" } == name && it.room.trim() == room &&
-                (teacher.isEmpty() || it.teacher.trim() == teacher)
+                it.start == start && it.end == end && (teacher.isEmpty() || it.teacher.trim() == teacher)
         }
+        // 内容链接 /l/course/<date>/<start>-<end> 不带课程名：按「日期 + 节次」定位，不猜同名课程。
+        if (name.isBlank() && room.isBlank()) return candidates.singleOrNull()
+        return candidates.singleOrNull { it.name.ifBlank { "课程" } == name && it.room.trim() == room }
     }
 
     companion object {
@@ -34,7 +36,7 @@ data class CourseFocus(val date: String, val start: Int = 0, val end: Int = 0, v
                 Json.decodeFromString<CourseFocus>(it).takeIf { focus ->
                     val year = LocalDate.parse(focus.date).year
                     year in 1..9999 && (focus.isDateOnly ||
-                        (focus.start in 1..TtPeriods.COUNT && focus.end in focus.start..TtPeriods.COUNT && focus.name.isNotBlank()))
+                        (focus.start in 1..TtPeriods.COUNT && focus.end in focus.start..TtPeriods.COUNT))
                 }
             }.getOrNull()
         }

@@ -640,7 +640,7 @@ private fun DownloadRowCard(
                 !row.available -> Text(
                     text = "未生成",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
 
                 state is PptRowDownloadState.Downloading -> Column(
@@ -655,7 +655,7 @@ private fun DownloadRowCard(
                     Text(
                         text = "${state.percent}%",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
 
@@ -795,7 +795,7 @@ private fun MediaDownloadRowCard(
                     Text(
                         text = "${state.percent}%",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
 

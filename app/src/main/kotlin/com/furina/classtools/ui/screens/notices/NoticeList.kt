@@ -546,7 +546,7 @@ private fun NoticeCardMeta(item: NoticeUiItem, mode: NoticeCardMode = NoticeCard
                 Text(
                     text = item.recurNextText,
                     style = MaterialTheme.typography.labelSmall,
-                    color = scheme.secondary,
+                    color = scheme.onSurface,
                 )
             }
         }

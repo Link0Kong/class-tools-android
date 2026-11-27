@@ -69,6 +69,14 @@ fun CtSegmentedButtons(
                 onClick = { onSelect(option.key) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
                 enabled = optionEnabled,
+                colors = SegmentedButtonDefaults.colors(
+                    activeContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    activeContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    inactiveContentColor = MaterialTheme.colorScheme.onSurface,
+                    activeBorderColor = MaterialTheme.colorScheme.outline,
+                    inactiveBorderColor = MaterialTheme.colorScheme.outline,
+                ),
                 icon = when {
                     option.icon != null -> {
                         {

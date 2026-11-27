@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.screens.tasks
 
+import com.furina.classtools.ui.components.ctOutlinedFieldColors
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import com.furina.classtools.ui.components.CtToastBus
 import android.app.DatePickerDialog
@@ -118,7 +119,7 @@ internal fun ImportSharedTask(onClose: () -> Unit, onPreview: (SharedTask) -> Un
         OutlinedTextField(link, {
             link = it.take(TaskShareLink.MAX_INPUT + 1)
             invalid = false
-        }, label = { Text("任务分享链接或小程序路径") }, maxLines = 6, isError = invalid)
+        }, label = { Text("任务分享链接或小程序路径") }, maxLines = 6, isError = invalid, colors = ctOutlinedFieldColors())
     }, confirmButton = { TextButton(enabled = link.isNotBlank(), onClick = {
         val shared = TaskShareLink.parse(link)
         if (shared == null) {
@@ -161,7 +162,7 @@ internal fun TaskManagement(repository: TaskRepository, snapshot: JsonObject, vi
     }, confirmButton = { TextButton(onClick = onClose) { Text("完成") } })
     if (form != null) CtLightAlertDialog(onDismissRequest = { form = null }, title = { Text(if (form.isNullOrEmpty()) "新建分组" else "编辑分组") }, text = {
         Column {
-            OutlinedTextField(name, { name = it.take(20) }, label = { Text("分组名称") }, singleLine = true)
+            OutlinedTextField(name, { name = it.take(20) }, label = { Text("分组名称") }, singleLine = true, colors = ctOutlinedFieldColors())
             Choice("颜色", color, groupColors.toList()) { color = it }
             if (!form.isNullOrEmpty()) TextButton(onClick = { remove = true }) { Text("删除分组") }
         }

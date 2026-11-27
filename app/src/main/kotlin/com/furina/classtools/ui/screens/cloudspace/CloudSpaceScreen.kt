@@ -860,7 +860,7 @@ private fun UploadsCard(
                             color = if (task.state == CloudSpaceUploadState.FAILED) {
                                 MaterialTheme.colorScheme.error
                             } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                                MaterialTheme.colorScheme.onSurface
                             },
                             modifier = Modifier.weight(1f),
                         )
@@ -915,15 +915,8 @@ private fun FileRow(
     onConvert: (() -> Unit)?,
     onDelete: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
+    com.furina.classtools.ui.components.background.CtGlassSurface(
         shape = RoundedCornerShape(CtRadius.card),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f),
-        ),
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             Row(
@@ -954,7 +947,7 @@ private fun FileRow(
                     Text(
                         text = "${file.sizeText} · ${file.timeText} · ${file.ttlText(nowMillis)}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
                 if (!stackActions) {

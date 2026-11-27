@@ -2,7 +2,6 @@ package com.furina.classtools.ui.screens.all
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -29,25 +28,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.navigation.rememberToolCardTransition
 import com.furina.classtools.ui.theme.CtMotion
-import com.furina.classtools.ui.components.background.CtGlassSurface
-import com.furina.classtools.ui.theme.CtText
-import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.HarmonyMotion
-import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.HarmonyTokens
-import com.furina.classtools.ui.components.background.CtGlassSurface
-import com.furina.classtools.ui.theme.harmonyTint
-import com.furina.classtools.ui.components.background.CtGlassSurface
-import com.furina.classtools.ui.theme.uiAccentOf
-import com.furina.classtools.ui.components.background.CtGlassSurface
-import com.furina.classtools.ui.theme.rememberHarmonyColors
-import com.furina.classtools.ui.components.background.CtGlassSurface
-import com.furina.classtools.ui.theme.rememberReduceMotion
 
 /**
  * 「全部工具」磁贴（2026-11-19 逐项对齐鸿蒙 `ToolTile.ets`）：
@@ -55,8 +44,8 @@ import com.furina.classtools.ui.theme.rememberReduceMotion
  * - 白色（深色 surface）18dp 圆角 + 轻阴影，最小高度 **96dp**、内边距 **12dp**；
  * - 左侧 **40dp 淡色 tint 图标块（12dp 圆角）**：图标 **24dp**（鸿蒙 fontSize 24）；
  * - 图标块与文字间距 **12dp**（鸿蒙 `margin({left: GAP})`）、主次文本间距 **2dp**（鸿蒙 `TEXT_GAP`）；
- * - 名称 **15sp Medium**、副标题 **12sp 最多 2 行（行高 17）**；
- * - 按压 **scale 0.97 + opacity 0.92**（鸿蒙 `stateStyles.pressed`），快 160ms；
+ * - 名称 **15sp Medium**、副标题在系统放大字号时随内容换行；
+ * - 按压 **scale 0.97 + M3 状态层**（鸿蒙 `stateStyles.pressed`），快 160ms；
  * - 编辑首页模式：右上角 22dp 雾青 ✓ 角标（选中首页快捷时显示）。
  *
  * 转场锚点 / 读屏语义 / 拖动能力保持不变（参数向后兼容，预览无需改调用）。
@@ -72,7 +61,7 @@ internal fun AllToolCard(
     editing: Boolean = false,
     selected: Boolean = false,
 ) {
-    val colors = rememberHarmonyColors()
+    val enlargedText = LocalDensity.current.fontScale > 1f
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pressProgress by animateFloatAsState(
@@ -81,12 +70,10 @@ internal fun AllToolCard(
         label = "allToolPress",
     )
     val scale = 1f - (1f - HarmonyMotion.PressScale) * pressProgress
-    val alpha = 1f - (1f - HarmonyMotion.PressAlpha) * pressProgress
     val (transitionSource, open) = rememberToolCardTransition(tool.id, HarmonyTokens.RadiusCard, onClick)
     val shape = RoundedCornerShape(HarmonyTokens.RadiusCard)
 
     Box {
-        // 磨砂玻璃卡片（统一材质来源 CtGlassSurface）：半透明底 + 顶部高光 + 1px 高光边。
         CtGlassSurface(
             modifier = modifier
                 .fillMaxWidth()
@@ -95,10 +82,10 @@ internal fun AllToolCard(
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
-                    this.alpha = alpha
                 },
             shape = shape,
             onClick = open,
+            interactionSource = interaction,
             frosted = true,
             body = true,
         ) {
@@ -144,7 +131,8 @@ internal fun AllToolCard(
                         text = tool.subtitle,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        maxLines = if (enlargedText) Int.MAX_VALUE else 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

@@ -61,7 +61,7 @@ class BackgroundStore(context: Context) {
 
     /** 同步读取（冷启动首帧镜像用）：缺失/非法一律回退默认暖白（不抛异常、不丢其他设置）。 */
     fun load(): CtBackgroundSelection =
-        CtBackgroundSelection.fromStorage(prefs.getString(KEY, null))
+        readSelection(appContext)
 
     /** 自定义图片的本地文件（**只允许**私有目录内的合法文件名）。 */
     fun imageFile(selection: CtBackgroundSelection = _selection.value): File? {
@@ -241,6 +241,9 @@ class BackgroundStore(context: Context) {
 
         /** 键名（持久化契约，禁止改名）。 */
         const val KEY: String = "ct_background_selection"
+
+        internal fun readSelection(context: Context): CtBackgroundSelection =
+            CtBackgroundSelection.fromStorage(context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY, null))
 
 
     }

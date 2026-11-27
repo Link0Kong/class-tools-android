@@ -1,5 +1,6 @@
 package com.furina.classtools.ui.screens.notices
 
+import com.furina.classtools.ui.components.ctOutlinedFieldColors
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -65,6 +66,7 @@ internal fun NoticeAdminDialog(
                             singleLine = key != "summary",
                             enabled = !saving,
                             modifier = Modifier.fillMaxWidth(),
+                            colors = ctOutlinedFieldColors(),
                         )
                     }
                 } else {

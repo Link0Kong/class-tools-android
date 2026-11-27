@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.screens.tasks
 
+import com.furina.classtools.ui.components.ctOutlinedFieldColors
+import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import com.furina.classtools.ui.components.CtToastBus
 import android.app.DatePickerDialog
@@ -112,6 +114,9 @@ fun TaskScreen(
     sessionSid: String? = null,
     createFromWidget: Boolean = false,
     taskAiClient: TaskAiClient? = null,
+    /** App Link 任务分享（`/l/task-share#s=...`）：只预填草稿，保存仍需用户确认。 */
+    initialShareLink: String? = null,
+    onInitialShareConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val snapshot by repository.snapshot.collectAsState()
@@ -172,6 +177,19 @@ fun TaskScreen(
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     var firstSyncComplete by remember(repository) { mutableStateOf(false) }
     var openedFromCard by rememberSaveable { mutableStateOf<String?>(null) }
+    /* App Link 任务分享：预览 → 用户确认。只预填编辑器，不落库、不重复导入。 */
+    LaunchedEffect(initialShareLink) {
+        val link = initialShareLink
+        if (link.isNullOrBlank()) return@LaunchedEffect
+        onInitialShareConsumed()
+        val shared = TaskShareLink.parse(link)
+        if (shared == null) {
+            CtToastBus.show("分享内容不完整，请在浏览器打开原链接")
+            return@LaunchedEffect
+        }
+        sharedContext = listOf(shared.groupLabel, shared.dueLabel).filter(String::isNotBlank).joinToString(" · ")
+        newDraft = shared.draft(System.currentTimeMillis(), firstOrder(all)).toString()
+    }
     LaunchedEffect(openTaskId, all, firstSyncComplete) {
         if (openTaskId != null && all.any { it.text("id") == openTaskId }) {
             detail = openTaskId
@@ -293,7 +311,7 @@ fun TaskScreen(
             }
             if (searching) OutlinedTextField(query, { query = it },
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp), singleLine = true,
-                label = { Text("搜索标题、备注或标签") })
+                label = { Text("搜索标题、备注或标签") }, colors = ctOutlinedFieldColors())
             HorizontalPager(
                 state = pager,
                 modifier = Modifier.weight(1f),
@@ -329,9 +347,10 @@ fun TaskScreen(
                         val done = task.flag("done")
                         val active = wide && detail == id
                         val colors = MaterialTheme.colorScheme
-                        Card(
+                        CtGlassSurface(
                             modifier = if (reduceMotion) Modifier else Modifier.animateItem(),
-                            colors = CardDefaults.cardColors(containerColor = if (active) colors.secondaryContainer else colors.surfaceContainerLow),
+                            shape = CardDefaults.shape, frosted = !active,
+                            containerColor = if (active) colors.secondaryContainer else colors.surfaceContainerLow,
                         ) {
                             Row(
                                 Modifier.fillMaxWidth().clickable {
@@ -351,7 +370,7 @@ fun TaskScreen(
                                     val due = taskDueLabel(task, today)
                                     if (due.isNotBlank()) Text(
                                         due, style = MaterialTheme.typography.labelMedium,
-                                        color = if (!done && taskPriority(task, today) == 0) colors.error else colors.onSurfaceVariant,
+                                        color = if (!done && taskPriority(task, today) == 0) colors.error else colors.onSurface,
                                     )
                                     val meta = buildList {
                                         if (task.text("myDay") == today) add("我的一天")
@@ -418,7 +437,7 @@ fun TaskScreen(
                             keyboardActions = KeyboardActions(onDone = { create() }),
                             trailingIcon = { IconButton(onClick = ::create, enabled = quick.isNotBlank()) {
                                 Icon(Icons.Rounded.Add, "保存任务")
-                            } })
+                            } }, colors = ctOutlinedFieldColors())
                         if (taskAiClient != null) TextButton(onClick = { aiOpen = true }) {
                             Text(if (aiDrafts.isEmpty()) "AI 整理" else "继续整理 · ${aiDrafts.size}")
                         }
@@ -457,7 +476,7 @@ fun TaskScreen(
     }
     if (manage) TaskManagement(repository, snapshot, viewOrder) { manage = false }
     if (addGroup) CtLightAlertDialog(onDismissRequest = { addGroup = false }, title = { Text("新建分组") },
-        text = { OutlinedTextField(groupName, { groupName = it.take(20) }, label = { Text("分组名称") }, singleLine = true) },
+        text = { OutlinedTextField(groupName, { groupName = it.take(20) }, label = { Text("分组名称") }, singleLine = true, colors = ctOutlinedFieldColors()) },
         confirmButton = { TextButton(enabled = groupName.isNotBlank(), onClick = {
             repository.addGroup(groupName)?.let { savedView = "group-" + it }
             addGroup = false
@@ -601,9 +620,9 @@ private fun TaskEditor(task: JsonObject, groups: List<JsonObject>, isNew: Boolea
     CtLightAlertDialog(onDismissRequest = ::close, title = { Text(if (sharedContext != null) "保存为我的任务" else if (isNew) "新建任务" else "编辑任务") }, text = {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (!sharedContext.isNullOrEmpty()) Text("原任务 · $sharedContext", style = MaterialTheme.typography.bodySmall)
-            OutlinedTextField(title, { title = it.take(200) }, label = { Text("标题") }, singleLine = true)
-            OutlinedTextField(notes, { notes = it.take(5000) }, label = { Text("备注") }, maxLines = 5)
-            OutlinedTextField(tags, { tags = it.take(120) }, label = { Text("标签（逗号分隔）") }, singleLine = true)
+            OutlinedTextField(title, { title = it.take(200) }, label = { Text("标题") }, singleLine = true, colors = ctOutlinedFieldColors())
+            OutlinedTextField(notes, { notes = it.take(5000) }, label = { Text("备注") }, maxLines = 5, colors = ctOutlinedFieldColors())
+            OutlinedTextField(tags, { tags = it.take(120) }, label = { Text("标签（逗号分隔）") }, singleLine = true, colors = ctOutlinedFieldColors())
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 TextButton(onClick = {
                     val d = runCatching { LocalDate.parse(date) }.getOrDefault(LocalDate.now())
@@ -635,8 +654,8 @@ private fun TaskEditor(task: JsonObject, groups: List<JsonObject>, isNew: Boolea
                         if (i == index) s.withFields { put("done", value) } else s
                     }).toString() })
                     Column(Modifier.weight(1f)) {
-                        OutlinedTextField(step.text("text"), { updateStep(index, "text", it.take(120)) }, singleLine = true, label = { Text("步骤 ${index + 1}") })
-                        OutlinedTextField(step.text("note"), { updateStep(index, "note", it.take(500)) }, maxLines = 3, label = { Text("步骤备注") })
+                        OutlinedTextField(step.text("text"), { updateStep(index, "text", it.take(120)) }, singleLine = true, label = { Text("步骤 ${index + 1}") }, colors = ctOutlinedFieldColors())
+                        OutlinedTextField(step.text("note"), { updateStep(index, "note", it.take(500)) }, maxLines = 3, label = { Text("步骤备注") }, colors = ctOutlinedFieldColors())
                     }
                     TextButton(onClick = { stepData = JsonArray(draftSteps.filterIndexed { i, _ -> i != index }).toString() }) { Text("删除") }
                 }
@@ -645,7 +664,7 @@ private fun TaskEditor(task: JsonObject, groups: List<JsonObject>, isNew: Boolea
                 singleLine = true, trailingIcon = { IconButton(onClick = {
                     stepData = JsonArray(draftSteps + buildJsonObject { put("text", stepTitle.trim()); put("done", false) }).toString()
                     stepTitle = ""
-                }, enabled = stepTitle.isNotBlank()) { Icon(Icons.Rounded.Add, "添加步骤") } })
+                }, enabled = stepTitle.isNotBlank()) { Icon(Icons.Rounded.Add, "添加步骤") } }, colors = ctOutlinedFieldColors())
             files.forEach { attachment -> Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(modifier = Modifier.weight(1f), onClick = {
                     runCatching { TaskFiles.open(context, attachment) }.onFailure { CtToastBus.show("无法打开附件") }

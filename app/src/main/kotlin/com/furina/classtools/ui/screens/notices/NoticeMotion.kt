@@ -254,7 +254,7 @@ internal fun NoticePressableCard(
 
     // 高光：深色用白色微高光（surfaceBright 在深色下本身很暗），浅色用 surfaceBright
     val dark = LocalCtDarkTheme.current
-    val highlight = if (dark) CtPalette.MediaOnScrim else MaterialTheme.colorScheme.surfaceBright
+    val highlight = MaterialTheme.colorScheme.surfaceBright
     val highlightAlpha = (if (dark) 0.12f else 0.16f) * press + (if (dark) 0.04f else 0.07f) * expand
 
     val semanticsModifier = if (contentDescription != null) {
@@ -292,9 +292,11 @@ internal fun NoticePressableCard(
         CtToolCard(
             modifier = Modifier.border(1.dp, ringColor, shape),
             contentPadding = contentPadding,
+            stateLayer = if (dark) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f * press + 0.04f * expand)
+                else Color.Transparent,
             content = content,
         )
-        if (highlightAlpha > 0.005f) {
+        if (!dark && highlightAlpha > 0.005f) {
             Box(
                 modifier = Modifier
                     .matchParentSize()

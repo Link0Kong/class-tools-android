@@ -20,7 +20,12 @@ internal data class SharedTask(
 
 internal object TaskShareLink {
     const val MAX_INPUT = 8192
-    private const val PREFIX = "https://tool.furina.fun/#task-share="
+
+    /** 旧分享格式：快照放在主域根路径的 hash 里（继续可读）。 */
+    private const val LEGACY_PREFIX = "https://tool.furina.fun/#task-share="
+
+    /** 统一内容链接（docs/app-links/CONTRACT.md §3）：路径固定 /l/task-share，快照只在片段里。 */
+    private const val LINK_PREFIX = "https://tool.furina.fun/l/task-share#s="
 
     private fun String.clipped(limit: Int) = take(limit).dropLastWhile(Char::isHighSurrogate)
 
@@ -34,14 +39,16 @@ internal object TaskShareLink {
         }
         val encoded = URLEncoder.encode(payload.toString(), "UTF-8").replace("+", "%20")
             .replace("%21", "!").replace("%27", "'").replace("%28", "(").replace("%29", ")").replace("%7E", "~")
-        return PREFIX + encoded
+        return LINK_PREFIX + encoded
     }
 
     fun parse(input: String): SharedTask? {
         if (input.length !in 1..MAX_INPUT) return null
         val text = input.trim()
         val value = when {
-            text.startsWith(PREFIX) -> text.removePrefix(PREFIX)
+            text.startsWith(LINK_PREFIX) -> text.removePrefix(LINK_PREFIX)
+            text.startsWith(LEGACY_PREFIX) -> text.removePrefix(LEGACY_PREFIX)
+            text.startsWith("#s=") -> text.removePrefix("#s=")
             text.startsWith("#task-share=") -> text.removePrefix("#task-share=")
             text.startsWith("shared=") || text.startsWith("?shared=") -> text.substringAfter("shared=")
             text.removePrefix("/").startsWith("pages/task/task?") ->

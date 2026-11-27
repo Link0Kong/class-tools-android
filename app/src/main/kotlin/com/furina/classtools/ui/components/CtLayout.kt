@@ -6,7 +6,12 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.LocalIndication
+import com.furina.classtools.ui.theme.LocalCtDarkTheme
+import com.furina.classtools.ui.theme.adjustInk
+import com.furina.classtools.ui.theme.lucidContrastRatio
+import com.furina.classtools.ui.theme.layerOver
+import com.furina.classtools.ui.components.background.actionFill
+import androidx.compose.material3.ripple
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -443,8 +448,8 @@ fun CtButton(
     )
     val (container, contentColor) = when {
         !enabled -> scheme.surfaceContainerHigh to scheme.onSurfaceVariant.copy(alpha = 0.58f)
-        style == CtButtonStyle.Filled -> scheme.primary to scheme.onPrimary
-        style == CtButtonStyle.Tonal -> scheme.secondaryContainer to scheme.onSecondaryContainer
+        style == CtButtonStyle.Filled -> actionFill(scheme.primary, scheme.onPrimary, true) to scheme.onPrimary
+        style == CtButtonStyle.Tonal -> actionFill(scheme.secondaryContainer, scheme.onSecondaryContainer, false) to scheme.onSecondaryContainer
         style == CtButtonStyle.Outlined -> scheme.surface to scheme.primary
         else -> Color.Transparent to scheme.primary
     }
@@ -469,7 +474,7 @@ fun CtButton(
                 enabled = enabled,
                 role = Role.Button,
                 interactionSource = interaction,
-                indication = LocalIndication.current,
+                indication = ripple(color = contentColor),
                 onClick = onClick,
             )
             .semantics {
@@ -556,6 +561,30 @@ fun CtTextAction(
     }
 }
 
+/** Opaque field surfaces keep the field label cutout and indicator legible over photos. */
+@Composable
+internal fun ctOutlinedFieldColors(): androidx.compose.material3.TextFieldColors {
+    val defaults = androidx.compose.material3.OutlinedTextFieldDefaults
+    if (!LocalCtDarkTheme.current) return defaults.colors()
+    val c = MaterialTheme.colorScheme
+    return defaults.colors(
+        focusedContainerColor = c.surfaceContainer, unfocusedContainerColor = c.surfaceContainer,
+        errorContainerColor = c.surfaceContainer, disabledContainerColor = c.surfaceContainer,
+        unfocusedBorderColor = c.outline, focusedBorderColor = c.primary, errorBorderColor = c.error,
+    )
+}
+
+@Composable
+internal fun ctFilledFieldColors(): androidx.compose.material3.TextFieldColors {
+    if (!LocalCtDarkTheme.current) return androidx.compose.material3.TextFieldDefaults.colors()
+    val c = MaterialTheme.colorScheme
+    return androidx.compose.material3.TextFieldDefaults.colors(
+        focusedContainerColor = c.surfaceContainerHighest, unfocusedContainerColor = c.surfaceContainerHighest,
+        disabledContainerColor = c.surfaceContainerHighest, errorContainerColor = c.surfaceContainerHighest,
+        unfocusedIndicatorColor = c.outline,
+    )
+}
+
 /**
  * 输入框：**14dp 圆角 tonal 底、无边框**（M3 Expressive filled text field 的轻量版）。
  *
@@ -586,6 +615,7 @@ fun CtTextField(
 ) {
     // M3 filled text field：4dp 顶圆角 + surfaceContainerHighest + 底部 1dp 指示线。
     androidx.compose.material3.TextField(
+        colors = ctFilledFieldColors(),
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.widthIn(min = 0.dp).fillMaxWidth(),
@@ -767,13 +797,21 @@ fun CtTag(
 ) {
     val c = rememberCtColors()
     val tint = color ?: c.primary
-    Surface(modifier = modifier, shape = CtShape.pill, color = harmonyTint(tint), contentColor = tint) {
+    val (fill, ink) = remember(tint, c) { tagColors(tint, c) }
+    Surface(modifier = modifier, shape = CtShape.pill, color = fill, contentColor = ink) {
         Text(
             text = text,
             style = CtTypeScale.caption,
             modifier = Modifier.padding(horizontal = CtSpace.sm, vertical = CtSpace.xxs),
         )
     }
+}
+
+/** Small status labels use their own opaque, tinted fill so the pixel behind a card cannot dilute the text. */
+internal fun tagColors(tint: Color, colors: CtColor): Pair<Color, Color> {
+    if (!colors.dark) return harmonyTint(tint) to tint
+    val fill = tint.layerOver(colors.containerLow, 0.12f)
+    return fill to adjustInk(tint, Color.White) { lucidContrastRatio(it, fill) >= 7.0 }
 }
 
 /** 图标块（40dp 默认；30dp 小号）：淡色 tint 底 + 圆角图标。 */

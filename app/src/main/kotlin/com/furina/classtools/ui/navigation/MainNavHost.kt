@@ -292,6 +292,10 @@ fun MainNavHost(
                             // Tool ids are arguments of one destination. Preserve different tool entries.
                             launchSingleTop = current?.destination?.route != Routes.TOOL
                         }
+                        request.taskShare?.let {
+                            navController.currentBackStackEntry?.savedStateHandle
+                                ?.set(IncomingNavigation.TASK_SHARE_DELIVERY, it)
+                        }
                     }
                 }
             }
@@ -513,6 +517,15 @@ fun MainNavHost(
             )
         }
 
+        composable(Routes.DRAW_VERIFY) { entry ->
+            ScanScreen(
+                container = container,
+                session = session,
+                onBack = { navController.popBackStack() },
+                initialVerify = entry.arguments?.getString(Routes.DRAW_VERIFY_ARG),
+            )
+        }
+
         composable(
             route = Routes.TOOL,
             arguments = listOf(
@@ -702,6 +715,9 @@ fun MainNavHost(
                     }
                     var reminderRevision by remember(session.sid) { mutableIntStateOf(0) }
                     val taskState = rememberSaveableStateHolder()
+                    val sharedTaskLink by entry.savedStateHandle
+                        .getStateFlow<String?>(IncomingNavigation.TASK_SHARE_DELIVERY, null)
+                        .collectAsState()
                     if (!showHomework) taskState.SaveableStateProvider(session.sid) {
                         var revision by remember(session.sid) { mutableIntStateOf(0) }
                         val brief = com.furina.classtools.ui.screens.tasks.rememberHomeworkBrief(
@@ -710,6 +726,10 @@ fun MainNavHost(
                         val taskAiClient = remember(session) { TaskAiClient { session.token } }
                         com.furina.classtools.ui.screens.tasks.TaskCacheRecovery(tasks)
                         TaskScreen(tasks, sessionSid = session.sid, createFromWidget = entry.arguments?.getBoolean(Routes.CREATE_TASK_ARG) == true, openTaskId = openTaskId, onTaskOpened = { openTaskId = null }, taskAiClient = taskAiClient,
+                            initialShareLink = sharedTaskLink,
+                            onInitialShareConsumed = {
+                                entry.savedStateHandle.set<String?>(IncomingNavigation.TASK_SHARE_DELIVERY, null)
+                            },
                             onCloseFocused = focus?.takeUnless { pickInTool }?.let { { back() } },
                             onBack = ::back, onHomework = { showHomework = true },
                             onSource = { task ->

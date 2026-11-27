@@ -48,6 +48,25 @@ class QrPayloadParserTest {
     }
 
     @Test
+    fun `content link draw url`() {
+        assertEquals(
+            QrPayload.DrawVerify("dabc123456"),
+            QrPayloadParser.parse("https://tool.furina.fun/l/draw/dABC123456"),
+        )
+        assertEquals(
+            QrPayload.DrawVerify("dabc123456"),
+            QrPayloadParser.parse("https://tool.furina.fun/l/draw/dabc123456?from=qr"),
+        )
+    }
+
+    @Test
+    fun `content link on other hosts is not treated as draw`() {
+        assertTrue(QrPayloadParser.parse("https://evil.example/l/draw/dabc123456") is QrPayload.Unknown)
+        assertTrue(QrPayloadParser.parse("https://tool.furina.fun/l/draw/d-short") is QrPayload.Unknown)
+        assertTrue(QrPayloadParser.parse("https://tool.furina.fun/l/notice/dabc123456") is QrPayload.Unknown)
+    }
+
+    @Test
     fun `unknown content is not misclassified`() {
         assertTrue(QrPayloadParser.parse("https://example.com/hello") is QrPayload.Unknown)
         assertTrue(QrPayloadParser.parse("#qr=not-hex") is QrPayload.Unknown)

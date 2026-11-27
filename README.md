@@ -1,6 +1,6 @@
 # 班级工具站 · Android 客户端
 
-[![version](https://img.shields.io/badge/version-1.0.0--beta22-blue)](https://github.com/Link0Kong/class-tools-android/releases)
+[![version](https://img.shields.io/badge/version-1.0.1-blue)](docs/CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-Android-3DDC84)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-7F52FF)](https://kotlinlang.org)
@@ -34,12 +34,11 @@
 - **统计**：访问统计（管理员）、个人数据概览。
 - **诊断**：设备信息、接口连通性、脱敏日志、异常上报。
 
-> 桌面小组件当前版本未实现，故不在此列出。
+- **桌面小组件**：工作台、课表、通知和待办，支持按尺寸展示摘要或可滚动列表。
 
 ## 下载
 
-- 测试版 APK 见 [GitHub Releases](https://github.com/Link0Kong/class-tools-android/releases)。
-- 当前为 **1.0.0-beta** 测试版本，功能和稳定性可能变化；正式上架前请以 Release 说明为准。
+- 当前正式版本为 **1.0.1**，更新内容见[版本记录](docs/CHANGELOG.md)。
 - 安装前需允许「安装未知应用」；App 内更新会校验版本与 SHA-256。
 
 ## 开发与构建

@@ -492,7 +492,7 @@ const val CT_TOP_BAR_FULL_SCROLL_PX: Float = 100_000f
 // -----------------------------------------------------------------------------
 
 /**
- * 计算「正文落在材质上」的最坏情况对比度（WCAG 2.1）。
+ * 计算「正文落在材质上」的最坏情况对比度（WCAG 2.2）。
  *
  * 最坏情况：材质底不透明度 = [alpha]，其下透出的是与文字**对比度最低**的容器色（内容可能透出的最坏底色）。
  * 合成公式：`mixed = base * alpha + (worstUnder * (1 - alpha))`。
@@ -518,7 +518,7 @@ fun ctLightContrastFloor(
     return lucidContrastRatio(text, mixed)
 }
 
-/** WCAG 2.1 相对亮度（sRGB；sRGB 线性化按官方公式）。 */
+/** WCAG 2.2 相对亮度（sRGB；sRGB 线性化按官方公式）。 */
 fun relativeLuminance(color: Color): Double {
     fun channel(c: Float): Double {
         val v = c.toDouble()
@@ -527,7 +527,7 @@ fun relativeLuminance(color: Color): Double {
     return 0.2126 * channel(color.red) + 0.7152 * channel(color.green) + 0.0722 * channel(color.blue)
 }
 
-/** WCAG 2.1 对比度（(L1+0.05)/(L2+0.05)，L1 为较亮者）。 */
+/** WCAG 2.2 对比度（(L1+0.05)/(L2+0.05)，L1 为较亮者）。 */
 fun lucidContrastRatio(a: Color, b: Color): Double {
     val la = relativeLuminance(a)
     val lb = relativeLuminance(b)

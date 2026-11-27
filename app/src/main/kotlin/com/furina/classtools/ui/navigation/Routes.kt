@@ -31,6 +31,12 @@ object Routes {
     /** 扫一扫：电脑扫码登录 / 抽签存证核验（同一入口按二维码内容分流）。 */
     const val SCAN = "scan"
 
+    /** 抽签核验详情（App Link `/l/draw/<recordId>`）：复用扫码核验界面，进来直接读记录。 */
+    const val DRAW_VERIFY_ARG = "recordId"
+    const val DRAW_VERIFY = "drawVerify/{$DRAW_VERIFY_ARG}"
+
+    fun drawVerify(recordId: String): String = "drawVerify/" + Uri.encode(recordId)
+
     const val TOOL_ARG = "toolId"
     const val TOOL_PICK_ARG = "pick"
     const val MAP_ROOM_ARG = "room"

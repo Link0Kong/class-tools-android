@@ -812,7 +812,7 @@ private fun CardItemRow(item: HomeRotationItem, modifier: Modifier) {
     ) {
         Text(item.title, style = MaterialTheme.typography.titleSmall, color = scheme.onSurface,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(item.sub, style = CtText.caption, color = scheme.onSurfaceVariant,
+        Text(item.sub, style = CtText.caption, color = scheme.onSurface,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

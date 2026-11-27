@@ -81,6 +81,7 @@ internal fun RosterSearchField(search: RosterSearchState, modifier: Modifier = M
         keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { submit() }),
         trailingIcon = { IconButton(onClick = submit) { Icon(Icons.Rounded.Search, contentDescription = "搜索") } },
+        colors = ctOutlinedFieldColors(),
     )
 }
 

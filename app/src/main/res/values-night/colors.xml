@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- 深色窗口底色：避免启动/转场白闪 -->
-    <color name="ct_window_background">#121514</color>
+    <color name="ct_window_background">#181D20</color>
     <color name="live_course_accent">#8CD3BC</color>
     <color name="live_vote_accent">#C4BFF3</color>
     <color name="live_upload_accent">#A9CAEF</color>

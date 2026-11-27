@@ -112,6 +112,8 @@ fun ScanScreen(
     container: AppContainer,
     session: Session,
     onBack: () -> Unit,
+    /** App Link `/l/draw/<recordId>`：直接读记录核验，不申请相机、不进扫码态。 */
+    initialVerify: String? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -132,7 +134,9 @@ fun ScanScreen(
     }
 
     LaunchedEffect(Unit) {
-        if (!granted && !permissionAsked) permissionLauncher.launch(Manifest.permission.CAMERA)
+        if (initialVerify.isNullOrBlank() && !granted && !permissionAsked) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
     BackHandler {
         if (state is ScanState.Scanning) onBack() else state = ScanState.Scanning
@@ -169,6 +173,12 @@ fun ScanScreen(
                 ScanState.Failed("登录确认失败", result.message.ifBlank { "请稍后重试" })
             }
         }
+    }
+
+    /* App Link 进入：直接用记录 id 走既有核验（同一套云端校验与本地复算）。 */
+    LaunchedEffect(initialVerify) {
+        val recordId = initialVerify?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
+        handleText(recordId)
     }
 
     Box(

@@ -2,6 +2,7 @@ package com.furina.classtools.ui.components.background
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,7 +40,7 @@ import com.furina.classtools.ui.theme.rememberCtColors
 
 // =============================================================================
 // [CtGlassTokens] 保留旧绘制器 ctFrostedCard 的规格。
-// 线上的 CtGlassSurface 通过 ctGlass 使用 theme/Glass.kt 的规格。
+// CtGlassSurface 的深色底材由 DarkGlassMaterial 解析，浅色使用 ctGlass。
 // =============================================================================
 
 /**
@@ -185,14 +186,16 @@ fun rememberCtGlassSpec(boost: Float = 0f): CtGlassSpec {
 }
 
 /**
- * 卡片表面。内容和内边距由调用方定义。玻璃材质使用半透明色叠加窗口光场，滚动时无需 Haze。
+ * 卡片表面。深色填充先校验合成对比度，有同窗口背景源时再模糊底图。内容和内边距由调用方定义。
  *
  * @param onClick 非 null 时使用可点击的 Material Surface。
- * @param boost 背景预设或自定义照片提供的底色不透明度补偿。
- * @param body 正文卡默认使用 THIN 并应用正文不透明度下限，装饰面默认使用 ULTRA_THIN。
+ * @param boost 浅色装饰材质的底色不透明度补偿。
+ * @param body 指定浅色正文表面。
  * @param frosted 使用半透明材质，或使用实色底。
  * @param opaque 玻璃化关闭时使用实色 Material 卡片。
- * @param darkRole 深色玻璃化开启时采用的材质用途。
+ * @param darkRole Hero 默认采用高层容器，其他卡片采用低层容器。
+ * @param containerColor 调用方指定的语义表面。
+ * @param interactionSource 与缩放等按压反馈共享的交互源。
  */
 @Composable
 fun CtGlassSurface(
@@ -204,33 +207,43 @@ fun CtGlassSurface(
     frosted: Boolean = true,
     opaque: Boolean = true,
     darkRole: CtDarkGlassRole? = null,
+    containerColor: Color = Color.Unspecified,
+    interactionSource: MutableInteractionSource? = null,
     content: @Composable () -> Unit,
 ) {
     val c = rememberCtColors()
     val lightEnabled = LocalCtLight.current.enabled
     // 玻璃化开关关：实色 M3；开：走下方磨砂玻璃材质（beta1 风格）。
-    if (body || (opaque && !lightEnabled)) {
+    if (c.dark || body || (opaque && !lightEnabled)) {
         val scheme = MaterialTheme.colorScheme
-        val container = if (darkRole == CtDarkGlassRole.HERO) scheme.surfaceContainerHigh else scheme.surfaceContainerLow
+        val base = when {
+            containerColor != Color.Unspecified -> containerColor
+            darkRole == CtDarkGlassRole.HERO -> scheme.surfaceContainerHigh
+            else -> scheme.surfaceContainerLow
+        }
+        val material = if (c.dark && frosted) rememberDarkGlass(base) else DarkGlassMaterial(base, 0.dp)
+        val container = material.fill
+        val surfaceModifier = modifier.fillMaxWidth().darkGlassBlur(shape, material)
         val border = BorderStroke(1.dp, scheme.outlineVariant)
         if (onClick != null) {
             Surface(
                 onClick = onClick,
-                modifier = modifier.fillMaxWidth(),
+                interactionSource = interactionSource,
+                modifier = surfaceModifier,
                 shape = shape,
                 color = container,
                 contentColor = scheme.onSurface,
                 border = border,
-                shadowElevation = 1.dp,
+                shadowElevation = if (c.dark) 0.dp else 1.dp,
             ) { content() }
         } else {
             Surface(
-                modifier = modifier.fillMaxWidth(),
+                modifier = surfaceModifier,
                 shape = shape,
                 color = container,
                 contentColor = scheme.onSurface,
                 border = border,
-                shadowElevation = 1.dp,
+                shadowElevation = if (c.dark) 0.dp else 1.dp,
             ) { content() }
         }
         return
@@ -270,6 +283,7 @@ fun CtGlassSurface(
     if (onClick != null) {
         Surface(
             onClick = onClick,
+            interactionSource = interactionSource,
             modifier = modifier.fillMaxWidth().then(material),
             shape = shape,
             color = Color.Transparent,

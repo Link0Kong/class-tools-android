@@ -5,7 +5,8 @@ package com.furina.classtools.features.scan
  *
  * 网页二维码只有两类：
  * - 扫码登录：`https://tool.furina.fun/#qr=<32 位 hex>[&p=harmony]`（通用 / 鸿蒙）；
- * - 抽签存证核验：`https://tool.furina.fun/#verify=<存证 id>`（`d` + 8..31 位 [0-9a-z]）。
+ * - 抽签存证核验：`https://tool.furina.fun/#verify=<存证 id>`（旧码）或
+ *   `https://tool.furina.fun/l/draw/<存证 id>`（统一内容链接，见 docs/app-links/CONTRACT.md）。
  * 另外兼容直接粘贴裸票据/裸存证 id（调试与手工输入）。
  */
 sealed interface QrPayload {
@@ -27,6 +28,10 @@ object QrPayloadParser {
     private val P_IN_URL_RE = Regex("[#?&]p=([a-zA-Z]+)")
     private val VERIFY_IN_URL_RE = Regex("[#?&]verify=([A-Za-z0-9%._~-]+)")
 
+    /** 统一内容链接 `/l/draw/<id>`（新二维码）；只认本站 HTTPS 链接。 */
+    private val LINK_DRAW_RE =
+        Regex("^https://tool\\.furina\\.fun/l/draw/([A-Za-z0-9%._~-]{1,64})(?:\\?[^#]*)?(?:#.*)?$")
+
     fun parse(raw: String?): QrPayload {
         val text = raw?.trim().orEmpty()
         if (text.isEmpty()) return QrPayload.Unknown("")
@@ -40,7 +45,13 @@ object QrPayloadParser {
             }
         }
 
-        // 抽签存证核验（网页 `#verify=<id>`）
+        // 抽签存证核验（统一内容链接 `/l/draw/<id>`，2026-11-27 起的新二维码）
+        LINK_DRAW_RE.find(text)?.let { match ->
+            val id = urlDecode(match.groupValues[1]).lowercase()
+            if (RECORD_RE.matches(id)) return QrPayload.DrawVerify(id)
+        }
+
+        // 抽签存证核验（旧码 `#verify=<id>`）
         VERIFY_IN_URL_RE.find(text)?.let { match ->
             val id = urlDecode(match.groupValues[1]).lowercase()
             if (RECORD_RE.matches(id)) return QrPayload.DrawVerify(id)

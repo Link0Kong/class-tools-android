@@ -3,11 +3,9 @@ package com.furina.classtools.ui.components.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import com.furina.classtools.data.background.CtBackgroundPreset
-import com.furina.classtools.ui.theme.CtDarkColorScheme
-import com.furina.classtools.ui.theme.CtLightColorScheme
+import com.furina.classtools.ui.theme.resolveThemeColors
 import com.furina.classtools.ui.theme.CtLightFields
 import com.furina.classtools.ui.theme.CtLightSetting
-import com.furina.classtools.ui.theme.CtPalette
 import com.furina.classtools.ui.theme.lucidContrastRatio
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -29,13 +27,13 @@ class BackdropContrastTest {
             for (preset in CtBackgroundPreset.entries) {
                 val field = CtLightFields.forBackdrop(preset, dark, CtLightSetting.Default)
                 val layers = listOf(field.base, field.topGlow, field.vignette) + field.blooms.map { it.color }
-                assertContrast(dark, layers, hasPhoto = false)
+                assertContrast(dark, layers, hasPhoto = false, preset = preset)
             }
         }
     }
 
-    private fun assertContrast(dark: Boolean, backgrounds: List<Color>, hasPhoto: Boolean) {
-        val scheme = if (dark) CtDarkColorScheme else CtLightColorScheme
+    private fun assertContrast(dark: Boolean, backgrounds: List<Color>, hasPhoto: Boolean, preset: CtBackgroundPreset = CtBackgroundPreset.DEFAULT) {
+        val (scheme, colors) = resolveThemeColors(dark, preset, null)
         val foregrounds = listOf(
             scheme.onBackground,
             scheme.onSurfaceVariant,
@@ -43,10 +41,11 @@ class BackdropContrastTest {
             scheme.secondary,
             scheme.tertiary,
             scheme.error,
-            if (dark) CtPalette.DarkTextTertiary else CtPalette.TextTertiary,
+            colors.textTertiary,
         )
-        val veil = scheme.background.copy(alpha = backdropVeilAlpha(dark, hasPhoto))
         for (pixel in backgrounds) {
+            val alpha = if (dark) darkBackdropAlpha(pixel, scheme, colors) else lightBackdropVeilAlpha(hasPhoto)
+            val veil = scheme.background.copy(alpha = alpha)
             val background = veil.compositeOver(pixel)
             for (foreground in foregrounds) {
                 val contrast = lucidContrastRatio(foreground, background)

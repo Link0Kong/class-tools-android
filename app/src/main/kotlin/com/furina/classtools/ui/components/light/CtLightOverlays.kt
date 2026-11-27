@@ -33,9 +33,9 @@ import com.furina.classtools.ui.theme.rememberCtColors
 fun ctLightSheetContainerColor(): Color {
     val light = LocalCtLight.current
     val c = rememberCtColors()
-    if (!light.enabled) return c.containerLow
+    if (c.dark || !light.enabled) return c.containerLow
     val spec = light.spec(CtLightScene.SHEET)
-    val base = if (c.dark) CtPalette.DarkContainer else CtPalette.Container
+    val base = c.container
     // 弹层必须不透明：0.94 的透明底会让下页文字透上来（实机截图确认「幽灵文字」）。
     return blendToward(base, c.primary, spec.tintAlpha * 0.5f)
 }
@@ -45,9 +45,9 @@ fun ctLightSheetContainerColor(): Color {
 fun ctLightDialogContainerColor(): Color {
     val light = LocalCtLight.current
     val c = rememberCtColors()
-    if (!light.enabled) return c.containerHigh
+    if (c.dark || !light.enabled) return c.containerHigh
     val spec = light.spec(CtLightScene.DIALOG)
-    val base = if (c.dark) CtPalette.DarkContainerHigh else CtPalette.ContainerHigh
+    val base = c.containerHigh
     // 对话框同样不透明，避免表单底下透出页面内容。
     return blendToward(base, c.primary, spec.tintAlpha * 0.5f)
 }

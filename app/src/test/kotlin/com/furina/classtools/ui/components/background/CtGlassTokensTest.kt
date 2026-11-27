@@ -4,7 +4,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import com.furina.classtools.data.background.CtBackgroundPalette
 import com.furina.classtools.data.background.CtBackgroundPreset
-import com.furina.classtools.ui.theme.CtDarkColorScheme
 import com.furina.classtools.ui.theme.CtDarkGlassRole
 import com.furina.classtools.ui.theme.CtGlassTable
 import com.furina.classtools.ui.theme.CtLightIntensity
@@ -42,8 +41,8 @@ class CtGlassTokensTest {
 
     @Test
     fun `dark glass text stays readable over a white photo and peak reflection`() {
-        val scheme = CtDarkColorScheme
-        val photo = scheme.background.copy(alpha = backdropVeilAlpha(dark = true, hasPhoto = true))
+        val (scheme, resolved) = com.furina.classtools.ui.theme.resolveThemeColors(true, CtBackgroundPreset.DEFAULT, null)
+        val photo = scheme.background.copy(alpha = darkBackdropAlpha(Color.White, scheme, resolved))
             .compositeOver(Color.White)
         val boost = CtBackgroundPalette.dark(CtBackgroundPreset.DEFAULT).cardAlphaBoost + 0.18f
         for (intensity in CtLightIntensity.entries) {

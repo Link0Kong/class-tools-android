@@ -204,7 +204,7 @@ private fun BackgroundThumb(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(CtRadius.tile)
-    val colors = CtBackgroundPalette.of(selection.preset, dark = false)
+    val colors = CtBackgroundPalette.of(selection.preset, dark)
     Box(
         modifier = modifier
             .size(40.dp)
@@ -383,8 +383,7 @@ private fun PresetChip(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    // 缩略图始终用浅色参数展示「这个预设是什么颜色」，避免深色模式下所有浅色预设都发黑。
-    val colors = CtBackgroundPalette.of(preset, dark = false)
+    val colors = CtBackgroundPalette.of(preset, com.furina.classtools.ui.theme.LocalCtDarkTheme.current)
     val shape = RoundedCornerShape(CtRadius.tile)
     Column(
         modifier = Modifier

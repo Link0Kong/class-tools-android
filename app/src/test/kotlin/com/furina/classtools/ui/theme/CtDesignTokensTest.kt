@@ -52,9 +52,9 @@ class CtDesignTokensTest {
 
     @Test
     fun `品牌三色与网页主题同值（跨端一致）`() {
-        assertEquals(Color(0xFF5E8F87), CtPalette.MistTeal)
-        assertEquals(Color(0xFF7D9EBB), CtPalette.SlateBlue)
-        assertEquals(Color(0xFFC6A475), CtPalette.WarmSand)
+        assertEquals(Color(0xFF4E9082), CtPalette.MistTeal)
+        assertEquals(Color(0xFF6E8CA8), CtPalette.SlateBlue)
+        assertEquals(Color(0xFFB98F63), CtPalette.WarmSand)
         assertEquals(CtPalette.MistTeal, BrandMistTeal)
         assertEquals(CtPalette.SlateBlue, BrandSlateBlue)
         assertEquals(CtPalette.WarmSand, BrandWarmSand)
@@ -81,9 +81,9 @@ class CtDesignTokensTest {
         ).map { luminance(it) }
         // 深色：容器越「高」越亮
         dark.zipWithNext().forEach { (a, b) -> assertTrue("dark container 应逐级变亮", a <= b) }
-        assertEquals(Color(0xFF111614), CtPalette.DarkBg)
-        assertEquals(Color(0xFF1A211E), CtPalette.DarkContainerLow)
-        assertEquals(Color(0xFF29332D), CtPalette.DarkContainerHigh)
+        assertEquals(Color(0xFF181D20), CtPalette.DarkBg)
+        assertEquals(Color(0xFF232C2E), CtPalette.DarkContainerLow)
+        assertEquals(Color(0xFF2D383A), CtPalette.DarkContainerHigh)
     }
 
     // ---- 2. 深色 / 浅色 AA ----

@@ -72,7 +72,7 @@ internal fun rememberHomeworkBrief(
 internal fun ClassHomeworkOverview(brief: HomeworkBrief, onOpen: (String?) -> Unit,
     onRemind: (HomeworkRow) -> Unit, onSettings: () -> Unit, onImport: (List<HomeworkRow>) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Card(colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerHigh)) {
+    com.furina.classtools.ui.components.background.CtGlassSurface(shape = CardDefaults.shape, containerColor = colors.surfaceContainerHigh) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("班级作业", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
@@ -101,7 +101,7 @@ internal fun ClassHomeworkOverview(brief: HomeworkBrief, onOpen: (String?) -> Un
                         val subject = item.row.subject.trim().takeIf { it.isNotEmpty() && it != title }
                         Text(listOfNotNull(subject, deadline).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall, color =
-                            if (item.due?.expired == true) colors.error else colors.onSurfaceVariant)
+                            if (item.due?.expired == true) colors.error else colors.onSurface)
                     }
                     if (item.due != null && !item.due.expired) {
                         TextButton(onClick = { onRemind(item.row) }) { Text("提醒我") }
