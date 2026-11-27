@@ -6,6 +6,8 @@ import android.widget.RemoteViews
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.ColorUtils
 import com.furina.classtools.R
+import com.furina.classtools.data.settings.AppSettingsStore
+import com.furina.classtools.ui.theme.AppearanceMode
 import com.furina.classtools.ui.theme.appColorScheme
 
 /** Resolve against the app's appearance even when the launcher uses the opposite mode. */
@@ -55,5 +57,13 @@ internal class WidgetPaint(context: Context, palette: WidgetPalette, dark: Boole
     fun band(view: RemoteViews, background: Int, rule: Int, tone: Int) {
         view.setInt(background, "setColorFilter", fill(tone))
         view.setInt(rule, "setColorFilter", tone)
+    }
+
+    companion object {
+        fun resolve(context: Context, palette: WidgetPalette, monet: Boolean = AppSettingsStore(context).startupDynamicColor()): WidgetPaint {
+            val appearance = AppSettingsStore(context).startupAppearanceMode()
+            val systemDark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+            return WidgetPaint(context, palette, appearance.resolveDark(systemDark), monet, appearance == AppearanceMode.SYSTEM)
+        }
     }
 }

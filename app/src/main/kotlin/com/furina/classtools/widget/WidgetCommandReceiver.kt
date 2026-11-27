@@ -59,11 +59,15 @@ class WidgetCommandReceiver : BroadcastReceiver() {
         const val COMPLETE = "complete"
         const val REFRESH = "refresh-notices"
 
-        fun action(context: Context, owner: String, command: String, id: String? = null): PendingIntent {
+        fun commandUri(owner: String, command: String, id: String? = null): Uri {
             val uri = Uri.Builder().scheme("classtools-widget").authority("action").appendPath(command)
                 .appendQueryParameter("owner", owner)
             if (id != null) uri.appendPath(id)
-            val intent = Intent(context, WidgetCommandReceiver::class.java).setData(uri.build())
+            return uri.build()
+        }
+
+        fun action(context: Context, owner: String, command: String, id: String? = null): PendingIntent {
+            val intent = Intent(context, WidgetCommandReceiver::class.java).setData(commandUri(owner, command, id))
             return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
     }

@@ -4,16 +4,19 @@ import com.furina.classtools.data.homework.*
 import com.furina.classtools.data.timetable.SessionState
 import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.data.timetable.CourseFocus
+import com.furina.classtools.data.timetable.SessionInfo
+import java.time.Instant
+import java.time.ZoneId
 import kotlinx.serialization.Serializable
 
 internal enum class WidgetKind(val label: String, val destination: String) {
     TIMETABLE("班级课表", "tt"), WORKBENCH("工作台", "home"),
     NOTICES("班级通知", "nt"), TASKS("待办任务", "hw"),
 }
-
 @Serializable
 internal data class WidgetLine(val title: String, val detail: String = "", val destination: String = "", val priority: Int = 5, val homeworkId: String = "", val focus: String = "",
-    val deadlineAt: Long? = null, val starred: Boolean = false, val canComplete: Boolean = false)
+    val deadlineAt: Long? = null, val starred: Boolean = false, val canComplete: Boolean = false,
+    val excerpt: String = "")
 
 @Serializable
 internal data class WidgetList(
@@ -22,6 +25,7 @@ internal data class WidgetList(
     val fetchedAt: Long,
     val taskVersion: Long? = null,
     val importedHomeworkIds: Set<String> = rows.mapNotNullTo(mutableSetOf()) { it.homeworkId.takeIf(String::isNotBlank) },
+    // Older feeds kept one leading record per quadrant in addition to the compact cache.
     val quadrantLeads: List<WidgetLine> = emptyList(),
 )
 
@@ -50,19 +54,20 @@ internal data class WidgetHomework(val rows: List<HomeworkRow>, val fetchedAt: L
             WidgetLine("作业 · " + title, listOfNotNull(subject, deadline).joinToString(" · "),
                 "class-homework", priority, item.id, focus = item.id, deadlineAt = item.due?.atMillis)
         }
-        return WidgetList(items.size, lines.take(8), fetchedAt, quadrantLeads = quadrantLeads(lines, now))
+        return WidgetList(items.size, lines, fetchedAt)
     }
 }
 
 internal data class WidgetContent(
-    val heading: String,
+    val compactStatus: String,
     val first: WidgetLine,
     val more: List<WidgetLine> = emptyList(),
     val summary: String = "",
-    val number: String = "",
-    val label: String = "",
     val sections: List<WidgetSection> = emptyList(),
     val createTask: Boolean = false,
+    val hasRecords: Boolean = true,
+    val cachedRemainder: Int = 0,
+    val compactDetail: String = first.detail,
 )
 
 internal data class WidgetSection(val title: String, val link: WidgetLine, val lines: List<WidgetLine>, val empty: String)
@@ -72,21 +77,20 @@ internal fun quadrantOf(line: WidgetLine, tomorrow: Long): Int {
     return (if (line.starred) 0 else 2) + (if (urgent) 0 else 1)
 }
 
-private fun scheduleLine(course: com.furina.classtools.data.timetable.SessionInfo) = WidgetLine(
-    course.name, listOf("${course.startText}–${course.endText}", course.fullRoom).filter(String::isNotBlank).joinToString(" · "),
+private fun scheduleLine(course: SessionInfo, day: String = "") = WidgetLine(
+    course.name, listOf(day, "${course.startText}–${course.endText}", course.fullRoom).filter(String::isNotBlank).joinToString(" · "),
     "tt", focus = CourseFocus.of(course).encode(),
 )
 
-internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, feed: WidgetFeed, now: Long, tomorrowCourses: List<com.furina.classtools.data.timetable.SessionInfo> = emptyList()): WidgetContent {
-    if (!signedIn) return WidgetContent(kind.label, WidgetLine("登录后查看", "点按打开枫丹工具箱"))
-    val localDay = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, feed: WidgetFeed, now: Long, tomorrowCourses: List<SessionInfo> = emptyList()): WidgetContent {
+    if (!signedIn) return WidgetContent(kind.label, WidgetLine("登录后查看", "点按打开枫丹工具箱"), hasRecords = false)
+    val zone = ZoneId.systemDefault()
+    val localDay = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
     val tomorrow = localDay.plusDays(1)
     val active = plan?.today?.firstOrNull { it.state == SessionState.ONGOING }
     val course = active ?: plan?.next
-    val courseLine = course?.let {
-        WidgetLine(it.name, listOf("${it.startText}–${it.endText}", it.fullRoom, it.span)
-            .filter(String::isNotBlank).joinToString(" · "), "tt", focus = CourseFocus.of(it).encode())
-    } ?: WidgetLine(if (plan?.hasData == true) "近期暂无课程" else "打开课表同步课程", destination = "tt")
+    val courseLine = course?.let { scheduleLine(it, if (it.dayOffset > 0) it.dayText else "") }
+        ?: WidgetLine(if (plan?.hasData == true) "近期暂无课程" else "打开课表同步课程", destination = "tt")
     val courseLabel = when {
         active != null -> "正在上课"
         course != null -> listOf(course.dateText.takeIf { course.dayOffset > 0 }.orEmpty(), course.dayText, "下一节").filter(String::isNotBlank).joinToString(" · ")
@@ -95,26 +99,38 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
     fun countText(list: WidgetList?, unit: String) = list?.let { "${it.count} $unit" } ?: "待同步"
     return when (kind) {
         WidgetKind.TIMETABLE -> {
-            val upcoming = plan?.today.orEmpty().filter { it.startAt > (course?.startAt ?: now) }
-                .map { WidgetLine(it.name, "${it.startText}–${it.endText}  ${it.fullRoom}".trim(), "tt", focus = CourseFocus.of(it).encode()) }.toMutableList()
-            plan?.next?.takeIf { active != null && it.dayOffset > 0 }?.let {
-                upcoming.add(WidgetLine(it.name, "${it.dayText} ${it.startText}  ${it.fullRoom}".trim(), "tt", focus = CourseFocus.of(it).encode()))
+            val later = (plan?.today.orEmpty() + tomorrowCourses + listOfNotNull(plan?.next))
+                .filter { it.startAt > (course?.startAt ?: now) }
+                .distinctBy { CourseFocus.of(it) }.sortedBy { it.startAt }
+            val upcoming = later.map {
+                scheduleLine(it, when (Instant.ofEpochMilli(it.startAt).atZone(zone).toLocalDate()) {
+                    localDay -> ""
+                    tomorrow -> "明天"
+                    else -> it.dayText
+                })
             }
             val daySummary = plan?.takeIf { it.hasData }?.let {
                 listOfNotNull(it.week?.let { week -> "第 ${week} 周" }, "今日 ${it.today.size} 门").joinToString(" · ")
             }.orEmpty()
-            val timeHeading = if (course == null) courseLabel else
-                courseLabel + " · " + if (active == null) course.startText + " 开始" else course.endText + " 下课"
-            val columns = if (plan?.hasData == true && (course == null || course.dayOffset <= 1)) {
+            val days = if (plan?.hasData == true && (course == null || course.dayOffset <= 1)) {
                 listOf(localDay to plan.today, tomorrow to tomorrowCourses).mapIndexed { index, (date, sessions) ->
                     val link = WidgetLine("", destination = "tt", focus = CourseFocus(date.toString()).encode())
                     val ordered = sessions.filterNot { it.state == SessionState.DONE }
-                    WidgetSection(if (index == 0) "今天" else "明天", link, ordered.map(::scheduleLine),
+                    WidgetSection(if (index == 0) "今天" else "明天", link, ordered.map { scheduleLine(it) },
                         if (sessions.isEmpty()) "没有课程" else "课程已结束")
                 }
             } else emptyList()
-            WidgetContent(timeHeading, courseLine, upcoming, daySummary,
-                localDay.dayOfMonth.toString(), "课表", columns)
+            val quickStatus = when {
+                active != null -> "${active.endText} 下课"
+                course != null -> "${course.startText} 开始"
+                else -> "今日课表"
+            }
+            WidgetContent(quickStatus, courseLine, upcoming,
+                listOf(quickStatus, daySummary).filter(String::isNotBlank).joinToString(" · "),
+                sections = days, hasRecords = course != null, compactDetail = course?.let {
+                    listOf(if (it.dayOffset > 0) it.dayText else "", it.fullRoom)
+                        .filter(String::isNotBlank).joinToString(" · ")
+                }.orEmpty())
         }
         WidgetKind.WORKBENCH -> {
             val tasks = feed.tasks
@@ -122,10 +138,10 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
             val overview = listOf(tasks?.let { "${it.count} 待办" } ?: "任务待同步",
                 notices?.let { "${it.count} 待处理通知" } ?: "通知待同步")
             val assignments = feed.homework?.current(now, tasks?.importedHomeworkIds.orEmpty())
-            val sections = buildList {
+            val highlights = buildList {
                 assignments?.rows?.firstOrNull()?.let { add(it) }
-                tasks?.rows?.take(2)?.forEach { task -> add(task.copy(title = "待办 · " + task.title, destination = "hw")) }
-                notices?.rows?.take(2)?.forEach { notice -> add(notice.copy(title = "通知 · " + notice.title, destination = "nt")) }
+                tasks?.rows?.firstOrNull()?.let { add(it.copy(title = "待办 · " + it.title, destination = "hw")) }
+                notices?.rows?.firstOrNull()?.let { add(it.copy(title = "通知 · " + it.title, destination = "nt")) }
                 if (course != null) add(courseLine.copy(title = courseLabel + " · " + courseLine.title,
                     priority = if (course.startAt in now..(now + 15 * 60_000L)) 2 else 6))
             }.sortedBy { it.priority }
@@ -135,15 +151,17 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
                 section("个人待办", "hw", tasks?.rows?.firstOrNull()?.copy(destination = "hw"), if (tasks == null) "待同步" else "暂无待办"),
                 section("班级作业", "class-homework", assignments?.rows?.firstOrNull(), if (assignments == null) "待同步" else "暂无作业"),
                 section("班级通知", "nt", notices?.rows?.firstOrNull()?.copy(destination = "nt"), if (notices == null) "待同步" else "暂无待处理"))
-            WidgetContent("工作台", WidgetLine(overview.joinToString(" · "),
-                sections.firstOrNull()?.title.orEmpty()), sections, java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault())
-                    .format(java.time.format.DateTimeFormatter.ofPattern("M月d日 E", java.util.Locale.CHINA)), localDay.dayOfMonth.toString(), "工作台", tiles)
+            WidgetContent("${tiles.size} 个入口", WidgetLine(overview.joinToString(" · "),
+                highlights.firstOrNull()?.title.orEmpty()), highlights, overview.joinToString(" · "), tiles)
         }
         WidgetKind.NOTICES, WidgetKind.TASKS -> {
             val tasks = kind == WidgetKind.TASKS
             val list = if (tasks) feed.tasks else feed.latestNotices
             val assignments = if (tasks) feed.homework?.current(now, list?.importedHomeworkIds.orEmpty()) else null
-            val personal = list?.rows.orEmpty().map {
+            val cached = list?.rows.orEmpty()
+            val cachedIds = cached.mapTo(hashSetOf()) { it.focus }
+            val legacyLeads = if (tasks) list?.quadrantLeads.orEmpty().filterNot { it.focus in cachedIds } else emptyList()
+            val personal = (cached + legacyLeads).map {
                 if (tasks) it.copy(title = "待办 · " + it.title, destination = "hw") else it.copy(destination = "nt")
             }
             val rows = if (assignments == null) personal else {
@@ -157,33 +175,24 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
             val summary = if (assignments != null && assignments.count > 0) listOf(
                 list?.let { "${it.count} 待办" } ?: "待办待同步", "${assignments.count} 作业",
                 ).joinToString(" · ") + if (now - assignments.fetchedAt >= 60 * 60_000L) " · 上次同步" else ""
-                else if (list != null && now - list.fetchedAt >= 60 * 60_000L) "上次同步"
-                else countText(list, if (tasks) "项待办" else "条通知")
+                else countText(list, if (tasks) "项待办" else "条通知") +
+                    if (list != null && now - list.fetchedAt >= 60 * 60_000L) " · 上次同步" else ""
             val primary = rows.firstOrNull()
-            val emphasis = primary?.detail?.split(" · ")?.firstOrNull { it.contains("截止") || it.contains("逾期") }
-            val heading = if (tasks) listOfNotNull(kind.label, emphasis).joinToString(" · ")
-                else listOf(kind.label, primary?.detail.orEmpty()).filter(String::isNotBlank).joinToString(" · ")
-            val nextMidnight = tomorrow.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-            val byQuadrant = (rows + list?.quadrantLeads.orEmpty().map { it.copy(destination = "hw") } +
-                assignments?.quadrantLeads.orEmpty()).groupBy { quadrantOf(it, nextMidnight) }
-            val panels = if (tasks && list != null) listOf("重要且紧急", "重要不紧急", "未标星且紧急", "未标星不紧急").mapIndexed { i, text ->
-                val entry = byQuadrant[i]?.minWithOrNull(compareBy<WidgetLine> { it.deadlineAt ?: Long.MAX_VALUE }.thenBy { it.priority })
-                WidgetSection(text, WidgetLine("", destination = "hw"), listOfNotNull(entry),
-                    if (list.count > list.rows.size && (list.quadrantLeads.isEmpty() ||
-                        java.time.Instant.ofEpochMilli(list.fetchedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate() != localDay)) "查看列表" else "暂无事项")
+            val nextMidnight = tomorrow.atStartOfDay(zone).toInstant().toEpochMilli()
+            val byQuadrant = rows.groupBy { quadrantOf(it, nextMidnight) }
+            val panels = if (tasks) listOf("重要且紧急", "重要不紧急", "未标星且紧急", "未标星不紧急").mapIndexed { i, text ->
+                val group = byQuadrant[i].orEmpty().sortedBy { it.deadlineAt ?: Long.MAX_VALUE }
+                WidgetSection(text, WidgetLine("", destination = "hw"), group, "暂无事项")
             } else emptyList()
             val count = (list?.count ?: 0) + (assignments?.count ?: 0)
-            WidgetContent(heading, primary ?: WidgetLine(empty,
-                if (list == null) "点按查看并刷新" else ""), rows.drop(1), summary, count.toString().takeIf { list != null || assignments != null }.orEmpty(),
-                if (tasks) "待完成" else "条通知", panels, createTask = tasks)
+            WidgetContent(when {
+                    tasks && list != null -> "${list.count} 待办"
+                    tasks && assignments != null -> "${assignments.count} 作业"
+                    list != null -> "${list.count} 条通知"
+                    else -> kind.label
+                }, primary ?: WidgetLine(empty, if (list == null) "点按查看并刷新" else ""),
+                rows.drop(1), summary, panels, createTask = tasks, hasRecords = primary != null,
+                cachedRemainder = (count - rows.size).coerceAtLeast(0))
         }
-    }
-}
-
-internal fun quadrantLeads(lines: List<WidgetLine>, now: Long): List<WidgetLine> {
-    val zone = java.time.ZoneId.systemDefault()
-    val tomorrow = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-    return lines.groupBy { quadrantOf(it, tomorrow) }.values.map { quadrant ->
-        quadrant.minBy { it.deadlineAt ?: Long.MAX_VALUE }
     }
 }

@@ -10,7 +10,7 @@ import android.os.Bundle
 import android.os.Parcel
 import android.util.SizeF
 import android.view.View
-import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.RemoteViews
 import android.widget.TextView
 import com.furina.classtools.R
@@ -18,6 +18,10 @@ import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.data.reminder.ReminderIntentFactory
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.session.SessionStore
+import com.furina.classtools.data.timetable.SessionInfo
+import com.furina.classtools.data.timetable.SessionState
+import com.furina.classtools.data.timetable.TodayState
+import com.furina.classtools.data.timetable.TtPlan
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -90,7 +94,7 @@ class DesktopWidgetHostTest {
         assertEquals("实验", tasks.rows.single().title)
     }
 
-    @Test fun taskAndWorkbenchWidgetsFilterAllImportedSourcesBeforeLimitingRows() {
+    @Test fun taskAndWorkbenchWidgetsRetainEveryPendingTaskAndFilterImportedHomework() {
         val sid = "3260799999"
         val now = 1000L
         val assignments = (1..10).map { HomeworkRow("h$it", subject = "作业 $it", ts = it.toLong()) }
@@ -102,8 +106,9 @@ class DesktopWidgetHostTest {
         WidgetFeedStore.save(app, sid, feed.copy(homework = WidgetHomework(assignments, now)))
         val data = WidgetFeedStore.read(app, sid)
         val personal = requireNotNull(data.tasks)
-        assertEquals(8, personal.rows.size)
-        assertFalse(personal.rows.any { it.homeworkId == "h1" || it.homeworkId == "h9" })
+        assertEquals(9, personal.rows.size)
+        assertFalse(personal.rows.any { it.homeworkId == "h1" })
+        assertTrue(personal.rows.any { it.homeworkId == "h9" })
         fun homeworkLines(kind: WidgetKind, source: WidgetFeed): List<String> {
             val content = widgetContent(kind, true, null, source, now)
             return (listOf(content.first) + content.more).filter { it.destination == "class-homework" }.map { it.homeworkId }
@@ -167,30 +172,27 @@ class DesktopWidgetHostTest {
         }
     }
 
-    @Test fun largeTaskWidgetUsesStarAndDeadlineAndRoutesAddSeparately() {
+    @Test fun wideTaskGroupingIncludesEveryRecordAndKeepsCreateAction() {
         val tomorrow = java.time.LocalDate.now().plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-        val lines = listOf(
-            WidgetLine("同名事项", focus = "a", starred = true, deadlineAt = tomorrow - 1),
-            WidgetLine("同名事项", focus = "b", starred = true),
-            WidgetLine("同名事项", focus = "c", deadlineAt = tomorrow - 10),
-            WidgetLine("同名事项", focus = "d", deadlineAt = tomorrow),
-        )
-        val content = widgetContent(WidgetKind.TASKS, true, null, WidgetFeed(tasks = WidgetList(4, lines, tomorrow - 10)), tomorrow - 10)
-        assertEquals(listOf("a", "b", "c", "d"), content.sections.map { it.lines.single().focus })
-        val widget = host(WidgetViews.forHost(app, WidgetKind.TASKS, content, options(340, 245)), 340, 245)
-        val grid = widget.findViewById<LinearLayout>(R.id.widget_grid)
-        assertEquals(2, grid.childCount)
-        (grid.getChildAt(0) as LinearLayout).getChildAt(1).findViewById<View>(R.id.widget_cell_item).performClick()
-        assertEquals("b", shadowOf(app).nextStartedActivity.getStringExtra(com.furina.classtools.MainActivity.CARD_FOCUS))
+        val lines = (1..16).map {
+            WidgetLine("同名事项", focus = "t/$it", starred = it % 2 == 0,
+                deadlineAt = if (it % 4 < 2) tomorrow - it else tomorrow + it)
+        }
+        val content = widgetContent(WidgetKind.TASKS, true, null, WidgetFeed(tasks = WidgetList(lines.size, lines, tomorrow - 20)), tomorrow - 20)
+        val style = WidgetLayout.fit(375f, 245f, app.resources.displayMetrics).rows
+        val entries = WidgetRows.entries(WidgetKind.TASKS, content, style)
+        assertEquals(4, entries.filterIsInstance<WidgetEntry.Header>().size)
+        assertEquals(lines.map { it.focus }.toSet(), entries.filterIsInstance<WidgetEntry.Record>().map { it.line.focus }.toSet())
+        assertEquals(16, entries.filterIsInstance<WidgetEntry.Record>().size)
+        val widget = host(WidgetViews.forHost(app, WidgetKind.TASKS, content, options(375, 245)), 375, 245)
         widget.findViewById<View>(R.id.widget_add).performClick()
         assertEquals(com.furina.classtools.MainActivity.WIDGET_ACTION + "new-task", shadowOf(app).nextStartedActivity.action)
     }
 
-    @Test fun checkboxSendsOnlyTheBoundPersonalTaskAndTitleStillOpensIt() {
-        val task = WidgetLine("同名", destination = "hw", focus = "t/1", canComplete = true)
-        val homework = WidgetLine("同名", destination = "class-homework", focus = "h/2")
-        val data = WidgetContent("任务", task, listOf(homework), "", "2", "待完成")
-        val widget = host(WidgetViews.forHost(app, WidgetKind.TASKS, data, options(300, 245), owner = "debug:9999"), 300, 245)
+    @Test fun compactPrimaryAndCompleteAndAllAreIndependent() {
+        val task = WidgetLine("设计任务", "周五截止", destination = "hw", focus = "t/1", canComplete = true)
+        val data = WidgetContent("2 待办", task, summary = "2 项待办")
+        val widget = host(WidgetViews.forHost(app, WidgetKind.TASKS, data, options(300, 60), owner = "debug:9999"), 300, 60)
         val check = widget.findViewById<View>(R.id.widget_primary_check)
         assertEquals(View.VISIBLE, check.visibility)
         assertTrue(check.performClick())
@@ -199,40 +201,128 @@ class DesktopWidgetHostTest {
         assertEquals(listOf("complete", "t/1"), action.data?.pathSegments)
         assertEquals("debug:9999", action.data?.getQueryParameter("owner"))
         assertNull(shadowOf(app).nextStartedActivity)
-        assertEquals(View.GONE, widget.findViewById<View>(R.id.widget_row_check).visibility)
-        widget.findViewById<View>(R.id.widget_primary).performClick()
-        assertEquals("t/1", shadowOf(app).nextStartedActivity.getStringExtra(com.furina.classtools.MainActivity.CARD_FOCUS))
-    }
-
-    @Test fun primaryAndSecondaryRowsCarryIndependentIdsAndHeaderOpensOverview() {
-        val rows = listOf(WidgetLine("同名", destination = "hw", focus = "task/1"),
-            WidgetLine("同名", destination = "class-homework", focus = "作业?2"))
-        val model = WidgetContent("待办任务", rows.first(), rows.drop(1))
-        val view = host(WidgetViews.forHost(app, WidgetKind.TASKS, model, options(300, 245)), 300, 245)
-        for ((id, expected) in listOf(R.id.widget_primary to "task/1", R.id.widget_row to "作业?2", R.id.widget_header to "")) {
-            view.findViewById<View>(id).performClick()
+        for ((id, expected) in listOf(R.id.widget_primary to "t/1", R.id.widget_summary_open to "")) {
+            assertTrue(widget.findViewById<View>(id).performClick())
             assertEquals(expected, shadowOf(app).nextStartedActivity.getStringExtra(com.furina.classtools.MainActivity.CARD_FOCUS))
         }
     }
 
-    @Test fun independentSizesChangeContentAndSignedOutRemovesPrivateRows() {
+    @Test fun rowTapForwardsExactFocusAndCompletionReturnsToHost() {
+        val lines = listOf(WidgetLine("同名", destination = "hw", focus = "任务/1"),
+            WidgetLine("同名", destination = "class-homework", focus = "作业?2"),
+            WidgetLine("同名", destination = "tt", focus = """{"date":"2026-11-27","name":"课次"}"""),
+            WidgetLine("同名", destination = "nt", focus = "通知@occ:20261127"))
+        for (line in lines) {
+            val tap = WidgetIntents.line(line, WidgetKind.WORKBENCH).setClass(app, WidgetRowActivity::class.java)
+            val activity = org.robolectric.Robolectric.buildActivity(WidgetRowActivity::class.java, tap).create().get()
+            val opened = shadowOf(activity).nextStartedActivity
+            assertEquals(com.furina.classtools.MainActivity.WIDGET_ACTION + line.destination, opened.action)
+            assertEquals(line.focus, opened.getStringExtra(com.furina.classtools.MainActivity.CARD_FOCUS))
+            assertTrue(activity.isFinishing)
+        }
+        val complete = android.content.Intent(app, WidgetRowActivity::class.java)
+            .setData(WidgetCommandReceiver.commandUri("debug:9999", WidgetCommandReceiver.COMPLETE, "任务/1"))
+        val activity = org.robolectric.Robolectric.buildActivity(WidgetRowActivity::class.java, complete).create().get()
+        assertNull(shadowOf(activity).nextStartedActivity)
+        assertEquals(listOf("complete", "任务/1"), shadowOf(app).broadcastIntents.last().data?.pathSegments)
+        assertTrue(activity.isFinishing)
+    }
+
+    @Test fun minimumDefaultAndDifferentAspectRatiosAllocateTheFullViewport() {
         val kind = WidgetKind.TASKS
-        val content = widgetContent(kind, true, null, feed, 2)
-        fun layout(w: Int, h: Int) = host(WidgetViews.forHost(app, kind, content, options(w,h)),w,h)
-        val small = layout(125, 56)
-        assertEquals("待办 · 报告 1", small.findViewById<TextView>(R.id.widget_course).text.toString())
-        assertEquals(View.GONE, small.findViewById<View>(R.id.widget_details).visibility)
-        val banner = layout(300, 56)
-        assertEquals("周五截止", banner.findViewById<TextView>(R.id.widget_details).text.toString())
-        val tall = layout(130, 170)
-        assertEquals(1, tall.findViewById<LinearLayout>(R.id.widget_list).childCount)
-        val large = layout(300, 245)
-        assertEquals(2, large.findViewById<LinearLayout>(R.id.widget_list).childCount)
-        assertEquals(View.VISIBLE, large.findViewById<View>(R.id.widget_row_detail).visibility)
-        assertEquals(View.GONE, tall.findViewById<View>(R.id.widget_row_detail).visibility)
-        large.updateAppWidget(parcelled(WidgetViews.forHost(app, kind, widgetContent(kind,false,null,feed,2), options(300,245))))
-        assertEquals(0, large.findViewById<LinearLayout>(R.id.widget_list).childCount)
-        assertEquals("登录后查看", large.findViewById<TextView>(R.id.widget_course).text.toString())
+        val model = widgetContent(kind, true, null, feed, 2)
+        fun layout(w: Int, h: Int) = host(WidgetViews.forHost(app, kind, model, options(w,h)),w,h)
+        val small = layout(132, 60)
+        assertEquals("报告 1", small.findViewById<TextView>(R.id.widget_course).text.toString())
+        assertEquals("5 待办", small.findViewById<TextView>(R.id.widget_summary_status).text.toString())
+        assertEquals(48, small.findViewById<View>(R.id.widget_summary_open).width)
+        assertEquals(View.GONE, small.findViewById<View>(R.id.widget_list).visibility)
+        val banner = layout(350, 60)
+        assertEquals("周五截止", banner.findViewById<TextView>(R.id.widget_side_details).text.toString())
+        assertEquals(View.VISIBLE, banner.findViewById<View>(R.id.widget_summary_add).visibility)
+        assertEquals(View.GONE, layout(180, 99).findViewById<View>(R.id.widget_list).visibility)
+        val first = layout(180, 100).findViewById<ListView>(R.id.widget_list)
+        assertEquals(52, first.height)
+        for ((w, h) in listOf(180 to 112, 132 to 260, 375 to 280)) {
+            val widget = layout(w, h)
+            assertEquals(h, widget.findViewById<View>(R.id.widget_backplate).height)
+            assertEquals(w, widget.findViewById<View>(R.id.widget_backplate).width)
+            val list = widget.findViewById<ListView>(R.id.widget_list)
+            assertEquals(View.VISIBLE, list.visibility)
+            assertEquals(h, list.bottom)
+            assertEquals(h - widget.findViewById<View>(R.id.widget_header).height, list.height)
+        }
+        val defaults = host(WidgetViews.forHost(app, kind, model, Bundle()), 180, 112)
+        assertEquals(View.VISIBLE, defaults.findViewById<View>(R.id.widget_list).visibility)
+    }
+
+    @Test fun fontScalingKeepsFullEntryAndAdaptsColumns() {
+        for (scale in listOf(1.3f, 2f)) {
+            val config = android.content.res.Configuration(app.resources.configuration).apply { fontScale = scale }
+            val context = app.createConfigurationContext(config)
+            val narrow = WidgetLayout.fit(132f, 60f, context.resources.displayMetrics)
+            val wide = WidgetLayout.fit(350f, 280f, context.resources.displayMetrics)
+            assertFalse(narrow.collection)
+            assertTrue(wide.collection)
+            assertFalse(WidgetLayout.fit(132f, 280f, context.resources.displayMetrics).rows.twoColumns)
+            if (scale == 2f) assertFalse(wide.rows.twoColumns)
+            val model = widgetContent(WidgetKind.TASKS, true, null,
+                WidgetFeed(tasks = WidgetList(1, listOf(WidgetLine("人机交互设计项目开题汇报与原型评审提交时间提醒", "本周五十八点前")), 2)), 2)
+            val views = WidgetViews.forHost(context, WidgetKind.TASKS, model, options(132, 60))
+            val root = host(views, 132, 60)
+            assertEquals(View.VISIBLE, root.findViewById<View>(R.id.widget_summary_open).visibility)
+            assertEquals(View.VISIBLE, root.findViewById<View>(R.id.widget_course).visibility)
+        }
+    }
+
+    @Test fun compactCourseKeepsRoomSeparateFromStartTime() {
+        val now = System.currentTimeMillis()
+        val course = SessionInfo("示例课程", "创意楼 306", 6, 6, "14:30", "15:10", "",
+            now + 60_000, now + 2_460_000, SessionState.NEXT)
+        val kind = WidgetKind.TIMETABLE
+        val model = widgetContent(kind, true, TtPlan(true, 3, listOf(course), TodayState.HAS, course), WidgetFeed(), now)
+        val narrow = host(WidgetViews.forHost(app, kind, model, options(132, 60)), 132, 60)
+        assertEquals("14:30 开始", narrow.findViewById<TextView>(R.id.widget_summary_status).text.toString())
+        assertEquals("创意楼 306", narrow.findViewById<TextView>(R.id.widget_details).text.toString())
+        val wide = host(WidgetViews.forHost(app, kind, model, options(350, 60)), 350, 60)
+        assertEquals("14:30–15:10 · 创意楼 306", wide.findViewById<TextView>(R.id.widget_side_details).text.toString())
+    }
+
+    @Test fun workbenchKeepsAllEnabledSectionsAndStableOrderAtEitherWidth() {
+        val kind = WidgetKind.WORKBENCH
+        val model = widgetContent(kind, true, null, feed, 2)
+        val expected = listOf("tt", "hw", "class-homework", "nt")
+        assertEquals(expected, model.sections.map { it.link.destination })
+        for ((width, count) in listOf(145f to 4, 355f to 2)) {
+            val style = WidgetLayout.fit(width, 275f, app.resources.displayMetrics).rows
+            val rows = WidgetRows.entries(kind, model, style).filterIsInstance<WidgetEntry.Tiles>()
+            assertEquals(count, rows.size)
+            assertEquals(expected, rows.flatMap { it.sections }.map { it.link.destination })
+            val fewerSections = model.copy(sections = model.sections.take(3))
+            val fewer = WidgetRows.entries(kind, fewerSections, style).filterIsInstance<WidgetEntry.Tiles>()
+            assertEquals(expected.take(3), fewer.flatMap { it.sections }.map { it.link.destination })
+        }
+    }
+
+    @Test fun restoredWidgetIdsKeepTheirOwnPaletteEvenWhenIdsOverlap() {
+        WidgetPalette.prefs(app).edit().putString("27", "LILAC").putString("28", "AMBER").commit()
+        TimetableWidget().onRestored(app, intArrayOf(27, 28), intArrayOf(28, 29))
+        assertEquals(WidgetPalette.SYSTEM, WidgetPalette.get(app, 27))
+        assertEquals(WidgetPalette.LILAC, WidgetPalette.get(app, 28))
+        assertEquals(WidgetPalette.AMBER, WidgetPalette.get(app, 29))
+    }
+
+    @Test fun legacyCacheShowsAnAccurateRemainderAndEmptyWidgetsHaveAnEntry() {
+        val kind = WidgetKind.NOTICES
+        val cached = widgetContent(kind, true, null, feed.copy(latestNotices = feed.latestNotices?.copy(count = 12)), 2)
+        val opts = options(300, 245)
+        val large = host(WidgetViews.forHost(app, kind, cached, opts), 300, 245)
+        assertEquals("另 7 项见全部", large.findViewById<TextView>(R.id.widget_header_status).text.toString())
+        val empty = widgetContent(kind, true, null, feed.copy(latestNotices = WidgetList(0, emptyList(), 2)), 2)
+        large.updateAppWidget(parcelled(WidgetViews.forHost(app, kind, empty, opts)))
+        assertEquals(View.GONE, large.findViewById<View>(R.id.widget_list).visibility)
+        assertEquals("暂无班级通知", large.findViewById<TextView>(R.id.widget_course).text.toString())
+        assertEquals(View.VISIBLE, large.findViewById<View>(R.id.widget_summary_open).visibility)
     }
 
     @Test @Config(sdk = [34]) fun launcherSelectsWideAndTallVariantsFromTheSameRemoteViews() {
@@ -242,11 +332,11 @@ class DesktopWidgetHostTest {
         val model = widgetContent(WidgetKind.NOTICES,true,null,feed,2)
         val variants = WidgetViews.forHost(app,WidgetKind.NOTICES,model,opts)
         val host = host(variants,125,56)
-        assertEquals(0, host.findViewById<LinearLayout>(R.id.widget_list).childCount)
+        assertEquals(View.GONE, host.findViewById<View>(R.id.widget_list).visibility)
         host.measure(View.MeasureSpec.makeMeasureSpec(300, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(245, View.MeasureSpec.EXACTLY))
         host.layout(0, 0, 300, 245)
-        assertEquals(2, host.findViewById<LinearLayout>(R.id.widget_list).childCount)
+        assertEquals(View.VISIBLE, host.findViewById<View>(R.id.widget_list).visibility)
     }
 
     @Test fun providerUpdatesBothBoundInstancesAndClearsPreviousAccount() = runBlocking {
@@ -266,12 +356,20 @@ class DesktopWidgetHostTest {
         assertNull(WidgetFeedStore.read(app, "99990001").tasks)
         DesktopWidgets.update(app, TasksWidget::class.java, false)
         fun root(index: Int) = registry.getViewFor(ids[index])
-        assertEquals("待办 · 报告 1", root(0).findViewById<TextView>(R.id.widget_course).text.toString())
-        assertEquals(0, root(0).findViewById<LinearLayout>(R.id.widget_list).childCount)
-        assertEquals(2, root(1).findViewById<LinearLayout>(R.id.widget_list).childCount)
+        assertEquals("报告 1", root(0).findViewById<TextView>(R.id.widget_course).text.toString())
+        assertEquals(View.GONE, root(0).findViewById<View>(R.id.widget_list).visibility)
+        assertEquals(View.VISIBLE, root(1).findViewById<View>(R.id.widget_list).visibility)
+        val style = WidgetLayout.fit(300f, 245f, app.resources.displayMetrics).rows
+        val collection = WidgetCollectionFactory(app, ids[1], WidgetKind.TASKS, style)
+        collection.onDataSetChanged()
+        assertEquals(5, collection.getCount())
+        assertNotNull(collection.getViewAt(4))
+        assertNotEquals(collection.getItemId(3), collection.getItemId(4))
         sessionStore.clear()
         DesktopWidgets.update(app, TasksWidget::class.java, false)
         assertEquals("登录后查看", root(1).findViewById<TextView>(R.id.widget_course).text.toString())
-        assertEquals(0, root(1).findViewById<LinearLayout>(R.id.widget_list).childCount)
+        assertEquals(View.GONE, root(1).findViewById<View>(R.id.widget_list).visibility)
+        collection.onDataSetChanged()
+        assertEquals(0, collection.getCount())
     }
 }

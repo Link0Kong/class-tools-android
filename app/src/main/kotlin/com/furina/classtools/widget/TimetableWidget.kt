@@ -7,9 +7,13 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import com.furina.classtools.R
 import com.furina.classtools.data.timetable.SessionState
 import com.furina.classtools.data.timetable.TtCalendar
+import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.data.timetable.deviceTimetable
+import com.furina.classtools.data.session.Session
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
@@ -38,7 +42,11 @@ abstract class DesktopWidgetProvider : AppWidgetProvider() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                DesktopWidgets.update(context, this@DesktopWidgetProvider.javaClass, intent.action == AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+                DesktopWidgets.update(context, this@DesktopWidgetProvider.javaClass,
+                    periodic = intent.action == AppWidgetManager.ACTION_APPWIDGET_UPDATE,
+                    resizedId = id.takeIf { it != AppWidgetManager.INVALID_APPWIDGET_ID &&
+                        intent.action == AppWidgetManager.ACTION_APPWIDGET_OPTIONS_CHANGED })
             } finally {
                 pending.finish()
             }
@@ -52,6 +60,34 @@ abstract class DesktopWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onDisabled(context: Context) = DesktopWidgets.cancelAlarm(context, javaClass)
+
+    override fun onRestored(context: Context, oldWidgetIds: IntArray, newWidgetIds: IntArray) {
+        val prefs = WidgetPalette.prefs(context)
+        val colors = oldWidgetIds.map { prefs.getString(it.toString(), null) }
+        prefs.edit().apply {
+            oldWidgetIds.forEach { remove(it.toString()) }
+            newWidgetIds.zip(colors).forEach { (id, color) -> putString(id.toString(), color) }
+        }.apply()
+        DesktopWidgets.refresh(context)
+    }
+}
+
+internal data class WidgetSnapshot(val session: Session?, val plan: TtPlan?, val content: WidgetContent) {
+    companion object {
+        suspend fun read(context: Context, kind: WidgetKind, now: Long): WidgetSnapshot {
+            val session = WidgetFeedStore.session(context)
+            val zone = ZoneId.systemDefault()
+            val timetable = kind == WidgetKind.TIMETABLE || kind == WidgetKind.WORKBENCH
+            val snapshot = if (timetable && session != null) deviceTimetable(context, session.sid) else null
+            val plan = snapshot?.let { TtCalendar.plan(it, now, zone) }
+            val tomorrow = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1)
+            val tomorrowCourses = if (kind == WidgetKind.TIMETABLE && snapshot != null)
+                TtCalendar.sessionsOn(snapshot.c, TtCalendar.parseTermStart(snapshot.termStart), tomorrow, now, zone) else emptyList()
+            val feed = if (kind != WidgetKind.TIMETABLE && session != null)
+                WidgetFeedStore.read(context, session.sid, session.debug) else WidgetFeed()
+            return WidgetSnapshot(session, plan, widgetContent(kind, session != null, plan, feed, now, tomorrowCourses))
+        }
+    }
 }
 
 internal object DesktopWidgets {
@@ -108,24 +144,25 @@ internal object DesktopWidgets {
     fun cancelAlarm(context: Context, provider: Class<out DesktopWidgetProvider>) =
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent(context, provider))
 
-    suspend fun update(context: Context, provider: Class<out DesktopWidgetProvider>, periodic: Boolean) = lock.withLock {
+    @Suppress("DEPRECATION")
+    suspend fun update(context: Context, provider: Class<out DesktopWidgetProvider>, periodic: Boolean, resizedId: Int? = null) = lock.withLock {
         val manager = AppWidgetManager.getInstance(context)
-        val ids = ids(context, provider)
+        val ids = ids(context, provider).filter { resizedId == null || it == resizedId }
         if (ids.isEmpty()) return@withLock
         val kind = components.entries.first { it.value == provider }.key
         val monet = com.furina.classtools.data.settings.AppSettingsStore(context).dynamicColor.first()
-        val session = WidgetFeedStore.session(context)
         val now = System.currentTimeMillis()
         val zone = ZoneId.systemDefault()
         val timetable = kind == WidgetKind.TIMETABLE || kind == WidgetKind.WORKBENCH
-        val snapshot = if (timetable && session != null) deviceTimetable(context, session.sid) else null
-        val plan = snapshot?.let { TtCalendar.plan(it, now, zone) }
-        val tomorrow = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1)
-        val tomorrowCourses = if (kind == WidgetKind.TIMETABLE && snapshot != null)
-            TtCalendar.sessionsOn(snapshot.c, TtCalendar.parseTermStart(snapshot.termStart), tomorrow, now, zone) else emptyList()
-        val feed = if (kind != WidgetKind.TIMETABLE && session != null) WidgetFeedStore.read(context, session.sid, session.debug) else WidgetFeed()
-        val model = widgetContent(kind, session != null, plan, feed, now, tomorrowCourses)
-        for (id in ids) manager.updateAppWidget(id, WidgetViews.forHost(context, kind, model, manager.getAppWidgetOptions(id), WidgetPalette.get(context, id), monet, session?.widgetOwner))
+        val (session, plan, model) = WidgetSnapshot.read(context, kind, now)
+        // New Android versions can implement invalidation by re-publishing the last RemoteViews.
+        // Send the new shell after that operation so the header and list cannot diverge.
+        if (resizedId == null && Build.VERSION.SDK_INT >= 35)
+            manager.notifyAppWidgetViewDataChanged(ids.toIntArray(), R.id.widget_list)
+        for (id in ids) manager.updateAppWidget(id, WidgetViews.forHost(context, kind, model,
+            manager.getAppWidgetOptions(id), WidgetPalette.get(context, id), monet, session?.widgetOwner, widgetId = id))
+        if (resizedId == null && Build.VERSION.SDK_INT < 35)
+            manager.notifyAppWidgetViewDataChanged(ids.toIntArray(), R.id.widget_list)
         if (periodic && session != null && !session.debug && kind != WidgetKind.TIMETABLE) WidgetFeedStore.request(context, session.sid)
         val current = plan?.today?.firstOrNull { it.state == SessionState.ONGOING }
         val boundary = listOfNotNull(current?.endAt, plan?.next?.startAt, session?.expiresAt,
