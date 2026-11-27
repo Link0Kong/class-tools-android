@@ -260,6 +260,9 @@ object CtPageTransitions {
     /** 鸿蒙淡入淡出时长（Motion.NORMAL 近似；与位移同时长会让淡入过慢）。 */
     const val HARMONY_FADE_MS: Int = 200
 
+    /** 根页被覆盖时的隐藏时长：0 = 首帧不可见（见 [rootCoveredExit]）。 */
+    const val ROOT_COVERED_EXIT_MS: Int = 0
+
     private fun harmonyPageSpec(): FiniteAnimationSpec<Float> =
         tween(durationMillis = HARMONY_PAGE_MS, easing = HarmonyMotion.ease)
 
@@ -297,6 +300,17 @@ object CtPageTransitions {
         } +
             fadeOut(animationSpec = harmonyFadeSpec()) +
             scaleOut(animationSpec = harmonyPageSpec(), targetScale = HarmonyMotion.PageExitScale)
+
+    /**
+     * 根页被工具/详情页覆盖时的退出：**首帧即隐藏**，不参与视觉过渡。
+     *
+     * 工具页底色沿用全局光感背板（半透明），卡片也是玻璃材质。若根页以 alpha=1 留在
+     * NavHost 的退出层里（`ExitTransition.None` 不会改变 alpha），工具页 400ms 的淡入过程中
+     * 会从这些透明区域透出工作台卡片和底栏，形成「工作台与工具页重叠」（2026-11-27 用户反馈）。
+     * 0ms 淡出只让根页立刻不可见，转场时长仍由工具页自己的 enter 决定；卡片容器变换走
+     * `EnterTransition.None`，根页本来就会在首帧移除，不受影响。
+     */
+    fun rootCoveredExit(): ExitTransition = fadeOut(animationSpec = tween(durationMillis = ROOT_COVERED_EXIT_MS))
     /** 供预览/测试：给定滑动进度 (0..1) 的页面参数（与 pager 插值一致）。 */
     fun progressTransform(progress: Float): CtDockLogic.PageTransform =
         CtDockLogic.pageTransform(

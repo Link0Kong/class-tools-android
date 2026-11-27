@@ -452,10 +452,10 @@ fun MainNavHost(
             ) {
         composable(
             route = Routes.ROOT,
-            // 根页不参与 NavHost 的进出场：工具页的进入/返回统一由容器变换覆盖层负责
-            // （覆盖层与目标页之间靠淡出交接），根页再叠加位移会出现两重动画。
+            // 根页不做位移/缩放（避免和容器变换覆盖层叠成两重动画），但被工具页覆盖时
+            // 必须在首帧隐藏：工具页底色是半透明光感背板，根页留着会从空隙透出工作台内容。
             enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
+            exitTransition = { CtPageTransitions.rootCoveredExit() },
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { ExitTransition.None },
         ) { entry ->
