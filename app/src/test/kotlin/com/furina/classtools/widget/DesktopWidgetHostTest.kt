@@ -313,7 +313,7 @@ class DesktopWidgetHostTest {
     @Test fun workbenchTwoColumnCardsAlignWithDifferentTitleLengthsAndKeepSeparateListEntry() {
         val kind = WidgetKind.WORKBENCH
         val style = WidgetLayout.fit(375f, 220f, app.resources.displayMetrics).rows
-        val longTitle = "数字媒体教学实践项目场地调整与展板材料提交"
+        val longTitle = "数字媒体教学实践项目场地调整\n与展板材料提交"
         val sections = listOf(
             WidgetSection("课程", WidgetLine("", destination = "tt"), emptyList(), "暂无课程"),
             WidgetSection("班级通知", WidgetLine("", destination = "nt"),
@@ -331,6 +331,12 @@ class DesktopWidgetHostTest {
         assertEquals(left.findViewById<View>(R.id.widget_tile_fill).height, right.findViewById<View>(R.id.widget_tile_fill).height)
         assertEquals(left.findViewById<View>(R.id.widget_tile_caption).top, right.findViewById<View>(R.id.widget_tile_caption).top)
         assertTrue(left.height >= 48)
+        val title = right.findViewById<TextView>(R.id.widget_tile_title)
+        val detail = right.findViewById<TextView>(R.id.widget_tile_detail)
+        assertEquals(2, title.lineCount)
+        assertTrue(title.height >= title.layout.height)
+        assertTrue(detail.height >= detail.layout.height)
+        assertTrue(detail.bottom <= right.findViewById<View>(R.id.widget_tile_primary).height)
         assertEquals("班级通知 · 12", right.findViewById<TextView>(R.id.widget_tile_caption).text.toString())
         assertEquals("打开班级通知列表", right.findViewById<View>(R.id.widget_tile_open).contentDescription)
         assertEquals(View.GONE, left.findViewById<View>(R.id.widget_tile_open).visibility)
