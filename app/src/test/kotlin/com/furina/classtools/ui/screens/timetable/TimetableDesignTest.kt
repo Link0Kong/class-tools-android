@@ -172,6 +172,29 @@ class TimetableDesignTest {
         assertEquals("", TimetableWeekLogic.weekRangeLabel(null, 10))
     }
 
+    // ---- 日视图切天（2026-11-27：日视图左右滑动切相邻天，不再是切周） ----------------
+
+    @Test
+    fun dayNavigate_movesOneDayWithinWeek() {
+        assertEquals(1, TimetableDayLogic.navigate(0, TimetableSwipe.Direction.NEXT))
+        assertEquals(3, TimetableDayLogic.navigate(2, TimetableSwipe.Direction.NEXT))
+        assertEquals(5, TimetableDayLogic.navigate(6, TimetableSwipe.Direction.PREV))
+        assertEquals(0, TimetableDayLogic.navigate(1, TimetableSwipe.Direction.PREV))
+    }
+
+    @Test
+    fun dayNavigate_stopsAtWeekEdges() {
+        assertNull(TimetableDayLogic.navigate(0, TimetableSwipe.Direction.PREV))
+        assertNull(TimetableDayLogic.navigate(6, TimetableSwipe.Direction.NEXT))
+        assertNull(TimetableDayLogic.navigate(3, TimetableSwipe.Direction.NONE))
+        assertNull(TimetableDayLogic.navigate(-1, TimetableSwipe.Direction.NEXT))
+        assertNull(TimetableDayLogic.navigate(7, TimetableSwipe.Direction.PREV))
+        assertFalse(TimetableDayLogic.canNavigate(0, TimetableSwipe.Direction.PREV))
+        assertTrue(TimetableDayLogic.canNavigate(0, TimetableSwipe.Direction.NEXT))
+        assertTrue(TimetableDayLogic.canNavigate(6, TimetableSwipe.Direction.PREV))
+        assertFalse(TimetableDayLogic.canNavigate(6, TimetableSwipe.Direction.NEXT))
+    }
+
     // ---- 显示比例 -----------------------------------------------------------
 
     @Test

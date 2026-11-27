@@ -111,6 +111,7 @@ import com.furina.classtools.data.timetable.SessionInfo
 import com.furina.classtools.data.timetable.SessionState
 import com.furina.classtools.data.timetable.TimetableLoginRepository
 import com.furina.classtools.data.timetable.TimetableRepository
+import com.furina.classtools.data.timetable.TimetableViewMode
 import com.furina.classtools.data.timetable.TtCalendar
 import com.furina.classtools.data.timetable.TtFailureKind
 import com.furina.classtools.data.timetable.TtLoadResult
@@ -149,9 +150,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** 课表视图模式（周/日只由按钮切换，不参与左右滑动）。 */
-enum class TimetableViewMode { WEEK, DAY }
-
 /**
  * 课表页 v5（参考 HFUT-Schedule / xiaoying 的马卡龙课表重做；详见 `docs/design/UI_REFERENCE_20261113.md`）。
  *
@@ -163,8 +161,8 @@ enum class TimetableViewMode { WEEK, DAY }
  * - 课程详情 Bottom Sheet（spring 进入 + 拖拽把手）、首次/切周课程块错峰入场、按下缩放。
  *
  * 功能（不回归）：
- * - 左右滑动切周（跟手/边缘阻尼/提交阈值/点击抑制）、上下周按钮、「本周」；
- * - 周/日视图切换（按钮）与日视图日期选择；周末空列隐藏；今日高亮；全部课程折叠卡；
+ * - 左右滑动：周视图切上一周/下一周，日视图切相邻一天（跟手/边缘阻尼/提交阈值/点击抑制）、上下周按钮、「本周」；
+ * - 周/日视图切换（按钮）且记住上次选择；日视图日期选择；周末空列隐藏；今日高亮；全部课程折叠卡；
  * - 导出课表图片 `onExportTimetable`、登录教务/个人课表/清除个人课表、公共/缓存来源标识；
  * - 平板从 800dp 起支持周课表与所选日期日程并排显示，支持大字体 1.3x 和空、加载、错误态。
  * - 课程详情「写日程」入口。
@@ -191,6 +189,8 @@ fun TimetableViewScreen(
     initialError: String? = null,
     initialErrorKind: TtFailureKind? = null,
     initialDayView: Boolean = false,
+    initialViewMode: TimetableViewMode? = null,
+    onViewModeChange: (TimetableViewMode) -> Unit = {},
     initialWeekOffset: Int = 0,
     focusRequest: TimetableFocusRequest? = null,
     isPageActive: Boolean = true,
@@ -279,8 +279,15 @@ fun TimetableViewScreen(
     val maxWeek = remember(snapshot, currentWeek) { TimetableWeekLogic.maxWeekOf(snapshot.c, currentWeek) }
 
     var weekOffset by rememberSaveable { mutableIntStateOf(initialWeekOffset) }
-    val preferDay = initialDayView || LocalDensity.current.fontScale > 1.3f
-    var viewMode by rememberSaveable { mutableStateOf(if (preferDay) TimetableViewMode.DAY else TimetableViewMode.WEEK) }
+    // 首次进入的视图（2026-11-27）：深链强制日视图；否则优先上次显式保存的周/日选择；
+    // 从未保存时沿用大字体默认日视图（>1.3x）。
+    val defaultViewMode = when {
+        initialDayView -> TimetableViewMode.DAY
+        initialViewMode != null -> initialViewMode
+        LocalDensity.current.fontScale > 1.3f -> TimetableViewMode.DAY
+        else -> TimetableViewMode.WEEK
+    }
+    var viewMode by rememberSaveable { mutableStateOf(defaultViewMode) }
     var selectedDay by rememberSaveable { mutableIntStateOf(todayIndex) }
     var selectedCourse by rememberSaveable(stateSaver = Saver<Course?, String>(
         save = { course -> course?.let { Json.encodeToString(it) } },
@@ -295,6 +302,16 @@ fun TimetableViewScreen(
         selectedCourse = course
         openedFrom = fromFocus
         detailVersion += 1
+    }
+
+    /**
+     * 用户显式切换周/日（顶部 SegmentedButton 或周表点某天进入日视图）：
+     * 更新当前视图并记住偏好。深链/工作台定位、大字体默认不经过这里，不写偏好。
+     */
+    fun chooseViewMode(mode: TimetableViewMode) {
+        if (viewMode == mode) return
+        viewMode = mode
+        onViewModeChange(mode)
     }
 
     // Resolve against the same loaded snapshot that supplied the week values in this composition.
@@ -332,9 +349,9 @@ fun TimetableViewScreen(
         displayWeek?.let { TtCalendar.mondayOf(termStart, it) } ?: today.minusDays(todayIndex.toLong())
     }
 
-    // 滑动切周状态
+    // 滑动切周/切天状态
     var swipeOffset by remember { mutableFloatStateOf(initialSwipeOffsetPx) }
-    var weekTransitioning by remember { mutableStateOf(false) }
+    var contentTransitioning by remember { mutableStateOf(false) }
     var suppressClickUntil by remember { mutableLongStateOf(0L) }
     var gridWidthPx by remember { mutableFloatStateOf(0f) }
 
@@ -342,10 +359,10 @@ fun TimetableViewScreen(
         refreshToken += 1
     }
 
-    /** 周切换动画：跟随拖拽 → 飞出 150ms → 切周 → 飞入 230ms（与既有 web/mp 参数一致）。 */
-    fun animateWeekFlip(direction: TimetableSwipe.Direction, applyChange: () -> Unit) {
-        if (weekTransitioning || direction == TimetableSwipe.Direction.NONE) return
-        weekTransitioning = true
+    /** 内容切换动画（切周/切天共用）：跟随拖拽 → 飞出 150ms → 换内容 → 飞入 230ms（与既有 web/mp 参数一致）。 */
+    fun animateContentFlip(direction: TimetableSwipe.Direction, applyChange: () -> Unit) {
+        if (contentTransitioning || direction == TimetableSwipe.Direction.NONE) return
+        contentTransitioning = true
         scope.launch {
             val width = gridWidthPx.coerceAtLeast(1f)
             animate(
@@ -363,7 +380,7 @@ fun TimetableViewScreen(
                     easing = CubicBezierEasing(0.22f, 0.8f, 0.3f, 1f),
                 ),
             ) { value, _ -> swipeOffset = value }
-            weekTransitioning = false
+            contentTransitioning = false
             suppressClickUntil = System.currentTimeMillis() + TimetableSwipe.TAP_GUARD_MS
         }
     }
@@ -371,21 +388,32 @@ fun TimetableViewScreen(
     fun goWeek(direction: TimetableSwipe.Direction) {
         val week = displayWeek ?: return
         val target = TimetableWeekLogic.navigate(week, direction, maxWeek) ?: return
-        animateWeekFlip(direction) {
-            weekOffset = target - (currentWeek ?: return@animateWeekFlip)
+        animateContentFlip(direction) {
+            weekOffset = target - (currentWeek ?: return@animateContentFlip)
         }
+    }
+
+    /** 日视图：切相邻一天（本周 0..6 内；边界由手势层阻尼回弹，不跨周）。 */
+    fun goDay(direction: TimetableSwipe.Direction) {
+        val target = TimetableDayLogic.navigate(selectedDay, direction) ?: return
+        animateContentFlip(direction) { selectedDay = target }
+    }
+
+    /** 左右滑动提交：日视图切天，周视图切周（2026-11-27 用户要求）。 */
+    fun goSwipe(direction: TimetableSwipe.Direction) {
+        if (viewMode == TimetableViewMode.DAY) goDay(direction) else goWeek(direction)
     }
 
     fun goThisWeek(animate: Boolean = true) {
         if (!TimetableWeekLogic.isThisWeek(weekOffset)) {
             val direction = if (weekOffset > 0) TimetableSwipe.Direction.PREV else TimetableSwipe.Direction.NEXT
-            if (animate) animateWeekFlip(direction) { weekOffset = 0 } else weekOffset = 0
+            if (animate) animateContentFlip(direction) { weekOffset = 0 } else weekOffset = 0
         }
     }
 
     /** 周选择器：直接跳到目标教学周（无动画，避免跨多周飞行）。 */
     fun goToWeek(target: Int) {
-        if (weekTransitioning) return
+        if (contentTransitioning) return
         val current = currentWeek ?: return
         weekOffset = (target - current).coerceIn(1 - current, maxWeek - current)
     }
@@ -443,8 +471,35 @@ fun TimetableViewScreen(
         },
         onSelectDay = { day ->
             selectedDay = day
-            if (!twoPane) viewMode = TimetableViewMode.DAY
+            // 周视图点某天 → 进日视图；这是用户显式选择，按日视图记住。
+            if (!twoPane) chooseViewMode(TimetableViewMode.DAY)
         },
+    )
+
+    // 课表内容左右滑动：日视图切相邻天，周视图切上一周/下一周（2026-11-27）。
+    val swipeModifier = Modifier.timetableSwipe(
+        viewMode = viewMode,
+        selectedDay = selectedDay,
+        displayWeek = displayWeek,
+        maxWeek = maxWeek,
+        enabled = !contentTransitioning,
+        onOffset = { swipeOffset = it },
+        onCommit = { dx, dy ->
+            val direction = if (dx < 0) TimetableSwipe.Direction.NEXT else TimetableSwipe.Direction.PREV
+            if (TimetableSwipe.shouldCommit(dx, dy)) {
+                suppressClickUntil = System.currentTimeMillis() + TimetableSwipe.TAP_GUARD_MS
+                goSwipe(direction)
+            } else {
+                scope.launch {
+                    animate(
+                        initialValue = swipeOffset,
+                        targetValue = 0f,
+                        animationSpec = CtMotion.spatial,
+                    ) { value, _ -> swipeOffset = value }
+                }
+            }
+        },
+        onWidth = { gridWidthPx = it },
     )
 
     val rangeText = TimetableWeekLogic.weekRangeLabel(termStart, displayWeek)
@@ -540,34 +595,13 @@ fun TimetableViewScreen(
                                 onPrev = { goWeek(TimetableSwipe.Direction.PREV) },
                                 onNext = { goWeek(TimetableSwipe.Direction.NEXT) },
                                 onThisWeek = { goThisWeek() },
-                                onViewMode = { viewMode = it },
+                                onViewMode = { chooseViewMode(it) },
                                 onSelectDay = { selectedDay = it },
                                 onOpenWeekPicker = { showWeekPicker = true },
                                 onOpenSettings = { showSettingsSheet = true },
                                 onOpenLink = { showLinkSheet = true },
                                 onExport = if (onExportTimetable != null) ({ exportTimetable() }) else null,
-                                swipeModifier = Modifier.timetableSwipe(
-                                    displayWeek = displayWeek,
-                                    maxWeek = maxWeek,
-                                    enabled = !weekTransitioning,
-                                    onOffset = { swipeOffset = it },
-                                    onCommit = { dx, dy ->
-                                        val direction = if (dx < 0) TimetableSwipe.Direction.NEXT else TimetableSwipe.Direction.PREV
-                                        if (TimetableSwipe.shouldCommit(dx, dy)) {
-                                            suppressClickUntil = System.currentTimeMillis() + TimetableSwipe.TAP_GUARD_MS
-                                            goWeek(direction)
-                                        } else {
-                                            scope.launch {
-                                                animate(
-                                                    initialValue = swipeOffset,
-                                                    targetValue = 0f,
-                                                    animationSpec = CtMotion.spatial,
-                                                ) { value, _ -> swipeOffset = value }
-                                            }
-                                        }
-                                    },
-                                    onWidth = { gridWidthPx = it },
-                                ),
+                                swipeModifier = swipeModifier,
                             )
                         } else {
                             CompactBodyV5(
@@ -584,34 +618,13 @@ fun TimetableViewScreen(
                                 onPrev = { goWeek(TimetableSwipe.Direction.PREV) },
                                 onNext = { goWeek(TimetableSwipe.Direction.NEXT) },
                                 onThisWeek = { goThisWeek() },
-                                onViewMode = { viewMode = it },
+                                onViewMode = { chooseViewMode(it) },
                                 onSelectDay = { selectedDay = it },
                                 onOpenWeekPicker = { showWeekPicker = true },
                                 onOpenSettings = { showSettingsSheet = true },
                                 onOpenLink = { showLinkSheet = true },
                                 onExport = if (onExportTimetable != null) ({ exportTimetable() }) else null,
-                                swipeModifier = Modifier.timetableSwipe(
-                                    displayWeek = displayWeek,
-                                    maxWeek = maxWeek,
-                                    enabled = !weekTransitioning,
-                                    onOffset = { swipeOffset = it },
-                                    onCommit = { dx, dy ->
-                                        val direction = if (dx < 0) TimetableSwipe.Direction.NEXT else TimetableSwipe.Direction.PREV
-                                        if (TimetableSwipe.shouldCommit(dx, dy)) {
-                                            suppressClickUntil = System.currentTimeMillis() + TimetableSwipe.TAP_GUARD_MS
-                                            goWeek(direction)
-                                        } else {
-                                            scope.launch {
-                                                animate(
-                                                    initialValue = swipeOffset,
-                                                    targetValue = 0f,
-                                                    animationSpec = CtMotion.spatial,
-                                                ) { value, _ -> swipeOffset = value }
-                                            }
-                                        }
-                                    },
-                                    onWidth = { gridWidthPx = it },
-                                ),
+                                swipeModifier = swipeModifier,
                             )
                         }
                     }
@@ -2370,14 +2383,17 @@ private fun PersonalTimetableBanner(onClear: () -> Unit) {
 // =============================================================================
 
 /**
- * 给课表内容挂「左右滑动切周」手势（跟手 → 松手弹性吸附/飞出飞入）。
+ * 给课表内容挂「左右滑动切换」手势（跟手 → 松手弹性吸附/飞出飞入）。
  *
+ * - 日视图：切相邻一天（0..6，边界阻尼）；周视图：切上一周/下一周（1..maxWeek）；
  * - 横向锁定：|dx|≥12px 且 |dx| > |dy|×1.35；
  * - 纵向/斜向手势不拦截（交给页面滚动）；
- * - 有目标周 1:1 跟手，到第一/最后周时阻尼 0.28；
+ * - 有目标 1:1 跟手，到边界时阻尼 0.28；
  * - 松手提交与否由调用方判断（[TimetableSwipe.shouldCommit]）。
  */
 private fun Modifier.timetableSwipe(
+    viewMode: TimetableViewMode,
+    selectedDay: Int,
     displayWeek: Int?,
     maxWeek: Int,
     enabled: Boolean,
@@ -2386,7 +2402,7 @@ private fun Modifier.timetableSwipe(
     onWidth: (Float) -> Unit,
 ): Modifier = this
     .onSizeChanged { onWidth(it.width.toFloat()) }
-    .pointerInput(displayWeek, maxWeek, enabled) {
+    .pointerInput(viewMode, selectedDay, displayWeek, maxWeek, enabled) {
         if (!enabled) return@pointerInput
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
@@ -2407,10 +2423,15 @@ private fun Modifier.timetableSwipe(
                 }
                 if (locked) {
                     change.consume()
-                    val hasTarget = when {
-                        dx < 0 -> displayWeek != null && displayWeek < maxWeek
-                        dx > 0 -> displayWeek != null && displayWeek > TimetableWeekLogic.MIN_WEEK
-                        else -> false
+                    val direction = if (dx < 0) TimetableSwipe.Direction.NEXT else TimetableSwipe.Direction.PREV
+                    val hasTarget = when (viewMode) {
+                        TimetableViewMode.DAY -> TimetableDayLogic.canNavigate(selectedDay, direction)
+                        TimetableViewMode.WEEK -> when (direction) {
+                            TimetableSwipe.Direction.NEXT -> displayWeek != null && displayWeek < maxWeek
+                            TimetableSwipe.Direction.PREV ->
+                                displayWeek != null && displayWeek > TimetableWeekLogic.MIN_WEEK
+                            TimetableSwipe.Direction.NONE -> false
+                        }
                     }
                     onOffset(TimetableSwipe.damped(dx, hasTarget))
                 }

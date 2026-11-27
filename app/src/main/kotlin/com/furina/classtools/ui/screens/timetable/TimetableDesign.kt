@@ -275,6 +275,28 @@ object TimetableWeekLogic {
     }
 }
 
+/**
+ * 日视图切天（2026-11-27）：日视图左右滑动切的是相邻一天，不再是上一周/下一周。
+ *
+ * 口径与日视图日期条一致：只在当前展示周的 周一..周日（0..6）内移动；
+ * 走到周一/周日边界时返回 null，由手势层做 0.28 阻尼回弹（不跨周；跨周用顶部周导航）。
+ */
+object TimetableDayLogic {
+
+    const val DAY_COUNT: Int = 7
+
+    /** 单步切换（滑动提交）：越界/无方向返回 null。 */
+    fun navigate(day: Int, direction: TimetableSwipe.Direction): Int? {
+        if (day !in 0 until DAY_COUNT || direction == TimetableSwipe.Direction.NONE) return null
+        val target = day + direction.delta
+        return if (target in 0 until DAY_COUNT) target else null
+    }
+
+    /** 当前天是否还能朝该方向切（手势跟手/阻尼判定）。 */
+    fun canNavigate(day: Int, direction: TimetableSwipe.Direction): Boolean =
+        navigate(day, direction) != null
+}
+
 /** 一节课的展示尺寸规格（按窗口宽度/视图模式自适应）。 */
 data class TimetableMetrics(
     val rowHeightDp: Int,

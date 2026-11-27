@@ -106,6 +106,7 @@ import com.furina.classtools.data.push.PushTokenPayload
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
+import com.furina.classtools.data.timetable.TimetableViewPrefs
 import com.furina.classtools.features.export.ExportCardSpec
 import com.furina.classtools.features.export.toCardSpec
 import com.furina.classtools.features.fit.FitRecord
@@ -836,9 +837,14 @@ fun MainNavHost(
                     val delivery by entry.savedStateHandle.getStateFlow<Bundle?>(TIMETABLE_DELIVERY, null).collectAsState()
                     val focusRequest = delivery?.getString("id")?.let { TimetableFocusRequest(it, delivery?.getString("focus")) }
                         ?: focus?.let { TimetableFocusRequest(entry.id, it) }
+                    // 周/日视图记忆：进页读本机偏好，用户显式切换时写回（深链定位不写）。
+                    val timetablePrefs = remember(context) { TimetableViewPrefs(context) }
+                    val storedViewMode = remember { timetablePrefs.read() }
                     TimetableViewScreen(
                         focusRequest = focusRequest,
                         isPageActive = active,
+                        initialViewMode = storedViewMode,
+                        onViewModeChange = { timetablePrefs.write(it) },
                         onBack = ::back,
                         onOpenMap = { room ->
                             if (navController.currentBackStackEntry?.id == entry.id) {
