@@ -6,11 +6,13 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.view.View
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -57,7 +59,7 @@ import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlinx.coroutines.delay
 
 private const val OFFLINE_MAP = "file:///android_asset/map/campus_final_25d.html"
-private const val MAP_VERSION = "20261127-map3"
+private const val MAP_VERSION = "20261127-map4"
 private const val READY_SCRIPT = "window.zqMapReady === true"
 private const val DISMISS_SCRIPT = "typeof window.zqMapDismiss === 'function' && window.zqMapDismiss()"
 
@@ -104,6 +106,7 @@ fun CampusMapScreen(
     }
     val currentUrl by rememberUpdatedState(url)
     val currentDark by rememberUpdatedState(dark)
+    val closeMap by rememberUpdatedState(onBack)
 
     fun advanceFallback(failedUrl: String) {
         val failedSource = if (failedUrl.startsWith("file:")) MapSource.OFFLINE else MapSource.ONLINE
@@ -119,6 +122,8 @@ fun CampusMapScreen(
 
     val webView = remember(context) {
         WebView(context).apply {
+            // 旧 WebView 在 WRAP_CONTENT 下会把页面根节点高度算成零。
+            layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
             // 部分旧 WebView 的硬件层无法显示 Canvas，保留软件绘制。
             setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             settings.javaScriptEnabled = true
@@ -203,12 +208,21 @@ fun CampusMapScreen(
             webView.destroy()
         }
     }
-    BackHandler {
-        if (source == MapSource.STATIC || loading) onBack()
-        else webView.evaluateJavascript(DISMISS_SCRIPT) { closed ->
-            if (closed != "true") onBack()
+    var dismissing by remember(webView) { mutableStateOf(false) }
+    fun handleBack() {
+        if (dismissing) return
+        if (source == MapSource.STATIC || loading) {
+            closeMap()
+            return
+        }
+        dismissing = true
+        val backUrl = currentUrl
+        webView.evaluateJavascript(DISMISS_SCRIPT) { closed ->
+            dismissing = false
+            if (closed != "true" && webView.isAttachedToWindow && currentUrl == backUrl) closeMap()
         }
     }
+    BackHandler(onBack = ::handleBack)
 
     Column(
         modifier = Modifier
@@ -220,7 +234,7 @@ fun CampusMapScreen(
         ctTopBarRaw(
             subtitle = source.label,
             title = "校内地图",
-            onBack = onBack,
+            onBack = ::handleBack,
             actions = {
                 TextButton(onClick = { openBrowser(Uri.parse(mapUrl(BuildConfig.MAP_BASE_URL, room, false))) }) {
                     Text("浏览器")
