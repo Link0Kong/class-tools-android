@@ -275,7 +275,7 @@ class ReminderEngine(
     ) : this(
         settingsStore = DataStoreReminderSettingsStore(context),
         dedupeStore = SharedPrefsReminderDedupeStore(context, owner),
-        notifier = AndroidReminderNotifier(context),
+        notifier = AndroidReminderNotifier(context, owner),
         permissionController = AndroidPermissionController(context),
         dataProvider = provider,
         runStateStore = SharedPrefsReminderRunStateStore(context, owner),
@@ -347,6 +347,12 @@ class ReminderEngine(
             return finish(ReminderRunResult(disabledReason = "所有通知类型均已关闭", reason = "全部类型关闭"))
         }
         if (!permission.isGranted) {
+            if (stillSignedIn() && ttPlan != null && settings.classRemindEnabled) {
+                val course = ReminderPlanner.planCourse(ttPlan, now, settings, TimetableLink.CHINA_ZONE).firstOrNull()
+                val due = course?.takeIf { it.triggerAtMillis <= now }
+                notifier.reconcileLiveCourse(due, now, alreadySent = due != null)
+                course?.let { scheduleCourseAt(if (due == null) it.triggerAtMillis else it.courseStartAtMillis!!) }
+            }
             // 权限缺失时仍建立基线：用户授权后不会把历史消息当成「新增」轰炸。
             saveSnapshot()
             return finish(ReminderRunResult(disabledReason = "通知权限未开启", reason = "通知权限未开启"))
@@ -378,6 +384,8 @@ class ReminderEngine(
             // At the bell, compute the next reminder even if the periodic scan is still far away.
             val boundary = if (course.triggerAtMillis > now) course.triggerAtMillis else course.courseStartAtMillis
             if (boundary != null && boundary > now) scheduleCourseAt(boundary)
+            val imminent = course.course?.takeIf { it.trackLive }?.startAt?.minus(10 * 60_000L)
+            if (imminent != null && imminent > now && course.triggerAtMillis <= now) scheduleCourseAt(imminent)
         }
 
         // Doze/省电延迟补偿：
@@ -402,6 +410,8 @@ class ReminderEngine(
         if (!stillSignedIn()) return ReminderRunResult(reason = "登录状态已变更")
         val liveCourse = due.firstOrNull { it.kind == ReminderKind.COURSE_SOON }
         if (ttPlan != null || !settings.classRemindEnabled) {
+            plan.events.firstOrNull { it.kind == ReminderKind.COURSE_SOON && it.triggerAtMillis > now }
+                ?.let { notifier.pauseEarlyCourse(it.key) }
             val alreadySent = liveCourse != null &&
                 !ReminderDedupe.shouldNotify(liveCourse.key, dedupeStore.lastSent(liveCourse.key), now, zone)
             notifier.reconcileLiveCourse(liveCourse, now, alreadySent).forEach { key -> dedupeStore.markSent(key, 0L) }
@@ -539,8 +549,15 @@ class ReminderWorker(
         val app = (applicationContext as? ClassToolsApp)?.container ?: return Result.failure()
         suspend fun signedIn() = (app.sessionStore.state.first() as? SessionState.SignedIn)?.session
             ?.takeIf { !it.debug && it.isLikelyValid() }
-        val owner = signedIn() ?: return Result.success()
+        CourseActivities.expire(applicationContext)
+        val accountRevision = CourseActivities.accountRevision
+        val session = reminderSession(applicationContext)
+        if (!CourseActivities.restore(applicationContext, session?.reminderOwner, accountRevision)) return Result.success()
+        val owner = session?.takeUnless { it.debug } ?: return Result.success()
         val settings = app.reminderSettingsStore.current()
+        if (!settings.enabled || !settings.classRemindEnabled) {
+            CourseActivities.reconcile(applicationContext, owner.reminderOwner, null)
+        }
         if (!settings.anySectionEnabled) return Result.success()
         val boundary = inputData.getBoolean(ReminderRuntime.COURSE_BOUNDARY, false)
         val signupBoundary = inputData.getBoolean(ReminderRuntime.SIGNUP_BOUNDARY, false)

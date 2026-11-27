@@ -12,6 +12,8 @@ import androidx.work.WorkerParameters
 import com.furina.classtools.AppContainer
 import com.furina.classtools.BuildConfig
 import com.furina.classtools.ClassToolsApp
+import com.furina.classtools.data.reminder.CourseActivities
+import com.furina.classtools.data.reminder.UserReminderAlarms
 import com.furina.classtools.data.session.SessionState
 import java.io.IOException
 import java.util.UUID
@@ -35,6 +37,13 @@ internal class XiaobuCourseSync(private val context: Context, private val contai
     private val mutex = Mutex()
     private val message = MutableStateFlow("")
     val status = message.asStateFlow()
+
+    fun clickTarget(entity: String): Pair<String, String>? {
+        if (entity != prefs.getString("clickEntity", null)) return null
+        val owner = prefs.getString("clickOwner", null) ?: return null
+        val focus = prefs.getString("clickFocus", null) ?: return null
+        return "account:$owner" to focus
+    }
 
     fun enabledFor(sid: String) = sid.isNotBlank() && prefs.getString("owner", null) == sid
 
@@ -79,12 +88,27 @@ internal class XiaobuCourseSync(private val context: Context, private val contai
         val enabled = sid != null && sid == owner && settings.enabled && settings.classRemindEnabled
         val snapshot = if (enabled) deviceTimetable(context, sid) else null
         val window = XiaobuCourseCard.window(snapshot, now, settings.classLeadMillis)
-        window.nextChange?.let { schedule(it) }
+        val scheduled = prefs.getLong("nextBoundary", 0)
+        val alarmOwner = prefs.getString("alarmOwner", "").orEmpty()
+        val boundary = window.nextChange
+        if (scheduled != 0L && (scheduled != boundary || sid != alarmOwner)) {
+            UserReminderAlarms.cancel(context,
+                UserReminderAlarms.XIAOBU, alarmOwner, "course", scheduled.toString())
+            WorkManager.getInstance(context).cancelUniqueWork("ct_xiaobu_$scheduled")
+            prefs.edit().remove("nextBoundary").remove("alarmOwner").commit()
+        }
+        if (boundary != null && sid != null) {
+            prefs.edit().putLong("nextBoundary", boundary).putString("alarmOwner", sid).commit()
+            UserReminderAlarms.set(context,
+                UserReminderAlarms.XIAOBU, sid, "course", boundary.toString(), boundary)
+            schedule(boundary)
+        }
         val course = window.course?.takeUnless {
-            settings.isQuiet(it.startMillis - settings.classLeadMillis, TimetableLink.CHINA_ZONE) ||
+            CourseActivities.ended(context, sid.orEmpty(), XiaobuCourseCard.focus(it), it.startMillis) ||
+                settings.isQuiet(it.startMillis - settings.classLeadMillis, TimetableLink.CHINA_ZONE) ||
                 settings.isQuiet(now, TimetableLink.CHINA_ZONE)
         }
-        val entity = course?.let(XiaobuCourseCard::entityId)
+        val entity = course?.let { XiaobuCourseCard.entityId(it, sid.orEmpty()) }
         if (previous != null && (previous != entity || prefs.getString("entityOwner", null) != sid)) {
             val result = call("deleteIntent", Bundle().apply {
                 putString("intentName", prefs.getString("intent", config.intentName))
@@ -104,7 +128,7 @@ internal class XiaobuCourseSync(private val context: Context, private val contai
         }
         // A refresh with changed classroom or time updates the same system entity.
         val fingerprint = TimetableLink.sha1Hex(
-            XiaobuCourseCard.payload(config, course, false, "", 0).toString()
+            XiaobuCourseCard.payload(config, course, false, "", 0, sid.orEmpty()).toString()
         )
         val update = prefs.getString("entity", null) == entity
         if (update && prefs.getString("fingerprint", null) == fingerprint) {
@@ -114,8 +138,10 @@ internal class XiaobuCourseSync(private val context: Context, private val contai
         // Journal before IPC so that process death after a successful call still permits withdrawal.
         if (currentSid() != sid || System.currentTimeMillis() >= course.startMillis) return
         if (!prefs.edit().putString("entity", entity).putString("entityOwner", sid)
+                .putString("clickEntity", entity).putString("clickOwner", sid)
+                .putString("clickFocus", XiaobuCourseCard.focus(course).encode())
                 .putString("intent", config.intentName).commit()) throw IOException("Could not persist course card")
-        val payload = XiaobuCourseCard.payload(config, course, update, UUID.randomUUID().toString(), now)
+        val payload = XiaobuCourseCard.payload(config, course, update, UUID.randomUUID().toString(), now, sid.orEmpty())
         val result = call("shareIntent", Bundle().apply { putString("intentData", payload.toString()) })
         if (accepted(result)) {
             prefs.edit().putString("fingerprint", fingerprint).commit()

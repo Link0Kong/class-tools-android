@@ -479,7 +479,12 @@ internal suspend fun deliverOneShot(context: Context, key: OneShotKey, expectedO
         store.remove(key)
         return true
     }
-    val notifier = AndroidReminderNotifier(context)
+    if (key.targetKind == OneShotTargetKind.NOTICE &&
+        com.furina.classtools.data.notify.SignupCountdowns.deliverOpening(context, owner, key.targetId, key.fireAtMillis)) {
+        store.remove(key)
+        return true
+    }
+    val notifier = AndroidReminderNotifier(context, owner)
     notifier.ensureChannels()
     val event = ReminderOneShot.eventFor(key.targetKind, key.targetId, item.label,
         legacyTargetAt.takeIf { it > 0 } ?: item.targetAtMillis)

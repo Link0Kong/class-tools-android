@@ -85,6 +85,39 @@ class UserReminderDeliveryTest {
         assertTrue(manager.activeNotifications.isEmpty())
     }
 
+    @Test fun hiddenRoundStaysHiddenAndAStaleActionCannotHideItsReplacement() = runBlocking {
+        val now = System.currentTimeMillis()
+        val watch = SignupCountdown(owner, "round", "报名", now + 60_000, generation = "first")
+        val prefs = SignupCountdowns.prefs(app)
+        fun put(item: SignupCountdown) {
+            prefs.edit().putString("$owner/round", Json.encodeToString(item)).commit()
+        }
+        put(watch)
+        SignupCountdowns.onBoundary(app, owner, watch.id)
+        SignupCountdowns.hide(app, owner, watch.id, "first")
+        SignupCountdowns.onBoundary(app, owner, watch.id)
+        assertTrue(manager.activeNotifications.isEmpty())
+        put(watch.copy(start = now + 120_000, generation = "second"))
+        SignupCountdowns.hide(app, owner, watch.id, "first")
+        SignupCountdowns.onBoundary(app, owner, watch.id)
+        assertFalse(SignupCountdowns.get(app, owner, watch.id)!!.hidden)
+        assertEquals(1, manager.activeNotifications.size)
+    }
+
+    @Test fun openingResultSharesDeliveryWithAnExplicitAlarmForTheSameInstant() = runBlocking {
+        val now = System.currentTimeMillis()
+        val watch = SignupCountdown(owner, "round", "报名", now - 1000, generation = "same")
+        SignupCountdowns.prefs(app).edit().putString("$owner/round", Json.encodeToString(watch)).commit()
+        val key = OneShotKey(OneShotTargetKind.NOTICE, watch.id, watch.start)
+        val store = SharedPrefsOneShotPendingStore(app, owner)
+        store.add(OneShotPending(key, watch.title, watch.start, watch.start))
+        deliverOneShot(app, key, owner)
+        SignupCountdowns.onBoundary(app, owner, watch.id)
+        assertTrue(store.load().isEmpty())
+        assertTrue(SignupCountdowns.get(app, owner, watch.id)!!.opened)
+        assertEquals(7421, manager.activeNotifications.single().id)
+    }
+
     @Config(sdk = [34, 36])
     @Test fun systemCardChangesAtOpeningAndKeepsSeparateActivityIdentities() = runBlocking {
         val now = System.currentTimeMillis()
@@ -101,8 +134,9 @@ class UserReminderDeliveryTest {
         assertEquals(2, entries.size)
         val card = entries.single { it.notification.extras.getString(Notification.EXTRA_TITLE) == watch.title }.notification
         assertEquals(watch.start, card.`when`)
-        assertTrue(NotificationCompat.isRequestPromotedOngoing(card))
-        if (android.os.Build.VERSION.SDK_INT >= 36) assertTrue(card.hasPromotableCharacteristics())
+        val eligible = com.furina.classtools.data.notify.LiveCapabilities.canPromote(app, card.channelId)
+        assertEquals(eligible, NotificationCompat.isRequestPromotedOngoing(card))
+        if (eligible && android.os.Build.VERSION.SDK_INT >= 36) assertTrue(card.hasPromotableCharacteristics())
         assertTrue(card.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN))
         assertEquals(watch.details(), card.extras.getString(Notification.EXTRA_BIG_TEXT))
         assertEquals(2, entries.map { it.notification.contentIntent }.distinct().size)

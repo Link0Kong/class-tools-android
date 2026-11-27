@@ -34,6 +34,7 @@ data class PptDeck(
     val hasCompatFiles: Boolean = false,
     /** v2.0 列表小标签：PDF 兼容副本是否存在。 */
     val hasPdfFile: Boolean = false,
+    val updatedAt: Long = 0L,
 ) {
     /** 封面展示地址：OSS 香港 `/ppt/` 下 cover 映射到 ECS `/pptfiles`（2026-11-18 P4；data:/外域/空原样）。 */
     val coverDisplayUrl: String get() = PptEcsUrl.map(coverUrl)
@@ -293,6 +294,7 @@ data class PptDeckDetail(
     val error: String = "",
     val ownerName: String = "",
     val sourceSize: Long = 0L,
+    val updatedAt: Long = 0L,
 ) {
     val isPlayable: Boolean get() = manifest.isPlayable
 
@@ -324,6 +326,9 @@ interface PptByteSource {
 data class PptUploadInput(
     val title: String,
     val source: PptByteSource,
+    val deckId: String? = null,
+    val resumeExisting: Boolean = false,
+    val onProgress: (PptUploadProgress) -> Unit = {},
 )
 
 // ---------------------------------------------------------------- 结果类型
@@ -363,6 +368,7 @@ sealed interface PptDetailResult {
     data class Failure(
         val message: String,
         val tokenInvalid: Boolean = false,
+        val missing: Boolean = false,
     ) : PptDetailResult
 }
 
@@ -375,5 +381,6 @@ sealed interface PptUploadResult {
         /** 已建行时的 deckId（取消/失败时可软删，避免残留 uploading 行）。 */
         val deckId: String? = null,
         val tokenInvalid: Boolean = false,
+        val retryable: Boolean = false,
     ) : PptUploadResult
 }

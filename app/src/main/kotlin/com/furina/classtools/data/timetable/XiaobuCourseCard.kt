@@ -34,7 +34,13 @@ internal object XiaobuCourseCard {
         return if (now < due) Window(null, due) else Window(next, next.startMillis)
     }
 
-    fun entityId(course: TimetableLink.PlannedSession) = "class-" + course.startMillis
+    fun focus(course: TimetableLink.PlannedSession) = CourseFocus(
+        Instant.ofEpochMilli(course.startMillis).atZone(TimetableLink.CHINA_ZONE).toLocalDate().toString(),
+        course.startPeriod, course.endPeriod, course.courseName, course.room, course.teacher.trim(),
+    )
+
+    fun entityId(course: TimetableLink.PlannedSession, owner: String) = "class-" +
+        TimetableLink.sha1Hex("$owner|${course.sourceKey}|${course.endPeriod}|${course.startMillis}")
 
     fun responseCode(result: String?): Int? {
         val obj = result?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() } as? JsonObject
@@ -43,7 +49,7 @@ internal object XiaobuCourseCard {
 
     // OPPO 文档 13558 / 13565 / 13576。仅请求桌面小布建议入口。
     fun payload(scene: XiaobuCourseScene, course: TimetableLink.PlannedSession, update: Boolean,
-                requestId: String, now: Long): JsonObject {
+                requestId: String, now: Long, owner: String = ""): JsonObject {
         val start = clock.format(Instant.ofEpochMilli(course.startMillis))
         val end = clock.format(Instant.ofEpochMilli(course.endMillis))
         return buildJsonObject {
@@ -54,7 +60,7 @@ internal object XiaobuCourseCard {
             putJsonObject("intentAction") { put("actionStatus", if (update) 1 else 0) }
             putJsonObject("intentEntity") {
                 put("entityName", scene.entityName)
-                put("entityId", entityId(course))
+                put("entityId", entityId(course, owner))
                 putJsonObject("milestone") {
                     put("code", scene.milestoneCode)
                     put("text", scene.milestoneText)
@@ -63,7 +69,7 @@ internal object XiaobuCourseCard {
                 putJsonObject("primary") {
                     put("title", course.courseName)
                     put("content", listOf("$start–$end", course.room).filter(String::isNotBlank).joinToString(" · "))
-                    put("clickAction", TIMETABLE_LINK)
+                    put("clickAction", "$TIMETABLE_LINK?activity=${entityId(course, owner)}")
                 }
             }
         }

@@ -13,7 +13,6 @@
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- v2 课表/通知写日程（运行时申请；拒绝时退回系统 ACTION_INSERT 兜底） -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
@@ -122,6 +121,7 @@
             </intent-filter>
         </receiver>
 
+        <receiver android:name=".data.notify.HideLiveActivityReceiver" android:exported="false" />
         <receiver android:name=".data.reminder.UserReminderAlarmReceiver" android:exported="false" />
         <activity android:name=".ui.screens.notices.SignupCountdownActivity" android:exported="false"
             android:supportsPictureInPicture="true" android:resizeableActivity="true"
@@ -226,15 +226,6 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/tasks_widget_info" />
         </receiver>
-        <service
-            android:name=".data.reminder.CourseLiveService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:stopWithTask="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Hold the active class reminder countdown until the next scheduled school bell" />
-        </service>
     </application>
 
 </manifest>

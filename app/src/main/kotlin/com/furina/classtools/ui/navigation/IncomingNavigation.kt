@@ -12,15 +12,17 @@ data class IncomingNavigation(
     val account: String? = null,
     val id: String = UUID.randomUUID().toString(),
     val issuedAt: Long? = null,
+    val activityParent: String? = null,
 ) {
     internal fun isFor(session: Session): Boolean =
         (account == null || account == session.navigationAccount) && (issuedAt == null || issuedAt == session.issuedAt)
 
     internal fun sameDestination(other: IncomingNavigation): Boolean =
-        route == other.route && courseFocus == other.courseFocus && account == other.account && issuedAt == other.issuedAt
+        route == other.route && courseFocus == other.courseFocus && account == other.account && issuedAt == other.issuedAt && activityParent == other.activityParent
 
     internal fun save(): Bundle = Bundle().apply {
         putString("route", route)
+        putString("activityParent", activityParent)
         putString("focus", courseFocus)
         putString("account", account)
         putString("id", id)
@@ -36,7 +38,7 @@ data class IncomingNavigation(
                 val route = request.getString("route") ?: return null
                 val id = request.getString("id") ?: return null
                 val issuedAt = request.getLong("issuedAt").takeIf { request.containsKey("issuedAt") }
-                return IncomingNavigation(route, request.getString("focus"), request.getString("account"), id, issuedAt)
+                return IncomingNavigation(route, request.getString("focus"), request.getString("account"), id, issuedAt, request.getString("activityParent"))
             }
             val route = state.getString("pendingCardRoute") ?: return null
             val base = route.substringBefore('?')

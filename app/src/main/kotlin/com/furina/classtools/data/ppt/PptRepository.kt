@@ -11,7 +11,7 @@ import com.furina.classtools.features.ppt.PptLimits
 import com.furina.classtools.features.ppt.PptStatusTexts
 import java.net.URLEncoder
 import java.util.Base64
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -34,7 +34,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** 一次上传的阶段（UI 进度卡片展示）。 */
+/** DONE acknowledges a completed upload and queue submission. Conversion has a separate server lifecycle. */
 enum class PptUploadPhase { IDLE, CREATING, UPLOADING, SUBMITTING, DONE, FAILED, CANCELLED }
 
 /** 上传进度快照（仓库以 [PptRepository.uploadProgress] 暴露 StateFlow，UI collect）。 */
@@ -85,9 +85,12 @@ interface PptRepository {
 }
 
 /** 上传内部失败（携带是否 token 失效）。 */
+private fun ApiError?.temporary() = this is ApiError.Network || this is ApiError.Http && status in setOf(408, 425, 429, 500, 502, 503, 504)
+
 private class PptUploadFailure(
     override val message: String,
     val tokenInvalid: Boolean = false,
+    val retryable: Boolean = false,
 ) : Exception(message)
 
 class DefaultPptRepository(
@@ -172,7 +175,7 @@ class DefaultPptRepository(
     override suspend fun loadDownloadDetail(deckId: String): PptDetailResult {
         val id = deckId.trim()
         if (id.isEmpty()) return PptDetailResult.Failure("演示参数无效")
-        val result = api.get("ppt_decks?select=${DETAIL_SELECT}&id=eq.${encode(id)}")
+        val result = api.get("ppt_decks?select=${DETAIL_SELECT}&id=eq.${encode(id)}&deleted=eq.false")
         return when (result) {
             is ApiResult.Failure -> PptDetailResult.Failure(
                 message = result.error.displayMessage,
@@ -181,7 +184,9 @@ class DefaultPptRepository(
 
             is ApiResult.Success -> {
                 val detail = PptParsers.parseDeckDetail(json, result.value)
-                if (detail == null) {
+                if (result.value.trim() == "[]") {
+                    PptDetailResult.Failure("课件已删除或无法查看", missing = true)
+                } else if (detail == null) {
                     PptDetailResult.Failure("演示数据格式异常，请稍后重试")
                 } else {
                     PptDetailResult.Success(detail)
@@ -194,19 +199,23 @@ class DefaultPptRepository(
 
     override suspend fun upload(input: PptUploadInput): PptUploadResult {
         var deckId: String? = null
+        fun report(progress: PptUploadProgress) {
+            _uploadProgress.value = progress
+            input.onProgress(progress)
+        }
         var completed = false
         try {
             val source = input.source
             val fileName = source.name.trim().ifBlank { "演示.pptx" }
             val sourceSize = source.size
             PptLimits.rejectReason(sourceSize, fileName)?.let { reason ->
-                _uploadProgress.value = PptUploadProgress(phase = PptUploadPhase.FAILED, message = reason)
+                report(PptUploadProgress(phase = PptUploadPhase.FAILED, message = reason))
                 return PptUploadResult.Failure(reason)
             }
             val session = currentSession()
             if (session == null || session.sid.isBlank() || session.token.isBlank() || session.debug) {
                 val message = "身份已失效，请重新验证"
-                _uploadProgress.value = PptUploadProgress(phase = PptUploadPhase.FAILED, message = message)
+                report(PptUploadProgress(phase = PptUploadPhase.FAILED, message = message))
                 return PptUploadResult.Failure(message, tokenInvalid = true)
             }
             val title = PptLimits.sanitizeTitle(
@@ -214,82 +223,83 @@ class DefaultPptRepository(
             )
             val chunks = PptLimits.chunks(sourceSize, chunkBytes)
             val now = clock()
-            val newDeckId = PptIds.newDeckId(now, random)
+            val newDeckId = input.deckId ?: PptIds.newDeckId(now, random)
             deckId = newDeckId
 
             // §4.1 建行
-            _uploadProgress.value = PptUploadProgress(deckId = newDeckId, phase = PptUploadPhase.CREATING, title = title)
-            when (val created = createDeck(newDeckId, title, session, fileName, sourceSize, chunks.size, now)) {
+            report(PptUploadProgress(deckId = newDeckId, phase = PptUploadPhase.CREATING, title = title))
+            if (!input.resumeExisting) when (val created = createDeck(newDeckId, title, session, fileName, sourceSize, chunks.size, now)) {
                 is ApiResult.Failure -> {
-                    throw PptUploadFailure(created.error.displayMessage, created.error is ApiError.TokenInvalid)
+                    throw PptUploadFailure(created.error.displayMessage, created.error is ApiError.TokenInvalid, created.error.temporary())
                 }
 
                 is ApiResult.Success -> Unit
             }
 
             // §4.2 分片
-            _uploadProgress.value = PptUploadProgress(deckId = newDeckId, phase = PptUploadPhase.UPLOADING, title = title)
-            val total = chunks.size
+            report(PptUploadProgress(deckId = newDeckId, phase = PptUploadPhase.UPLOADING, title = title))
             coroutineScope {
                 val semaphore = Semaphore(concurrency.coerceAtLeast(1))
-                val done = AtomicInteger(0)
+                val acknowledged = AtomicLong(0)
                 chunks.map { chunk ->
                     async(ioDispatcher) {
                         semaphore.withPermit {
                             val bytes = readChunk(source, chunk)
                             uploadChunk(newDeckId, session.sid, chunk.idx, bytes)
-                            val finished = done.incrementAndGet()
-                            val percent = if (total <= 0) 100 else (finished * 100 / total).coerceIn(0, 100)
-                            _uploadProgress.value = PptUploadProgress(
+                            val sent = acknowledged.addAndGet(bytes.size.toLong())
+                            val percent = (sent * 100 / sourceSize).toInt().coerceIn(0, 100)
+                            report(PptUploadProgress(
                                 deckId = newDeckId,
                                 percent = percent,
                                 phase = PptUploadPhase.UPLOADING,
                                 title = title,
-                            )
+                            ))
                         }
                     }
                 }.awaitAll()
             }
 
             // §4.3 提交转换
-            _uploadProgress.value = PptUploadProgress(deckId = newDeckId, percent = 100, phase = PptUploadPhase.SUBMITTING, title = title)
+            report(PptUploadProgress(deckId = newDeckId, percent = 100, phase = PptUploadPhase.SUBMITTING, title = title))
             val submit = submitForConversion(newDeckId, chunks.size, sourceSize)
             if (submit is ApiResult.Failure) {
-                throw PptUploadFailure(submit.error.displayMessage, submit.error is ApiError.TokenInvalid)
+                throw PptUploadFailure(submit.error.displayMessage, submit.error is ApiError.TokenInvalid, submit.error.temporary())
             }
             completed = true
-            _uploadProgress.value = PptUploadProgress(deckId = newDeckId, percent = 100, phase = PptUploadPhase.DONE)
+            report(PptUploadProgress(deckId = newDeckId, percent = 100, phase = PptUploadPhase.DONE))
             return PptUploadResult.Success(newDeckId)
         } catch (c: CancellationException) {
             // 取消上传：软删已建的行（契约 §8.1「取消即软删」）；不可取消以确保清理。
             withContext(NonCancellable) {
-                deckId?.let { id -> runCatching { softDeleteInternal(id) } }
-                _uploadProgress.value = PptUploadProgress(
+                if (input.deckId == null) deckId?.let { id -> runCatching { softDeleteInternal(id) } }
+                report(PptUploadProgress(
                     deckId = deckId,
                     percent = 0,
                     phase = PptUploadPhase.CANCELLED,
                     message = "已取消上传",
-                )
+                ))
             }
             throw c
         } catch (failure: PptUploadFailure) {
             withContext(NonCancellable) {
-                deckId?.let { id -> runCatching { markFailedInternal(id, FAIL_UPLOAD_MESSAGE) } }
+                if (input.deckId == null || !failure.retryable)
+                    deckId?.let { id -> runCatching { markFailedInternal(id, FAIL_UPLOAD_MESSAGE) } }
             }
-            _uploadProgress.value = PptUploadProgress(
+            report(PptUploadProgress(
                 deckId = deckId,
                 percent = 0,
                 phase = PptUploadPhase.FAILED,
                 message = failure.message,
-            )
+            ))
             return PptUploadResult.Failure(
                 message = failure.message,
                 deckId = deckId,
                 tokenInvalid = failure.tokenInvalid,
+                retryable = failure.retryable,
             )
         } finally {
             if (!completed && _uploadProgress.value.phase == PptUploadPhase.IDLE) {
-                _uploadProgress.value = PptUploadProgress()
+                report(PptUploadProgress())
             }
         }
     }
@@ -335,6 +345,7 @@ class DefaultPptRepository(
         throw PptUploadFailure(
             message = if (tokenInvalid) "身份已失效，请重新验证" else FAIL_UPLOAD_MESSAGE,
             tokenInvalid = tokenInvalid,
+            retryable = lastError.temporary(),
         )
     }
 
@@ -381,7 +392,9 @@ class DefaultPptRepository(
 
     override suspend fun softDelete(deckId: String): ApiResult<Unit> = softDeleteInternal(deckId)
 
-    override suspend fun retryConversion(deckId: String): ApiResult<Unit> {
+    override suspend fun retryConversion(deckId: String): ApiResult<Unit> = retryConversion(deckId, "", 0)
+
+    suspend fun retryConversion(deckId: String, seenStatus: String, seenAt: Long): ApiResult<Unit> {
         val id = deckId.trim()
         if (id.isEmpty()) return ApiResult.Failure(ApiError.Config("演示参数无效"))
         val body = buildJsonObject {
@@ -390,7 +403,11 @@ class DefaultPptRepository(
             put("error", "")
             put("updated_at", clock())
         }.toString()
-        return api.patch("ppt_decks?id=eq.${encode(id)}", body, prefer = PREFER_REPRESENTATION).mapUnit()
+        val filter = buildString {
+            if (seenStatus.isNotBlank()) append("&deleted=eq.false&status=eq.").append(encode(seenStatus))
+            if (seenAt > 0) append("&updated_at=eq.").append(seenAt)
+        }
+        return api.patch("ppt_decks?id=eq.${encode(id)}$filter", body, prefer = PREFER_REPRESENTATION).mapUnit()
     }
 
     private suspend fun softDeleteInternal(deckId: String): ApiResult<Unit> {
@@ -407,12 +424,25 @@ class DefaultPptRepository(
             put("error", error.take(PptParsers.MAX_ERROR_CHARS))
             put("updated_at", clock())
         }.toString()
-        api.patch("ppt_decks?id=eq.${encode(deckId)}", body, prefer = PREFER_REPRESENTATION)
+        api.patch("ppt_decks?id=eq.${encode(deckId)}&status=eq.uploading", body, prefer = PREFER_REPRESENTATION)
     }
 
     private fun ApiResult<String>.mapUnit(): ApiResult<Unit> = when (this) {
         is ApiResult.Success -> ApiResult.Success(Unit)
         is ApiResult.Failure -> this
+    }
+
+    /** Fetch a single lightweight row. An authoritative empty array denotes deletion. */
+    suspend fun transferStatus(deckId: String): ApiResult<PptDeck?> {
+        val select = "id,title,status,progress,error,source_size,updated_at"
+        return when (val response = api.get("ppt_decks?select=$select&id=eq.${encode(deckId)}&deleted=eq.false")) {
+            is ApiResult.Failure -> response
+            is ApiResult.Success -> when {
+                response.value.trim() == "[]" -> ApiResult.Success(null)
+                else -> PptParsers.parseDeckList(json, response.value).singleOrNull()?.let { ApiResult.Success(it) }
+                    ?: ApiResult.Failure(ApiError.Config("课件状态暂时无法读取"))
+            }
+        }
     }
 
     /** 供 UI：判断失败是否 token 失效（回身份页由全局 onTokenInvalid 处理）。 */
@@ -430,7 +460,7 @@ class DefaultPptRepository(
          */
         const val LIST_SELECT: String =
             "id,title,owner_sid,owner_name,status,progress,error,slide_count,step_count,aspect," +
-                "cover_url,source_name,source_size,created_at,converted_at,client,manifest->files"
+                "cover_url,source_name,source_size,created_at,updated_at,converted_at,client,manifest->files"
 
         val LIST_PATH: String =
             "ppt_decks?select=$LIST_SELECT&deleted=eq.false&order=created_at.desc&limit=100"
@@ -438,7 +468,7 @@ class DefaultPptRepository(
         /** v2.0 §12.4.1 下载详情字段（含 manifest.files + 状态/进度/封面）。 */
         const val DETAIL_SELECT: String =
             "manifest,title,status,progress,error,owner_name,slide_count,step_count,aspect," +
-                "cover_url,source_name,source_key,source_size,converted_at"
+                "cover_url,source_name,source_key,source_size,updated_at,converted_at"
 
         /** §4.5 播放清单字段（旧 deck 在线预览；保留常量兼容旧断言）。 */
         const val PLAYER_SELECT: String = DETAIL_SELECT

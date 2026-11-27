@@ -97,6 +97,7 @@ data class SessionInfo(
     val label: String = "",
     val fullRoom: String = room,
     val afterShortBreak: Boolean = false,
+    val targetWeek: Int? = null,
     val teacher: String = "",
 )
 

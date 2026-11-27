@@ -84,6 +84,10 @@ fun PermissionSettingsScreen(
     val ctTopBarScroll = rememberScrollState()
 
     // refreshTick 参与读取，授权返回后强制重新检查。
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { refreshTick++ }
+    val liveStatus = remember(refreshTick, showColorOsLiveUpdates) {
+        com.furina.classtools.data.notify.LiveCapabilities.summary(context, showColorOsLiveUpdates)
+    }
     val snapshot = remember(refreshTick) { controller.snapshot() }
 
     val launcher = rememberLauncherForActivityResult(
@@ -179,11 +183,7 @@ fun PermissionSettingsScreen(
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                if (showColorOsLiveUpdates) {
-                                    "报名倒计时 · 投票 · 上传进度（流体云）"
-                                } else {
-                                    "报名倒计时 · 投票 · 上传进度"
-                                },
+                                liveStatus,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

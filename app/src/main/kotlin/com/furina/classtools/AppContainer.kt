@@ -24,7 +24,6 @@ import com.furina.classtools.data.diag.installCrashHandler
 import com.furina.classtools.data.draw.SharedPreferencesDrawLastResultStore
 import com.furina.classtools.data.draw.DrawProofRepository
 import com.furina.classtools.data.fitrecs.DefaultFitRecsRepository
-import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.calendar.AndroidCalendarWriter
 import com.furina.classtools.data.cloudspace.CloudSpaceApi
 import com.furina.classtools.data.cloudspace.CloudSpaceDefaults
@@ -62,7 +61,6 @@ import com.furina.classtools.data.ppt.DefaultPptRepository
 import com.furina.classtools.data.ppt.OkHttpPptImageLoader
 import com.furina.classtools.data.ppt.PptImageLoader
 import com.furina.classtools.data.ppt.PptFileDownloader
-import com.furina.classtools.data.ppt.PptUploadPhase
 import com.furina.classtools.data.ppt.PptLocalStore
 import com.furina.classtools.data.ppt.PptNetworkQualityProvider
 import com.furina.classtools.data.ppt.PptRepository
@@ -89,8 +87,8 @@ import com.furina.classtools.data.privacy.CallbackLocalCleaner
 import com.furina.classtools.data.privacy.DefaultPrivacyRepository
 import com.furina.classtools.data.privacy.PrivacyRepository
 import com.furina.classtools.data.privacy.RepositoryPrivacyUserDataAccess
-import com.furina.classtools.data.reminder.AndroidReminderNotifier
 import com.furina.classtools.data.reminder.DataStoreReminderSettingsStore
+import com.furina.classtools.data.reminder.reminderOwner
 import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.data.reminder.ReminderScheduler
 import com.furina.classtools.data.reminder.ReminderSettingsStore
@@ -207,6 +205,11 @@ class AppContainer(context: Context) {
             }
         }
         activeSession = session
+        if (previous?.reminderOwner != session?.reminderOwner) {
+            com.furina.classtools.data.notify.VoteWatches.restore(appContext, session?.reminderOwner)
+            transferActivities.sessionChanged(session?.reminderOwner)
+        }
+        com.furina.classtools.data.reminder.CourseActivities.bind(appContext, session?.reminderOwner)
         if (previous?.sid != session?.sid || previous?.debug != session?.debug) {
             com.furina.classtools.data.reminder.UserReminderAlarms.restore(appContext)
         }
@@ -225,10 +228,6 @@ class AppContainer(context: Context) {
             runCatching { oppoPushManager.onSessionChanged() }
         }
         if (previousSid != session?.sid) {
-            if (previousSid != null) {
-                AndroidReminderNotifier(appContext)
-                    .reconcileLiveCourse(null, System.currentTimeMillis())
-            }
             // 云空间会话绑定班级身份；切号/退出时丢弃内存会话与游标，避免串号。
             cloudSpace = null
             // 账号绑定列表按学号区分：切号/退出时丢弃内存列表，避免显示上一个账号的绑定。
@@ -494,35 +493,18 @@ class AppContainer(context: Context) {
 
     /** 演示（PPT）仓库：列表/播放清单/分片上传/软删/重试 + 转换机心跳（web/ppt/CONTRACT.md §4）。 */
     /** 懒加载：启动首帧不需要 PPT 仓库。 */
-    val pptRepository: PptRepository by lazy {
-        DefaultPptRepository(
-            api = apiClient,
-            currentSession = { activeSession },
-        ).also { repository ->
-            // Live Updates：PPT 上传/转换进度以系统实时活动（Android 16 实时更新 / ColorOS 流体云）呈现。
-            appScope.launch {
-                repository.uploadProgress.collect { progress ->
-                    when (progress.phase) {
-                        PptUploadPhase.DONE -> {
-                            LiveUpdateNotifier.cancelPptUpload(appContext)
-                            LiveUpdateNotifier.postPptFinished(appContext, success = true, message = progress.message)
-                        }
+    val transferActivities by lazy { com.furina.classtools.data.transfer.TransferActivities(appContext) }
 
-                        PptUploadPhase.FAILED -> {
-                            LiveUpdateNotifier.cancelPptUpload(appContext)
-                            LiveUpdateNotifier.postPptFinished(appContext, success = false, message = progress.message)
-                        }
-
-                        PptUploadPhase.IDLE,
-                        PptUploadPhase.CANCELLED,
-                        -> LiveUpdateNotifier.cancelPptUpload(appContext)
-
-                        else -> LiveUpdateNotifier.postPptUpload(appContext, progress)
-                    }
-                }
-            }
+    private var deckOwner: ApiIdentity? = null
+    private var decks: PptRepository? = null
+    val pptRepository: PptRepository
+        @Synchronized get() {
+            val owner = identity
+            val existing = decks
+            if (existing != null && deckOwner == owner) return existing
+            return DefaultPptRepository(apiClient.forIdentity(owner), currentSession = { activeSession.takeIf { identity == owner } })
+                .also { decks = it; deckOwner = owner }
         }
-    }
 
     /** 演示图片加载器：自建 OkHttp + BitmapFactory + LRU（项目无 Coil，不新增依赖）。 */
     /** 懒加载：启动首帧不需要图片加载器（内部会创建 OkHttp 客户端）。 */
@@ -742,6 +724,7 @@ class AppContainer(context: Context) {
     }
 
     private fun refreshCourseSurfaces() {
+        ReminderRuntime.scheduleCourseAt(appContext, System.currentTimeMillis())
         DesktopWidgets.refresh(appContext)
         refreshCourseCard()
     }

@@ -24,7 +24,10 @@ internal data class SignupCountdown(
     val leadMinutes: Int = 5,
     val customTime: Boolean = false,
     val opened: Boolean = false,
+    val hidden: Boolean = false,
+    val generation: String = "",
 ) {
+    val instance get() = generation.ifEmpty { start.toString() }
     val showAt get() = start - leadMinutes * 60_000L
     val expiresAt get() = minOf(start + 120_000L, end ?: Long.MAX_VALUE)
     fun details() = buildList {

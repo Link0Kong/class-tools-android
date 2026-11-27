@@ -6,6 +6,9 @@ import com.furina.classtools.data.notices.NoticeStatusMachine
 import com.furina.classtools.data.notices.NoticesData
 import com.furina.classtools.data.vote.PollResultVisibility
 import com.furina.classtools.data.vote.PollSummary
+import com.furina.classtools.data.timetable.CourseFocus
+import com.furina.classtools.data.timetable.TimetableLink
+import com.furina.classtools.data.timetable.TtPeriods
 import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.features.water.WaterCalculator
 import com.furina.classtools.features.water.WaterMonthStats
@@ -183,17 +186,28 @@ object ReminderPlanner {
         val rawTrigger = next.startAt - leadMillis
         val trigger = maxOf(rawTrigger, nowMillis)
         if (settings.isQuiet(trigger, zone)) return emptyList()
+        val focus = CourseFocus.of(next, TimetableLink.CHINA_ZONE)
+        // Before the first bell the timetable summarizes the entire block. The card describes only
+        // the period about to begin, while its CourseFocus always resolves the full timetable row.
+        val firstPeriod = TtPeriods.PERIODS.getOrNull(next.start - 1)?.takeIf {
+            next.end > next.start && next.span == "第${next.start}-${next.end}节" && it.first == next.startText
+        }
+        val displayEnd = firstPeriod?.let {
+            LocalDate.parse(focus.date).atTime(LocalTime.parse(it.second)).atZone(TimetableLink.CHINA_ZONE).toInstant().toEpochMilli()
+        } ?: next.endAt
+        val displaySpan = if (firstPeriod == null) next.span else "第${next.start}节"
+        val endText = firstPeriod?.second ?: next.endText
         return listOf(
             ReminderEvent(
                 kind = ReminderKind.COURSE_SOON,
-                key = "class:${next.startAt}",
+                key = "class:${next.startAt}:${TimetableLink.sha1Hex(focus.encode())}",
                 triggerAtMillis = trigger,
                 title = "上课提醒 · ${next.name}",
                 body = buildString {
                     append(next.startText)
-                    if (next.endText.isNotBlank()) {
+                    if (endText.isNotBlank()) {
                         append("–")
-                        append(next.endText)
+                        append(endText)
                     }
                     append(" · ")
                     append(next.name)
@@ -203,7 +217,8 @@ object ReminderPlanner {
                     }
                 },
                 toolId = ReminderKind.COURSE_SOON.toolId,
-                course = CourseReminderInfo(next.name, next.fullRoom.ifBlank { next.room }, next.startAt, next.endAt),
+                course = CourseReminderInfo(next.name, next.fullRoom.ifBlank { next.room }, next.startAt, displayEnd,
+                    focus, displaySpan, next.teacher, next.targetWeek, settings.courseLiveTracking),
             ),
         )
     }

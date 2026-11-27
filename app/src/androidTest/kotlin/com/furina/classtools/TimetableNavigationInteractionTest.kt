@@ -37,7 +37,9 @@ class TimetableNavigationInteractionTest {
     private val today = LocalDate.now()
     private val tomorrow = today.plusDays(1)
     private val courseA = Course("回归课程甲", "回归教师甲", "自强楼(教室01105)", TtCalendar.dayIndex(today), 3, 4)
-    private val courseB = Course("回归课程乙", "回归教师乙", "自强楼(教室01106)", TtCalendar.dayIndex(tomorrow), 5, 6)
+    private val layoutReview = InstrumentationRegistry.getArguments().getString("courseLayout") == "yes"
+    private val courseB = Course(if (layoutReview) "回归课程乙 · 高等数学与应用建模专题实验" else "回归课程乙",
+        "回归教师乙", if (layoutReview) "第一教学楼信息工程实验中心东区综合实验楼四层 B302 教室" else "自强楼(教室01106)", TtCalendar.dayIndex(tomorrow), 5, 6)
     private val focusA = CourseFocus(today.toString(), courseA.start, courseA.end, courseA.name, courseA.room).encode()
     private val focusB = CourseFocus(tomorrow.toString(), courseB.start, courseB.end, courseB.name, courseB.room).encode()
     private val mapFromDetail = By.desc("在地图查看教室")
@@ -72,6 +74,71 @@ class TimetableNavigationInteractionTest {
                 ?: container.timetableRepository.clearPersonal()
             if (saved is SessionState.SignedIn) container.sessionStore.save(saved.session)
             else container.sessionStore.clear()
+        }
+    }
+
+    @Test fun notificationOpensExactCourseAndRepeatedTapKeepsOneTimetableParent() {
+        val info = com.furina.classtools.data.reminder.CourseReminderInfo(courseB.name, courseB.room,
+            System.currentTimeMillis() + 60_000L, System.currentTimeMillis() + 90_000L,
+            CourseFocus.decode(focusB))
+        val activity = com.furina.classtools.data.reminder.CourseActivity("debug_" + session.sid,
+            "test-navigation", "test-course-generation", info)
+        val card = com.furina.classtools.data.reminder.ReminderIntentFactory.courseIntent(app, activity)
+        withDesktopHost(desktop(destination = "home", cold = true)) {
+            expectWorkbench()
+            if (layoutReview) {
+                val owner = "debug_" + session.sid
+                val notifier = com.furina.classtools.data.reminder.AndroidReminderNotifier(app, owner)
+                notifier.ensureChannels()
+                val event = com.furina.classtools.data.reminder.ReminderEvent(
+                    com.furina.classtools.data.reminder.ReminderKind.COURSE_SOON, "layout:${info.startAt}",
+                    System.currentTimeMillis() - 1000L, courseB.name, "",
+                    course = info.copy(teacher = courseB.teacher, span = "第5节", week = 5, trackLive = true))
+                assertTrue(notifier.notify(event))
+                assertTrue(device.openNotification())
+                val row = node(By.pkg("com.android.systemui").textContains("回归课程乙"))
+                device.takeScreenshot(java.io.File(app.getExternalFilesDir(null), "course-layout-shade.png"))
+                row.click()
+            } else card.send()
+            if (layoutReview) {
+                node(closeDetail)
+                node(By.text(courseB.name))
+                device.takeScreenshot(java.io.File(app.getExternalFilesDir(null), "course-layout-title.png"))
+                val roomSelector = By.text(courseB.room)
+                device.swipe(device.displayWidth / 2, device.displayHeight * 4 / 5,
+                    device.displayWidth / 2, device.displayHeight / 3, 45)
+                device.waitForIdle(600)
+                val roomBounds = node(roomSelector).visibleBounds
+                assertTrue("Long classroom should be above the navigation bar after scrolling",
+                    roomBounds.bottom < device.displayHeight - 20)
+                device.takeScreenshot(java.io.File(app.getExternalFilesDir(null), "course-layout-details.png"))
+            } else expectDetails(courseB)
+            card.send()
+            if (layoutReview) node(By.text(courseB.room)) else expectDetails(courseB)
+            device.pressBack()
+            expectTimetable()
+            device.pressBack()
+            expectWorkbench()
+        }
+    }
+
+    @Test fun coldCourseNotificationRestoresItsTargetAfterSameAccountLogin() {
+        runBlocking { app.container.sessionStore.clear() }
+        val intent = Intent(app, MainActivity::class.java).apply {
+            data = Uri.parse("ct-course://notification/login-fixture")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra(com.furina.classtools.data.reminder.ReminderIntentFactory.EXTRA_TOOL_ID, "tt")
+            putExtra(MainActivity.CARD_ACCOUNT, "debug:" + session.sid)
+            putExtra(MainActivity.CARD_FOCUS, focusB)
+        }
+        ActivityScenario.launch<MainActivity>(intent).use {
+            node(By.text("身份核验"))
+            runBlocking { app.container.sessionStore.save(session.copy(issuedAt = System.currentTimeMillis())) }
+            expectDetails(courseB)
+            device.pressBack()
+            expectTimetable()
+            device.pressBack()
+            expectWorkbench()
         }
     }
 

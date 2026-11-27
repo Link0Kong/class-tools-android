@@ -73,6 +73,7 @@ object PptParsers {
             aspect = stringOf(row["aspect"]).trim(),
             coverUrl = stringOf(row["cover_url"]).trim(),
             sourceName = stringOf(row["source_name"]).trim(),
+            updatedAt = longOf(row["updated_at"]) ?: 0L,
             sourceSize = longOf(row["source_size"])?.coerceAtLeast(0) ?: 0L,
             createdAt = longOf(row["created_at"]) ?: 0L,
             convertedAt = longOf(row["converted_at"]) ?: 0L,
@@ -130,6 +131,7 @@ object PptParsers {
             progress = intOf(row["progress"])?.coerceIn(0, 100) ?: 0,
             error = stringOf(row["error"]).trim().take(MAX_ERROR_CHARS),
             ownerName = stringOf(row["owner_name"]).trim(),
+            updatedAt = longOf(row["updated_at"]) ?: 0L,
             sourceSize = longOf(row["source_size"])?.coerceAtLeast(0) ?: 0L,
         )
     }

@@ -51,8 +51,9 @@ class SignupCountdownActivity : ComponentActivity() {
         enableEdgeToEdge()
         compact = isInPictureInPictureMode
         val parts = intent.data?.pathSegments
-        if (parts?.size != 2) { finish(); return }
+        if (parts == null || parts.size !in 2..3) { finish(); return }
         val (owner, id) = parts
+        val expected = parts.getOrNull(2)
         val container = (application as ClassToolsApp).container
         setContent {
             val session by container.sessionStore.state.collectAsStateWithLifecycle(initialValue = SessionState.Loading)
@@ -69,7 +70,7 @@ class SignupCountdownActivity : ComponentActivity() {
             val current = watch
             val signed = (session as? SessionState.SignedIn)?.session
             if (session is SessionState.Loading) return@setContent
-            if (current == null || signed?.reminderOwner != owner || !signed.isLikelyValid()) {
+            if (current == null || (expected != null && current.instance != expected) || signed?.reminderOwner != owner || !signed.isLikelyValid()) {
                 LaunchedEffect(Unit) { finishAndRemoveTask() }
                 return@setContent
             }
@@ -104,7 +105,7 @@ class SignupCountdownActivity : ComponentActivity() {
                                     startActivity(link)
                                 }.onFailure { CtToastBus.show("无法打开报名链接，请查看活动原文") }
                             }) { Text("打开报名入口") }
-                            OutlinedButton(onClick = { startActivity(SignupCountdowns.noticeIntent(this@SignupCountdownActivity, id)) },
+                            OutlinedButton(onClick = { startActivity(SignupCountdowns.noticeIntent(this@SignupCountdownActivity, owner, id)) },
                                 modifier = Modifier.fillMaxWidth()) { Text("查看活动原文") }
                             TextButton(onClick = {
                                 SignupCountdowns.cancel(this@SignupCountdownActivity, owner, id)

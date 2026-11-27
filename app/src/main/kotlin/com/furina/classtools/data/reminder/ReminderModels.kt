@@ -1,5 +1,6 @@
 package com.furina.classtools.data.reminder
 
+import com.furina.classtools.data.timetable.CourseFocus
 import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.time.ZoneId
@@ -51,6 +52,7 @@ data class ReminderSettings(
     val quietStartHour: Int = 23,
     val quietEndHour: Int = 7,
     val breakLeadMinutes: Int = DEFAULT_BREAK_LEAD_MINUTES,
+    val courseLiveTracking: Boolean = false,
 ) {
     /** 字段规范化（DataStore 读到脏值时用）。 */
     fun sanitized(): ReminderSettings = copy(
@@ -198,11 +200,17 @@ enum class ReminderKind(
     SYSTEM_TEST("", "ct_test", "通知测试", "验证系统通知权限与通知样式", highPriority = true),
 }
 
+@Serializable
 data class CourseReminderInfo(
     val name: String,
     val room: String,
     val startAt: Long,
     val endAt: Long,
+    val focus: CourseFocus? = null,
+    val span: String = "",
+    val teacher: String = "",
+    val week: Int? = null,
+    val trackLive: Boolean = false,
 )
 
 /** 一条待发的本机提醒。 */

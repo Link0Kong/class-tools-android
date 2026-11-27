@@ -450,6 +450,10 @@ class DefaultVoteRepository(
     }
 
     private fun fallbackDetail(id: String, error: VoteError): VoteResult<PollDetail> {
+        if (error == VoteError.NotFound || error == VoteError.OutOfAudience || error == VoteError.IdentityInvalid) {
+            detailCache.remove(id)
+            return VoteResult.Failure(error)
+        }
         val cached = detailCache[id]?.first
         return if (cached != null) {
             VoteResult.Success(cached)

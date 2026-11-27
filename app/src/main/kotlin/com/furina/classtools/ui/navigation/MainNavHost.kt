@@ -268,6 +268,20 @@ fun MainNavHost(
                         pagerState.requestScrollToPage(0)
                     }
                     else -> {
+                        if (target.startsWith("voteDetail/") || target.startsWith("pptDetail/")) {
+                            val parent = if (target.startsWith("voteDetail/")) Routes.VOTE else Routes.tool("ppt")
+                            if (navController.currentDestination?.route == Routes.VOTE_DETAIL &&
+                                Routes.voteDetail(navController.currentBackStackEntry?.arguments?.getString(Routes.VOTE_DETAIL_ARG).orEmpty()) == target ||
+                                navController.currentDestination?.route == Routes.PPT_DETAIL &&
+                                Routes.pptDetail(navController.currentBackStackEntry?.arguments?.getString(Routes.PPT_DECK_ARG).orEmpty()) == target) return@requestLeave
+                            if (runCatching { navController.getBackStackEntry(parent) }.isSuccess) {
+                                navController.popBackStack(parent, inclusive = false)
+                            } else {
+                                navController.navigate(parent) { launchSingleTop = true }
+                            }
+                            navController.navigate(target) { launchSingleTop = true }
+                            return@requestLeave
+                        }
                         val current = navController.currentBackStackEntry
                         navController.navigate(target) {
                             if (current?.destination?.route == Routes.TOOL &&
@@ -280,7 +294,15 @@ fun MainNavHost(
                     }
                 }
             }
-        } else CtToastBus.show("入口对应的登录已失效，请在应用内重新打开")
+        } else {
+            request.activityParent?.let { parent ->
+                homeToolsEdit.requestLeave(replacePending = true) {
+                    navController.showWorkbench()
+                    navController.navigate(parent)
+                }
+            }
+            CtToastBus.show("入口对应的登录已失效，请在当前账号中查看")
+        }
         onRouteConsumed(request.id)
     }
 
@@ -899,7 +921,10 @@ fun MainNavHost(
                 )
 
                 "file" -> androidx.compose.runtime.key(container.cloudSpaceRepository) {
+                    var consumedFile by androidx.compose.runtime.saveable.rememberSaveable(focus) { mutableStateOf(false) }
                     CloudSpaceScreen(
+                        focusId = focus.takeUnless { consumedFile },
+                        onFocusConsumed = { consumedFile = true },
                         onBack = ::back,
                         onOpenClassDecks = {
                             if (navController.currentBackStackEntry?.arguments?.getString(Routes.TOOL_ARG) == "file") {
@@ -1157,6 +1182,7 @@ fun MainNavHost(
             popExitTransition = { CtPageTransitions.harmonyPopExit() },
         ) { entry ->
             VoteDetailScreen(
+                owner = session.reminderOwner,
                 pollId = entry.arguments?.getString(Routes.VOTE_DETAIL_ARG).orEmpty(),
                 repository = container.voteRepository,
                 onBack = { navController.popBackStack() },

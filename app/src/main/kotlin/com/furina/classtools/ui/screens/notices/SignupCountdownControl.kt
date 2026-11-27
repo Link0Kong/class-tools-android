@@ -96,7 +96,7 @@ internal fun SignupCountdownControl(owner: String, item: NoticeUiItem) {
                     modifier = Modifier.fillMaxWidth(), singleLine = true, isError = offset == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     label = { Text("开抢秒数（0–59.999）") })
-                Text("提前显示流体云", style = MaterialTheme.typography.labelLarge)
+                Text("提前显示实时活动", style = MaterialTheme.typography.labelLarge)
                 for (minutes in listOf(1, 5, 15, 30)) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).selectable(lead == minutes,
                         role = Role.RadioButton, onClick = { lead = minutes }), verticalAlignment = Alignment.CenterVertically) {
@@ -104,7 +104,7 @@ internal fun SignupCountdownControl(owner: String, item: NoticeUiItem) {
                         Text("$minutes 分钟", modifier = Modifier.padding(start = 12.dp))
                     }
                 }
-                Text("点开实时通知可看毫秒倒计时，也可悬浮在报名页面上。", style = MaterialTheme.typography.bodySmall)
+                Text("点通知查看报名活动。通过“毫秒倒计时”可打开画中画。", style = MaterialTheme.typography.bodySmall)
                 if (android.os.Build.VERSION.SDK_INT >= 36 && !manager.canPostPromotedNotifications()) {
                     TextButton(onClick = {
                         val settings = Intent(Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS)
@@ -117,15 +117,10 @@ internal fun SignupCountdownControl(owner: String, item: NoticeUiItem) {
             TextButton(enabled = watch != null, onClick = {
                 if (watch == null) return@TextButton
                 if (watch.start <= System.currentTimeMillis()) { CtToastBus.show("报名时间已到"); return@TextButton }
-                if (!SignupCountdowns.available(context)) {
-                    CtToastBus.show("请开启「实时活动」通知")
-                    val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        .putExtra(Settings.EXTRA_CHANNEL_ID, com.furina.classtools.data.notify.LiveUpdateNotifier.CHANNEL_ID)
-                    runCatching { context.startActivity(intent) }
-                } else if (SignupCountdowns.start(context, watch.copy(leadMinutes = lead))) {
+                if (SignupCountdowns.start(context, watch.copy(leadMinutes = lead))) {
                     configure = false
-                    CtToastBus.show(if (watch.start - System.currentTimeMillis() <= lead * 60_000L) "报名倒计时已开启" else "已设置，开抢前 $lead 分钟显示")
+                    CtToastBus.show(if (!SignupCountdowns.available(context)) "已开启，可在工作台查看倒计时"
+                        else if (watch.start - System.currentTimeMillis() <= lead * 60_000L) "报名倒计时已开启" else "已设置，开抢前 $lead 分钟显示")
                 } else CtToastBus.show("未能设置倒计时，请重新选择时间")
             }) { Text("开启倒计时") }
         }, dismissButton = { TextButton(onClick = { configure = false }) { Text("取消") } })

@@ -414,7 +414,37 @@ class ReminderPlannerTest {
         assertFalse(event.body.contains("还有"))
         assertEquals(start, event.course?.startAt)
         assertEquals("tt", event.toolId)
-        assertEquals("class:$start", event.key)
+        assertTrue(event.key.startsWith("class:$start:"))
+        assertEquals(event.course?.room, event.course?.focus?.room)
+    }
+
+    @Test
+    fun oldTrackingRequiresACustomCourseSettingAndEnabledReminders() {
+        assertFalse(migratedCourseTracking(true, true, null, null))
+        assertFalse(migratedCourseTracking(true, true, ReminderSettings.DEFAULT_CLASS_LEAD_MINUTES,
+            ReminderSettings.DEFAULT_BREAK_LEAD_MINUTES))
+        assertTrue(migratedCourseTracking(true, true, 15, null))
+        assertFalse(migratedCourseTracking(false, true, 15, null))
+        assertFalse(migratedCourseTracking(true, false, 15, null))
+        assertFalse(migratedCourseTracking(true, true, 99, 99))
+    }
+
+    @Test
+    fun focusedPeriodKeepsOriginalCourseRangeAndTargetWeek() {
+        val start = LocalDateTime.of(2026, 11, 16, 10, 0).atZone(zone).toInstant().toEpochMilli()
+        val base = coursePlan(start)
+        val next = base.next!!.copy(start = 2, end = 4, span = "第3节", fullRoom = "第一教学楼 B302",
+            teacher = "张老师", targetWeek = 12)
+        val event = ReminderPlanner.planCourse(base.copy(week = 11, next = next), start - 60_000,
+            defaultSettings(), zone).single()
+        val info = event.course!!
+        assertEquals("第3节", info.span)
+        assertEquals(2, info.focus?.start)
+        assertEquals(4, info.focus?.end)
+        assertEquals("2026-11-16", info.focus?.date)
+        assertEquals(12, info.week)
+        assertEquals("第一教学楼 B302", info.room)
+        assertEquals("张老师", info.teacher)
     }
 
     @Test

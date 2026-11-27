@@ -12,7 +12,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import com.furina.classtools.MainActivity
 import com.furina.classtools.R
 import com.furina.classtools.data.notices.NoticesData
 import com.furina.classtools.data.reminder.AndroidReminderNotifier
@@ -32,23 +31,28 @@ internal object SignupCountdowns {
     fun prefs(context: Context) = context.getSharedPreferences("signup_countdowns", Context.MODE_PRIVATE)
     private fun decode(raw: String?) = raw?.let { runCatching { Json.decodeFromString<SignupCountdown>(it) }.getOrNull() }
     fun get(context: Context, owner: String, id: String) = decode(prefs(context).getString(key(owner, id), null))
-    private fun all(context: Context) = prefs(context).all.values.mapNotNull { decode(it as? String) }
+    fun all(context: Context) = prefs(context).all.values.mapNotNull { decode(it as? String) }
     private fun save(context: Context, watch: SignupCountdown) =
         prefs(context).edit().putString(key(watch.owner, watch.id), Json.encodeToString(watch)).commit()
 
-    fun noticeIntent(context: Context, id: String) =
-        Intent(context, MainActivity::class.java).setAction(MainActivity.WIDGET_ACTION + "nt")
-            .putExtra(MainActivity.CARD_FOCUS, id)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    fun noticeIntent(context: Context, owner: String, id: String) = ActivityLinks.intent(context, owner, "signup", id)
 
-    private fun detailIntent(context: Context, watch: SignupCountdown): PendingIntent {
-        val intent = noticeIntent(context, watch.id).setData(Uri.parse("ct-signup://notice/${key(watch.owner, watch.id)}"))
-        return PendingIntent.getActivity(context, 0, intent, FLAGS)
+    fun timerIntent(context: Context, owner: String, id: String): Intent {
+        val instance = get(context, owner, id)?.instance.orEmpty()
+        val uri = Uri.Builder().scheme("ct-signup").authority("timer").appendPath(owner)
+            .appendPath(id).appendPath(instance).build()
+        return Intent(context, SignupCountdownActivity::class.java).setData(uri)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
     }
 
-    fun timerIntent(context: Context, owner: String, id: String): Intent =
-        Intent(context, SignupCountdownActivity::class.java).setData(Uri.parse("ct-signup://timer/${key(owner, id)}"))
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+    @Synchronized
+    fun hide(context: Context, owner: String, id: String, generation: String) {
+        val watch = get(context, owner, id)?.takeIf { it.instance == generation } ?: return
+        if (!save(context, watch.copy(hidden = true))) return
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.cancel(key(owner, id), LIVE_ID)
+        manager.cancel(key(owner, id), OPEN_ID)
+    }
 
     fun available(context: Context): Boolean {
         LiveUpdateNotifier.ensureChannel(context)
@@ -59,14 +63,15 @@ internal object SignupCountdowns {
     @Synchronized
     fun start(context: Context, watch: SignupCountdown): Boolean {
         val now = System.currentTimeMillis()
-        if (watch.start <= now || !available(context)) return false
-        if (!save(context, watch)) return false
-        schedule(context, watch, now)
+        if (watch.start <= now || watch.owner.isBlank() || watch.id.isBlank()) return false
+        val next = watch.copy(generation = java.util.UUID.randomUUID().toString())
+        if (!save(context, next)) return false
+        schedule(context, next, now)
         return true
     }
 
     private fun schedule(context: Context, watch: SignupCountdown, now: Long) {
-        for ((slot, at) in listOf("show" to watch.showAt, "open" to watch.start)) {
+        for ((slot, at) in listOf("show" to watch.showAt, "open" to watch.start, "expire" to watch.expiresAt)) {
             val name = "signup:${key(watch.owner, watch.id)}:$slot"
             if (at > now) {
                 UserReminderAlarms.set(context, UserReminderAlarms.SIGNUP, watch.owner, watch.id, slot, at)
@@ -85,7 +90,7 @@ internal object SignupCountdowns {
     @Synchronized
     fun cancel(context: Context, owner: String, id: String) {
         prefs(context).edit().remove(key(owner, id)).commit()
-        for (slot in listOf("show", "open")) {
+        for (slot in listOf("show", "open", "expire")) {
             UserReminderAlarms.cancel(context, UserReminderAlarms.SIGNUP, owner, id, slot)
             WorkManager.getInstance(context).cancelUniqueWork("signup:${key(owner, id)}:$slot")
         }
@@ -111,7 +116,11 @@ internal object SignupCountdowns {
         for (watch in all(context).filter { it.owner == owner && it.start > now }) {
             val entry = entries[watch.id] ?: continue
             val updated = SignupCountdown.from(owner, entry.group.copy(id = entry.id, title = entry.title), entry.items, now,
-                watch.start.takeIf { watch.customTime })?.copy(leadMinutes = watch.leadMinutes)
+                watch.start.takeIf { watch.customTime })?.let { candidate ->
+                if (candidate.start == watch.start) candidate.copy(leadMinutes = watch.leadMinutes,
+                    hidden = watch.hidden, generation = watch.generation, opened = watch.opened)
+                else candidate.copy(leadMinutes = watch.leadMinutes, generation = java.util.UUID.randomUUID().toString())
+            }
             if (entry.hidden || entry.group.expired || updated == null) cancel(context, owner, watch.id)
             else if (updated != watch) {
                 save(context, updated)
@@ -127,6 +136,16 @@ internal object SignupCountdowns {
         }
     }
 
+    /** An independently requested alarm at the same opening uses the countdown's single result. */
+    @Synchronized
+    fun deliverOpening(context: Context, owner: String, id: String, at: Long): Boolean {
+        val watch = get(context, owner, id) ?: return false
+        val now = System.currentTimeMillis()
+        if (watch.start != at || now !in at until watch.expiresAt || watch.hidden) return false
+        render(context, watch, now)
+        return get(context, owner, id)?.opened == true
+    }
+
     private fun render(context: Context, watch: SignupCountdown, now: Long) {
         val tag = key(watch.owner, watch.id)
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -134,7 +153,7 @@ internal object SignupCountdowns {
             cancel(context, watch.owner, watch.id)
             return
         }
-        if (now < watch.showAt) {
+        if (watch.hidden || now < watch.showAt) {
             manager.cancel(tag, LIVE_ID)
             return
         }
@@ -146,7 +165,8 @@ internal object SignupCountdowns {
         val channel = if (open) ReminderKind.NOTICE_SIGNUP.channelId else LiveUpdateNotifier.CHANNEL_ID
         if (manager.getNotificationChannel(channel)?.importance == NotificationManager.IMPORTANCE_NONE) return
         val timer = PendingIntent.getActivity(context, 0, timerIntent(context, watch.owner, watch.id), FLAGS)
-        val detail = detailIntent(context, watch)
+        val detail = ActivityLinks.open(context, watch.owner, "signup", watch.id)
+        val hide = ActivityLinks.hide(context, watch.owner, "signup", watch.id, watch.instance)
         val firstLine = if (open) "已到报名时间" else "报名开始  ${SignupCountdown.timeText(watch.start)}"
         val builder = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_live_timer)
@@ -156,18 +176,20 @@ internal object SignupCountdowns {
             .setContentText(listOf(firstLine, watch.location).filter { it.isNotBlank() }.joinToString(" · "))
             .setStyle(NotificationCompat.BigTextStyle().bigText(watch.details()))
             .setWhen(watch.start).setShowWhen(true)
-            .setContentIntent(if (open) detail else timer)
+            .setContentIntent(detail)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
         if (open) {
             builder.setAutoCancel(true).setTimeoutAfter(watch.expiresAt - now)
         } else {
-            builder.setOngoing(true).setRequestPromotedOngoing(true)
+            builder.setOngoing(true).setRequestPromotedOngoing(LiveCapabilities.canPromote(context, channel))
+                .setSilent(true)
+                .setDeleteIntent(hide)
+                .addAction(0, "隐藏本次展示", hide)
                 .setUsesChronometer(true).setChronometerCountDown(true)
                 .setTimeoutAfter(watch.start - now)
                 .addAction(0, "毫秒倒计时", timer)
         }
-        builder.addAction(0, "查看活动", detail)
         manager.notify(tag, if (open) OPEN_ID else LIVE_ID, if (open) builder.build() else builder.buildLiveUpdate())
         if (open) save(context, watch.copy(opened = true))
     }

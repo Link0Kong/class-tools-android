@@ -13,17 +13,16 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.furina.classtools.MainActivity
 import com.furina.classtools.R
-import com.furina.classtools.data.ppt.PptUploadPhase
-import com.furina.classtools.data.ppt.PptUploadProgress
+import com.furina.classtools.data.transfer.TransferActivities
+import com.furina.classtools.data.transfer.TransferActivity
+import com.furina.classtools.data.transfer.TransferStage
 import com.furina.classtools.data.reminder.ReminderIntentFactory
 import com.furina.classtools.data.vote.VoteLogic
 
 /**
  * 系统级「实时活动」通知（Android 16 Live Updates / 状态栏胶囊）。
  *
- * 背景：ColorOS 16 的流体云完整接入了原生 Android 16 Live Updates API（OPPO 官方确认），
- * 因此遵循 Google Live Updates 规范即可在支持设备上以流体云/灵动岛/状态栏胶囊呈现；
- * 不支持的系统则退化为普通常驻通知（进度条 + 倒计时），不影响功能。
+ * 应用请求系统提升展示；具体入口和布局由系统决定。
  *
  * 规则（Google 规范）：
  * - `POST_PROMOTED_NOTIFICATIONS` 非运行时权限（manifest 声明）；
@@ -98,89 +97,69 @@ object LiveUpdateNotifier {
 
     // ---------------------------------------------------------------- PPT 上传
 
-    /** 上传/转换进度：常驻 + 进度条 + 系统胶囊百分比。 */
-    fun postPptUpload(context: Context, progress: PptUploadProgress) {
-        if (!canNotify(context)) return
-        ensureChannel(context)
-        val uploading = progress.phase == PptUploadPhase.UPLOADING
-        val percent = progress.percent.coerceIn(0, PROGRESS_MAX)
-        val phaseText = when (progress.phase) {
-            PptUploadPhase.CREATING -> "正在准备文件"
-            PptUploadPhase.UPLOADING -> "已上传 $percent%"
-            PptUploadPhase.SUBMITTING -> "上传完成，正在提交转换"
-            else -> progress.message.ifBlank { "处理中" }
+    internal fun clearTransfer(context: Context, task: TransferActivity) {
+        val tag = ActivityLinks.tag(task.owner, task.kind, task.id)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.cancel(tag, PPT_NOTIFICATION_ID)
+        manager.cancel(tag, PPT_RESULT_NOTIFICATION_ID)
+    }
+
+    internal fun renderTransfer(context: Context, task: TransferActivity) {
+        val tag = ActivityLinks.tag(task.owner, task.kind, task.id)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (task.hidden || task.stage in setOf(TransferStage.CANCELED, TransferStage.REMOVED)) {
+            clearTransfer(context, task)
+            return
         }
+        ensureChannel(context)
+        val other = if (task.active) PPT_RESULT_NOTIFICATION_ID else PPT_NOTIFICATION_ID
+        manager.cancel(tag, other)
+        if (!LiveCapabilities.canNotify(context, CHANNEL_ID)) return
         val accent = context.getColor(R.color.live_upload_accent)
-        val style = NotificationCompat.ProgressStyle()
-            .setProgressSegments(
-                listOf(
-                    NotificationCompat.ProgressStyle.Segment(PROGRESS_MAX).setColor(accent),
-                ),
-            )
-            .setProgress(percent)
-            .setProgressIndeterminate(!uploading)
-            .setStyledByProgress(true)
-        if (uploading) {
-            style.setProgressTrackerIcon(IconCompat.createWithResource(context, R.drawable.ic_live_upload).setTint(accent))
-        }
+        val open = ActivityLinks.open(context, task.owner, task.kind, task.id)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_live_upload)
-            .setColor(accent)
-            .setContentTitle(progress.title.ifBlank { "上传演示文稿" })
-            .setSubText("演示上传")
-            .setContentText(phaseText)
-            .setShowWhen(false)
-            .setStyle(style)
-            .setProgress(PROGRESS_MAX, percent, !uploading)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setRequestPromotedOngoing(true)
-            .setShortCriticalText(when (progress.phase) {
-                PptUploadPhase.UPLOADING -> "$percent%"
-                PptUploadPhase.CREATING -> "准备中"
-                else -> "提交中"
-            })
-            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
-            .setContentIntent(openToolIntent(context, "ppt"))
-        runCatching {
-            NotificationManagerCompat.from(context).notify(PPT_NOTIFICATION_ID, builder.buildLiveUpdate())
+            .setSmallIcon(R.drawable.ic_live_upload).setColor(accent)
+            .setContentTitle(task.title).setContentText(task.label)
+            .setSubText(if (task.kind == "deck") "班级课件" else "文件传输")
+            .setContentIntent(open).setShowWhen(false).setOnlyAlertOnce(true)
+        if (task.active) {
+            val percent = task.percent.takeIf { task.stage == TransferStage.UPLOADING || task.stage == TransferStage.PROCESSING }
+            val hide = ActivityLinks.hide(context, task.owner, task.kind, task.id, task.generation)
+            val promote = task.stage == TransferStage.UPLOADING && LiveCapabilities.canPromote(context, CHANNEL_ID)
+            val style = NotificationCompat.ProgressStyle().setProgressSegments(listOf(
+                NotificationCompat.ProgressStyle.Segment(PROGRESS_MAX).setColor(accent)))
+                .setProgress(percent ?: 0).setProgressIndeterminate(percent == null)
+            if (percent != null) style.setProgressTrackerIcon(IconCompat.createWithResource(context, R.drawable.ic_live_upload).setTint(accent))
+            builder.setStyle(style).setProgress(PROGRESS_MAX, percent ?: 0, percent == null)
+                .setOngoing(true).setCategory(NotificationCompat.CATEGORY_PROGRESS)
+                .setShortCriticalText(percent?.let { "$it%" } ?: "处理中")
+                .setRequestPromotedOngoing(promote).setDeleteIntent(hide).addAction(0, "隐藏", hide)
+                .setTimeoutAfter((task.createdAt + (if (task.stage in TransferActivities.uploadStages) 24L else 8L) * 3_600_000 - System.currentTimeMillis()).coerceAtLeast(1))
+            manager.notify(tag, PPT_NOTIFICATION_ID, if (promote) builder.buildLiveUpdate() else builder.build())
+        } else {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(task.label)).setAutoCancel(true)
+                .setTimeoutAfter(TransferActivities.RETAIN_MS).setCategory(NotificationCompat.CATEGORY_STATUS)
+                .addAction(0, if (task.stage == TransferStage.READY) "查看或下载" else "查看详情", open)
+            manager.notify(tag, PPT_RESULT_NOTIFICATION_ID, builder.build())
         }
-    }
-
-    /** 上传成功/失败后的短暂结果通知（非实时活动，自动消失）。 */
-    fun postPptFinished(context: Context, success: Boolean, message: String) {
-        if (!canNotify(context)) return
-        ensureChannel(context)
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_live_upload)
-            .setColor(context.getColor(R.color.live_upload_accent))
-            .setContentTitle(if (success) "演示上传完成" else "演示上传失败")
-            .setContentText(message.ifBlank { if (success) "已提交转换，可在演示列表查看进度" else "请稍后重试" })
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message.ifBlank { if (success) "已提交转换，可在演示列表查看进度" else "请稍后重试" }))
-            .setAutoCancel(true)
-            .setOnlyAlertOnce(true)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setContentIntent(openToolIntent(context, "ppt"))
-        runCatching {
-            NotificationManagerCompat.from(context).notify(PPT_RESULT_NOTIFICATION_ID, builder.build())
-        }
-    }
-
-    fun cancelPptUpload(context: Context) {
-        runCatching { NotificationManagerCompat.from(context).cancel(PPT_NOTIFICATION_ID) }
     }
 
     // ---------------------------------------------------------------- 限时投票
 
     /** 限时投票倒计时：常驻 + 系统倒计时（无需应用逐秒刷新）。 */
-    fun postVoteDeadline(context: Context, pollTitle: String, deadlineMillis: Long, countdownDeadlineMillis: Long = deadlineMillis) {
+    internal fun postVote(context: Context, watch: VoteWatch) {
+        val countdownDeadlineMillis = watch.localDeadline
+        val deadlineMillis = watch.deadline
+        val pollTitle = watch.title
         val remaining = countdownDeadlineMillis - System.currentTimeMillis()
         if (remaining <= 0L) {
-            cancelVote(context)
+            cancelVote(context, watch.tag)
             return
         }
         if (!canNotify(context)) return
         ensureChannel(context)
+        if (watch.hidden || !LiveCapabilities.canNotify(context, CHANNEL_ID)) return
+        val hide = ActivityLinks.hide(context, watch.owner, "vote", watch.id, watch.generation)
         val deadlineText = "截止 ${VoteLogic.formatAt(deadlineMillis)}"
         val title = pollTitle.ifBlank { "班级投票" }
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -197,16 +176,18 @@ object LiveUpdateNotifier {
             .setTimeoutAfter(remaining)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setRequestPromotedOngoing(true)
+            .setRequestPromotedOngoing(LiveCapabilities.canPromote(context, CHANNEL_ID))
             .setCategory(NotificationCompat.CATEGORY_EVENT)
-            .setContentIntent(openToolIntent(context, "vote"))
+            .setDeleteIntent(hide)
+            .addAction(0, "隐藏本次展示", hide)
+            .setContentIntent(ActivityLinks.open(context, watch.owner, "vote", watch.id))
         runCatching {
-            NotificationManagerCompat.from(context).notify(VOTE_NOTIFICATION_ID, builder.buildLiveUpdate())
+            NotificationManagerCompat.from(context).notify(watch.tag, VOTE_NOTIFICATION_ID, builder.buildLiveUpdate())
         }
     }
 
-    fun cancelVote(context: Context) {
-        runCatching { NotificationManagerCompat.from(context).cancel(VOTE_NOTIFICATION_ID) }
+    internal fun cancelVote(context: Context, tag: String?) {
+        runCatching { NotificationManagerCompat.from(context).cancel(tag, VOTE_NOTIFICATION_ID) }
     }
 
     // ---------------------------------------------------------------- 调试演示

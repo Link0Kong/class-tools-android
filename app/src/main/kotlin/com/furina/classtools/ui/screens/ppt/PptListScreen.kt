@@ -74,17 +74,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import com.furina.classtools.data.notify.LiveUpdateNotifier
 import com.furina.classtools.data.ppt.DefaultPptRepository
-import com.furina.classtools.data.ppt.PptByteSource
 import com.furina.classtools.data.ppt.PptDeck
 import com.furina.classtools.data.ppt.PptImageLoader
 import com.furina.classtools.data.ppt.PptListResult
 import com.furina.classtools.data.ppt.PptLocalStore
 import com.furina.classtools.data.ppt.PptRepository
-import com.furina.classtools.data.ppt.PptUploadInput
-import com.furina.classtools.data.ppt.PptUploadPhase
-import com.furina.classtools.data.ppt.PptUploadResult
 import com.furina.classtools.data.ppt.PptUriSource
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.features.ppt.PptDeckListLogic
@@ -105,7 +100,10 @@ import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShape
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
-import kotlinx.coroutines.Job
+import com.furina.classtools.ClassToolsApp
+import com.furina.classtools.data.transfer.TransferActivities
+import com.furina.classtools.data.transfer.TransferStage
+import com.furina.classtools.data.reminder.reminderOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -153,11 +151,11 @@ fun PptListScreen(
     var pendingSource by remember { mutableStateOf<PptUriSource?>(null) }
     var titleDraft by remember { mutableStateOf("") }
     var replaceDeckId by remember { mutableStateOf<String?>(null) }
-    var uploadJob by remember { mutableStateOf<Job?>(null) }
-    var uploadNonce by remember { mutableStateOf(0) }
-    var uploadTitle by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<PptDeck?>(null) }
-    val uploadProgress by repository.uploadProgress.collectAsStateWithLifecycle()
+    val transfers = (context.applicationContext as ClassToolsApp).container.transferActivities
+    val records by transfers.tasks.collectAsStateWithLifecycle()
+    val owner = session?.reminderOwner.orEmpty()
+    val currentUpload = records.lastOrNull { it.owner == owner && it.kind == "deck" && it.stage in TransferActivities.uploadStages }
 
     suspend fun refresh() {
         when (val result = repository.loadList()) {
@@ -227,44 +225,18 @@ fun PptListScreen(
         )
     }
 
-    fun startUpload(title: String, source: PptByteSource) {
-        if (!LiveUpdateNotifier.isAvailable(context)) {
-            toast(context, "系统通知未开启：上传进度不会显示在通知栏/灵动岛")
-        }
+    fun startUpload(title: String, source: PptUriSource) {
         pendingSource = null
         uploadFailedMessage = null
-        uploadTitle = PptLimits.sanitizeTitle(title)
-        val replaceId = replaceDeckId
+        transfers.startUpload(owner, "deck", source.uri, source.name, PptLimits.sanitizeTitle(title), source.size, replaceDeckId.orEmpty())
         replaceDeckId = null
-        uploadJob?.cancel()
-        val nonce = uploadNonce + 1
-        uploadNonce = nonce
-        uploadJob = scope.launch {
-            try {
-                when (val result = repository.upload(PptUploadInput(title = uploadTitle, source = source))) {
-                    is PptUploadResult.Success -> {
-                        if (replaceId != null) runCatching { repository.softDelete(replaceId) }
-                        toast(context, "已上传，排队转换中")
-                        refresh()
-                    }
-
-                    is PptUploadResult.Failure -> {
-                        uploadFailedMessage = result.message
-                        toast(context, result.message)
-                        refresh()
-                    }
-                }
-            } finally {
-                // 仅当前这次上传结束时才清空（避免旧任务覆盖新任务的进度条）。
-                if (uploadNonce == nonce) uploadJob = null
-            }
-        }
     }
 
     fun deleteDeck(deck: PptDeck) {
         scope.launch {
             when (val result = repository.softDelete(deck.id)) {
                 is com.furina.classtools.data.network.ApiResult.Success -> {
+                    transfers.removed(owner, "deck", deck.id)
                     toast(context, "已删除")
                     refresh()
                 }
@@ -283,26 +255,12 @@ fun PptListScreen(
             pickFile()
             return
         }
-        scope.launch {
-            when (val result = repository.retryConversion(deck.id)) {
-                is com.furina.classtools.data.network.ApiResult.Success -> {
-                    toast(context, "已重新排队")
-                    refresh()
-                }
-
-                is com.furina.classtools.data.network.ApiResult.Failure -> {
-                    toast(context, result.error.displayMessage)
-                }
-            }
-        }
+        transfers.retryDeck(owner, deck)
     }
 
-    val uploading = uploadJob?.isActive == true
-    val uploadBar = if (uploading) {
-        PptUploadBar(title = uploadTitle, percent = uploadProgress.percent, deckId = uploadProgress.deckId)
-    } else {
-        null
-    }
+    val uploadBar = currentUpload?.let { PptUploadBar(it.title, it.percent ?: 0, it.id) }
+    val failure = records.lastOrNull { it.owner == owner && it.kind == "deck" && it.stage == TransferStage.FAILED }
+    LaunchedEffect(failure?.generation) { if (failure != null) uploadFailedMessage = failure.label }
 
     PptListContent(
         decks = decks,
@@ -321,7 +279,7 @@ fun PptListScreen(
         onDelete = { deck -> deleteTarget = deck },
         onRetry = ::retryDeck,
         onCancelUpload = {
-            uploadJob?.cancel()
+            currentUpload?.let { transfers.cancelUpload(owner, "deck", it.id) }
             toast(context, "已取消上传")
         },
         onDismissUploadError = { uploadFailedMessage = null },

@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.furina.classtools.data.reminder.CourseActivities.expire(applicationContext)
         ReminderRuntime.scheduleCourseAt(applicationContext, System.currentTimeMillis())
         // 访问统计：回前台补报一次（同一账号同一小时 reporter 内部去重，失败静默）。
         runCatching { (application as ClassToolsApp).container.reportVisitOnResume() }
@@ -80,6 +81,7 @@ class MainActivity : ComponentActivity() {
 
     private fun routeFrom(intent: Intent?): IncomingNavigation? {
         if (intent == null) return null
+        com.furina.classtools.data.notify.ActivityLinks.navigation(intent)?.let { return it }
         val widgetTool = intent.action?.removePrefix(WIDGET_ACTION)?.takeIf { intent.action == WIDGET_ACTION + it }
         val focus = intent.getStringExtra(CARD_FOCUS)?.takeIf(String::isNotBlank)?.let { if (it.length <= 4096) it else "invalid" }
         val owner = (application as ClassToolsApp).container.currentSession
@@ -95,12 +97,19 @@ class MainActivity : ComponentActivity() {
         }
         val notice = noticeIdFrom(intent)
         if (notice != null) return request(Routes.tool("nt", focus = notice))
-        if (intent.action == Intent.ACTION_VIEW && intent.dataString == com.furina.classtools.data.timetable.XiaobuCourseCard.TIMETABLE_LINK) {
-            return request(Routes.tool("tt"))
+        if (intent.action == Intent.ACTION_VIEW &&
+            intent.data?.buildUpon()?.clearQuery()?.build()?.toString() == com.furina.classtools.data.timetable.XiaobuCourseCard.TIMETABLE_LINK) {
+            val entity = intent.data?.getQueryParameter("activity")
+            val target = entity?.let { (application as ClassToolsApp).container.xiaobuCourseSync.clickTarget(it) }
+            return if (target != null) IncomingNavigation(Routes.tool("tt"), target.second, target.first, activityParent = Routes.tool("tt"))
+            else request(Routes.tool("tt"), "invalid".takeIf { entity != null })
         }
         val id = ReminderIntentFactory.toolIdFromExtras(intent.getStringExtra(ReminderIntentFactory.EXTRA_TOOL_ID)) ?: return null
         if (id == "vote") return request(Routes.VOTE)
-        if (id == "tt") return request(Routes.tool("tt"))
+        if (id == "tt" && intent.data?.scheme == "ct-course") {
+            return IncomingNavigation(Routes.tool("tt"), focus, account, activityParent = Routes.tool("tt"))
+        }
+        if (id == "tt") return request(Routes.tool("tt"), focus)
         val key = intent.getStringExtra(ReminderIntentFactory.EXTRA_REMINDER_KEY).orEmpty()
         val detail = ReminderIntentFactory.focusFor(key)
         return request(Routes.tool(id, pick = id == "hw" && intent.getStringExtra(ReminderIntentFactory.EXTRA_REMINDER_KIND) !=

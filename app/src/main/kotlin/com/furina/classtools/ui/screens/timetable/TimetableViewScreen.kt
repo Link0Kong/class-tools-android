@@ -2076,7 +2076,7 @@ fun TimetableCourseDetailContent(
     val content = scheme.onPrimaryContainer
     val date = displayWeek?.let { TtCalendar.mondayOf(termStart, it)?.plusDays(course.day.toLong()) }
     Column(
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+        modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Surface(

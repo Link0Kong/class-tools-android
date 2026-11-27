@@ -137,6 +137,7 @@ data class CloudSpaceUploadTask(
     val sentBytes: Long = 0L,
     val state: CloudSpaceUploadState = CloudSpaceUploadState.WAITING,
     val message: String = "",
+    val cancellable: Boolean = true,
 ) {
     val percent: Int
         get() = if (state == CloudSpaceUploadState.DONE) {
@@ -158,10 +159,10 @@ data class CloudSpaceUploadTask(
 }
 
 
-data class DropConversion(val status: String, val progress: Int, val error: String, val attempt: Int) {
+data class DropConversion(val status: String, val progress: Int?, val error: String, val attempt: Int) {
     val label: String get() = when (status) {
         "queued" -> "等待转换"
-        "processing" -> "转换中 $progress%"
+        "processing" -> progress?.let { "转换中 $it%" } ?: "转换中"
         "ready" -> "查看转换结果"
         else -> if (error.isBlank()) "转换失败，重试" else "转换失败，重试 · $error"
     }

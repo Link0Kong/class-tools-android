@@ -21,7 +21,7 @@ import kotlinx.coroutines.withContext
  */
 class PptUriSource private constructor(
     private val context: Context,
-    private val uri: Uri,
+    val uri: Uri,
     override val name: String,
     override val size: Long,
 ) : PptByteSource {

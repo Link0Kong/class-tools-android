@@ -78,6 +78,20 @@ object ReminderIntentFactory {
         }
     }
 
+    internal fun courseIntent(context: Context, activity: CourseActivity): PendingIntent {
+        val intent = Intent(context, com.furina.classtools.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            data = android.net.Uri.Builder().scheme("ct-course").authority("notification")
+                .appendPath(activity.generation).build()
+            putExtra(EXTRA_TOOL_ID, "tt")
+            putExtra(com.furina.classtools.MainActivity.CARD_FOCUS, activity.info.focus?.encode())
+            val account = if (activity.owner.startsWith("debug_")) "debug:" + activity.owner.removePrefix("debug_")
+                else "account:" + activity.owner
+            putExtra(com.furina.classtools.MainActivity.CARD_ACCOUNT, account)
+        }
+        return PendingIntent.getActivity(context, 0, intent, PENDING_INTENT_FLAGS)
+    }
+
     /** 通知点击 PendingIntent（同 key 覆盖，不堆叠）。 */
     fun pendingIntent(context: Context, event: ReminderEvent): PendingIntent {
         val intent = openIntent(context, event)

@@ -4,6 +4,12 @@ package com.furina.classtools.ui.screens.ppt
 
 import com.furina.classtools.ui.components.CtToastBus
 
+import com.furina.classtools.ClassToolsApp
+import com.furina.classtools.data.ppt.PptDeck
+import com.furina.classtools.data.transfer.TransferStage
+import com.furina.classtools.data.transfer.TransferActivities
+import com.furina.classtools.data.reminder.reminderOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -122,20 +128,32 @@ fun PptDownloadDetailScreen(
     var detail by remember(deckId, initialDetail) { mutableStateOf(initialDetail) }
     var error by remember(deckId) { mutableStateOf<String?>(null) }
     var retryToken by remember(deckId) { mutableIntStateOf(0) }
-    var reprocessing by remember(deckId) { mutableStateOf(false) }
+    val container = (context.applicationContext as? ClassToolsApp)?.container
+    val owner = container?.currentSession?.reminderOwner.orEmpty()
+    val activities = container?.transferActivities
+    val records = activities?.tasks?.collectAsStateWithLifecycle()?.value.orEmpty()
+    val transfer = records.firstOrNull { it.owner == owner && it.kind == "deck" && it.id == deckId }
+    val reprocessing = transfer?.stage == TransferStage.SUBMITTING
     var rowStates by remember(deckId) {
         // key：文件行 "compat"/"pdf"/"source"；媒体行 "media:<video_1>"（v2.3 §12.8）
         mutableStateOf<Map<String, PptRowDownloadState>>(emptyMap())
     }
 
-    LaunchedEffect(deckId, retryToken, skipLoad) {
+    LaunchedEffect(deckId, retryToken, skipLoad, transfer?.stage) {
         if (skipLoad) return@LaunchedEffect
         val repo = repository ?: return@LaunchedEffect
         loading = true
         error = null
         when (val result = repo.loadDownloadDetail(deckId)) {
             is PptDetailResult.Success -> detail = result.detail
-            is PptDetailResult.Failure -> error = result.message
+            is PptDetailResult.Failure -> when {
+                transfer?.stage in TransferActivities.uploadStages -> Unit
+                result.missing -> {
+                    toast(context, result.message)
+                    onBack()
+                }
+                else -> error = result.message
+            }
         }
         loading = false
     }
@@ -223,25 +241,18 @@ fun PptDownloadDetailScreen(
         openState("media:" + row.key, row.url, row.fileName, row.mimeType)
 
     fun reprocess() {
-        val repo = repository ?: return
-        if (reprocessing) return
-        reprocessing = true
-        scope.launch {
-            when (val result = repo.retryConversion(deckId)) {
-                is com.furina.classtools.data.network.ApiResult.Success -> {
-                    toast(context, "已提交重新处理")
-                    retryToken += 1
-                }
-
-                is com.furina.classtools.data.network.ApiResult.Failure ->
-                    toast(context, result.error.displayMessage)
-            }
-            reprocessing = false
+        val item = detail ?: return
+        if (!reprocessing && activities != null) {
+            activities.retryDeck(owner, PptDeck(deckId, title = item.title, status = item.status,
+                updatedAt = item.updatedAt, sourceSize = item.sourceSize))
         }
     }
 
+    val displayDetail = if (transfer != null && transfer.stage in TransferActivities.uploadStages) {
+        (detail ?: PptDeckDetail(title = transfer.title)).copy(status = "uploading", progress = transfer.percent ?: 0)
+    } else detail
     PptDownloadDetailContent(
-        detail = detail,
+        detail = displayDetail,
         imageLoader = imageLoader,
         loading = loading,
         error = error,
@@ -507,7 +518,7 @@ private fun NotReadyCard(detail: PptDeckDetail, reprocessing: Boolean, onReproce
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            if (kind == PptStatusTexts.Kind.FAILED || detail.status == "queued") {
+            if (kind == PptStatusTexts.Kind.FAILED && !detail.error.contains("上传中断")) {
                 TextButton(onClick = onReprocess, enabled = !reprocessing) {
                     Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))

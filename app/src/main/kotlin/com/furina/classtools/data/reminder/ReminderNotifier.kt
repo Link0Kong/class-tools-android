@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.furina.classtools.ClassToolsApp
 import com.furina.classtools.R
+import com.furina.classtools.data.notify.LiveCapabilities
 import com.furina.classtools.data.notify.buildLiveUpdate
 import com.furina.classtools.data.timetable.TimetableLink
 import java.time.Instant
@@ -31,6 +32,8 @@ interface ReminderNotifier {
 
     /** 发送一条提醒；返回是否真正发出（无权限/无 Launcher Activity 时 false）。 */
     fun notify(event: ReminderEvent): Boolean
+
+    fun pauseEarlyCourse(key: String) = Unit
 
     /** Refresh a visible course card or withdraw it if the timetable or clock moved out of its window. */
     fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long, alreadySent: Boolean = false): List<String> = emptyList()
@@ -79,8 +82,7 @@ object ReminderGrouping {
 
 class AndroidReminderNotifier(
     context: Context,
-    private val supportsLiveCourse: Boolean = Build.VERSION.SDK_INT >= 36 &&
-        (context.applicationContext as? ClassToolsApp)?.container?.hasColorOsRom() == true,
+    private val owner: String = (context.applicationContext as? ClassToolsApp)?.container?.currentSession?.reminderOwner.orEmpty(),
 ) : ReminderNotifier {
 
     private val appContext: Context = context.applicationContext
@@ -116,84 +118,84 @@ class AndroidReminderNotifier(
             }
     }
 
+    override fun pauseEarlyCourse(key: String) = CourseActivities.pauseEarly(appContext, owner, key)
+
     override fun reconcileLiveCourse(due: ReminderEvent?, nowMillis: Long, alreadySent: Boolean): List<String> {
-        if (!supportsLiveCourse) return emptyList()
-        val manager = appContext.getSystemService(NotificationManager::class.java) ?: return emptyList()
-        if (due == null) CourseLiveService.stop(appContext)
-        val active = runCatching { manager.activeNotifications }.getOrElse { return emptyList() }
-        val withdrawn = mutableListOf<String>()
-        for (card in active) {
-            val shown = card.notification
-            if (!card.isOngoing || shown.channelId != ReminderKind.COURSE_SOON.channelId) continue
-            val key = "class:${shown.`when`}"
-            if (card.id != key.hashCode()) continue
-            if (shown.`when` == due?.courseStartAtMillis) continue
-            if (due != null) CourseLiveService.stop(appContext)
-            manager.cancel(card.id)
-            if (shown.`when` > nowMillis) withdrawn.add(key)
-        }
-        if (alreadySent && due != null) {
-            post(due, silent = true)
-        }
-        return withdrawn
+        CourseActivities.reconcile(appContext, owner, due?.key)
+        if (alreadySent && due != null) postCourse(due, silent = true)
+        return emptyList()
     }
 
-    override fun notify(event: ReminderEvent): Boolean = post(event, silent = false)
+    override fun notify(event: ReminderEvent): Boolean =
+        if (event.kind == ReminderKind.COURSE_SOON) postCourse(event, false) else post(event)
 
-    private fun post(event: ReminderEvent, silent: Boolean): Boolean {
+    private fun postCourse(event: ReminderEvent, silent: Boolean): Boolean {
+        val info = event.course ?: return false
+        return CourseActivities.show(appContext, owner, event) { activity ->
+            if (!LiveCapabilities.canNotify(appContext, event.kind.channelId)) return@show false
+            val remaining = info.startAt - System.currentTimeMillis()
+            if (remaining <= 0) return@show false
+            val promote = info.trackLive && remaining <= 10 * 60_000L &&
+                LiveCapabilities.canPromote(appContext, event.kind.channelId)
+            val manager = appContext.getSystemService(NotificationManager::class.java)
+            val signature = kotlinx.serialization.json.Json.encodeToString(info) + ":" + promote
+            val shown = manager.activeNotifications.firstOrNull { it.tag == activity.tag && it.id == activity.notificationId }
+            if (shown?.notification?.extras?.getString(COURSE_SIGNATURE) == signature) return@show true
+            val dismiss = CourseActivities.dismissIntent(appContext, activity)
+            val builder = NotificationCompat.Builder(appContext, event.kind.channelId)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setOnlyAlertOnce(true)
+                .setWhen(info.startAt).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
+                .setTimeoutAfter(remaining).setOngoing(promote).setAutoCancel(false)
+                .setContentIntent(ReminderIntentFactory.courseIntent(appContext, activity))
+                            .setDeleteIntent(dismiss)
+                .addAction(0, "隐藏本次", dismiss)
+                .addExtras(android.os.Bundle().apply { putString(COURSE_SIGNATURE, signature) })
+            // A refresh of an existing card uses onlyAlertOnce. Silent also suppresses a fresh
+            // system alert if a previously delivered card must be restored.
+            if (silent && shown == null) builder.setSilent(true)
+            builder.setLiveCourseContent(appContext, event, event.body)
+            if (promote) builder.setRequestPromotedOngoing(true)
+            val card = if (promote) builder.buildLiveUpdate() else builder.build()
+            manager.notify(activity.tag, activity.notificationId, card)
+            true
+        }
+    }
+
+    private fun post(event: ReminderEvent): Boolean {
         if (!canNotify() || appContext.getSystemService(NotificationManager::class.java)
                 .getNotificationChannel(event.kind.channelId)?.importance == NotificationManager.IMPORTANCE_NONE) return false
-        val pendingIntent = ReminderIntentFactory.pendingIntent(appContext, event)
+        val target = when (event.kind) {
+            ReminderKind.VOTE_NEW, ReminderKind.VOTE_RESULT -> event.key.substringAfter(':', "").takeIf { it.isNotBlank() }
+                ?.let { "vote" to it }
+            ReminderKind.NOTICE_SIGNUP -> ReminderIntentFactory.focusFor(event.key)?.let { "signup" to it }
+            else -> null
+        }
+        val pendingIntent = if (target != null && owner.isNotBlank())
+            com.furina.classtools.data.notify.ActivityLinks.open(appContext, owner, target.first, target.second)
+        else ReminderIntentFactory.pendingIntent(appContext, event)
         viewEvent(event)
-        val startAt = event.courseStartAtMillis
-        val now = System.currentTimeMillis()
-        if (event.kind == ReminderKind.COURSE_SOON &&
-            (startAt == null || startAt <= now || event.triggerAtMillis > now)) return false
-        val liveCourse = startAt != null && supportsLiveCourse
-        val body = if (event.kind == ReminderKind.COURSE_SOON) event.body.substringBeforeLast(" · 还有 ") else event.body
         val groupKey = ReminderGrouping.groupKey(event.kind)
         val builder = NotificationCompat.Builder(appContext, event.kind.channelId)
             .setSmallIcon(smallIcon)
             .setContentTitle(event.title)
-            .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(
-                if (event.kind.highPriority) {
-                    NotificationCompat.PRIORITY_HIGH
-                } else {
-                    NotificationCompat.PRIORITY_DEFAULT
-                },
-            )
+            .setContentText(event.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(event.body))
+            .setPriority(if (event.kind.highPriority) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
-        if (startAt != null) {
-            builder.setWhen(startAt)
-                .setShowWhen(true)
-                .setUsesChronometer(true)
-                .setChronometerCountDown(true)
-                .setTimeoutAfter(startAt - now)
-        }
         val userReminder = event.kind == ReminderKind.PERSONAL_TASK || event.key.startsWith("oneshot:")
         if (userReminder) builder.setWhen(event.triggerAtMillis)
-        if (liveCourse) {
-            builder.setLiveCourseContent(appContext, event, body)
-            builder.setAutoCancel(false)
-                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-                .setSilent(silent)
-                .setOngoing(true)
-                .setRequestPromotedOngoing(true)
-        } else if (!userReminder) {
+        if (!userReminder) {
             builder.setGroup(groupKey).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
         }
         val childOk = runCatching {
-            val notification = if (liveCourse) builder.buildLiveUpdate() else builder.build()
-            NotificationManagerCompat.from(appContext).notify(event.notificationId, notification)
-            if (liveCourse) CourseLiveService.attach(appContext, event.notificationId, notification)
+            NotificationManagerCompat.from(appContext).notify(event.notificationId, builder.build())
             true
         }.getOrDefault(false)
-        if (childOk && !liveCourse && !userReminder) {
+        if (childOk && !userReminder) {
             postGroupSummary(event, groupKey, pendingIntent)
         }
         return childOk
@@ -249,6 +251,7 @@ class AndroidReminderNotifier(
     }
 }
 
+private const val COURSE_SIGNATURE = "ct.preclass.content"
 private val courseClock = DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA).withZone(TimetableLink.CHINA_ZONE)
 
 /** Use the platform's expandable template so System UI can also render the promoted chip. */
@@ -267,12 +270,18 @@ internal fun NotificationCompat.Builder.setLiveCourseContent(context: Context, e
     val time = if (course.endAt > course.startAt) {
         "$start–${courseClock.format(Instant.ofEpochMilli(course.endAt))}"
     } else start
-    val room = course.room.trim()
-    val details = buildString {
-        append("时间  ").append(time)
-        if (room.isNotEmpty()) append("\n教室  ").append(room)
-    }
+    val date = course.focus?.date?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+    val details = listOfNotNull(
+        course.room.trim().takeIf(String::isNotEmpty)?.let { "教室  $it" },
+        "时间  " + listOf(time, course.span).filter(String::isNotBlank).joinToString(" · "),
+        course.teacher.trim().takeIf(String::isNotEmpty)?.let { "教师  $it" },
+        date?.let {
+            val day = it.format(DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.CHINA))
+            "日期  " + listOfNotNull(day, course.week?.let { w -> "第 ${w} 周" }).joinToString(" · ")
+        },
+    )
+    setSubText("距离上课")
     setContentTitle(course.name.ifBlank { "上课提醒" })
-    setContentText(if (room.isEmpty()) time else "$time · $room")
-    setStyle(NotificationCompat.BigTextStyle().bigText(details))
+    setContentText(course.room.ifBlank { time })
+    setStyle(NotificationCompat.BigTextStyle().bigText(details.joinToString("\n")))
 }

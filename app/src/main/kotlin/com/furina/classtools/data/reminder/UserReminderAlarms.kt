@@ -32,6 +32,8 @@ internal suspend fun reminderSession(context: Context): Session? =
 
 /** Alarm identity includes the actual IDs. Extras alone do not distinguish PendingIntents. */
 internal object UserReminderAlarms {
+    const val COURSE = "course"
+    const val XIAOBU = "xiaobu"
     const val TASK = "task"
     const val SIGNUP = "signup"
 
@@ -87,6 +89,15 @@ class UserReminderAlarmReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 when (kind) {
+                    UserReminderAlarms.COURSE -> if (slot == "hide") {
+                        CourseActivities.hide(context, owner, id)
+                        (context.applicationContext as? com.furina.classtools.ClassToolsApp)?.container?.xiaobuCourseSync?.refresh()
+                    } else {
+                        CourseActivities.onBoundary(context, owner, id)
+                        ReminderRuntime.scheduleCourseAt(context, System.currentTimeMillis())
+                    }
+                    UserReminderAlarms.XIAOBU ->
+                        (context.applicationContext as? com.furina.classtools.ClassToolsApp)?.container?.xiaobuCourseSync?.refresh()
                     UserReminderAlarms.TASK -> deliverTaskReminder(context, owner, id, at)
                     UserReminderAlarms.SIGNUP -> SignupCountdowns.onBoundary(context, owner, id)
                     else -> OneShotTargetKind.entries.find { it.name == kind }?.let {
@@ -104,11 +115,15 @@ class UserReminderAlarmReceiver : BroadcastReceiver() {
 
 class RestoreUserRemindersWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        val revision = CourseActivities.accountRevision
         val session = reminderSession(applicationContext)
+        CourseActivities.restore(applicationContext, session?.reminderOwner, revision)
+        ReminderRuntime.scheduleCourseAt(applicationContext, System.currentTimeMillis())
         if (session != null) {
             restoreOneShotAlarms(applicationContext, session.reminderOwner)
             if (!session.debug) restoreTaskReminders(applicationContext, session.sid)
         }
+        com.furina.classtools.data.notify.VoteWatches.restore(applicationContext, session?.reminderOwner)
         SignupCountdowns.restore(applicationContext, session?.reminderOwner)
         return Result.success()
     }

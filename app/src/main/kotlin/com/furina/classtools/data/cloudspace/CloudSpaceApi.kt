@@ -373,7 +373,7 @@ class CloudSpaceApi(
         if (obj == null) return null
         val status = obj["status"].asStringOrNull() ?: return null
         if (status !in setOf("queued", "processing", "ready", "failed")) return null
-        return DropConversion(status, obj["progress"].asIntOrNull()?.coerceIn(0, 100) ?: 0,
+        return DropConversion(status, obj["progress"].asIntOrNull()?.coerceIn(0, 100),
             obj["error"].asStringOrNull().orEmpty(), obj["attempt"].asIntOrNull() ?: 0)
     }
 

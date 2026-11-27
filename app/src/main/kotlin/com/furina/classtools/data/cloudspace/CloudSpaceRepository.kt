@@ -17,6 +17,8 @@ import kotlinx.coroutines.sync.withLock
  * 装配（Lead 负责）：`CloudSpaceRepository(CloudSpaceApi(tokenProvider = { activeSession?.token }))`。
  * token 只由 [CloudSpaceApi] 放进 `X-Device-Id`，本类不接触 token、不落盘、不打日志。
  */
+data class UploadCheckpoint(val sessionId: String, val uploadId: String, val nextChunk: Int)
+
 class CloudSpaceRepository(
     private val api: CloudSpaceApi,
     private val now: () -> Long = System::currentTimeMillis,
@@ -85,6 +87,17 @@ class CloudSpaceRepository(
         return mutex.withLock { refreshLocked(force = force) }
     }
 
+    /** A background status lookup must never create a new space for an expired session. */
+    suspend fun existingFiles(): CloudSpaceResult<CloudSpaceSnapshot> = mutex.withLock {
+        if (session == null) {
+            when (val mine = api.mine()) {
+                is CloudSpaceResult.Failure -> return@withLock mine
+                is CloudSpaceResult.Success -> session = mine.value
+            }
+        }
+        if (session == null) CloudSpaceResult.Success(CloudSpaceSnapshot()) else refreshLocked(force = true)
+    }
+
     /** 下载前调用：强拉一次最新列表并返回该文件（带 30 分钟有效的签名下载链接）。 */
     suspend fun findFreshFile(fileId: String): CloudSpaceResult<CloudSpaceFile> {
         if (fileId.isBlank()) {
@@ -138,6 +151,8 @@ class CloudSpaceRepository(
      */
     suspend fun upload(
         source: CloudSpaceByteSource,
+        resume: UploadCheckpoint? = null,
+        checkpoint: (UploadCheckpoint) -> Unit = {},
         onProgress: (CloudSpaceUploadProgress) -> Unit = {},
     ): CloudSpaceResult<CloudSpaceFile> {
         val size = source.size
@@ -160,7 +175,11 @@ class CloudSpaceRepository(
 
         onProgress(CloudSpaceUploadProgress(CloudSpaceUploadState.WAITING, sentBytes = 0L, totalBytes = size))
 
-        val initResult = api.initUpload(
+        if (resume != null && resume.sessionId != currentSession.id) {
+            return CloudSpaceResult.Failure(CloudSpaceErrors.local("原上传会话已失效，请重新选择文件"))
+        }
+        val initResult = if (resume != null) CloudSpaceResult.Success(CloudSpaceUploadInit(resume.uploadId, chunkSize))
+            else api.initUpload(
             sessionId = currentSession.id,
             name = name,
             size = size,
@@ -178,8 +197,10 @@ class CloudSpaceRepository(
             )
         }
 
-        var sent = 0L
-        for (chunk in plan.chunks) {
+        val firstChunk = resume?.nextChunk?.coerceIn(0, plan.totalChunks) ?: 0
+        checkpoint(UploadCheckpoint(currentSession.id, init.uploadId, firstChunk))
+        var sent = minOf(firstChunk.toLong() * chunkSize, size)
+        for (chunk in plan.chunks.drop(firstChunk)) {
             onProgress(
                 CloudSpaceUploadProgress(
                     state = CloudSpaceUploadState.UPLOADING,
@@ -216,6 +237,7 @@ class CloudSpaceRepository(
 
                 is CloudSpaceResult.Success -> {
                     sent = chunk.endExclusive
+                    checkpoint(UploadCheckpoint(currentSession.id, init.uploadId, chunk.index + 1))
                     onProgress(
                         CloudSpaceUploadProgress(
                             state = CloudSpaceUploadState.UPLOADING,

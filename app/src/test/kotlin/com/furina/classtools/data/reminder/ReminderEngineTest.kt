@@ -211,7 +211,7 @@ class ReminderEngineTest {
             clock = { current }, scheduleCourseAt = { wakeups.add(it) })
         assertEquals(1, engine.runNow().sent)
         current -= 5 * 60_000L
-        notifier.withdrawn = listOf("class:$start")
+        notifier.withdrawn = listOf(notifier.events.single().key)
         assertEquals(0, engine.runNow().sent)
         assertEquals(listOf(start, now), wakeups)
         current = now
@@ -235,7 +235,7 @@ class ReminderEngineTest {
         val notifier = FakeNotifier()
         val relaunched = engine(notifier = notifier, data = data, dedupeStore = dedupe, clock = { clock })
         assertEquals(0, relaunched.runNow().sent)
-        assertEquals(listOf("class:$start"), notifier.restored)
+        assertTrue(notifier.restored.single().startsWith("class:$start:"))
         clock = start
         assertEquals(0, relaunched.runNow().sent)
         assertEquals(1, notifier.restored.size)

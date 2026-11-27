@@ -66,7 +66,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import com.furina.classtools.data.cloudspace.CloudSpaceByteSource
+import com.furina.classtools.ClassToolsApp
+import com.furina.classtools.data.reminder.reminderOwner
+import com.furina.classtools.data.transfer.TransferActivities
+import com.furina.classtools.data.transfer.TransferStage
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.furina.classtools.data.cloudspace.CloudSpaceDefaults
 import com.furina.classtools.data.cloudspace.DropAsset
 import com.furina.classtools.data.cloudspace.CloudSpaceDownloadEvent
@@ -92,7 +97,6 @@ import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.CtRadius
 import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
@@ -122,6 +126,8 @@ fun CloudSpaceScreen(
     onOpenClassDecks: () -> Unit,
     repository: CloudSpaceRepository,
     modifier: Modifier = Modifier,
+    focusId: String? = null,
+    onFocusConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -131,14 +137,37 @@ fun CloudSpaceScreen(
     var snapshot by remember { mutableStateOf(repository.snapshot()) }
     var loading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var uploads by remember { mutableStateOf<List<CloudSpaceUploadTask>>(emptyList()) }
+    val container = (context.applicationContext as ClassToolsApp).container
+    val owner = container.currentSession?.reminderOwner.orEmpty()
+    val transfers = container.transferActivities
+    val records by transfers.tasks.collectAsStateWithLifecycle()
+    val personal = records.filter { it.owner == owner && it.kind == "file" }
+    val uploads = personal.filter { it.id.startsWith("upload-") && it.stage in TransferActivities.uploadStages +
+        setOf(TransferStage.UNCONFIRMED, TransferStage.CANCELED, TransferStage.FAILED, TransferStage.UPLOADED) }
+        .sortedByDescending { it.createdAt }.map { task ->
+            val state = when (task.stage) {
+                TransferStage.CREATING -> CloudSpaceUploadState.WAITING
+                TransferStage.UPLOADING, TransferStage.FINALIZING -> CloudSpaceUploadState.UPLOADING
+                TransferStage.UPLOADED -> CloudSpaceUploadState.DONE
+                TransferStage.CANCELED -> CloudSpaceUploadState.CANCELED
+                else -> CloudSpaceUploadState.FAILED
+            }
+            CloudSpaceUploadTask(task.id, task.title, task.size, task.sentBytes, state, task.label,
+                cancellable = task.stage in TransferActivities.cancellableStages)
+        }
+    var focusedId by rememberSaveable(owner) { mutableStateOf<String?>(null) }
+    LaunchedEffect(focusId) {
+        if (!focusId.isNullOrBlank()) {
+            focusedId = focusId
+            onFocusConsumed()
+        }
+    }
     var downloadingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var downloadedFiles by remember { mutableStateOf<Map<String, CloudSpaceDownloadTicket>>(emptyMap()) }
     var conversionFiles by remember { mutableStateOf<Pair<String, List<DropAsset>>?>(null) }
     var deleteTarget by remember { mutableStateOf<CloudSpaceFile?>(null) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
-    val uploadJobs = remember { mutableMapOf<String, Job>() }
 
     fun applyResult(result: CloudSpaceResult<CloudSpaceSnapshot>) {
         when (result) {
@@ -180,62 +209,6 @@ fun CloudSpaceScreen(
         }
     }
 
-    fun startUpload(source: CloudSpaceByteSource) {
-        val taskId = "u" + System.nanoTime().toString(36)
-        uploads = uploads + CloudSpaceUploadTask(
-            id = taskId,
-            name = CloudSpaceLogic.safeName(source.name),
-            sizeBytes = source.size,
-        )
-        val job = scope.launch {
-            val result = repository.upload(source) { progress ->
-                uploads = uploads.map { task ->
-                    if (task.id != taskId) {
-                        task
-                    } else {
-                        task.copy(
-                            sentBytes = progress.sentBytes,
-                            state = progress.state,
-                            message = progress.message,
-                        )
-                    }
-                }
-            }
-            when (result) {
-                is CloudSpaceResult.Success -> {
-                    uploads = uploads.map { task ->
-                        if (task.id == taskId) {
-                            task.copy(
-                                sentBytes = result.value.sizeBytes,
-                                state = CloudSpaceUploadState.DONE,
-                            )
-                        } else {
-                            task
-                        }
-                    }
-                    snapshot = repository.snapshot()
-                    toast(context, "已上传：${result.value.name}")
-                }
-
-                is CloudSpaceResult.Failure -> {
-                    uploads = uploads.map { task ->
-                        if (task.id == taskId && task.state != CloudSpaceUploadState.CANCELED) {
-                            task.copy(
-                                state = CloudSpaceUploadState.FAILED,
-                                message = result.error.displayMessage,
-                            )
-                        } else {
-                            task
-                        }
-                    }
-                    toast(context, result.error.displayMessage)
-                }
-            }
-            uploadJobs.remove(taskId)
-        }
-        uploadJobs[taskId] = job
-    }
-
     val pickFiles = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
@@ -248,7 +221,7 @@ fun CloudSpaceScreen(
                     toast(context, "无法读取所选文件，请重新选择")
                     return@forEach
                 }
-                startUpload(source)
+                transfers.startUpload(owner, "file", uri, source.name, source.name, source.size)
                 accepted += 1
             }
             if (accepted == 0) toast(context, "没有可上传的文件")
@@ -263,16 +236,7 @@ fun CloudSpaceScreen(
         }
     }
 
-    fun cancelUpload(taskId: String) {
-        uploadJobs.remove(taskId)?.cancel()
-        uploads = uploads.map { task ->
-            if (task.id == taskId) {
-                task.copy(state = CloudSpaceUploadState.CANCELED, message = "已取消")
-            } else {
-                task
-            }
-        }
-    }
+    fun cancelUpload(taskId: String) = transfers.cancelUpload(owner, "file", taskId)
 
     fun openOrDownload(file: CloudSpaceFile) {
         val local = downloadedFiles[file.id]
@@ -327,6 +291,7 @@ fun CloudSpaceScreen(
                 is CloudSpaceResult.Success -> {
                     snapshot = result.value
                     errorMessage = null
+                    transfers.removed(owner, "file", file.id)
                     downloadedFiles = downloadedFiles - file.id
                     toast(context, "已删除")
                 }
@@ -337,14 +302,13 @@ fun CloudSpaceScreen(
     }
 
     fun clearSpace() {
-        uploadJobs.values.forEach { it.cancel() }
-        uploadJobs.clear()
-        uploads = emptyList()
+        personal.filter { it.stage in TransferActivities.cancellableStages }.forEach { cancelUpload(it.id) }
         scope.launch {
             when (val result = repository.clearSpace()) {
                 is CloudSpaceResult.Success -> {
                     snapshot = result.value
                     errorMessage = null
+                    personal.forEach { transfers.removed(owner, "file", it.id) }
                     downloadedFiles = emptyMap()
                     toast(context, "云空间已清空")
                 }
@@ -360,7 +324,7 @@ fun CloudSpaceScreen(
     fun openConversion(file: CloudSpaceFile) {
         scope.launch {
             if (file.conversion?.status != "ready") {
-                applyResult(repository.submitConversion(file))
+                transfers.convert(owner, file)
                 return@launch
             }
             when (val result = repository.assets(file.id)) {
@@ -400,6 +364,47 @@ fun CloudSpaceScreen(
                     }
                 }
                 if (!expired) return@launch
+            }
+        }
+    }
+
+    focusedId?.let { id ->
+        val task = personal.firstOrNull { it.id == id || it.remoteId == id }
+        val file = snapshot.files.firstOrNull { it.id == (task?.remoteId?.ifBlank { null } ?: id) }
+        val missingFile = task != null && task.remoteId.isNotBlank() && file == null && snapshot.connected &&
+            !loading && errorMessage == null && task.stage !in TransferActivities.uploadStages
+        if (task?.stage != TransferStage.REMOVED && !missingFile && (task != null || file != null)) {
+            CtLightAlertDialog(
+                onDismissRequest = { focusedId = null },
+                title = { Text(file?.name ?: task?.title.orEmpty()) },
+                text = {
+                    Column {
+                        Text(file?.conversion?.label ?: task?.label ?: "已上传，可下载")
+                        if (file != null) {
+                            Text(file.sizeText)
+                            TextButton(onClick = { openOrDownload(file) }) { Text("下载原文件") }
+                            if (file.canConvert && snapshot.pptConversion) {
+                                val status = file.conversion?.status
+                                if (status == null || status == "failed" || status == "ready") {
+                                    TextButton(onClick = {
+                                        if (status == "ready") focusedId = null
+                                        openConversion(file)
+                                    }) { Text(when (status) { "ready" -> "查看转换结果"; "failed" -> "重试转换"; else -> "转换 PPT" }) }
+                                }
+                            }
+                        } else if (task?.stage in TransferActivities.cancellableStages) {
+                            TextButton(onClick = { cancelUpload(id) }) { Text("取消上传") }
+                        } else if (task?.stage == TransferStage.FAILED && task.remoteId.isBlank()) {
+                            TextButton(onClick = { focusedId = null; pickFiles.launch(arrayOf("*/*")) }) { Text("重新选择文件") }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { focusedId = null }) { Text("返回文件传输") } },
+            )
+        } else if (!loading) {
+            LaunchedEffect(id) {
+                toast(context, if (errorMessage != null) "暂时无法获取文件，请刷新重试" else "文件已过期或已删除")
+                focusedId = null
             }
         }
     }
@@ -861,7 +866,7 @@ private fun UploadsCard(
                         )
                         val active = task.state == CloudSpaceUploadState.WAITING ||
                             task.state == CloudSpaceUploadState.UPLOADING
-                        if (active) {
+                        if (active && task.cancellable) {
                             TextButton(
                                 onClick = { onCancelUpload(task.id) },
                                 modifier = Modifier.heightIn(min = 48.dp),

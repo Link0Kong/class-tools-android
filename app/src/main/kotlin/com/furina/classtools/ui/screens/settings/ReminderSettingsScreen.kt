@@ -189,11 +189,11 @@ fun ReminderSettingsScreen(
                 NotifyGroup {
                     NotifySwitchRow(
                         title = "上课提醒",
-                        description = "按课表在课前 ${settings.classLeadMinutes} 分钟提醒",
+                        description = "提前 ${settings.classLeadMinutes} 分钟提醒。开启或调整提前时间后，临近上课时显示实时倒计时",
                         checked = settings.classRemindEnabled,
                         enabled = settings.enabled,
                         icon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = null) },
-                        onCheckedChange = { value -> update { it.copy(classRemindEnabled = value) } },
+                        onCheckedChange = { value -> update { it.copy(classRemindEnabled = value, courseLiveTracking = value) } },
                     )
                     NotifyDivider()
                     LeadChipsRow(
@@ -201,14 +201,14 @@ fun ReminderSettingsScreen(
                         options = ReminderSettings.CLASS_LEAD_OPTIONS,
                         selected = settings.classLeadMinutes,
                         enabled = settings.enabled && settings.classRemindEnabled,
-                        onSelect = { minutes -> update { it.copy(classLeadMinutes = minutes) } },
+                        onSelect = { minutes -> update { it.copy(classLeadMinutes = minutes, courseLiveTracking = true) } },
                     )
                     LeadChipsRow(
                         label = "课间提前时间",
                         options = ReminderSettings.BREAK_LEAD_OPTIONS,
                         selected = settings.breakLeadMinutes,
                         enabled = settings.enabled && settings.classRemindEnabled,
-                        onSelect = { minutes -> update { it.copy(breakLeadMinutes = minutes) } },
+                        onSelect = { minutes -> update { it.copy(breakLeadMinutes = minutes, courseLiveTracking = true) } },
                     )
                 }
 

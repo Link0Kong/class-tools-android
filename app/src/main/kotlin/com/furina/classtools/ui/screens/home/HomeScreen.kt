@@ -363,6 +363,7 @@ fun HomeScreen(
                                 reduceMotion = reduceMotion,
                                 onOpenCourse = { openCard("tt", it.encode()) },
                             )
+                            HomeActivities(session, currentTime)
                             HomeWorkbenchColumns(layout, updates = {
                                 HomeReveal(enabled = animateEntrance, index = 1) {
                                     HomeNoticesCard(

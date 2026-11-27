@@ -8,7 +8,7 @@ import kotlinx.serialization.json.Json
 
 /** A timetable has no server-side occurrence ID. Resolve the displayed slot against today's account data. */
 @Serializable
-data class CourseFocus(val date: String, val start: Int = 0, val end: Int = 0, val name: String = "", val room: String = "") {
+data class CourseFocus(val date: String, val start: Int = 0, val end: Int = 0, val name: String = "", val room: String = "", val teacher: String = "") {
     fun encode(): String = Json.encodeToString(this)
 
     val isDateOnly: Boolean get() = start == 0 && end == 0 && name.isEmpty() && room.isEmpty()
@@ -19,14 +19,15 @@ data class CourseFocus(val date: String, val start: Int = 0, val end: Int = 0, v
         val week = TtCalendar.weekOf(termStart, day) ?: return null
         return snapshot.c.singleOrNull {
             it.day == TtCalendar.dayIndex(day) && TtCalendar.isActive(it, week) &&
-                it.start == start && it.end == end && it.name.ifBlank { "课程" } == name && it.room.trim() == room
+                it.start == start && it.end == end && it.name.ifBlank { "课程" } == name && it.room.trim() == room &&
+                (teacher.isEmpty() || it.teacher.trim() == teacher)
         }
     }
 
     companion object {
         fun of(session: SessionInfo, zone: ZoneId = ZoneId.systemDefault()) = CourseFocus(
             Instant.ofEpochMilli(session.startAt).atZone(zone).toLocalDate().toString(),
-            session.start, session.end, session.name, session.fullRoom,
+            session.start, session.end, session.name, session.fullRoom, session.teacher.trim(),
         )
         fun decode(raw: String?): CourseFocus? = raw?.let {
             runCatching {

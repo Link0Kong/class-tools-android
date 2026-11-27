@@ -179,6 +179,7 @@ object TtCalendar {
                 coursesOnDay(courses, termStart, week, dayIndex(date)).any { period - 1 in it.start..it.end }
             return candidate.copy(
                 afterShortBreak = afterShortBreak,
+                targetWeek = week,
                 dayOffset = off,
                 dayText = dayText,
                 dateText = "${date.monthValue}/${date.dayOfMonth}",

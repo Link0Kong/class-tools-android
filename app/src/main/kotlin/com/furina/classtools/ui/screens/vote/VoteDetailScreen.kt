@@ -65,7 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import com.furina.classtools.data.notify.LiveUpdateNotifier
+import com.furina.classtools.data.notify.VoteWatches
 import com.furina.classtools.data.vote.Poll
 import com.furina.classtools.data.vote.PollDetail
 import com.furina.classtools.data.vote.PollManageAction
@@ -122,6 +122,7 @@ fun VoteDetailScreen(
     onEdit: (String) -> Unit = {},
     /** 分享投票（生成 5:4 分享卡；**不展示票数/百分比**）。 */
     onShare: ((Poll, PollDetail) -> Unit)? = null,
+    owner: String = "",
     nowMillis: Long = System.currentTimeMillis(),
     initialDetail: PollDetail? = null,
     initialError: VoteError? = null,
@@ -145,24 +146,22 @@ fun VoteDetailScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var showExtend by remember { mutableStateOf(false) }
 
-    // Live Updates：限时投票在系统实时活动/流体云中显示倒计时，离开详情页即撤销。
-    val liveUpdateContext = LocalContext.current
-    LaunchedEffect(detail, skipLoad) {
-        if (skipLoad) return@LaunchedEffect
-        val current = detail
-        if (current != null && current.poll.deadline > 0L && !current.closed) {
-            LiveUpdateNotifier.postVoteDeadline(
-                context = liveUpdateContext,
-                pollTitle = current.poll.title,
-                deadlineMillis = current.poll.deadline,
-                countdownDeadlineMillis = current.localCountdownDeadline(System.currentTimeMillis(), android.os.SystemClock.elapsedRealtime()),
-            )
-        } else {
-            LiveUpdateNotifier.cancelVote(liveUpdateContext)
+    val liveContext = LocalContext.current
+    var watch by remember(owner, pollId) { mutableStateOf(VoteWatches.get(liveContext, owner, pollId)) }
+    DisposableEffect(owner, pollId, liveContext) {
+        val prefs = VoteWatches.prefs(liveContext)
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            watch = VoteWatches.get(liveContext, owner, pollId)
         }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
-    DisposableEffect(liveUpdateContext) {
-        onDispose { LiveUpdateNotifier.cancelVote(liveUpdateContext) }
+    fun unavailable(problem: VoteError) {
+        if (problem == VoteError.NotFound || problem == VoteError.OutOfAudience) {
+            watch?.let { VoteWatches.remove(liveContext, it) }
+            CtToastBus.show(problem.message)
+            onBack()
+        }
     }
 
     val nowTick = if (skipLoad) nowMillis else rememberNowTick()
@@ -171,6 +170,7 @@ fun VoteDetailScreen(
     }
 
     fun applyDetail(next: PollDetail) {
+        watch?.let { VoteWatches.refresh(liveContext, it, next) }
         detail = next
         error = null
         loading = false
@@ -187,6 +187,7 @@ fun VoteDetailScreen(
             is VoteResult.Failure -> {
                 loading = false
                 if (detail == null) error = result.error
+                unavailable(result.error)
             }
         }
     }
@@ -198,7 +199,7 @@ fun VoteDetailScreen(
                 delay(VOTE_POLL_INTERVAL_MS)
                 when (val result = repository.detail(pollId, force = true)) {
                     is VoteResult.Success -> if (!submitting && !managing) applyDetail(result.value)
-                    is VoteResult.Failure -> Unit
+                    is VoteResult.Failure -> unavailable(result.error)
                 }
             }
         }
@@ -236,7 +237,10 @@ fun VoteDetailScreen(
             managing = true
             when (val result = repository.manage(pollId, action)) {
                 is VoteResult.Success -> when (val value = result.value) {
-                    is PollManageResult.Deleted -> onBack()
+                    is PollManageResult.Deleted -> {
+                        watch?.let { VoteWatches.remove(liveContext, it) }
+                        onBack()
+                    }
                     is PollManageResult.Updated -> {
                         applyDetail(value.detail)
                         successMessage?.let { CtToastBus.show(it) }
@@ -344,6 +348,15 @@ fun VoteDetailScreen(
                                     nowMillis = effectiveNow,
                                     onRefresh = { reloadToken += 1 },
                                 )
+                            }
+                            if (owner.isNotBlank() && !closed && poll.deadline > 0) {
+                                item(key = "follow") {
+                                    TextButton(onClick = {
+                                        val previous = watch
+                                        if (previous == null) VoteWatches.follow(liveContext, owner, current)
+                                        else VoteWatches.remove(liveContext, previous)
+                                    }) { Text(if (watch == null) "关注截止倒计时" else "取消关注") }
+                                }
                             }
                             if (poll.description.isNotBlank()) {
                                 item(key = "desc") {

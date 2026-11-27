@@ -47,6 +47,7 @@ class DataStoreReminderSettingsStore(
             prefs[KEY_ENABLED] = next.enabled
             prefs[KEY_HW_NEW] = next.homeworkNewEnabled
             prefs[KEY_HW_DUE] = next.homeworkDueEnabled
+            prefs[KEY_COURSE_TRACKING] = next.courseLiveTracking
             prefs[KEY_CLASS] = next.classRemindEnabled
             prefs[KEY_NT_NEW] = next.noticeNewEnabled
             prefs[KEY_NT_DEADLINE] = next.noticeDeadlineEnabled
@@ -89,6 +90,12 @@ class DataStoreReminderSettingsStore(
             enabled = prefs[KEY_ENABLED] ?: true,
             homeworkNewEnabled = prefs[KEY_HW_NEW] ?: (legacyHomework ?: true),
             homeworkDueEnabled = prefs[KEY_HW_DUE] ?: (legacyHomework ?: true),
+            courseLiveTracking = prefs[KEY_COURSE_TRACKING] ?: migratedCourseTracking(
+                classEnabled = prefs[KEY_CLASS] ?: legacyCourse ?: true,
+                enabled = prefs[KEY_ENABLED] ?: true,
+                lead = prefs[KEY_CLASS_LEAD_MINUTES] ?: legacyCourseMinutes,
+                breakLead = prefs[KEY_BREAK_LEAD_MINUTES],
+            ),
             classRemindEnabled = prefs[KEY_CLASS] ?: (legacyCourse ?: true),
             noticeNewEnabled = prefs[KEY_NT_NEW] ?: (legacyNotice ?: true),
             noticeDeadlineEnabled = prefs[KEY_NT_DEADLINE] ?: (legacyNotice ?: true),
@@ -114,6 +121,7 @@ class DataStoreReminderSettingsStore(
         val KEY_ENABLED = booleanPreferencesKey("reminder_enabled")
         val KEY_HW_NEW = booleanPreferencesKey("hw_new_enabled")
         val KEY_HW_DUE = booleanPreferencesKey("hw_due_enabled")
+        val KEY_COURSE_TRACKING = booleanPreferencesKey("course_live_tracking")
         val KEY_CLASS = booleanPreferencesKey("class_remind_enabled")
         val KEY_NT_NEW = booleanPreferencesKey("nt_new_enabled")
         val KEY_NT_DEADLINE = booleanPreferencesKey("nt_deadline_enabled")
@@ -141,3 +149,10 @@ class DataStoreReminderSettingsStore(
         val Context.reminderSettingsDataStore by preferencesDataStore(name = "ct_reminder_settings")
     }
 }
+
+/** The old settings writer saved every default on any settings edit. Only an actual, valid
+ * course-specific customization provides evidence the user chose to follow classes. */
+internal fun migratedCourseTracking(classEnabled: Boolean, enabled: Boolean, lead: Int?, breakLead: Int?): Boolean =
+    enabled && classEnabled &&
+        ((lead != null && lead in ReminderSettings.CLASS_LEAD_OPTIONS && lead != ReminderSettings.DEFAULT_CLASS_LEAD_MINUTES) ||
+            (breakLead != null && breakLead in ReminderSettings.BREAK_LEAD_OPTIONS && breakLead != ReminderSettings.DEFAULT_BREAK_LEAD_MINUTES))
