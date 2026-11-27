@@ -6,11 +6,13 @@ import com.furina.classtools.data.timetable.Course
 import com.furina.classtools.data.timetable.TtCalendar
 import com.furina.classtools.data.timetable.TtSnapshot
 import com.furina.classtools.data.timetable.TtSource
+import com.furina.classtools.features.home.HomeAtmosphere
 import com.furina.classtools.features.home.HomeContentPreferences
 import com.furina.classtools.features.home.HomeContextRepository
 import com.furina.classtools.features.home.HomePhraseContext
 import com.furina.classtools.features.home.HomeTopic
 import com.furina.classtools.features.home.HomeWeather
+import com.furina.classtools.features.home.homeAtmosphere
 import com.furina.classtools.features.home.localHomePhrases
 import com.furina.classtools.features.home.selectHomePhrase
 import com.furina.classtools.features.home.validHomeSource
@@ -70,6 +72,19 @@ class HomeContextLogicTest {
         }
         assertNull(selectHomePhrase(rain, preferences.copy(funContent = false), emptyList(), emptyMap(), now, 0))
         assertNull(selectHomePhrase(rain, preferences, emptyList(), emptyMap(), now, 0, local = emptyList()))
+    }
+
+    @Test fun decorationUsesObservedRainAndSunAndFallsBackToTimeAtNight() {
+        val sunrise = iso(at(6, 30))
+        val sunset = iso(at(17, 20))
+        val sunny = HomeWeather("minhou", iso(at(17)), 100, "晴", 16.0, sunrise, sunset)
+        assertEquals(HomeAtmosphere.SUN, homeAtmosphere(sunny, at(17), HomeTopic.DAY))
+        assertEquals(HomeAtmosphere.NIGHT, homeAtmosphere(sunny, at(17, 21), HomeTopic.DAY))
+        assertEquals(HomeAtmosphere.NIGHT, homeAtmosphere(sunny.copy(conditionCode = 150), at(17, 21), HomeTopic.DAY))
+        assertEquals(HomeAtmosphere.RAIN, homeAtmosphere(sunny.copy(conditionCode = 350), at(21), HomeTopic.DUSK))
+        assertNull(homeAtmosphere(sunny.copy(conditionCode = 104), at(17), HomeTopic.DAY))
+        assertNull(homeAtmosphere(null, at(17), HomeTopic.DAY))
+        assertEquals(HomeAtmosphere.NIGHT, homeAtmosphere(null, at(21), HomeTopic.DUSK))
     }
 
     @Test fun avoidsRecentLinesAndFallsBackToTheOldestEligibleLine() {

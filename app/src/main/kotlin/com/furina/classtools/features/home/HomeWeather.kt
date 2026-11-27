@@ -63,7 +63,7 @@ internal data class HomeWeather(
         }
     }
 
-    private fun daylightTopic(nowMillis: Long): HomeTopic? {
+    internal fun daylightTopic(nowMillis: Long): HomeTopic? {
         val now = Instant.ofEpochMilli(nowMillis)
         val rise = instantOrNull(sunrise) ?: return null
         val set = instantOrNull(sunset) ?: return null
@@ -78,6 +78,24 @@ internal data class HomeWeather(
         private val rainCodes = setOf(300, 305, 306, 309, 314, 399)
         private val severeCodes = setOf(301, 302, 303, 304, 307, 308, 310, 311, 312, 313, 315, 316, 317, 318, 402, 403, 410, 507, 508, 514, 515)
     }
+}
+
+internal enum class HomeAtmosphere { RAIN, SUN, NIGHT }
+
+internal fun homeAtmosphere(weather: HomeWeather?, now: Long, time: HomeTopic): HomeAtmosphere? {
+    val code = weather?.conditionCode ?: 0
+    if (code in 300..318 || code == 350 || code == 351 || code == 399) return HomeAtmosphere.RAIN
+    if (weather?.important == true) return null
+    val night = time == HomeTopic.DUSK || time == HomeTopic.NIGHT
+    if (code in 150..153) return HomeAtmosphere.NIGHT
+    if (weather?.conditionCode == 100) {
+        return when (weather.daylightTopic(now)) {
+            HomeTopic.CLEAR_DAY -> HomeAtmosphere.SUN
+            HomeTopic.CLEAR_NIGHT -> HomeAtmosphere.NIGHT
+            else -> if (night) HomeAtmosphere.NIGHT else HomeAtmosphere.SUN
+        }
+    }
+    return HomeAtmosphere.NIGHT.takeIf { night }
 }
 
 @Serializable

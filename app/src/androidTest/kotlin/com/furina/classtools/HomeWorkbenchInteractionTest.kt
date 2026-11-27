@@ -22,24 +22,27 @@ import com.furina.classtools.data.tasks.TaskStorage
 import com.furina.classtools.data.tasks.changeCompletion
 import com.furina.classtools.data.tasks.emptyTasks
 import com.furina.classtools.data.tasks.newTask
+import com.furina.classtools.data.tasks.pendingTasks
 import com.furina.classtools.data.tasks.text
 import com.furina.classtools.data.tasks.withFields
 import com.furina.classtools.data.timetable.Course
 import com.furina.classtools.data.timetable.CourseFocus
 import com.furina.classtools.data.timetable.TtCalendar
 import com.furina.classtools.data.timetable.TtSnapshot
-import com.furina.classtools.ui.adaptive.CtAdaptive
 import com.furina.classtools.ui.screens.home.HomeScreen
 import com.furina.classtools.ui.screens.home.HomeWorkbenchLogic
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.isReduceMotion
+import java.io.File
 import java.time.ZonedDateTime
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -117,6 +120,17 @@ class HomeWorkbenchInteractionTest {
             "Missing $text (reduce motion: ${isReduceMotion(context)})"
         }
 
+        fun revealTask(text: String) {
+            if (device.wait(Until.hasObject(By.text(text)), 3500)) return
+            device.dumpWindowHierarchy(File(context.filesDir, "workbench-task-update.xml"))
+            val x = device.displayWidth / 2
+            repeat(2) {
+                device.swipe(x, device.displayHeight * 4 / 5, x, device.displayHeight * 3 / 5, 22)
+                if (device.wait(Until.hasObject(By.text(text)), 3500)) return
+            }
+            node(text)
+        }
+
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 scenario.onActivity { activity ->
@@ -140,12 +154,8 @@ class HomeWorkbenchInteractionTest {
                 val noticesHeader = node("班级通知").visibleCenter
                 val tasksHeader = node("待办任务").visibleCenter
                 val timetableHeader = node("今日课程").visibleCenter
+                assertTrue(timetableHeader.y < noticesHeader.y)
                 assertTrue(noticesHeader.y < tasksHeader.y)
-                if (context.resources.configuration.screenWidthDp >= CtAdaptive.EXPANDED_MIN_WIDTH_DP) {
-                    assertTrue(noticesHeader.x < timetableHeader.x && tasksHeader.x < timetableHeader.x)
-                } else {
-                    assertTrue(tasksHeader.y < timetableHeader.y)
-                }
                 assertEquals(1, device.findObjects(By.text(course.name)).size)
                 assertTrue(timetableHeader.y < node(course.name).visibleCenter.y)
                 node(course.name).click()
@@ -169,11 +179,19 @@ class HomeWorkbenchInteractionTest {
                 assertFalse(device.hasObject(By.text("测试待办 3")))
 
                 finishSync.complete(Unit)
-                node("2 项")
+                val synced = runBlocking {
+                    withTimeoutOrNull(10_000) { repository.snapshot.first { it.pendingTasks().size == 2 } }
+                }
+                assertTrue("Expected two tasks after sync (${repository.syncStatus.value})", synced != null)
+                revealTask("2 项")
                 assertFalse(device.hasObject(By.text("测试待办 1")))
                 node("测试待办 3").click()
                 scenario.onActivity { assertEquals("hw" to tasks.last().text("id"), opened) }
 
+                if (!device.hasObject(By.text("班级通知"))) {
+                    val x = device.displayWidth / 2
+                    device.swipe(x, device.displayHeight * 2 / 5, x, device.displayHeight * 3 / 5, 22)
+                }
                 node("轮播测试通知 1", rotationTimeout)
                 scenario.onActivity { active.value = false }
                 SystemClock.sleep(HomeWorkbenchLogic.ROTATION_INTERVAL_MS + 500)

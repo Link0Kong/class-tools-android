@@ -361,11 +361,25 @@ fun HomeScreen(
                                 zone = zone,
                                 active = pageActive,
                                 reduceMotion = reduceMotion,
-                                onOpenCourse = { openCard("tt", it.encode()) },
                             )
+                            HomeReveal(enabled = animateEntrance, index = 1) {
+                                HomeTodayCoursesCard(
+                                    plan = ttPlan,
+                                    nowMillis = currentTime,
+                                    loading = ttLoading,
+                                    error = timetableState?.error,
+                                    context = contextCourse,
+                                    onRetry = { loads.retry(loads.timetable) },
+                                    onOpen = {
+                                        val tomorrow = contextCourse.focus.takeIf { contextCourse.action == "查看明日课表" }
+                                        openCard("tt", (tomorrow ?: CourseFocus(today.toString())).encode())
+                                    },
+                                    onCourse = { openCard("tt", CourseFocus.of(it, zone).encode()) },
+                                )
+                            }
                             HomeActivities(session, currentTime)
                             HomeWorkbenchColumns(layout, updates = {
-                                HomeReveal(enabled = animateEntrance, index = 1) {
+                                HomeReveal(enabled = animateEntrance, index = 2) {
                                     HomeNoticesCard(
                                         items = ntItems,
                                         loading = noticesLoading,
@@ -381,7 +395,7 @@ fun HomeScreen(
                                         onRetry = loads::retryNotices,
                                     )
                                 }
-                                HomeReveal(enabled = animateEntrance, index = 2) {
+                                HomeReveal(enabled = animateEntrance, index = 3) {
                                     HomeHomeworkCard(
                                         items = hwItems,
                                         task = taskState,
@@ -393,25 +407,14 @@ fun HomeScreen(
                                     )
                                 }
                                 if (showNotificationPermissionBanner && onOpenPermissions != null) {
-                                    HomeReveal(enabled = animateEntrance, index = 3) {
+                                    HomeReveal(enabled = animateEntrance, index = 4) {
                                         NotificationPermissionBanner(
                                             visible = true,
                                             onOpenPermissions = onOpenPermissions,
                                         )
                                     }
                                 }
-                            }, schedule = {
-                                HomeReveal(enabled = animateEntrance, index = 4) {
-                                    HomeTodayCoursesCard(
-                                        plan = ttPlan,
-                                        nowMillis = currentTime,
-                                        loading = ttLoading,
-                                        error = timetableState?.error,
-                                        onRetry = { loads.retry(loads.timetable) },
-                                        onOpen = { openCard("tt", CourseFocus(today.toString()).encode()) },
-                                        onCourse = { openCard("tt", CourseFocus.of(it).encode()) },
-                                    )
-                                }
+                            }, utilities = {
                                 HomeReveal(enabled = animateEntrance, index = 5) {
                                     HomePowerCard(
                                         card = powerCard,
@@ -472,7 +475,7 @@ fun HomeScreen(
 private fun HomeWorkbenchColumns(
     layout: CtAdaptiveSpec,
     updates: @Composable () -> Unit,
-    schedule: @Composable () -> Unit,
+    utilities: @Composable () -> Unit,
     tools: @Composable () -> Unit,
 ) {
     if (CtAdaptive.supportsWorkbenchTwoPane(layout)) {
@@ -483,11 +486,11 @@ private fun HomeWorkbenchColumns(
                 tools()
             }
         }, side = { modifier ->
-            Column(modifier, verticalArrangement = gap) { schedule() }
+            Column(modifier, verticalArrangement = gap) { utilities() }
         })
     } else {
         updates()
-        schedule()
+        utilities()
         tools()
     }
 }
@@ -505,6 +508,7 @@ internal fun HomeTodayCoursesCard(
     onRetry: () -> Unit,
     onCourse: (SessionInfo) -> Unit,
     onOpen: () -> Unit,
+    context: HomeCourseContext? = null,
 ) {
     val todayCourses = plan?.today.orEmpty()
     val todayHighlight = todayCourses.firstOrNull { it.state == SessionState.ONGOING }
@@ -519,7 +523,7 @@ internal fun HomeTodayCoursesCard(
         badge = if (hasData) "${todayCourses.size} 节" else null,
         trailing = {
             Text(
-                text = "课表 ›",
+                text = if (context?.action == "查看明日课表") "查看明日课表 ›" else "课表 ›",
                 style = CtText.label,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -529,12 +533,17 @@ internal fun HomeTodayCoursesCard(
             loading && !hasData -> HomeLoadingRow("读取课表…")
             !hasData -> {
                 val state = HomeWorkbenchLogic.heroState(plan, loading, nowMillis)
-                HomeEmptyHint(state.title, state.detail, actionText = "打开课表", onAction = onOpen)
+                HomeEmptyHint(context?.status ?: state.title, state.detail, actionText = "打开课表", onAction = onOpen)
             }
             else -> {
+                if (context?.cached == true && error == null && context.status != null) {
+                    Text(context.status, style = CtText.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 if (todayCourses.isEmpty() || plan.todayState == TodayState.DONE) {
                     val state = HomeWorkbenchLogic.heroState(plan, loading, nowMillis)
                     HomeEmptyHint(state.title, sub = if (highlightedCourse == null) state.detail else "")
+                } else if (context?.status == "课间" || context?.status == "即将上课") {
+                    Text(context.status, style = CtText.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (highlightedCourse != null) {
                     HomeCourseHighlight(highlightedCourse, nowMillis) { onCourse(highlightedCourse) }
@@ -588,7 +597,7 @@ private fun CourseRow(sessionInfo: SessionInfo, nowMillis: Long, isNext: Boolean
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = listOf(sessionInfo.span, sessionInfo.room)
+                text = listOf(sessionInfo.span, sessionInfo.fullRoom)
                     .filter { it.isNotBlank() }
                     .joinToString(" · "),
                 style = CtText.caption,

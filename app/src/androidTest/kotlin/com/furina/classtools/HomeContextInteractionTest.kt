@@ -1,5 +1,6 @@
 package com.furina.classtools
 
+import android.content.Intent
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.compose.setContent
@@ -21,9 +22,6 @@ import com.furina.classtools.data.timetable.TtSnapshot
 import com.furina.classtools.features.home.HomeContentPreferences
 import com.furina.classtools.features.home.HomeContextRepository
 import com.furina.classtools.features.home.HomeContextSource
-import com.furina.classtools.features.home.HomePhrase
-import com.furina.classtools.features.home.HomePhraseBatch
-import com.furina.classtools.features.home.HomeTone
 import com.furina.classtools.features.home.HomeTopic
 import com.furina.classtools.features.home.HomeWeather
 import com.furina.classtools.features.home.LocalHomeContextSource
@@ -72,43 +70,43 @@ class HomeContextInteractionTest {
         val today = LocalDate.now(zone)
         val morning = today.atTime(8, 4).atZone(zone).toInstant().toEpochMilli()
         val day = today.atTime(15, 0).atZone(zone).toInstant().toEpochMilli()
+        val night = today.atTime(22, 0).atZone(zone).toInstant().toEpochMilli()
         val dateKey = today.minusDays(TtCalendar.dayIndex(today).toLong()).minusWeeks(2).toString()
-        val hour = AtomicInteger()
-        val sampleCourse = Course("数据可视化与校园开放数据实作", "测试教师", "测试教学楼 01105", TtCalendar.dayIndex(today), 1, 2)
+        val requests = AtomicInteger()
+        val sampleCourse = Course("数据可视化与校园开放数据实作", "测试教师", "测试教学楼 01105",
+            TtCalendar.dayIndex(today), 1, 2)
         val coursePlan = TtCalendar.plan(TtSnapshot(listOf(sampleCourse), dateKey), morning, zone)
         val courseFocus = CourseFocus.of(coursePlan.next!!, zone).encode()
         var opened: Pair<String, String?>? = null
-        val sampleWeather = object : HomeContextSource {
+        val englishSession = (0..9).map { testSession.copy(sid = "326079999" + it) }.first {
+            val seed = (it.navigationAccount.hashCode() * 31 + today.toString().hashCode()) * 31 + HomeTopic.DAY.ordinal
+            Math.floorMod(seed, 4) == 0
+        }
+
+        fun weather(code: Int, condition: String) = object : HomeContextSource {
             override suspend fun weather(regionId: String, now: Long): HomeWeather {
-                hour.incrementAndGet()
-                return HomeWeather(regionId, Instant.ofEpochMilli(now - 120_000).toString(), 305, "小雨", 18.0)
+                requests.incrementAndGet()
+                return HomeWeather(regionId, Instant.ofEpochMilli(now - 120_000).toString(), code, condition, 18.0,
+                    attributions = listOf("https://developer.qweather.com/attribution.html", "QWeather"))
             }
             override suspend fun content(now: Long) = null
         }
-        val sampleSources = object : HomeContextSource {
-            override suspend fun weather(regionId: String, now: Long) = null
-            override suspend fun content(now: Long): HomePhraseBatch {
-                val start = Instant.ofEpochMilli(now - 120_000)
-                return HomePhraseBatch(start.toString(), start.plusSeconds(86_400).toString(),
-                    HomeTone.entries.mapIndexed { i, tone ->
-                        HomePhrase("ai-demo-" + i, "合上笔记，试着说出一个还记得的发现。", HomeTopic.STUDY, tone,
-                            sourceTitle = "Effective Study Strategies", sourceUrl = "https://lsc.cornell.edu/how-to-study/")
-                    })
-            }
-        }
+
         fun show(
             dark: Boolean,
             glass: Boolean = false,
             clock: Long = day,
             source: HomeContextSource? = null,
+            session: Session = testSession,
             withCourse: Boolean = false,
+            check: () -> Unit = {},
         ) {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 scenario.onActivity { activity ->
                     activity.setContent {
                         ClassToolsTheme(darkTheme = dark, immersiveLight = CtLightSetting(CtLightIntensity.BALANCED, glass)) {
                             CompositionLocalProvider(LocalHomeContextSource provides source) {
-                                HomeScreen(session = testSession, onOpenTool = {}, nowMillis = clock,
+                                HomeScreen(session = session, onOpenTool = {}, nowMillis = clock,
                                     initialTtPlan = coursePlan.takeIf { withCourse },
                                     onCardOpen = { tool, focus -> opened = tool to focus })
                             }
@@ -117,69 +115,73 @@ class HomeContextInteractionTest {
                 }
                 node(By.text("工作台"))
                 node(phraseLabel)
-                when {
-                    withCourse -> {
-                        if (!wideText) {
-                            shot(folder, "course-dark-glass.png")
-                            node(By.text("查看课程")).click()
-                            assertEquals("tt" to courseFocus, opened)
-                        } else {
-                            visibleText("数据可视化")
-                            shot(folder, "course-narrow-large-font.png")
-                        }
-                    }
-                    source === sampleWeather -> {
-                        node(regionLabel)
-                        if (wideText) {
-                            shot(folder, "weather-narrow-large-font.png")
-                        } else {
-                            shot(folder, "weather-light.png")
-                            val expected = hour.get()
-                            repeat(3) { node(By.text("换一句")).click() }
-                            assertEquals(expected, hour.get())
-                            repeat(8) {
-                                if (!device.hasObject(By.text("看中文"))) node(By.text("换一句")).click()
-                            }
-                            // The explicit control and its idle state survive a short feedback.
-                            if (device.hasObject(By.desc("点亮小灯"))) {
-                                node(By.desc("点亮小灯")).click()
-                                SystemClock.sleep(1100)
-                                assertTrue(device.hasObject(By.desc("点亮小灯")))
-                            }
-                        }
-                    }
-                    source === sampleSources -> {
-                        seekAction("出处").click()
-                        node(By.text("文案出处"))
-                        node(By.text("Effective Study Strategies"))
-                        node(By.text("阅读原文"))
-                        shot(folder, "online-source-fixture.png")
-                        device.pressBack()
-                        assertTrue(device.wait(Until.gone(By.text("文案出处")), 5000))
-                    }
-                    else -> {
-                        if (wideText) {
-                            visibleText("尚未配置课表")
-                            shot(folder, "offline-narrow-large-font.png")
-                        } else {
-                            seekAction("看中文").click()
-                            node(By.text("收起中文"))
-                            shot(folder, if (landscape) "english-landscape.png" else "english-expanded.png")
-                            node(By.text("换一句")).click()
-                            assertFalse(device.hasObject(By.text("收起中文")))
-                        }
-                    }
+                val greeting = node(By.res("home_context_greeting"))
+                assertTrue(greeting.text.contains("，" + session.name))
+                if (!wideText && !landscape && config.screenWidthDp >= 400) {
+                    val date = node(By.res("home_context_date"))
+                    assertTrue(greeting.visibleBounds.left > date.visibleBounds.left)
                 }
+                assertFalse(device.hasObject(By.text("换一句")))
+                assertFalse(device.hasObject(By.text("看中文")))
+                assertFalse(device.hasObject(By.text("出处")))
+                check()
             }
         }
+
+        fun tapArt(label: String, feedback: String, screenshot: String) {
+            val icon = node(By.desc(label))
+            val expectedPhrase = node(phraseLabel).text
+            val expectedRequests = requests.get()
+            icon.click()
+            assertEquals(feedback, node(By.res("home_context_feedback")).text)
+            shot(folder, screenshot)
+            assertTrue(device.wait(Until.gone(By.res("home_context_feedback")), 4500))
+            assertEquals(expectedPhrase, node(phraseLabel).text)
+            node(By.desc(label)).click()
+            assertEquals(feedback, node(By.res("home_context_feedback")).text)
+            assertEquals(expectedRequests, requests.get())
+        }
+
         if (landscape) {
-            show(dark = false)
+            show(dark = false, session = englishSession) {
+                node(By.res("home_context_english"))
+                shot(folder, "english-landscape.png")
+            }
             return
         }
-        show(dark = false, source = sampleWeather)
-        show(dark = true, glass = true, clock = morning, withCourse = true)
-        show(dark = false)
-        if (!wideText) show(dark = false, source = sampleSources)
+        show(dark = false, source = weather(305, "小雨")) {
+            node(regionLabel)
+            assertFalse(device.hasObject(By.textContains("https://developer.qweather")))
+            if (wideText) {
+                shot(folder, "weather-narrow-large-font.png")
+            } else {
+                shot(folder, "weather-light.png")
+                tapArt("轻点小伞", "小伞已就位，今天也替你挡一点雨。", "rain-feedback.png")
+            }
+        }
+        show(dark = true, glass = true, clock = morning, withCourse = true) {
+            visibleText("数据可视化")
+            shot(folder, if (wideText) "course-narrow-large-font.png" else "course-dark-glass.png")
+            if (!wideText) {
+                assertTrue(node(By.text("今日课程")).visibleCenter.y > node(phraseLabel).visibleCenter.y)
+                node(By.text(sampleCourse.name)).click()
+                assertEquals("tt" to courseFocus, opened)
+            }
+        }
+        show(dark = false, session = englishSession) {
+            node(By.res("home_context_english"))
+            if (wideText) visibleText("尚未配置课表")
+            shot(folder, if (wideText) "offline-narrow-large-font.png" else "english-inline.png")
+        }
+        if (!wideText) {
+            show(dark = false, source = weather(100, "晴")) {
+                node(regionLabel)
+                tapArt("轻点太阳", "给今天加一点亮色。", "sun-feedback.png")
+            }
+            show(dark = true, glass = true, clock = night) {
+                tapArt("点亮小灯", "给今晚留一盏小灯。", "night-feedback.png")
+            }
+        }
     }
 
     @Test fun actualHostReturnsFromTomorrowAndRestoresWorkbench() {
@@ -206,32 +208,42 @@ class HomeContextInteractionTest {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 node(By.text("工作台"))
                 val expected = node(phraseLabel).text
-                val button = node(By.text("查看明日课表"))
+                val tomorrowAction = By.textStartsWith("查看明日课表")
+                val button = node(tomorrowAction)
                 val y = button.visibleCenter.y
                 button.click()
+                node(By.desc("返回"))
                 node(By.text(tomorrowName))
                 device.pressBack()
+                assertTrue(device.wait(Until.gone(By.desc("返回")), 9000))
                 node(By.text("工作台"))
                 assertEquals(expected, node(phraseLabel).text)
-                assertTrue(kotlin.math.abs(y - node(By.text("查看明日课表")).visibleCenter.y) < device.displayHeight / 20)
-                node(By.text("查看明日课表")).click()
+                assertTrue(kotlin.math.abs(y - node(tomorrowAction).visibleCenter.y) < device.displayHeight / 20)
+                node(tomorrowAction).click()
+                val up = node(By.desc("返回"))
                 node(By.text(tomorrowName))
-                val up = device.findObject(By.desc("返回")) ?: device.findObject(By.text("返回"))
-                assertNotNull("Timetable Up control", up)
                 up.click()
+                assertTrue(device.wait(Until.gone(By.desc("返回")), 9000))
                 node(By.text("工作台"))
                 scenario.recreate()
-                node(By.text("查看明日课表"))
+                node(tomorrowAction)
                 assertEquals(expected, node(phraseLabel).text)
                 assertFalse(runBlocking { container.appSettings.homeContent(account).first().preferences.motion })
-                runBlocking { container.appSettings.changeHomeContent(account) { it.copy(english = true) } }
-                device.waitForIdle(1_500)
-                seekAction("看中文").click()
-                node(By.text("收起中文"))
-                val english = node(phraseLabel).text
-                scenario.recreate()
-                node(By.text("收起中文"))
-                assertEquals(english, node(phraseLabel).text)
+
+                val firstOpen = app.openedAt.value
+                device.pressHome()
+                SystemClock.sleep(1300)
+                val launch = checkNotNull(app.packageManager.getLaunchIntentForPackage(app.packageName))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                app.startActivity(launch)
+                runBlocking { withTimeout(8000) { app.openedAt.first { it > firstOpen } } }
+                val deadline = SystemClock.uptimeMillis() + 8000
+                var refreshed = node(phraseLabel).text
+                while (refreshed == expected && SystemClock.uptimeMillis() < deadline) {
+                    SystemClock.sleep(100)
+                    refreshed = node(phraseLabel).text
+                }
+                assertNotEquals("Foregrounding should choose a new sentence", expected, refreshed)
             }
         } finally {
             runBlocking {
@@ -341,26 +353,6 @@ class HomeContextInteractionTest {
         } finally {
             emptyCache.delete()
         }
-    }
-
-    private fun seekAction(text: String): UiObject2 {
-        val selector = By.text(text)
-        repeat(16) {
-            device.waitForIdle(1500)
-            if (device.hasObject(selector)) {
-                val currentPhrase = node(phraseLabel).text
-                SystemClock.sleep(500)
-                val ready = device.findObject(selector)
-                if (ready != null && node(phraseLabel).text == currentPhrase) {
-                    return ready.parent?.takeIf { it.isClickable } ?: ready
-                }
-            } else {
-                val swap = node(By.text("换一句"))
-                (swap.parent?.takeIf { it.isClickable } ?: swap).click()
-                SystemClock.sleep(250)
-            }
-        }
-        return node(selector)
     }
 
     private fun node(selector: BySelector): UiObject2 =

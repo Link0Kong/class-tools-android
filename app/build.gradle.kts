@@ -166,8 +166,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 26
         targetSdk = 37
-        versionCode = 188
-        versionName = "1.0.0-beta103"
+        versionCode = 189
+        versionName = "1.0.0-beta104"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -461,6 +461,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
