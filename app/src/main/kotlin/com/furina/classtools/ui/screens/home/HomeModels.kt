@@ -16,7 +16,7 @@ import com.furina.classtools.data.timetable.TtPlan
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
-/** 工作台轮换条目（作业待交 / 通知待处理卡内最新一条）。 */
+/** 工作台卡片内可轮换的个人待办或待处理通知。 */
 data class HomeRotationItem(
     val id: String,
     val title: String,
@@ -37,7 +37,7 @@ data class HomePowerCard(
 )
 
 /**
- * 工作台 v5 顶部「今日」hero 的纯数据概览。
+ * 工作台今日课程的纯数据概览。
  *
  * @param kind 语义状态：`loading / ongoing / next / done / none / nodata`（UI 据此选强调色/图标）
  * @param tag 状态标签（`上课中 / 下一节 / 已结束 / 今日无课 / 未同步`）
@@ -56,7 +56,7 @@ data class HomeHeroState(
     val progress: Float?,
     val progressText: String,
 ) {
-    /** 是否处于「需要用户行动」的未同步空态（hero 显示打开课表 CTA）。 */
+    /** 是否处于需要打开课表同步数据的空态。 */
     val needsAction: Boolean get() = kind == "nodata"
 }
 
@@ -69,7 +69,7 @@ data class HomeHeroState(
  * - 通知待处理 = 未 mark ntdone，按时间倒序；
  * - 电费卡 = 关注宿舍（userdata.power.sel）+ 读数/状态；
  * - 轮换：每 5s 下一条（页面不可见时暂停由 UI 层控制）；
- * - v5：`heroState()` 汇总「今日 hero」（上课中/下一节/已结束/无课/未同步 + 进度条）。
+ * - `heroState()` 汇总今日课程状态（上课中/下一节/已结束/无课/未同步 + 进度条）。
  */
 object HomeWorkbenchLogic {
 
@@ -264,7 +264,7 @@ object HomeWorkbenchLogic {
     }
 
     /**
-     * 工作台顶部「今日」hero 状态。
+     * 工作台今日课程状态。
      *
      * 优先级：上课中 > 今日下一节 > 今日已结束 > 今日无课 > 未同步。
      * 进度条口径：

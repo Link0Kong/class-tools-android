@@ -17,17 +17,13 @@ import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.screens.guide.GuideScene
 import com.furina.classtools.ui.screens.guide.GuideSceneArt
 import com.furina.classtools.ui.screens.guide.GuideTone
-import com.furina.classtools.ui.screens.home.HomeHeroCard
+import com.furina.classtools.ui.screens.home.HomeTodayCoursesCard
 import com.furina.classtools.ui.screens.profile.ProfileScreen
 import com.furina.classtools.ui.theme.AppearanceMode
 import com.furina.classtools.ui.theme.ClassToolsTheme
 
 /**
- * 外观（跟随系统 / 浅色 / 深色）+ 顶部 hero 深色中性化 的预览。
- *
- * 用于本轮验收：浅色 hero 保持原品牌渐变；深色 hero 改中性 tonal（品牌绿只做小面积 accent），
- * 「我的 → 外观」为 3 个单选行 + 隐藏状态栏/壁纸取色开关。
- *
+ * 工作台今日课程、使用说明和外观设置的浅色与深色预览。
  * 注意：preview 的 ClassToolsTheme 用 `darkTheme` 显式强制（等价于外观模式选了浅色/深色），
  * 与 `ClassToolsTheme(appearance = ...)` 重载同一解析路径（[AppearanceMode.resolveDark]）。
  */
@@ -63,28 +59,30 @@ private fun AppearanceFrame(
 }
 
 @Composable
-private fun HomeHeroPreview(dark: Boolean) {
+private fun HomeTodayCoursesPreview(dark: Boolean) {
     AppearanceFrame(dark = dark) {
-        HomeHeroCard(
-            date = java.time.LocalDate.of(2026, 11, 15),
+        HomeTodayCoursesCard(
             plan = null,
             loading = false,
+            error = null,
             nowMillis = appearancePreviewNow,
-            onOpenTimetable = {},
+            onRetry = {},
+            onCourse = {},
+            onOpen = {},
         )
     }
 }
 
-@Preview(name = "240 外观 · 工作台 hero（浅色）", showBackground = true, widthDp = 412, heightDp = 240)
+@Preview(name = "240 外观 · 工作台今日课程（浅色）", showBackground = true, widthDp = 412, heightDp = 240)
 @Composable
-private fun HomeHeroLightPreview() {
-    HomeHeroPreview(dark = false)
+private fun HomeTodayCoursesLightPreview() {
+    HomeTodayCoursesPreview(dark = false)
 }
 
-@Preview(name = "241 外观 · 工作台 hero（深色中性）", showBackground = true, widthDp = 412, heightDp = 240)
+@Preview(name = "241 外观 · 工作台今日课程（深色）", showBackground = true, widthDp = 412, heightDp = 240)
 @Composable
-private fun HomeHeroDarkPreview() {
-    HomeHeroPreview(dark = true)
+private fun HomeTodayCoursesDarkPreview() {
+    HomeTodayCoursesPreview(dark = true)
 }
 
 @Preview(name = "242 外观 · 使用说明 hero（浅色）", showBackground = true, widthDp = 412, heightDp = 320)

@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.InputDevice
 import android.view.MotionEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -153,10 +154,14 @@ class TimetableNavigationInteractionTest {
 
     @Test fun workbenchCourseRestoresItsScrollPositionAndDetailAcrossTheMap() {
         ActivityScenario.launch<MainActivity>(desktop(destination = "home", cold = true)).use {
-            expectWorkbench()
+            expectWorkbenchAfterLoading()
             val source = scrollTo(By.text(courseA.name))
+            device.waitForIdle(3_000)
             val sourceY = source.visibleCenter.y
-            source.click()
+            val label = instrumentation.uiAutomation.rootInActiveWindow.findAccessibilityNodeInfosByText(courseA.name)
+                .first { it.text?.toString() == courseA.name }
+            val courseAction = generateSequence(label) { it.parent }.first { it.isClickable }
+            assertTrue(courseAction.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             expectDetails(courseA)
             node(mapFromDetail).click()
             val mapTitle = By.text("校内地图")
@@ -169,8 +174,16 @@ class TimetableNavigationInteractionTest {
             device.pressBack()
             expectTimetable()
             device.pressBack()
-            expectWorkbench()
-            assertTrue(kotlin.math.abs(sourceY - node(By.text(courseA.name)).visibleCenter.y) < device.displayHeight / 20)
+            expectWorkbenchAfterLoading()
+            val deadline = SystemClock.uptimeMillis() + 5_000L
+            val tolerance = device.displayHeight / 20
+            var restoredY = node(By.text(courseA.name)).visibleCenter.y
+            while (kotlin.math.abs(sourceY - restoredY) >= tolerance && SystemClock.uptimeMillis() < deadline) {
+                SystemClock.sleep(100)
+                restoredY = node(By.text(courseA.name)).visibleCenter.y
+            }
+            assertTrue("Course position changed from $sourceY to $restoredY",
+                kotlin.math.abs(sourceY - restoredY) < tolerance)
         }
     }
 
@@ -288,16 +301,29 @@ class TimetableNavigationInteractionTest {
 
     private fun expectWorkbench() { node(By.text("工作台")) }
 
+    private fun expectWorkbenchAfterLoading() {
+        expectWorkbench()
+        // Compare placement after the cards above the timetable have switched to their loaded height.
+        for (selector in listOf(By.desc("同步通知…"), By.text("更新通知…"), By.text("更新班级作业…"))) {
+            assertTrue(device.wait(Until.gone(selector), 10_000))
+        }
+        device.waitForIdle(3_000)
+    }
+
     private fun node(selector: BySelector) = requireNotNull(device.wait(Until.findObject(selector), 8_000)) {
         "Missing $selector. Foreground package: ${device.currentPackageName}"
     }
 
     private fun scrollTo(selector: BySelector): androidx.test.uiautomator.UiObject2 {
+        // Accessibility can report a course while the floating dock still covers its tap target.
+        val aboveDock = device.displayHeight - (106 * app.resources.displayMetrics.density).toInt()
         repeat(5) {
-            device.wait(Until.findObject(selector), 1_000)?.let { return it }
+            device.wait(Until.findObject(selector), 1_000)?.let {
+                if (it.visibleCenter.y < aboveDock) return it
+            }
             val x = device.displayWidth * 2 / 3
             device.swipe(x, device.displayHeight * 3 / 4, x, device.displayHeight / 3, 25)
         }
-        return node(selector)
+        return node(selector).also { assertTrue("Course must be above the floating dock", it.visibleCenter.y < aboveDock) }
     }
 }

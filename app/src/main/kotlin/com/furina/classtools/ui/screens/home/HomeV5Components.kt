@@ -41,7 +41,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.session.Session
-import com.furina.classtools.data.timetable.TtPlan
+import com.furina.classtools.data.timetable.SessionInfo
+import com.furina.classtools.data.timetable.SessionState
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.ui.components.CtIconBadge
 import com.furina.classtools.ui.components.CtPill
@@ -64,46 +65,42 @@ import com.furina.classtools.ui.theme.harmonyTint
 import com.furina.classtools.ui.theme.rememberCtColors
 import com.furina.classtools.ui.theme.rememberHarmonyColors
 import com.furina.classtools.ui.theme.uiAccentOf
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-
 // =============================================================================
-// 工作台首卡和信息卡使用 CtGlassSurface，内容排版及常用工具由页面组件定义。
+// 工作台信息卡使用 CtGlassSurface，内容排版及常用工具由页面组件定义。
 // =============================================================================
 
 /** 工作台卡片圆角（鸿蒙 18）。 */
 internal val HomeCardShape = RoundedCornerShape(HarmonyTokens.RadiusCard)
 
-/** 工作台 hero 圆角（鸿蒙 24）。 */
-internal val HomeHeroShape = RoundedCornerShape(HarmonyTokens.RadiusHero)
-
-/**
- * 工作台「今日」卡，展示日期、周次与课程摘要。整卡点击打开课表。
- */
+/** 课表卡片内的当前或下一节课程。 */
 @Composable
-internal fun HomeHeroCard(
-    date: LocalDate,
-    plan: TtPlan?,
-    loading: Boolean,
+internal fun HomeCourseHighlight(
+    course: SessionInfo,
     nowMillis: Long,
-    onOpenTimetable: () -> Unit,
+    onClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val course = plan?.today?.firstOrNull { it.state == com.furina.classtools.data.timetable.SessionState.ONGOING } ?: plan?.next
-    val ongoing = course?.state == com.furina.classtools.data.timetable.SessionState.ONGOING
-    val empty = HomeWorkbenchLogic.heroState(plan, loading, nowMillis)
-    val day = course?.let { Instant.ofEpochMilli(it.startAt).atZone(ZoneId.systemDefault()).toLocalDate() } ?: date
-    CtGlassSurface(onClick = onOpenTimetable, shape = CtShape.card, darkRole = CtDarkGlassRole.HERO) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(listOf(if (course == null) empty.tag else if (ongoing) "正在上课" else "下一节课",
-                HomeWorkbenchLogic.dateText(day)).joinToString(" · "), style = MaterialTheme.typography.labelLarge, color = scheme.primary)
-            Text(course?.name ?: empty.title, style = MaterialTheme.typography.headlineSmall, color = scheme.onSurface)
-            Text(if (course == null) empty.detail else listOf(
-                if (ongoing) "${course.endText} 下课" else "${course.startText} 开始",
-                course.fullRoom, course.span).filter(String::isNotBlank).joinToString(" · "),
-                style = MaterialTheme.typography.bodyLarge, color = scheme.onSurfaceVariant)
+    val ongoing = course.state == SessionState.ONGOING
+    val label = buildList {
+        add(if (ongoing) "正在上课" else "下一节课")
+        if (course.dayOffset > 0) {
+            add(listOf(course.dayText, course.dateText).filter(String::isNotBlank).joinToString(" "))
+        } else if (ongoing || HomeWorkbenchLogic.minutesUntil(course.startAt, nowMillis) in 1..10) {
+            add(HomeWorkbenchLogic.courseStatus(course, nowMillis))
         }
+    }.filter(String::isNotBlank).joinToString(" · ")
+    val details = listOf(
+        if (ongoing) "${course.endText} 下课" else "${course.startText} 开始",
+        course.span,
+        course.fullRoom,
+    ).filter(String::isNotBlank).joinToString(" · ")
+    Column(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = scheme.primary)
+        Text(course.name, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
+        Text(details, style = CtText.caption, color = scheme.onSurfaceVariant)
     }
 }
 

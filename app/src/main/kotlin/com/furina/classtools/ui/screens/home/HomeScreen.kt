@@ -1,36 +1,34 @@
 package com.furina.classtools.ui.screens.home
 
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import com.furina.classtools.ui.components.CtButton
-import com.furina.classtools.ui.components.CtButtonStyle
-
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Assignment
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
@@ -38,40 +36,40 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.furina.classtools.data.homework.HomeworkRepository
-import com.furina.classtools.data.tasks.TaskRepository
-import com.furina.classtools.data.tasks.pendingTasks
-import com.furina.classtools.data.tasks.text
 import com.furina.classtools.data.marks.MarksRepository
 import com.furina.classtools.data.marks.MarksSnapshot
 import com.furina.classtools.data.notices.NoticesData
@@ -80,6 +78,12 @@ import com.furina.classtools.data.power.PowerRepository
 import com.furina.classtools.data.power.PowerRow
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
+import com.furina.classtools.data.tasks.TaskRepository
+import com.furina.classtools.data.tasks.pendingTasks
+import com.furina.classtools.data.tasks.taskDueLabel
+import com.furina.classtools.data.tasks.taskPriorityOrder
+import com.furina.classtools.data.tasks.text
+import com.furina.classtools.data.timetable.CourseFocus
 import com.furina.classtools.data.timetable.SessionInfo
 import com.furina.classtools.data.timetable.SessionState
 import com.furina.classtools.data.timetable.TimetableRepository
@@ -94,41 +98,35 @@ import com.furina.classtools.ui.adaptive.CtAdaptive
 import com.furina.classtools.ui.adaptive.CtAdaptiveSpec
 import com.furina.classtools.ui.adaptive.CtTwoPaneRow
 import com.furina.classtools.ui.adaptive.rememberCtAdaptiveSpec
-import com.furina.classtools.ui.components.CtBrandDots
+import com.furina.classtools.ui.components.CtButton
+import com.furina.classtools.ui.components.CtButtonStyle
 import com.furina.classtools.ui.components.CtGlassIconButton
 import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtRootHeader
 import com.furina.classtools.ui.components.CtStickyHeaderBar
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.HarmonySkeletonRow
-import com.furina.classtools.ui.components.HarmonySkeletonTextBlock
 import com.furina.classtools.ui.components.NotificationPermissionBanner
+import com.furina.classtools.ui.components.ctHeaderCollapseProgress
+import com.furina.classtools.ui.components.ctRootPageEdgeFade
 import com.furina.classtools.ui.components.ctStickyHeaderProgress
 import com.furina.classtools.ui.components.glass.CtGlassCard
-import com.furina.classtools.ui.theme.CtAccents
 import com.furina.classtools.ui.theme.CtMotion
-import com.furina.classtools.ui.theme.CtShape
-import com.furina.classtools.ui.theme.CtShapeTokens
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
 import com.furina.classtools.ui.theme.CtTokens
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import com.furina.classtools.data.tasks.*
-import com.furina.classtools.data.timetable.CourseFocus
-import androidx.compose.foundation.layout.heightIn
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
-import com.furina.classtools.ui.components.ctRootPageEdgeFade
-import com.furina.classtools.ui.components.ctHeaderCollapseProgress
 
 /** 工作台展示当前账号的课程、宿舍、个人待办、通知与常用工具。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -170,9 +168,10 @@ fun HomeScreen(
     var lifecycleResumed by remember { mutableStateOf(true) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { lifecycleResumed = true }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { lifecycleResumed = false }
+    val pageActive = isPageActive && lifecycleResumed
     var liveTime by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(isPageActive, lifecycleResumed, nowMillis) {
-        if (nowMillis == null && isPageActive && lifecycleResumed) {
+    LaunchedEffect(pageActive, nowMillis) {
+        if (nowMillis == null && pageActive) {
             while (true) {
                 liveTime = System.currentTimeMillis()
                 delay(60_000L - liveTime % 60_000L)
@@ -206,7 +205,7 @@ fun HomeScreen(
 
     val loads = rememberHomeDataLoads(
         session = session,
-        active = isPageActive && lifecycleResumed,
+        active = pageActive,
         timetableRepository = timetableRepository,
         taskRepository = taskRepository,
         homeworkRepository = homeworkRepository,
@@ -241,7 +240,6 @@ fun HomeScreen(
             HomeRotationItem(it.text("id"), it.text("title"), taskDueLabel(it, today.toString()).ifBlank { "未设置截止" })
         }
     }
-    val pinnedCourse = ttPlan?.today?.firstOrNull { it.state == SessionState.ONGOING } ?: ttPlan?.next
     val hiddenNotices = (sections["hide"] as? JsonObject)?.get("ntHide") as? JsonObject
     val ntItems = remember(noticesData, marks, currentTime, hiddenNotices) {
         val hiddenIds = hiddenNotices.orEmpty().filterValues { (it as? JsonPrimitive)?.booleanOrNull == true }.keys
@@ -262,12 +260,29 @@ fun HomeScreen(
     val reduceMotion = rememberReduceMotion()
 
     val editor = editSession ?: rememberPreviewHomeToolsEditSession(0, quickToolIds, onSaved = onHomeToolsChange)
+    val scrollState = rememberScrollState()
+    var offsetBeforeOpening by rememberSaveable(session.sid) { mutableIntStateOf(-1) }
+    var offsetToRestore by remember(scrollState) { mutableIntStateOf(offsetBeforeOpening) }
+    val cardsLoading = ttLoading || noticesLoading || taskState?.loading == true ||
+        homeworkState?.loading == true || powerState?.loading == true
+    val layoutReady by rememberUpdatedState(pageActive && !cardsLoading)
+    LaunchedEffect(scrollState) {
+        if (offsetToRestore < 0) return@LaunchedEffect
+        snapshotFlow { layoutReady || scrollState.isScrollInProgress }.first { it }
+        if (!scrollState.isScrollInProgress) {
+            withFrameNanos { }
+            scrollState.scrollTo(offsetToRestore)
+        }
+        offsetToRestore = -1
+        offsetBeforeOpening = -1
+    }
 
     fun openToolId(id: String) {
         ToolCatalog.byId(id)?.let(onOpenTool)
     }
 
     fun openCard(tool: String, focus: String? = null) {
+        offsetBeforeOpening = scrollState.value
         if (onCardOpen != null) onCardOpen(tool, focus) else openToolId(if (tool == "class-homework") "hw" else tool)
     }
 
@@ -276,7 +291,6 @@ fun HomeScreen(
 
     // 2026-11-20 页面骨架 v2：滚动内容 + 常驻悬浮玻璃条（渐变模糊）。
     // haze 源 = 滚动内容（只有它会从悬浮条下面经过），悬浮条自己做真模糊。
-    val scrollState = rememberScrollState()
     val hazeState = rememberHazeState()
     val density = LocalDensity.current
     val stickyProgress = ctStickyHeaderProgress(scrollState.value.toFloat(), density.density)
@@ -296,6 +310,13 @@ fun HomeScreen(
                     BoxWithConstraints(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                         val contentWidth = maxWidth.value.toInt()
                         val layout = remember(contentWidth) { CtAdaptive.specFor(contentWidth) }
+                        // 刷新时保留已滚过的空间，避免卡片暂时变短后截掉返回位置。
+                        val reservedOffset = if (cardsLoading) maxOf(offsetToRestore, scrollState.value) else offsetToRestore
+                        val minContentHeight = if (reservedOffset > 0) {
+                            maxHeight + with(density) { reservedOffset.toDp() }
+                        } else {
+                            0.dp
+                        }
                         Column(
                             modifier = Modifier
                                 .widthIn(max = layout.contentMaxWidth)
@@ -305,6 +326,7 @@ fun HomeScreen(
                                 // 顶部/底部渐隐：内容滑到标题栏/浮岛附近时逐像素淡出（官方参考的顶部悬浮行为）。
                                 .ctRootPageEdgeFade(scrollState.value.toFloat())
                                 .verticalScroll(scrollState)
+                                .heightIn(min = minContentHeight)
                                 .padding(top = com.furina.classtools.ui.theme.HarmonyTokens.BreathTop, bottom = if (spec.widthDp >= CtAdaptive.MEDIUM_MIN_WIDTH_DP) 24.dp else 120.dp),
                             verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
                         ) {
@@ -334,38 +356,57 @@ fun HomeScreen(
                                     },
                                 )
                             }
-                            HomeWorkbenchColumns(layout, schedule = {
+                            HomeWorkbenchColumns(layout, updates = {
                                 HomeReveal(enabled = animateEntrance, index = 1) {
-                                    HomeHeroCard(
-                                        date = today,
-                                        plan = ttPlan,
-                                        loading = ttLoading,
-                                        nowMillis = currentTime,
-                                        onOpenTimetable = { openCard("tt", (pinnedCourse?.let { CourseFocus.of(it) } ?: CourseFocus(today.toString())).encode()) },
+                                    HomeNoticesCard(
+                                        items = ntItems,
+                                        loading = noticesLoading,
+                                        error = noticesError,
+                                        hasData = noticesData != null,
+                                        usingCache = noticesState?.error != null && noticesData != null,
+                                        statusLabel = noticeStatusLabel,
+                                        updatedText = noticesUpdatedText,
+                                        pageActive = pageActive,
+                                        animate = animateEntrance,
+                                        onOpen = { openCard("nt") },
+                                        onItem = { openCard("nt", it.id) },
+                                        onRetry = loads::retryNotices,
+                                    )
+                                }
+                                HomeReveal(enabled = animateEntrance, index = 2) {
+                                    HomeHomeworkCard(
+                                        items = hwItems,
+                                        task = taskState,
+                                        homework = homeworkState,
+                                        pageActive = pageActive,
+                                        animate = animateEntrance,
+                                        onOpen = { openCard("hw") },
+                                        onItem = { openCard("hw", it.id) },
+                                        onRetryTasks = { loads.retry(loads.tasks) },
+                                        onRetryHomework = { loads.retry(loads.homework, loads.marks) },
                                     )
                                 }
                                 if (showNotificationPermissionBanner && onOpenPermissions != null) {
-                                    HomeReveal(enabled = animateEntrance, index = 2) {
+                                    HomeReveal(enabled = animateEntrance, index = 3) {
                                         NotificationPermissionBanner(
                                             visible = true,
                                             onOpenPermissions = onOpenPermissions,
                                         )
                                     }
                                 }
-                                // 课程与电费在宽窗共用左栏，窄窗时排在待办之前。
-                                HomeReveal(enabled = animateEntrance, index = 3) {
+                            }, schedule = {
+                                HomeReveal(enabled = animateEntrance, index = 4) {
                                     HomeTodayCoursesCard(
                                         plan = ttPlan,
                                         nowMillis = currentTime,
                                         loading = ttLoading,
                                         error = timetableState?.error,
                                         onRetry = { loads.retry(loads.timetable) },
-                                        pinnedCourse = pinnedCourse,
                                         onOpen = { openCard("tt", CourseFocus(today.toString()).encode()) },
                                         onCourse = { openCard("tt", CourseFocus.of(it).encode()) },
                                     )
                                 }
-                                HomeReveal(enabled = animateEntrance, index = 4) {
+                                HomeReveal(enabled = animateEntrance, index = 5) {
                                     HomePowerCard(
                                         card = powerCard,
                                         loading = powerState?.loading == true,
@@ -381,37 +422,12 @@ fun HomeScreen(
                                         },
                                     )
                                 }
-                            }, tasks = {
-                                HomeReveal(enabled = animateEntrance, index = 5) {
-                                    HomeHomeworkCard(
-                                        items = hwItems,
-                                        task = taskState,
-                                        homework = homeworkState,
-                                        onOpen = { openCard("hw") },
-                                        onItem = { openCard("hw", it.id) },
-                                        onRetryTasks = { loads.retry(loads.tasks) },
-                                        onRetryHomework = { loads.retry(loads.homework, loads.marks) },
-                                    )
-                                }
+                            }, tools = {
                                 HomeReveal(enabled = animateEntrance, index = 6) {
-                                    HomeNoticesCard(
-                                        items = ntItems,
-                                        loading = noticesLoading,
-                                        error = noticesError,
-                                        hasData = noticesData != null,
-                                        usingCache = noticesState?.error != null && noticesData != null,
-                                        statusLabel = noticeStatusLabel,
-                                        updatedText = noticesUpdatedText,
-                                        onOpen = { openCard("nt") },
-                                        onItem = { openCard("nt", it.id) },
-                                        onRetry = loads::retryNotices,
-                                    )
-                                }
-                                HomeReveal(enabled = animateEntrance, index = 7) {
                                     HomeQuickToolsSection(
                                         editor = editor,
                                         quickToolIds = if (forceEmptyQuickTools) emptyList() else quickToolIds,
-                                        isPageActive = isPageActive && lifecycleResumed,
+                                        isPageActive = pageActive,
                                         reduceMotion = reduceMotion,
                                         onOpenTool = onOpenTool,
                                         onOpenAll = onOpenAll,
@@ -449,19 +465,24 @@ fun HomeScreen(
 @Composable
 private fun HomeWorkbenchColumns(
     layout: CtAdaptiveSpec,
+    updates: @Composable () -> Unit,
     schedule: @Composable () -> Unit,
-    tasks: @Composable () -> Unit,
+    tools: @Composable () -> Unit,
 ) {
     if (CtAdaptive.supportsWorkbenchTwoPane(layout)) {
         val gap = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact)
         CtTwoPaneRow(layout, main = { modifier ->
-            Column(modifier, verticalArrangement = gap) { schedule() }
+            Column(modifier, verticalArrangement = gap) {
+                updates()
+                tools()
+            }
         }, side = { modifier ->
-            Column(modifier, verticalArrangement = gap) { tasks() }
+            Column(modifier, verticalArrangement = gap) { schedule() }
         })
     } else {
+        updates()
         schedule()
-        tasks()
+        tools()
     }
 }
 
@@ -470,27 +491,26 @@ private fun HomeWorkbenchColumns(
 // =============================================================================
 
 @Composable
-private fun HomeTodayCoursesCard(
+internal fun HomeTodayCoursesCard(
     plan: TtPlan?,
     nowMillis: Long,
     loading: Boolean,
     error: String?,
     onRetry: () -> Unit,
-    pinnedCourse: SessionInfo?,
     onCourse: (SessionInfo) -> Unit,
     onOpen: () -> Unit,
 ) {
-    val courses = plan?.today.orEmpty().filterNot { pinnedCourse != null &&
-        it.name == pinnedCourse.name && it.start == pinnedCourse.start && it.end == pinnedCourse.end &&
-        it.fullRoom == pinnedCourse.fullRoom && pinnedCourse.dayOffset == 0 }
-    val omitted = courses.size < plan?.today.orEmpty().size
-    val countBadge = if (plan?.hasData == true) "${courses.size} 节" else null
+    val todayCourses = plan?.today.orEmpty()
+    val todayHighlight = todayCourses.firstOrNull { it.state == SessionState.ONGOING }
+        ?: todayCourses.firstOrNull { it.state == SessionState.NEXT }
+    val highlightedCourse = todayHighlight ?: plan?.next
+    val hasData = plan?.hasData == true
     HomeInfoCard(
         icon = Icons.Rounded.CalendarMonth,
-        title = if (omitted) "今日其他课程" else "今日课程",
+        title = "今日课程",
         accent = MaterialTheme.colorScheme.secondary,
         onClick = onOpen,
-        badge = countBadge,
+        badge = if (hasData) "${todayCourses.size} 节" else null,
         trailing = {
             Text(
                 text = "课表 ›",
@@ -500,42 +520,39 @@ private fun HomeTodayCoursesCard(
         },
     ) {
         when {
-            loading && plan == null -> HomeLoadingRow("读取课表…")
-            plan == null || !plan.hasData -> HomeEmptyHint(
-                title = "课表未同步",
-                sub = "点此同步",
-                actionText = "打开课表",
-                onAction = onOpen,
-            )
-
-            plan.today.isEmpty() -> HomeEmptyHint(
-                title = "今天没课",
-                sub = plan.next?.let { "下次 · ${it.label} ${it.name}" } ?: "近期暂无课程",
-            )
-
+            loading && !hasData -> HomeLoadingRow("读取课表…")
+            !hasData -> {
+                val state = HomeWorkbenchLogic.heroState(plan, loading, nowMillis)
+                HomeEmptyHint(state.title, state.detail, actionText = "打开课表", onAction = onOpen)
+            }
             else -> {
-                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    if (courses.isEmpty()) HomeMutedLine("今天只有上方这节课")
-                    courses.forEachIndexed { index, sessionInfo ->
-                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        CourseRow(sessionInfo, nowMillis, onClick = { onCourse(sessionInfo) }, isNext = sessionInfo.state == SessionState.NEXT &&
-                            plan.next?.startAt == sessionInfo.startAt)
-                    }
+                if (todayCourses.isEmpty() || plan.todayState == TodayState.DONE) {
+                    val state = HomeWorkbenchLogic.heroState(plan, loading, nowMillis)
+                    HomeEmptyHint(state.title, sub = if (highlightedCourse == null) state.detail else "")
                 }
-                if (plan.todayState == TodayState.DONE) {
-                    Text(
-                        text = buildString {
-                            append("今日课程已结束")
-                            plan.next?.let { append(" · 下次 ${it.label} ${it.name}") }
-                        },
-                        style = CtText.caption,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
+                if (highlightedCourse != null) {
+                    HomeCourseHighlight(highlightedCourse, nowMillis) { onCourse(highlightedCourse) }
+                }
+                val remaining = todayCourses.filterNot { it === todayHighlight }
+                if (remaining.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        remaining.forEachIndexed { index, sessionInfo ->
+                            if (highlightedCourse != null || index > 0) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            }
+                            CourseRow(
+                                sessionInfo,
+                                nowMillis,
+                                isNext = plan.next?.let { it.dayOffset == 0 && it.startAt == sessionInfo.startAt } == true &&
+                                    sessionInfo.state == SessionState.NEXT,
+                                onClick = { onCourse(sessionInfo) },
+                            )
+                        }
+                    }
                 }
             }
         }
-        HomeModuleStatus("课表", loading && plan != null, error, plan?.hasData == true, onRetry)
+        HomeModuleStatus("课表", loading && hasData, error, hasData, onRetry)
     }
 }
 
@@ -644,6 +661,8 @@ private fun HomeHomeworkCard(
     items: List<HomeRotationItem>,
     task: HomeLoadState<Unit>?,
     homework: HomeLoadState<*>?,
+    pageActive: Boolean,
+    animate: Boolean,
     onOpen: () -> Unit,
     onItem: (HomeRotationItem) -> Unit,
     onRetryTasks: () -> Unit,
@@ -656,7 +675,7 @@ private fun HomeHomeworkCard(
             if (loading) HomeLoadingRow("同步个人待办…")
             else if (task?.error == null) HomeMutedLine("暂无待完成事项")
         } else {
-            items.take(2).forEach { CardItemRow(it) { onItem(it) } }
+            HomeRotatingItems(items, pageActive, animate, onItem)
         }
         HomeModuleStatus("个人待办", loading && items.isNotEmpty(), task?.error, task?.data != null, onRetryTasks)
         HomeModuleStatus("班级作业", homework?.loading == true, homework?.error, homework?.data != null, onRetryHomework,
@@ -673,13 +692,15 @@ private fun HomeNoticesCard(
     usingCache: Boolean,
     statusLabel: String,
     updatedText: String,
+    pageActive: Boolean,
+    animate: Boolean,
     onOpen: () -> Unit,
     onItem: (HomeRotationItem) -> Unit,
     onRetry: () -> Unit,
 ) {
     HomeInfoCard(Icons.Rounded.Notifications, "班级通知", MaterialTheme.colorScheme.primary, onOpen,
         badge = if (!loading && error == null) "${items.size} 待处理" else null) {
-        items.take(2).forEach { CardItemRow(it) { onItem(it) } }
+        HomeRotatingItems(items, pageActive, animate, onItem)
         when {
             loading && !hasData -> HomeLoadingRow("同步通知…")
             !loading && error == null && items.isEmpty() -> HomeMutedLine("暂无待处理通知")
@@ -718,23 +739,60 @@ private fun HomeModuleStatus(
 }
 
 @Composable
-private fun CardItemRow(item: HomeRotationItem, onClick: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val scale = LocalDensity.current.fontScale
-    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().clickable(onClick = onClick)
-        .heightIn(min = 48.dp).padding(vertical = 6.dp), contentAlignment = Alignment.CenterStart) {
-        if (maxWidth < 300.dp * scale) {
-            Column {
-                Text(item.title, style = MaterialTheme.typography.titleSmall, color = scheme.onSurface)
-                Text(item.sub, style = CtText.caption, color = scheme.onSurfaceVariant)
-            }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(item.title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = scheme.onSurface)
-                Text(item.sub, Modifier.widthIn(max = this@BoxWithConstraints.maxWidth * 0.42f), style = CtText.caption,
-                    color = scheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.End)
-            }
+private fun HomeRotatingItems(
+    items: List<HomeRotationItem>,
+    pageActive: Boolean,
+    animate: Boolean,
+    onItem: (HomeRotationItem) -> Unit,
+) {
+    if (!animate || items.size < 2) {
+        items.take(2).forEach { item ->
+            CardItemRow(item, Modifier.clickable { onItem(item) })
         }
+        return
+    }
+
+    val ids = remember(items) { items.map { it.id } }
+    var selectedId by remember { mutableStateOf(ids.first()) }
+    val index = ids.indexOf(selectedId).coerceAtLeast(0)
+    val current = items[index]
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val focused by interaction.collectIsFocusedAsState()
+    val canRotate = HomeWorkbenchLogic.rotationEnabled(items.size, pageActive) && !pressed && !focused
+    LaunchedEffect(ids, index, canRotate) {
+        if (canRotate) {
+            delay(HomeWorkbenchLogic.ROTATION_INTERVAL_MS)
+            selectedId = ids[HomeWorkbenchLogic.nextRotationIndex(index, ids.size)]
+        }
+    }
+
+    AnimatedContent(
+        targetState = current,
+        contentKey = { it.id },
+        modifier = Modifier.fillMaxWidth().clipToBounds(),
+        transitionSpec = {
+            slideInVertically(CtMotion.pageTweenInt) { it } togetherWith
+                slideOutVertically(CtMotion.pageTweenInt) { -it }
+        },
+        label = "工作台条目轮播",
+    ) { item ->
+        val accessibility = if (item.id == current.id) Modifier else Modifier.semantics { hideFromAccessibility() }
+        CardItemRow(item, accessibility.clickable(interaction, LocalIndication.current) { onItem(item) })
+    }
+}
+
+@Composable
+private fun CardItemRow(item: HomeRotationItem, modifier: Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 6.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(item.title, style = MaterialTheme.typography.titleSmall, color = scheme.onSurface,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(item.sub, style = CtText.caption, color = scheme.onSurfaceVariant,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
