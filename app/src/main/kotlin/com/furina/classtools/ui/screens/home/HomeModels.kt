@@ -147,9 +147,11 @@ object HomeWorkbenchLogic {
         entries: List<NoticeEntry>,
         marks: MarksSnapshot,
         nowMillis: Long,
+        hiddenIds: Set<String> = emptySet(),
     ): List<NoticeEntry> = entries
         .filter { entry ->
-            NoticeStatusMachine.isPending(
+            !entry.hidden && entry.id !in hiddenIds && entry.rowId !in hiddenIds &&
+                NoticeStatusMachine.isPending(
                 group = entry.group,
                 nowMillis = nowMillis,
                 done = marks.isDone(MarkKind.NT_DONE, entry.id),
@@ -164,7 +166,8 @@ object HomeWorkbenchLogic {
         entries: List<NoticeEntry>,
         marks: MarksSnapshot,
         nowMillis: Long,
-    ): List<HomeRotationItem> = noticePendingEntries(entries, marks, nowMillis).map { entry ->
+        hiddenIds: Set<String> = emptySet(),
+    ): List<HomeRotationItem> = noticePendingEntries(entries, marks, nowMillis, hiddenIds).map { entry ->
         val occurrence = if (NoticeStatusMachine.isLongterm(entry.group)) {
             NoticeStatusMachine.occurrenceOf(entry.group, nowMillis)
         } else {

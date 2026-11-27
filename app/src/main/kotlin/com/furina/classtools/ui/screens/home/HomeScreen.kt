@@ -75,15 +75,11 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import com.furina.classtools.data.homework.HomeworkLoadResult
-import com.furina.classtools.data.homework.HomeworkRepository
 import com.furina.classtools.data.tasks.TaskRepository
 import com.furina.classtools.data.tasks.pendingTasks
 import com.furina.classtools.data.tasks.text
-import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.data.marks.MarksRepository
 import com.furina.classtools.data.marks.MarksSnapshot
-import com.furina.classtools.data.notices.NoticeEntry
 import com.furina.classtools.data.notices.NoticesData
 import com.furina.classtools.data.notices.NoticesLoadResult
 import com.furina.classtools.data.notices.NoticesRepository
@@ -131,7 +127,6 @@ import dev.chrisbanes.haze.rememberHazeState
 import com.furina.classtools.data.tasks.*
 import com.furina.classtools.data.timetable.CourseFocus
 import androidx.compose.foundation.layout.heightIn
-import com.furina.classtools.data.homework.briefTitle
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -140,11 +135,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import com.furina.classtools.ui.components.ctRootPageEdgeFade
 import com.furina.classtools.ui.components.ctHeaderCollapseProgress
 
-/** 工作台按课程、宿舍、待办、班级作业、通知与常用工具展示当前账号可用的数据。 */
+/** 工作台展示当前账号的课程、宿舍、个人待办、通知与常用工具。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -153,7 +149,6 @@ fun HomeScreen(
     onHomeToolsChange: (List<String>) -> Unit,
     modifier: Modifier = Modifier,
     quickToolIds: List<String> = ToolCatalog.defaultQuickIds,
-    homeworkRepository: HomeworkRepository? = null,
     taskRepository: TaskRepository? = null,
     timetableRepository: TimetableRepository? = null,
     marksRepository: MarksRepository? = null,
@@ -171,7 +166,6 @@ fun HomeScreen(
     onCardOpen: ((String, String?) -> Unit)? = null,
     nowMillis: Long? = null,
     initialTtPlan: TtPlan? = null,
-    initialHomeworkRows: List<HomeworkRow> = emptyList(),
     initialNoticesData: NoticesData? = null,
     initialPowerSel: String? = null,
     initialPowerRow: PowerRow? = null,
@@ -213,11 +207,8 @@ fun HomeScreen(
         ttSnapshot?.let { TtCalendar.plan(it, currentTime, zone) } ?: initialTtPlan
     }
     var ttLoading by remember { mutableStateOf(timetableRepository != null && initialTtPlan == null) }
-    var homeworkRows by remember { mutableStateOf(initialHomeworkRows) }
-    var homeworkLoading by remember { mutableStateOf(homeworkRepository != null && initialHomeworkRows.isEmpty()) }
-    var homeworkFailed by remember { mutableStateOf(false) }
-    var noticesData by remember { mutableStateOf(initialNoticesData) }
-    var noticesState by remember {
+    var noticesData by remember(session.sid, noticesRepository) { mutableStateOf(initialNoticesData) }
+    var noticesState by remember(session.sid, noticesRepository) {
         mutableStateOf(if (initialNoticesData != null) NoticeHomeState.READY else NoticeHomeState.LOADING)
     }
     var noticesFailedMessage by remember { mutableStateOf("") }
@@ -258,22 +249,9 @@ fun HomeScreen(
         ttLoading = false
     }
 
-    // 懒加载：作业
-    LaunchedEffect(homeworkRepository, refreshToken) {
-        val repo = homeworkRepository ?: return@LaunchedEffect
-        homeworkLoading = true
-        homeworkFailed = false
-        homeworkRows = runCatching { repo.cached() }.getOrDefault(emptyList())
-        when (val result = runCatching { repo.load(force = refreshToken > 0) }.getOrNull()) {
-            is HomeworkLoadResult.Success -> homeworkRows = result.rows
-            is HomeworkLoadResult.Failure -> homeworkFailed = true
-            null -> homeworkFailed = true
-        }
-        homeworkLoading = false
-    }
-
     // 懒加载：通知（缓存优先 → 网络；失败有缓存则离线态）
-    LaunchedEffect(noticesRepository, refreshToken) {
+    LaunchedEffect(noticesRepository, refreshToken, isPageActive, lifecycleResumed) {
+        if (!isPageActive || !lifecycleResumed) return@LaunchedEffect
         val repo = noticesRepository ?: return@LaunchedEffect
         noticesState = NoticeHomeState.LOADING
         noticesData = runCatching { repo.cached() }.getOrNull()
@@ -309,9 +287,6 @@ fun HomeScreen(
     }
 
     // ---- 卡片摘要与可定位条目 ----------------------------------------------------
-    val hwOpenRows = remember(homeworkRows, marks, currentTime) {
-        HomeWorkbenchLogic.openHomeworkRows(homeworkRows, marks, currentTime)
-    }
     val personal = taskRepository?.snapshot?.collectAsState()?.value
     val taskStatus = taskRepository?.syncStatus?.collectAsState()?.value
     LaunchedEffect(taskRepository, refreshToken) { taskRepository?.sync() }
@@ -320,17 +295,11 @@ fun HomeScreen(
             HomeRotationItem(it.text("id"), it.text("title"), taskDueLabel(it, today.toString()).ifBlank { "未设置截止" })
         }
     }
-    val classItems = remember(hwOpenRows, personal) {
-        val imported = personal?.importedHomeworkIds().orEmpty()
-        hwOpenRows.filterNot { it.id in imported }.map {
-            HomeRotationItem(it.id, it.briefTitle(), com.furina.classtools.data.homework.HomeworkDueCalculator.shortDueText(it)
-                .takeIf(String::isNotBlank)?.let { due -> "$due 截止" } ?: "未设置截止")
-        }
-    }
     val pinnedCourse = ttPlan?.today?.firstOrNull { it.state == SessionState.ONGOING } ?: ttPlan?.next
-    val ntEntries: List<NoticeEntry> = noticesData?.auto.orEmpty().filter { session.isAdmin || !it.hidden }
-    val ntItems = remember(ntEntries, marks, currentTime) {
-        HomeWorkbenchLogic.noticeRotation(ntEntries, marks, currentTime)
+    val hiddenNotices = (sections["hide"] as? JsonObject)?.get("ntHide") as? JsonObject
+    val ntItems = remember(noticesData, marks, currentTime, hiddenNotices) {
+        val hiddenIds = hiddenNotices.orEmpty().filterValues { (it as? JsonPrimitive)?.booleanOrNull == true }.keys
+        HomeWorkbenchLogic.noticeRotation(noticesData?.auto.orEmpty(), marks, currentTime, hiddenIds)
     }
     // G13：通知卡展示最后更新时间，便于判断数据是否过期。
     val noticesUpdatedText = remember(noticesData?.fetchedAt) {
@@ -525,8 +494,6 @@ fun HomeScreen(
                                     HomeHomeworkCard("待办任务", hwItems, taskStatus == "同步中…", taskStatus == "仅本机",
                                         onOpen = { openCard("hw") }, onItem = { openCard("hw", it.id) })
                                 }
-                                HomeHomeworkCard("班级作业", classItems, homeworkLoading, homeworkFailed,
-                                    onOpen = { openCard("class-homework") }, onItem = { openCard("class-homework", it.id) })
                                 HomeReveal(enabled = animateEntrance, index = 6) {
                                     HomeNoticesCard(
                                         items = ntItems,

@@ -1481,7 +1481,6 @@ private fun RootTabs(
                     quickToolIds = quickToolIds,
                     onOpenTool = onOpenTool,
                     onCardOpen = onCardOpen,
-                    homeworkRepository = container.homeworkRepository,
                     timetableRepository = container.timetableRepository,
                     marksRepository = container.marksRepository,
                     powerRepository = container.powerRepository,

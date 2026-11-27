@@ -137,6 +137,18 @@ class HomeWorkbenchLogicTest {
     }
 
     @Test
+    fun noticeRotation_excludesGlobalAndPersonalHiddenEntries() {
+        val entries = listOf(
+            autoEntry("auto_global", "全班隐藏", deadline = "2026-11-08T20:00:00+08:00").copy(hidden = true),
+            autoEntry("auto_personal", "个人隐藏", deadline = "2026-11-08T20:00:00+08:00"),
+            autoEntry("auto_legacy", "旧版隐藏", deadline = "2026-11-08T20:00:00+08:00"),
+            autoEntry("auto_visible", "可见通知", deadline = "2026-11-08T20:00:00+08:00"),
+        )
+        val rotation = HomeWorkbenchLogic.noticeRotation(entries, MarksSnapshot(), now, setOf("auto_personal", "legacy"))
+        assertEquals(listOf("visible"), rotation.map { it.id })
+    }
+
+    @Test
     fun noticeRotation_subContainsCategory() {
         val items = HomeWorkbenchLogic.noticeRotation(
             listOf(autoEntry("auto_1", "期中教学检查", cat = "教务", deadline = "2026-11-08T20:00:00+08:00")),

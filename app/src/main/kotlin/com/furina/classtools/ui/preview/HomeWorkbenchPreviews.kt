@@ -3,7 +3,6 @@ package com.furina.classtools.ui.preview
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.tooling.preview.Preview
-import com.furina.classtools.data.homework.HomeworkRow
 import com.furina.classtools.data.notices.NoticeEntry
 import com.furina.classtools.data.notices.NoticeGroupDto
 import com.furina.classtools.data.notices.NoticeRow
@@ -76,36 +75,6 @@ private val homePreviewNotSyncedPlan = TtPlan(
 private fun homePreviewPlan(snapshot: TtSnapshot, now: Long): TtPlan =
     TtCalendar.plan(snapshot, now, ZoneId.of("Asia/Shanghai"))
 
-private val homePreviewHomework: List<HomeworkRow> = listOf(
-    HomeworkRow(
-        id = "hw-1",
-        subject = "数据结构实验报告",
-        content = "完成二叉树遍历实验并提交报告",
-        due = "2026-11-09",
-        date = "2026-11-09",
-        time = "20:00",
-        ts = HOME_NOW_FRIDAY_1000 - 3_600_000L,
-    ),
-    HomeworkRow(
-        id = "hw-2",
-        subject = "大学英语作文",
-        content = "Unit 5 写作练习",
-        due = "2026-11-10",
-        date = "2026-11-10",
-        time = "18:00",
-        ts = HOME_NOW_FRIDAY_1000 - 7_200_000L,
-    ),
-    HomeworkRow(
-        id = "hw-3",
-        subject = "英语听力练习",
-        content = "Unit 5 听力",
-        due = "2026-11-07",
-        date = "2026-11-07",
-        time = "20:00",
-        ts = HOME_NOW_FRIDAY_1000 - 9_000_000L,
-    ),
-)
-
 private fun homePreviewNotices(): NoticesData {
     val auto = listOf(
         NoticeEntry(
@@ -167,7 +136,6 @@ private fun HomePreviewFrame(
             onHomeToolsChange = {},
             quickToolIds = quickToolIds,
             initialTtPlan = plan,
-            initialHomeworkRows = homePreviewHomework,
             initialNoticesData = homePreviewNotices(),
             initialPowerSel = "4-23A---305",
             initialPowerRow = homePreviewPowerRow,
