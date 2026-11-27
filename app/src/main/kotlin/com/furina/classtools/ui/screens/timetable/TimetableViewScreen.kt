@@ -297,11 +297,13 @@ fun TimetableViewScreen(
         detailVersion += 1
     }
 
-    LaunchedEffect(focusRequest, loadComplete, snapshot, isPageActive) {
-        if (!loadComplete || !isPageActive) return@LaunchedEffect
+    // Resolve against the same loaded snapshot that supplied the week values in this composition.
+    val loadedSnapshot = snapshot.takeIf { loadComplete }
+    LaunchedEffect(focusRequest, loadedSnapshot, isPageActive) {
+        if (loadedSnapshot == null || !isPageActive) return@LaunchedEffect
         val request = focusRequest
         if (request != null && request.shouldApply(lastFocusId, openedFrom)) {
-            val target = request.resolve(snapshot, today, currentWeek, maxWeek)
+            val target = request.resolve(loadedSnapshot, today, currentWeek, maxWeek)
             lastFocusId = request.id
             weekOffset = target.weekOffset
             selectedDay = target.day
@@ -316,7 +318,7 @@ fun TimetableViewScreen(
             // A second delivery of the visible course shares the sheet, including after dismissal.
             if (request != null) lastFocusId = request.id
             val openFocus = openedFrom?.let(CourseFocus::decode) ?: return@LaunchedEffect
-            val course = openFocus.match(snapshot, LocalDate.parse(openFocus.date))
+            val course = openFocus.match(loadedSnapshot, LocalDate.parse(openFocus.date))
             if (course == null) {
                 selectCourse(null)
                 CtToastBus.show("这节课已变动，显示当天安排")

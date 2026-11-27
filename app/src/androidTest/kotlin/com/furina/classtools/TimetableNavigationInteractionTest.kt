@@ -183,6 +183,26 @@ class TimetableNavigationInteractionTest {
         }
     }
 
+    @Test fun cachedTimetableOpensExactCourseInNextWeek() {
+        val thisMonday = today.minusDays(TtCalendar.dayIndex(today).toLong())
+        val nextMonday = thisMonday.plusWeeks(1)
+        val nextCourse = Course("下周回归课程", "下周回归教师", courseB.room, day = 0, start = 5, end = 6, weeks = "6")
+        runBlocking {
+            app.container.timetableRepository.savePersonal(
+                TtSnapshot(listOf(courseA, nextCourse), thisMonday.minusWeeks(4).toString()),
+            )
+        }
+        val focus = CourseFocus(nextMonday.toString(), nextCourse.start, nextCourse.end, nextCourse.name, nextCourse.room)
+        withDesktopHost(desktop(focus = focus.encode(), cold = true)) {
+            expectDetails(nextCourse)
+            device.pressBack()
+            expectTimetable()
+            node(By.text(nextCourse.name))
+            device.pressBack()
+            expectWorkbench()
+        }
+    }
+
     @Test fun desktopDateAndInvalidFocusKeepAnOperableTimetable() {
         withDesktopHost(desktop(focus = CourseFocus(tomorrow.toString()).encode(), cold = true)) { host ->
             expectTimetable()
