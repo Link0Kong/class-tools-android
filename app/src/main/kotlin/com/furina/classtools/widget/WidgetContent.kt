@@ -76,6 +76,7 @@ internal data class WidgetSection(
     val lines: List<WidgetLine>,
     val empty: String,
     val status: String = "",
+    val supportingDetail: String = "",
 )
 
 internal fun quadrantOf(line: WidgetLine, tomorrow: Long): Int {
@@ -97,11 +98,6 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
     val course = active ?: plan?.next
     val courseLine = course?.let { scheduleLine(it, if (it.dayOffset > 0) it.dayText else "") }
         ?: WidgetLine(if (plan?.hasData == true) "近期暂无课程" else "打开课表同步课程", destination = "tt")
-    val courseLabel = when {
-        active != null -> "正在上课"
-        course != null -> listOf(course.dateText.takeIf { course.dayOffset > 0 }.orEmpty(), course.dayText, "下一节").filter(String::isNotBlank).joinToString(" · ")
-        else -> "今日课表"
-    }
     fun countText(list: WidgetList?, unit: String) = list?.let { "${it.count} $unit" } ?: "待同步"
     return when (kind) {
         WidgetKind.TIMETABLE -> {
@@ -141,30 +137,56 @@ internal fun widgetContent(kind: WidgetKind, signedIn: Boolean, plan: TtPlan?, f
         WidgetKind.WORKBENCH -> {
             val tasks = feed.tasks
             val notices = feed.notices
-            val overview = listOf(tasks?.let { "${it.count} 待办" } ?: "待办待同步",
-                notices?.let { "${it.count} 待处理" } ?: "通知待同步")
             val assignments = feed.homework?.current(now, tasks?.importedHomeworkIds.orEmpty())
-            val highlights = buildList {
-                assignments?.rows?.firstOrNull()?.let { add(it) }
-                tasks?.rows?.firstOrNull()?.let { add(it.copy(title = "待办 · " + it.title, destination = "hw")) }
-                notices?.rows?.firstOrNull()?.let { add(it.copy(title = "通知 · " + it.title, destination = "nt")) }
-                if (course != null) add(courseLine.copy(title = courseLabel + " · " + courseLine.title,
-                    priority = if (course.startAt in now..(now + 15 * 60_000L)) 2 else 6))
-            }.sortedBy { it.priority }
-            fun section(title: String, dest: String, list: WidgetList?, empty: String) =
+            fun section(title: String, dest: String, list: WidgetList?, empty: String, countSuffix: String) =
                 WidgetSection(title, WidgetLine("", destination = dest),
                     listOfNotNull(list?.rows?.firstOrNull()?.copy(destination = dest)),
-                    if (list == null) "待同步" else empty, list?.count?.takeIf { it > 0 }?.toString().orEmpty())
+                    if (list == null) "待同步" else empty,
+                    list?.count?.takeIf { it > 0 }?.let { "${it}$countSuffix" }.orEmpty())
+            val courseDay = course?.let {
+                when (it.dayOffset) {
+                    0 -> ""
+                    1 -> "明天"
+                    else -> it.dayText
+                }
+            }.orEmpty()
+            val upcoming = course?.startAt?.let { it in now..(now + 15 * 60_000L) } == true
+            val agendaLine = course?.let {
+                courseLine.copy(detail = listOf(courseDay, "${it.startText}–${it.endText}").filter(String::isNotBlank).joinToString(" "),
+                    priority = if (active != null) -1 else if (upcoming) 2 else 6)
+            }
+            val agenda = WidgetSection("课程", WidgetLine("", destination = "tt"), listOfNotNull(agendaLine),
+                if (plan?.hasData == true) "近期暂无课程" else "课表待同步",
+                if (active != null) "上课中" else if (course != null) "下一节" else "", course?.fullRoom.orEmpty())
             val tiles = listOf(
-                WidgetSection("课程", WidgetLine("", destination = "tt"), listOfNotNull(courseLine.takeIf { course != null }),
-                    if (plan?.hasData == true) "暂无课程" else "待同步",
-                    if (active != null) "上课中" else if (course != null) "下一节" else ""),
-                section("个人待办", "hw", tasks, "暂无待办"),
-                section("班级作业", "class-homework", assignments, "暂无作业"),
-                section("班级通知", "nt", notices, "暂无待处理"),
+                agenda,
+                section("个人待办", "hw", tasks, "暂无待办", " 项"),
+                section("班级作业", "class-homework", assignments, "暂无作业", " 项"),
+                section("班级通知", "nt", notices, "暂无待处理", " 待处理"),
             )
-            WidgetContent("${tiles.size} 个入口", WidgetLine(overview.joinToString(" · "),
-                highlights.firstOrNull()?.title.orEmpty()), highlights, "${localDay.monthValue}月${localDay.dayOfMonth}日", tiles)
+            val spotlight = tiles.filter { it.lines.isNotEmpty() }.minWithOrNull(
+                compareBy<WidgetSection> { it.lines.first().priority }
+                    .thenBy { it.lines.first().deadlineAt ?: Long.MAX_VALUE },
+            )
+            val focus = spotlight?.lines?.firstOrNull()
+            val status = when {
+                spotlight == null -> kind.label
+                spotlight == agenda && active != null -> "${active.endText} 下课"
+                spotlight == agenda && course != null -> listOf(courseDay, course.startText, "开始").filter(String::isNotBlank).joinToString(" ")
+                spotlight.link.destination == "hw" -> countText(tasks, "待办")
+                spotlight.link.destination == "class-homework" -> countText(assignments, "项作业")
+                else -> countText(notices, "条待处理")
+            }
+            val primary = focus?.let {
+                when (it.destination) {
+                    "class-homework" -> it.copy(title = it.title.removePrefix("作业 · "))
+                    "tt" -> it.copy(detail = listOf(it.detail, agenda.supportingDetail).filter(String::isNotBlank).joinToString(" · "))
+                    else -> it
+                }
+            } ?: WidgetLine(if (tasks == null || assignments == null || notices == null || plan?.hasData != true)
+                "等待同步" else "近期暂无安排")
+            WidgetContent(status, primary, summary = "${localDay.monthValue}月${localDay.dayOfMonth}日", sections = tiles,
+                createTask = true, compactDetail = if (spotlight == agenda) agenda.supportingDetail else primary.detail)
         }
         WidgetKind.NOTICES, WidgetKind.TASKS -> {
             val tasks = kind == WidgetKind.TASKS

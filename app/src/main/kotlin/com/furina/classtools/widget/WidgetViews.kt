@@ -31,7 +31,7 @@ internal object WidgetViews {
     ): RemoteViews {
         val colors = WidgetPaint.resolve(context, palette, monet)
         val metrics = context.resources.displayMetrics
-        fun fit(width: Float, height: Float) = WidgetLayout.fit(width, height, metrics)
+        fun fit(width: Float, height: Float) = WidgetLayout.fit(width, height, metrics, workbench = kind == WidgetKind.WORKBENCH)
         fun view(layout: WidgetLayout) = render(context, kind, model, layout, colors, owner, widgetId, preview)
 
         if (Build.VERSION.SDK_INT >= 31) {
@@ -82,6 +82,7 @@ internal object WidgetViews {
             val caption = when {
                 model.cachedRemainder > 0 -> "另 ${model.cachedRemainder} 项见全部"
                 layout.headerDetails -> model.summary
+                kind == WidgetKind.WORKBENCH -> ""
                 else -> model.compactStatus
             }
             val heading = if (kind == WidgetKind.WORKBENCH || layout.headerDetails && model.cachedRemainder == 0)
@@ -129,6 +130,7 @@ internal object WidgetViews {
     }
 
     private fun fullEntry(view: RemoteViews, colors: WidgetPaint, id: Int, kind: WidgetKind, overview: PendingIntent) {
+        if (kind == WidgetKind.WORKBENCH) view.setTextViewText(id, "总览")
         colors.text(view, id, colors.accent)
         view.setContentDescription(id, if (kind == WidgetKind.WORKBENCH) "打开完整工作台" else "查看全部${kind.label}")
         view.setOnClickPendingIntent(id, overview)

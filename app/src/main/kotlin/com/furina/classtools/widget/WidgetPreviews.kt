@@ -22,9 +22,12 @@ internal object WidgetPreviews {
         WidgetKind.TASKS -> WidgetContent("2 待办", task, listOf(homework, WidgetLine("核对分组名单", "周五截止", "hw", focus = "sample-group", canComplete = true)),
             "2 待办 · 1 作业",
             listOf(section("重要且紧急", task), section("重要不紧急"), section("未标星且紧急"), section("未标星不紧急", homework)), true)
-        WidgetKind.WORKBENCH -> WidgetContent("4 个入口", WidgetLine("2 待办 · 1 待处理通知"), listOf(course, task, notice),
-            "2 待办 · 1 待处理通知",
-            listOf(section("课程", course), section("个人待办", task), section("班级作业", homework), section("班级通知", notice)))
+        WidgetKind.WORKBENCH -> WidgetContent("09:50 开始", course, summary = "11月26日", sections = listOf(
+            section("课程", course.copy(detail = "09:50–11:20")).copy(status = "下一节", supportingDetail = "创意楼 302"),
+            section("个人待办", task).copy(status = "2 项"),
+            section("班级作业", homework).copy(status = "1 项"),
+            section("班级通知", notice).copy(status = "1 待处理"),
+        ), createTask = true, compactDetail = "创意楼 302")
         WidgetKind.NOTICES -> WidgetContent("2 条通知", notice, listOf(WidgetLine("班会资料发布", "昨天 14:00 发布", "nt")),
             "2 条通知")
     }

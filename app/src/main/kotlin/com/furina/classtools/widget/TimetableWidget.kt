@@ -124,8 +124,13 @@ internal object DesktopWidgets {
         val signature = listOf(com.furina.classtools.BuildConfig.VERSION_CODE, scheme.primary, scheme.surfaceContainerLow, scheme.tertiary).hashCode()
         components.keys.forEach { kind ->
             if (prefs.getInt(kind.name, 0) != signature) {
+                val height = when (kind) {
+                    WidgetKind.TIMETABLE -> 240
+                    WidgetKind.WORKBENCH -> 200
+                    else -> 220
+                }
                 val accepted = runCatching { manager.setWidgetPreview(ComponentName(context, components.getValue(kind)),
-                    category, WidgetPreviews.render(context, kind, 320, if (kind == WidgetKind.TIMETABLE || kind == WidgetKind.WORKBENCH) 240 else 220)) }.getOrDefault(false)
+                    category, WidgetPreviews.render(context, kind, 320, height)) }.getOrDefault(false)
                 if (accepted) prefs.edit().putInt(kind.name, signature).apply()
             }
         }

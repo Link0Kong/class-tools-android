@@ -15,7 +15,7 @@ internal data class WidgetLayout(
     val rows: WidgetRowStyle,
 ) {
     companion object {
-        fun fit(width: Float, height: Float, metrics: DisplayMetrics): WidgetLayout {
+        fun fit(width: Float, height: Float, metrics: DisplayMetrics, workbench: Boolean = false): WidgetLayout {
             fun text(sp: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, metrics) / metrics.density
             val fontWidth = (text(14f) / 14f).coerceAtLeast(1f)
             val headingHeight = (text(14f) + text(11f)) * 1.2f
@@ -42,6 +42,7 @@ internal data class WidgetLayout(
                     check = availableWidth >= 48 + 67 * fontWidth,
                     tileOverview = availableWidth >= 48 + 72 * fontWidth,
                     tileCheck = availableWidth >= 96 + 106 * fontWidth,
+                    workbenchAgenda = workbench && availableWidth >= 218 * fontWidth && height >= header + 3 * row + 32,
                 ),
             )
         }
@@ -56,14 +57,15 @@ internal data class WidgetRowStyle(
     val check: Boolean,
     val tileOverview: Boolean,
     val tileCheck: Boolean,
+    val workbenchAgenda: Boolean = false,
 ) {
-    fun key(): String = listOf(sideDetails, grouped, excerpt, twoColumns, check, tileOverview, tileCheck)
+    fun key(): String = listOf(sideDetails, grouped, excerpt, twoColumns, check, tileOverview, tileCheck, workbenchAgenda)
         .joinToString("") { if (it) "1" else "0" }
 
     companion object {
         fun fromKey(key: String): WidgetRowStyle {
             fun on(index: Int) = key.getOrNull(index) == '1'
-            return WidgetRowStyle(on(0), on(1), on(2), on(3), on(4), on(5), on(6))
+            return WidgetRowStyle(on(0), on(1), on(2), on(3), on(4), on(5), on(6), on(7))
         }
     }
 }

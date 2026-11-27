@@ -66,7 +66,8 @@ class DesktopWidgetHostTest {
         assertEquals(WidgetPalette.LILAC, WidgetPalette.get(app, 27))
         assertEquals(WidgetPalette.SYSTEM, WidgetPalette.get(app, 28))
         val model = widgetContent(WidgetKind.WORKBENCH, true, null, feed, 5)
-        assertTrue(model.first.title.contains("5 待办"))
+        assertEquals("报告 1", model.first.title)
+        assertEquals("5 待办", model.compactStatus)
         val root = host(WidgetViews.forHost(app, WidgetKind.WORKBENCH, model, options(300,245), WidgetPalette.LILAC),300,245)
         assertEquals(app.getColor(WidgetPalette.LILAC.accent), root.findViewById<TextView>(R.id.widget_heading).currentTextColor)
     }
@@ -111,7 +112,9 @@ class DesktopWidgetHostTest {
         assertTrue(personal.rows.any { it.homeworkId == "h9" })
         fun homeworkLines(kind: WidgetKind, source: WidgetFeed): List<String> {
             val content = widgetContent(kind, true, null, source, now)
-            return (listOf(content.first) + content.more).filter { it.destination == "class-homework" }.map { it.homeworkId }
+            val lines = if (kind == WidgetKind.WORKBENCH) content.sections.flatMap { it.lines }
+                else listOf(content.first) + content.more
+            return lines.filter { it.destination == "class-homework" }.map { it.homeworkId }
         }
         for (kind in listOf(WidgetKind.TASKS, WidgetKind.WORKBENCH)) {
             assertEquals(listOf("h10"), homeworkLines(kind, data))
@@ -337,9 +340,57 @@ class DesktopWidgetHostTest {
         assertTrue(title.height >= title.layout.height)
         assertTrue(detail.height >= detail.layout.height)
         assertTrue(detail.bottom <= right.findViewById<View>(R.id.widget_tile_primary).height)
-        assertEquals("班级通知 · 12", right.findViewById<TextView>(R.id.widget_tile_caption).text.toString())
+        assertEquals("通知 · 12", right.findViewById<TextView>(R.id.widget_tile_caption).text.toString())
+        assertEquals("列表", right.findViewById<TextView>(R.id.widget_tile_open).text.toString())
         assertEquals("打开班级通知列表", right.findViewById<View>(R.id.widget_tile_open).contentDescription)
         assertEquals(View.GONE, left.findViewById<View>(R.id.widget_tile_open).visibility)
+    }
+
+    @Test fun workbenchStartsWithOngoingCourseAndUsesRemainingSpaceForAllSections() {
+        val now = System.currentTimeMillis()
+        val course = SessionInfo("交互设计", "创意楼 302", 1, 2, "09:50", "11:20", "",
+            now - 60_000, now + 2_460_000, SessionState.ONGOING)
+        val kind = WidgetKind.WORKBENCH
+        val model = widgetContent(kind, true, TtPlan(true, 3, listOf(course), TodayState.HAS, null), feed, now)
+        assertEquals("11:20 下课", model.compactStatus)
+        assertEquals("创意楼 302", model.compactDetail)
+        assertEquals("tt", model.first.destination)
+        val compact = host(WidgetViews.forHost(app, kind, model, options(132, 60)), 132, 60)
+        assertEquals("交互设计", compact.findViewById<TextView>(R.id.widget_course).text.toString())
+        assertEquals("总览", compact.findViewById<TextView>(R.id.widget_summary_open).text.toString())
+        compact.findViewById<View>(R.id.widget_primary).performClick()
+        assertEquals(model.first.focus, shadowOf(app).nextStartedActivity.getStringExtra(com.furina.classtools.MainActivity.CARD_FOCUS))
+
+        val wide = WidgetLayout.fit(375f, 200f, app.resources.displayMetrics, workbench = true).rows
+        val tall = WidgetLayout.fit(375f, 290f, app.resources.displayMetrics, workbench = true).rows
+        val flat = WidgetRows.entries(kind, model, wide).filterIsInstance<WidgetEntry.Tiles>()
+        assertEquals(listOf(2, 2), flat.map { it.sections.size })
+        val entries = WidgetRows.entries(kind, model, tall).filterIsInstance<WidgetEntry.Tiles>()
+        assertEquals(listOf(1, 2, 1), entries.map { it.sections.size })
+        assertTrue(entries.first().featured)
+        assertEquals(model.sections, entries.flatMap { it.sections })
+        val hero = WidgetRows.render(app, WidgetPaint.resolve(app, WidgetPalette.SYSTEM), kind,
+            entries.first(), tall, null, interactive = false).apply(app, android.widget.FrameLayout(app))
+        assertEquals("09:50–11:20", hero.findViewById<TextView>(R.id.widget_tile_detail).text.toString())
+        assertEquals("创意楼 302", hero.findViewById<TextView>(R.id.widget_tile_context).text.toString())
+    }
+
+    @Test fun workbenchExposesNewTaskAndInlineCompletionInTwoColumns() {
+        val kind = WidgetKind.WORKBENCH
+        val tasks = WidgetList(1, listOf(WidgetLine("核对分组", "今天截止", focus = "task-focus", canComplete = true)), 0)
+        val model = widgetContent(kind, true, null, WidgetFeed(tasks = tasks), 0)
+        val options = options(375, 200)
+        val board = host(WidgetViews.forHost(app, kind, model, options, owner = "debug:9999"), 375, 200)
+        board.findViewById<View>(R.id.widget_add).performClick()
+        assertEquals(com.furina.classtools.MainActivity.WIDGET_ACTION + "new-task", shadowOf(app).nextStartedActivity.action)
+        val style = WidgetLayout.fit(375f, 200f, app.resources.displayMetrics, workbench = true).rows
+        val row = WidgetRows.render(app, WidgetPaint.resolve(app, WidgetPalette.SYSTEM), kind,
+            WidgetRows.entries(kind, model, style).first(), style, "debug:9999", interactive = false)
+            .apply(app, android.widget.FrameLayout(app))
+        val task = row.findViewById<View>(R.id.widget_tile_right)
+        assertEquals(View.VISIBLE, task.findViewById<View>(R.id.widget_row_check).visibility)
+        assertEquals("完成任务，核对分组", task.findViewById<View>(R.id.widget_row_check).contentDescription)
+        assertEquals(View.GONE, task.findViewById<View>(R.id.widget_tile_open).visibility)
     }
 
     @Test fun restoredWidgetIdsKeepTheirOwnPaletteEvenWhenIdsOverlap() {
