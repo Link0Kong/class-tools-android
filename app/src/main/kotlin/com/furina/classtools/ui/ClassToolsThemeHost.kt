@@ -31,6 +31,7 @@ fun ClassToolsThemeHost(
     content: @Composable () -> Unit,
 ) {
     val backgroundStore = container.backgroundStore
+    val selection by backgroundStore.selection.collectAsStateWithLifecycle()
     LaunchedEffect(container) {
         withFrameNanos { }
         container.refreshRemoteConfig()
@@ -55,6 +56,7 @@ fun ClassToolsThemeHost(
 
     ClassToolsTheme(
         darkTheme = darkTheme,
+        preset = selection.preset,
         dynamicColor = dynamicColor,
         immersiveLight = immersiveLight,
     ) {

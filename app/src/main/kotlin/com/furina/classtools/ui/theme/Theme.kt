@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.ui.graphics.lerp
+import com.furina.classtools.data.background.CtBackgroundPalette
+import com.furina.classtools.data.background.CtBackgroundPreset
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -182,6 +185,20 @@ internal fun appColorScheme(context: Context, dark: Boolean, monet: Boolean): Co
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else if (dark) CtDarkColorScheme else CtLightColorScheme
 
+/** Keep brand card surfaces paired with their content across presets and system wallpaper palettes. */
+internal fun darkBrandCards(platform: ColorScheme, preset: CtBackgroundPreset): ColorScheme {
+    val tint = CtBackgroundPalette.of(preset, true).second
+    val brand = CtDarkColorScheme
+    fun card(base: androidx.compose.ui.graphics.Color) = lerp(base, tint, 0.32f)
+    return platform.copy(
+        surface = card(brand.surface), surfaceVariant = card(brand.surfaceVariant),
+        surfaceContainerLowest = card(brand.surfaceContainerLowest), surfaceContainerLow = card(brand.surfaceContainerLow),
+        surfaceContainer = card(brand.surfaceContainer), surfaceContainerHigh = card(brand.surfaceContainerHigh),
+        surfaceContainerHighest = card(brand.surfaceContainerHighest), onSurface = brand.onSurface,
+        onSurfaceVariant = brand.onSurfaceVariant, outline = brand.outline, outlineVariant = brand.outlineVariant,
+    )
+}
+
 private fun ColorScheme.semanticColors(dark: Boolean) = ctColorOf(dark).copy(
     background = surface, surface = surface, containerLow = surfaceContainerLow,
     container = surfaceContainer, containerHigh = surfaceContainerHigh, containerHighest = surfaceContainerHighest,
@@ -219,13 +236,17 @@ fun ClassToolsTheme(
     spacing: CtSpacing = CtSpacing(),
     immersiveLight: CtLightSetting = CtLightSetting.Default,
     lightCapabilityOverride: CtLightCapability? = null,
+    preset: CtBackgroundPreset = CtBackgroundPreset.DEFAULT,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val monet = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val colorScheme = remember(context, configuration, darkTheme, monet) { appColorScheme(context, darkTheme, monet) }
-    val semantic = remember(colorScheme, darkTheme, monet) { if (monet) colorScheme.semanticColors(darkTheme) else ctColorOf(darkTheme) }
+    val colorScheme = remember(context, configuration, darkTheme, monet, preset) {
+        val platform = appColorScheme(context, darkTheme, monet)
+        if (darkTheme) darkBrandCards(platform, preset) else platform
+    }
+    val semantic = remember(colorScheme, darkTheme, monet) { if (monet || darkTheme) colorScheme.semanticColors(darkTheme) else ctColorOf(darkTheme) }
     val accents = remember(colorScheme, darkTheme, monet) { if (monet) colorScheme.toolAccents(darkTheme) else ctAccentsOf(darkTheme) }
 
     // 系统栏图标随主题切换：深色模式状态栏/导航栏图标用浅色，避免「黑字压暗底」不可读。
