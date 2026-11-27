@@ -166,8 +166,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 26
         targetSdk = 37
-        versionCode = 181
-        versionName = "1.0.0-beta96"
+        versionCode = 182
+        versionName = "1.0.0-beta97"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -179,6 +179,7 @@ android {
         // 公开 Publishable Key（role=anon，设计上公开）。REST/ECS 地址按 buildType 注入（见 buildTypes）。
         val publishableKey = (project.findProperty("ct.publishableKey") as String?).orEmpty()
         buildConfigField("String", "PUBLISHABLE_KEY", buildConfigString(publishableKey))
+        buildConfigField("String", "HOME_CONTEXT_BASE_URL", buildConfigString(gradleProp("ct.homeContextBaseUrl").orEmpty()))
 
         // OPPO PUSH 密钥（app/oppo.properties；空串 = 未配置 → 客户端跳过注册/上传）。
         buildConfigField("String", "OPPO_PUSH_APP_KEY", buildConfigString(oppoAppKey))
@@ -256,6 +257,7 @@ android {
             buildConfigField("String", "UPDATE_BASE_URL", buildConfigString(releaseUpdateUrl))
             buildConfigField("String", "MAP_BASE_URL", buildConfigString(releaseMapUrl))
             buildConfigField("String", "WEB_BASE_URL", buildConfigString(releaseWebBaseUrl))
+            buildConfigField("String", "HOME_CONTEXT_BASE_URL", buildConfigString(gradleProp("ct.homeContextBaseUrl") ?: releaseEcsBase))
         }
     }
 

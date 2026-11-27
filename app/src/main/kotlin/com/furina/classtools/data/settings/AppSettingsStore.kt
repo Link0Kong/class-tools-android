@@ -12,9 +12,18 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.furina.classtools.ui.theme.AppearanceMode
 import com.furina.classtools.ui.theme.AppearanceSettings
 import com.furina.classtools.ui.theme.CtLightSetting
+import com.furina.classtools.data.network.NetJson
+import com.furina.classtools.features.home.HOME_RECENT_MS
+import com.furina.classtools.features.home.HomeContentPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+
+@kotlinx.serialization.Serializable
+internal data class HomeContentSettings(
+    val preferences: HomeContentPreferences = HomeContentPreferences(),
+    val seen: Map<String, Long> = emptyMap(),
+)
 
 /**
  * App 级本机外观设置（不进云端 userdata：主题是设备偏好，与账号无关）。
@@ -141,6 +150,41 @@ class AppSettingsStore(private val context: Context) {
     suspend fun setImmersiveLight(setting: CtLightSetting) {
         startupPrefs.edit().putString(STARTUP_KEY_IMMERSIVE_LIGHT, setting.storageValue).apply()
         store.edit { prefs -> prefs[KEY_IMMERSIVE_LIGHT] = setting.storageValue }
+    }
+
+    internal fun homeContent(account: String): Flow<HomeContentSettings> {
+        val key = homeKey(account)
+        return store.data.map { decodeHomeContent(it[key]) }
+    }
+
+    internal suspend fun changeHomeContent(account: String, change: (HomeContentPreferences) -> HomeContentPreferences) {
+        val key = homeKey(account)
+        store.edit { prefs ->
+            val current = decodeHomeContent(prefs[key])
+            prefs[key] = NetJson.encodeToString(HomeContentSettings.serializer(), current.copy(
+                preferences = change(current.preferences),
+            ))
+        }
+    }
+
+    internal suspend fun recordHomePhrase(account: String, id: String, seenAt: Long) {
+        val key = homeKey(account)
+        store.edit { prefs ->
+            val current = decodeHomeContent(prefs[key])
+            val seen = (current.seen + (id to maxOf(seenAt, current.seen[id] ?: 0L)))
+                .filterValues { it <= seenAt && seenAt - it < HOME_RECENT_MS }
+                .toList().sortedByDescending { it.second }.take(96).toMap()
+            prefs[key] = NetJson.encodeToString(HomeContentSettings.serializer(), current.copy(seen = seen))
+        }
+    }
+
+    private fun decodeHomeContent(value: String?): HomeContentSettings = value?.let {
+        runCatching { NetJson.decodeFromString<HomeContentSettings>(it) }.getOrNull()
+    } ?: HomeContentSettings()
+
+    private fun homeKey(account: String): Preferences.Key<String> {
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(account.encodeToByteArray())
+        return stringPreferencesKey("home_content_" + digest.take(16).joinToString("") { "%02x".format(it) })
     }
 
     private companion object {

@@ -571,6 +571,12 @@ class AppContainer(context: Context) {
 
     /** 本机外观偏好（壁纸取色等）：设备级设置，不进云端 userdata。 */
     val appSettings: AppSettingsStore = AppSettingsStore(appContext)
+    internal val homeContextRepository by lazy {
+        com.furina.classtools.features.home.HomeContextRepository(
+            BuildConfig.HOME_CONTEXT_BASE_URL, File(appContext.cacheDir, "home-phrases-v1.json"),
+            allowLoopback = BuildConfig.DEBUG,
+        )
+    }
 
     /** 运行时权限（通知/日历）：四态判定 + 请求 + 跳系统设置。 */
     val permissionController: PermissionController = AndroidPermissionController(appContext)

@@ -24,7 +24,6 @@ import com.furina.classtools.data.tasks.TaskRepository
 import com.furina.classtools.data.timetable.TimetableRepository
 import com.furina.classtools.data.timetable.TtFailureKind
 import com.furina.classtools.data.timetable.TtLoadResult
-import com.furina.classtools.data.timetable.TtSnapshot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -134,7 +133,7 @@ internal class HomeRefresh(parent: CoroutineScope, private val timeoutMillis: Lo
 
 internal class HomeDataLoads(
     private val controller: HomeRefresh,
-    val timetable: HomeLoad<TtSnapshot>?,
+    val timetable: HomeLoad<HomeTimetableSnapshot>?,
     val tasks: HomeLoad<Unit>?,
     val homework: HomeLoad<List<HomeworkRow>>?,
     val notices: HomeLoad<NoticesData>?,
@@ -191,9 +190,14 @@ internal fun rememberHomeDataLoads(
     }
 }
 
-private fun TimetableRepository.homeLoad() = HomeLoad(cached = { cached() }) { force ->
+private fun TimetableRepository.homeLoad() = HomeLoad(
+    cached = { cached()?.let { HomeTimetableSnapshot(it) } },
+    keepErrorWhileLoading = true,
+) { force ->
     when (val result = load(force)) {
-        is TtLoadResult.Success -> HomeLoadResult(result.snapshot, result.refreshError)
+        is TtLoadResult.Success -> HomeLoadResult(
+            HomeTimetableSnapshot(result.snapshot, result.source, result.fetchedAt), result.refreshError,
+        )
         is TtLoadResult.Failure -> if (result.kind == TtFailureKind.EMPTY) HomeLoadResult()
             else HomeLoadResult(error = result.message)
     }

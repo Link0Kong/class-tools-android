@@ -218,7 +218,7 @@ fun HomeScreen(
         initialNotices = initialNoticesData,
     )
     val timetableState = loads.timetable?.state
-    val ttSnapshot = timetableState?.data
+    val ttSnapshot = timetableState?.data?.snapshot
     val ttLoading = timetableState?.loading == true
     val ttPlan = remember(ttSnapshot, currentTime, initialTtPlan) {
         ttSnapshot?.let { TtCalendar.plan(it, currentTime, zone) } ?: initialTtPlan
@@ -295,10 +295,9 @@ fun HomeScreen(
     val hazeState = rememberHazeState()
     val density = LocalDensity.current
     val stickyProgress = ctStickyHeaderProgress(scrollState.value.toFloat(), density.density)
-    val greeting = remember(today, currentTime) {
-        HomeWorkbenchLogic.greeting(Instant.ofEpochMilli(currentTime).atZone(zone).hour)
+    val contextCourse = remember(ttPlan, timetableState, currentTime, today, zone) {
+        homeCourseContext(ttPlan, timetableState, currentTime, today, zone)
     }
-    val todayLabel = remember(today) { HomeWorkbenchLogic.dateText(today) }
 
     ExpressiveBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -335,8 +334,6 @@ fun HomeScreen(
                                 CtRootHeader(
                                     title = "工作台",
                                     collapse = ctHeaderCollapseProgress(scrollState.value.toFloat()),
-                                    eyebrow = "",
-                                    subtitle = "$todayLabel · $greeting",
                                     actions = {
                                         CtGlassIconButton(
                                             icon = Icons.Rounded.QrCodeScanner,
@@ -357,6 +354,15 @@ fun HomeScreen(
                                     },
                                 )
                             }
+                            HomeContextCard(
+                                session = session,
+                                course = contextCourse,
+                                now = currentTime,
+                                zone = zone,
+                                active = pageActive,
+                                reduceMotion = reduceMotion,
+                                onOpenCourse = { openCard("tt", it.encode()) },
+                            )
                             HomeWorkbenchColumns(layout, updates = {
                                 HomeReveal(enabled = animateEntrance, index = 1) {
                                     HomeNoticesCard(

@@ -84,6 +84,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -109,6 +110,7 @@ import com.furina.classtools.data.background.CtBackgroundSelection
 import com.furina.classtools.data.background.LocalBackgroundStore
 import com.furina.classtools.data.settings.AppSettingsStore
 import com.furina.classtools.data.settings.LocalAppSettingsStore
+import com.furina.classtools.ui.navigation.navigationAccount
 import com.furina.classtools.data.update.UpdateCheckResult
 import com.furina.classtools.data.update.UpdateCheckStatus
 import com.furina.classtools.data.update.UpdateManager
@@ -368,6 +370,7 @@ fun ProfileScreen(
                     )
                     BackgroundSection(store = backgroundStore, selection = storedBackground)
                     AppearanceSection(
+                        homeAccount = session.navigationAccount,
                         appearanceMode = effectiveAppearanceMode,
                         onAppearanceModeChange = ::changeAppearanceMode,
                         hideStatusBar = effectiveHideStatusBar,
@@ -763,6 +766,7 @@ private fun NotifySection(
 
 @Composable
 private fun AppearanceSection(
+    homeAccount: String,
     appearanceMode: AppearanceMode,
     onAppearanceModeChange: (AppearanceMode) -> Unit,
     hideStatusBar: Boolean,
@@ -771,9 +775,10 @@ private fun AppearanceSection(
     onImmersiveLightChange: (CtLightSetting) -> Unit,
 ) {
     SectionTitle("外观")
+    val settings = LocalAppSettingsStore.current
+    var homeContentOpen by rememberSaveable(homeAccount) { mutableStateOf(false) }
     GroupCard {
         AppearanceModeRows(mode = appearanceMode, onModeChange = onAppearanceModeChange)
-        val settings = LocalAppSettingsStore.current
         if (android.os.Build.VERSION.SDK_INT >= 31 && settings != null) {
             val monet by settings.dynamicColor.collectAsStateWithLifecycle(initialValue = settings.startupDynamicColor())
             val scope = rememberCoroutineScope()
@@ -810,6 +815,13 @@ private fun AppearanceSection(
                 )
             },
         )
+        if (settings != null) {
+            RowDivider()
+            ActionRow(Icons.Rounded.LightMode, title = "首页内容", onClick = { homeContentOpen = true })
+        }
+    }
+    if (homeContentOpen && settings != null) {
+        HomeContentSettingsSheet(settings, homeAccount, onDismiss = { homeContentOpen = false })
     }
 }
 

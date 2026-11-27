@@ -300,7 +300,7 @@ class TimetableNavigationInteractionTest {
     private fun expectWorkbenchAfterLoading() {
         expectWorkbench()
         // Compare placement after the cards above the timetable have switched to their loaded height.
-        for (selector in listOf(By.desc("同步通知…"), By.text("更新通知…"), By.text("更新班级作业…"))) {
+        for (selector in listOf(By.desc("同步通知…"), By.text("更新通知…"), By.text("更新班级作业…"), By.text("正在读取课表"))) {
             assertTrue(device.wait(Until.gone(selector), 10_000))
         }
         device.waitForIdle(3_000)

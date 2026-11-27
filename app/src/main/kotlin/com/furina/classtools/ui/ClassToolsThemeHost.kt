@@ -11,6 +11,7 @@ import com.furina.classtools.AppContainer
 import androidx.compose.runtime.withFrameNanos
 import com.furina.classtools.data.background.LocalBackgroundStore
 import com.furina.classtools.data.settings.LocalAppSettingsStore
+import com.furina.classtools.features.home.LocalHomeContextSource
 import com.furina.classtools.ui.components.CtFeedbackRoot
 import com.furina.classtools.ui.theme.ClassToolsTheme
 import com.furina.classtools.ui.theme.CtImmersiveStatusBar
@@ -63,6 +64,7 @@ fun ClassToolsThemeHost(
         // 「我的 → 外观」直接读写本机设置；背景 Store 同层提供（全局背景层订阅）。
         CompositionLocalProvider(
             LocalAppSettingsStore provides container.appSettings,
+            LocalHomeContextSource provides container.homeContextRepository,
             LocalBackgroundStore provides backgroundStore,
         ) {
             // 全局隐藏系统状态栏（下滑临时显示）；关闭时恢复 statusBarsPadding 的常规行为。
