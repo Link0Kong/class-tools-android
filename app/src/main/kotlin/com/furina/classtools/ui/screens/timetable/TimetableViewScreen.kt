@@ -486,7 +486,13 @@ fun TimetableViewScreen(
         onOffset = { swipeOffset = it },
         onCommit = { dx, dy ->
             val direction = if (dx < 0) TimetableSwipe.Direction.NEXT else TimetableSwipe.Direction.PREV
-            if (TimetableSwipe.shouldCommit(dx, dy)) {
+            // 边界（第一周/最后周、周一/周日）没有目标：只回弹，避免长滑后内容停在半路。
+            val hasTarget = when (viewMode) {
+                TimetableViewMode.DAY -> TimetableDayLogic.canNavigate(selectedDay, direction)
+                TimetableViewMode.WEEK ->
+                    displayWeek != null && TimetableWeekLogic.navigate(displayWeek, direction, maxWeek) != null
+            }
+            if (hasTarget && TimetableSwipe.shouldCommit(dx, dy)) {
                 suppressClickUntil = System.currentTimeMillis() + TimetableSwipe.TAP_GUARD_MS
                 goSwipe(direction)
             } else {
