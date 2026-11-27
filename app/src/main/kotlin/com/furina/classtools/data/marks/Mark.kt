@@ -40,6 +40,7 @@ data class MarksSnapshot(
     val hwDone: Map<String, Boolean> = emptyMap(),
     val ntPin: Map<String, Boolean> = emptyMap(),
     val ntDone: Map<String, Boolean> = emptyMap(),
+    internal val ownerSid: String? = null,
 ) {
     fun isDone(kind: MarkKind, ref: String): Boolean = when (kind) {
         MarkKind.HW -> hwDone[ref] == true
@@ -67,7 +68,7 @@ data class MarksSnapshot(
                 null -> Unit
             }
         }
-        return MarksSnapshot(hwDone = hw, ntPin = nt, ntDone = done)
+        return copy(hwDone = hw, ntPin = nt, ntDone = done)
     }
 
     private fun Map<String, Boolean>.updated(key: String, value: Boolean): Map<String, Boolean> =

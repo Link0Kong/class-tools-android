@@ -1,6 +1,7 @@
 package com.furina.classtools.data.network
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -59,7 +60,7 @@ fun interface HttpTransport {
     suspend fun execute(request: ApiRequest): ApiResponse
 }
 
-/** OkHttp 实现：10s 超时、禁用自动重试（重试策略由 [ApiClient] 控制）、调用方负责 Dispatchers。 */
+/** 执行阻塞网络 I/O，并在调用方取消或超时时关闭对应的 OkHttp Call。 */
 class OkHttpTransport(
     private val client: okhttp3.OkHttpClient = defaultClient(),
 ) : HttpTransport {
@@ -78,19 +79,22 @@ class OkHttpTransport(
                 request.body?.toRequestBody(mediaType) ?: EMPTY_REQUEST_BODY,
             )
         }
-        client.newCall(builder.build()).let { call ->
-            // 超时分级（2026-11-18）：按调用设置整体超时（OkHttp Call.timeout，毫秒级）。
-            val timeoutMs = request.timeoutMs
-            if (timeoutMs != null && timeoutMs > 0) {
-                call.timeout().timeout(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-            }
-            call.execute().use { response ->
-                val headers = LinkedHashMap<String, String>()
-                for (i in 0 until response.headers.size) {
-                    headers[response.headers.name(i)] = response.headers.value(i)
+        val call = client.newCall(builder.build())
+        val timeoutMs = request.timeoutMs
+        if (timeoutMs != null && timeoutMs > 0) {
+            call.timeout().timeout(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        }
+        suspendCancellableCoroutine { continuation ->
+            continuation.invokeOnCancellation { call.cancel() }
+            continuation.resumeWith(runCatching {
+                call.execute().use { response ->
+                    val headers = LinkedHashMap<String, String>()
+                    for (i in 0 until response.headers.size) {
+                        headers[response.headers.name(i)] = response.headers.value(i)
+                    }
+                    ApiResponse(status = response.code, body = response.body.string(), headers = headers)
                 }
-                ApiResponse(status = response.code, body = response.body.string(), headers = headers)
-            }
+            })
         }
     }
 

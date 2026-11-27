@@ -31,30 +31,32 @@ import androidx.lifecycle.repeatOnLifecycle
  * Intent 从已登录的 MainActivity 传入，不落盘、不写日志。
  */
 class ToolActivity : ComponentActivity() {
+    private var transitionId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableClassToolsEdgeToEdge()
         super.onCreate(savedInstanceState)
         val launch = ToolLaunchArgs.fromIntent(intent)
+        transitionId = launch?.transitionId
+        SharedViewMotion.toolCreated(transitionId)
         if (launch == null) {
-            // 参数不完整/工具 id 非法：不在空白页停留，直接回主界面。
-            finish()
+            finishToMainHost()
             return
         }
         val container = (application as ClassToolsApp).container
         setContent {
             val session by produceState(
                 initialValue = container.currentSession?.takeIf {
-                    it.sid == launch.session.sid && it.isLikelyValid() && container.isSessionPrepared(it)
+                    launch.belongsTo(it) && it.isLikelyValid() && container.isSessionPrepared(it)
                 },
             ) {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                     container.sessionStore.state.collect { state ->
                         val saved = (state as? SessionState.SignedIn)?.session
-                        if (saved == null || !saved.isLikelyValid() || saved.sid != launch.session.sid ||
+                        if (saved == null || !saved.isLikelyValid() || !launch.belongsTo(saved) ||
                             (ToolCatalog.byId(launch.toolId)?.adminOnly == true && !saved.isAdmin)) {
                             value = null
-                            finish()
+                            finishToMainHost()
                         } else {
                             container.prepareSession(saved)
                             value = saved
@@ -68,11 +70,11 @@ class ToolActivity : ComponentActivity() {
                         MainNavHost(
                             container = container,
                             session = restored,
-                            onSignOut = { finish() },
+                            onSignOut = ::finishToMainHost,
                             startToolId = launch.toolId,
                             startToolPick = launch.pick,
                             standaloneTool = true,
-                            onCloseStandaloneTool = { finishWithSharedViewMotion() },
+                            onCloseStandaloneTool = ::finishToMainHost,
                         )
                     }
                 }
@@ -80,9 +82,20 @@ class ToolActivity : ComponentActivity() {
         }
     }
 
-    private fun finishWithSharedViewMotion() {
+    override fun onDestroy() {
+        if (!isChangingConfigurations) SharedViewMotion.toolDestroyed(transitionId)
+        super.onDestroy()
+    }
+
+    private fun finishToMainHost() {
         if (isFinishing) return
-        SharedViewMotion.finishWithSharedView(this)
+        if (isTaskRoot) {
+            startActivity(Intent(this, MainActivity::class.java).apply {
+                action = MainActivity.WIDGET_ACTION + "home"
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            })
+        }
+        SharedViewMotion.finishWithSharedView(this, transitionId)
     }
 
     companion object {
@@ -90,8 +103,9 @@ class ToolActivity : ComponentActivity() {
          * 显式 Intent：Session 只在本进程/本任务内传给不导出的工具宿主。
          * 不把 token 写日志、不落盘（MainActivity 的 DataStore 才是唯一持久化点）。
          */
-        fun createIntent(context: Context, toolId: String, pick: Boolean, session: Session): Intent =
+        fun createIntent(context: Context, toolId: String, pick: Boolean, session: Session, transitionId: String? = null): Intent =
             Intent(context, ToolActivity::class.java).apply {
+                putExtra(ToolExtras.TRANSITION_ID, transitionId)
                 putExtra(ToolExtras.TOOL_ID, toolId)
                 putExtra(ToolExtras.TOOL_PICK, pick)
                 putExtra(ToolExtras.SID, session.sid)
@@ -109,6 +123,7 @@ class ToolActivity : ComponentActivity() {
 
 /** ToolActivity Intent 的 key 集中定义，避免发送/解析两处字符串漂移。 */
 private object ToolExtras {
+    const val TRANSITION_ID = "com.furina.classtools.extra.TOOL_TRANSITION_ID"
     const val TOOL_ID = "com.furina.classtools.extra.TOOL_ID"
     const val TOOL_PICK = "com.furina.classtools.extra.TOOL_PICK"
     const val SID = "com.furina.classtools.extra.SID"
@@ -127,7 +142,11 @@ internal data class ToolLaunchArgs(
     val toolId: String,
     val pick: Boolean,
     val session: Session,
+    val transitionId: String? = null,
 ) {
+    fun belongsTo(current: Session): Boolean =
+        session.sid == current.sid && session.debug == current.debug && session.issuedAt == current.issuedAt
+
     companion object {
         fun fromIntent(intent: Intent?): ToolLaunchArgs? {
             if (intent == null) return null
@@ -141,6 +160,7 @@ internal data class ToolLaunchArgs(
             return ToolLaunchArgs(
                 toolId = toolId,
                 pick = intent.getBooleanExtra(ToolExtras.TOOL_PICK, false),
+                transitionId = intent.getStringExtra(ToolExtras.TRANSITION_ID),
                 session = Session(
                     sid = sid,
                     name = intent.getStringExtra(ToolExtras.NAME).orEmpty(),

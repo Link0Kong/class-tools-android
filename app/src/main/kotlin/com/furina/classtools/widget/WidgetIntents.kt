@@ -13,20 +13,21 @@ internal object WidgetIntents {
     fun template(context: Context, widgetId: Int): PendingIntent =
         PendingIntent.getActivity(context, widgetId, Intent(context, WidgetRowActivity::class.java), PendingIntent.FLAG_MUTABLE)
 
-    fun target(context: Context, line: WidgetLine, kind: WidgetKind) =
-        open(context, destination(line, kind), focus(line))
+    fun target(context: Context, line: WidgetLine, kind: WidgetKind, owner: String? = null) =
+        open(context, destination(line, kind), focus(line), owner)
 
-    fun line(line: WidgetLine, kind: WidgetKind) =
-        Intent().setData(uri(destination(line, kind), focus(line)))
+    fun line(line: WidgetLine, kind: WidgetKind, owner: String? = null) =
+        Intent().setData(uri(destination(line, kind), focus(line))).putExtra(MainActivity.CARD_ACCOUNT, owner)
 
-    fun open(context: Context, destination: String, focus: String = ""): PendingIntent =
-        PendingIntent.getActivity(context, 0, activityIntent(context, destination, focus),
+    fun open(context: Context, destination: String, focus: String = "", owner: String? = null): PendingIntent =
+        PendingIntent.getActivity(context, 0, activityIntent(context, destination, focus, owner),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
-    fun activityIntent(context: Context, destination: String, focus: String): Intent =
+    fun activityIntent(context: Context, destination: String, focus: String, owner: String? = null): Intent =
         Intent(context, MainActivity::class.java).setAction(MainActivity.WIDGET_ACTION + destination)
             .setData(uri(destination, focus))
             .putExtra(MainActivity.CARD_FOCUS, focus)
+            .putExtra(MainActivity.CARD_ACCOUNT, owner)
             .putExtra(ReminderIntentFactory.EXTRA_TOOL_ID, if (destination == "class-homework" || destination == "new-task") "hw" else destination)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
@@ -47,7 +48,8 @@ class WidgetRowActivity : Activity() {
         if (data?.scheme == "classtools-widget") {
             when {
                 data.authority == "open" && destination in setOf("tt", "nt", "hw", "class-homework", "home") -> {
-                    startActivity(WidgetIntents.activityIntent(this, requireNotNull(destination), data.getQueryParameter("focus").orEmpty()))
+                    startActivity(WidgetIntents.activityIntent(this, requireNotNull(destination), data.getQueryParameter("focus").orEmpty(),
+                        intent.getStringExtra(MainActivity.CARD_ACCOUNT)))
                 }
                 data.authority == "action" && destination == WidgetCommandReceiver.COMPLETE -> {
                     sendBroadcast(Intent(this, WidgetCommandReceiver::class.java).setData(data))

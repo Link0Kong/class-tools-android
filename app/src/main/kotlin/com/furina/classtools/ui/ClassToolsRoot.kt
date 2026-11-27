@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,6 +37,8 @@ import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import com.furina.classtools.ui.components.CtToastBus
 import com.furina.classtools.ui.components.update.UpdateHost
 import com.furina.classtools.ui.navigation.MainNavHost
+import com.furina.classtools.ui.navigation.IncomingNavigation
+import com.furina.classtools.ui.navigation.navigationAccount
 import com.furina.classtools.ui.screens.identity.IdentityScreen
 import com.furina.classtools.ui.theme.findActivity
 import kotlinx.coroutines.launch
@@ -44,14 +47,13 @@ import kotlinx.coroutines.launch
  * App 根：根据本地会话状态在「启动页 / 身份门禁 / 主界面」之间切换。
  * 身份门禁是唯一入口（对齐站点红线：先学号+姓名，后加载班级数据）。
  *
- * @param pendingToolId 通知点击带入的工具 id（hw/tt；登录后跳转一次）
- * @param pendingNoticeId OPPO PUSH 通知点击带入的通知 id（登录后进通知页并定位）
+ * [incoming] 在本机会话就绪后由导航宿主消费。
  */
 @Composable
 fun ClassToolsRoot(
     container: AppContainer,
-    pendingRoute: String? = null,
-    onRouteConsumed: () -> Unit = {},
+    incoming: IncomingNavigation? = null,
+    onRouteConsumed: (String) -> Unit = {},
 ) {
     val sessionState by container.sessionStore.state.collectAsStateWithLifecycle(
         initialValue = SessionState.Loading,
@@ -120,7 +122,7 @@ fun ClassToolsRoot(
     Box(modifier = Modifier.fillMaxSize()) {
         CtContainerTransformHost {
         when (val state = sessionState) {
-            SessionState.Loading -> BootSplash(pendingRoute)
+            SessionState.Loading -> BootSplash(incoming?.route)
 
             SessionState.SignedOut -> IdentityScreen(
                 authRepository = container.authRepository,
@@ -180,21 +182,23 @@ fun ClassToolsRoot(
                 if (!state.session.isLikelyValid() ||
                     (preparedSession != state.session && !container.isSessionPrepared(state.session))
                 ) {
-                    BootSplash(pendingRoute)
+                    BootSplash(incoming?.route)
                 } else {
-                    MainNavHost(
-                        container = container,
-                        session = state.session,
-                        pendingRoute = pendingRoute,
-                        onRouteConsumed = onRouteConsumed,
-                        onSignOut = {
-                            scope.launch {
-                                container.authRepository.logout()
-                                container.signOut()
-                                CtToastBus.show("已退出登录")
-                            }
-                        },
-                    )
+                    key(state.session.navigationAccount, state.session.issuedAt) {
+                        MainNavHost(
+                            container = container,
+                            session = state.session,
+                            incoming = incoming,
+                            onRouteConsumed = onRouteConsumed,
+                            onSignOut = {
+                                scope.launch {
+                                    container.authRepository.logout()
+                                    container.signOut()
+                                    CtToastBus.show("已退出登录")
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -224,7 +228,7 @@ fun ClassToolsRoot(
 }
 
 @Composable
-private fun BootSplash(route: String?) {
+internal fun BootSplash(route: String?) {
     val tool = route?.substringBefore('?')?.removePrefix("tool/")
     val title = when (tool) {
         "hw" -> if (route.contains("pick=true")) "班级作业" else "待办任务"

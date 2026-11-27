@@ -85,7 +85,9 @@ class DefaultMarksRepository(
         val sid = sidOrNull() ?: return ApiResult.Failure(ApiError.Config("请先完成身份验证"))
         mutex.lock()
         try {
+            if (sid != sidOrNull()) return ApiResult.Failure(ApiError.Config("请求所属身份已切换"))
             ensureCacheLoaded(sid)
+            if (sid != sidOrNull()) return ApiResult.Failure(ApiError.Config("请求所属身份已切换"))
             if (!force && lastFetchAt > 0 && clock() - lastFetchAt < ttlMs) {
                 return ApiResult.Success(_marks.value)
             }
@@ -93,11 +95,14 @@ class DefaultMarksRepository(
             return when (val result = api.get(path)) {
                 is ApiResult.Failure -> ApiResult.Failure(result.error)
                 is ApiResult.Success -> {
+                    if (sid != sidOrNull()) return ApiResult.Failure(ApiError.Config("请求所属身份已切换"))
                     val rows = parseRows(json, result.value)
                         ?: return ApiResult.Failure(ApiError.Parse("marks 响应不是合法数组"))
                     local.writeCache(local.readCache().filterNot { it.seat == sid } + rows)
+                    val snapshot = MarksSnapshot(ownerSid = sid).replaceRows(rows)
+                        .applyPending(local.readPending().filter { it.seat == sid })
+                    if (sid != sidOrNull()) return ApiResult.Failure(ApiError.Config("请求所属身份已切换"))
                     lastFetchAt = clock()
-                    val snapshot = MarksSnapshot().replaceRows(rows).applyPending(local.readPending().filter { it.seat == sid })
                     _marks.value = snapshot
                     ApiResult.Success(snapshot)
                 }
@@ -175,7 +180,8 @@ class DefaultMarksRepository(
         if (cachedSid == sid) return
         val cached = local.readCache().filter { it.seat == sid }
         val pending = local.readPending().filter { it.seat == sid }
-        _marks.value = MarksSnapshot().replaceRows(cached).applyPending(pending)
+        if (sid != sidOrNull()) return
+        _marks.value = MarksSnapshot(ownerSid = sid).replaceRows(cached).applyPending(pending)
         cachedSid = sid
         lastFetchAt = 0L
     }

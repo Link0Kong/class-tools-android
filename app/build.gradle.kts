@@ -163,10 +163,11 @@ android {
 
     defaultConfig {
         applicationId = "com.furina.classtools"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 26
         targetSdk = 37
-        versionCode = 176
-        versionName = "1.0.0-beta91"
+        versionCode = 177
+        versionName = "1.0.0-beta92"
 
         // OPPO 账号 OAuth 官方要求 application 节点配置 MSP APPID（Authing 文档键名：
         // com.heytap.msp.client.appid）；从 app/oppo.properties 读取，空值不崩溃。
@@ -490,6 +491,9 @@ dependencies {
     // 运行时由 ROM 提供实现；不支持的设备 isViewAnimationSupported()==0，业务回退现有 Compose 转场。
     implementation(libs.sharedview.kit)
 
+    androidTestImplementation("androidx.test:runner:1.6.1")
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.uiautomator)
     testImplementation(libs.junit)
     testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation(libs.kotlinx.coroutines.test)

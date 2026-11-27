@@ -31,8 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.tool.AppTool
-import com.furina.classtools.ui.navigation.ctToolTransitionSource
 import com.furina.classtools.ui.components.background.CtGlassSurface
+import com.furina.classtools.ui.navigation.rememberToolCardTransition
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.components.background.CtGlassSurface
 import com.furina.classtools.ui.theme.CtText
@@ -82,7 +82,7 @@ internal fun AllToolCard(
     )
     val scale = 1f - (1f - HarmonyMotion.PressScale) * pressProgress
     val alpha = 1f - (1f - HarmonyMotion.PressAlpha) * pressProgress
-    val transitionSource = Modifier.ctToolTransitionSource(tool.id, HarmonyTokens.RadiusCard)
+    val (transitionSource, open) = rememberToolCardTransition(tool.id, HarmonyTokens.RadiusCard, onClick)
     val shape = RoundedCornerShape(HarmonyTokens.RadiusCard)
 
     Box {
@@ -98,7 +98,7 @@ internal fun AllToolCard(
                     this.alpha = alpha
                 },
             shape = shape,
-            onClick = onClick,
+            onClick = open,
             frosted = true,
             body = true,
         ) {

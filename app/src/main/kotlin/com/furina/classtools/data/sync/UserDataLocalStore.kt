@@ -2,6 +2,10 @@ package com.furina.classtools.data.sync
 
 import com.furina.classtools.data.network.NetJson
 import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption.ATOMIC_MOVE
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -25,6 +29,12 @@ interface UserDataLocalStore {
 
     suspend fun readCurrent(): JsonObject
     suspend fun writeCurrent(sections: JsonObject)
+
+    /** An explicit save must confirm both the persisted value and its pending upload marker. */
+    suspend fun commitCurrent(sections: JsonObject, pendingKey: String?) {
+        writeCurrent(sections)
+        if (pendingKey != null) markPending(listOf(pendingKey))
+    }
 
     suspend fun pend(): Boolean
     suspend fun setPend(value: Boolean)
@@ -125,6 +135,37 @@ class FileUserDataLocalStore(
         io { updateBlocking { it.copy(currentJson = text) } }
     }
 
+    override suspend fun commitCurrent(sections: JsonObject, pendingKey: String?) {
+        val text = UserdataV6.encode(sections, json)
+        io {
+            var saved = false
+            commit {
+                val sid = currentSid()
+                if (sid.isEmpty()) return@commit
+                directory.mkdirs()
+                val destination = fileFor(sid).toPath()
+                val current = readFileBlocking()
+                val next = current.copy(
+                    currentJson = text,
+                    pend = current.pend || pendingKey != null,
+                    pendingKeys = if (pendingKey == null) current.pendingKeys else (current.pendingKeys + pendingKey).distinct(),
+                )
+                val temp = Files.createTempFile(directory.toPath(), "userdata-save-", ".tmp")
+                try {
+                    temp.toFile().outputStream().use { stream ->
+                        stream.write(json.encodeToString(UserDataStoreFile.serializer(), next).toByteArray(Charsets.UTF_8))
+                        stream.fd.sync()
+                    }
+                    Files.move(temp, destination, ATOMIC_MOVE, REPLACE_EXISTING)
+                    saved = true
+                } finally {
+                    Files.deleteIfExists(temp)
+                }
+            }
+            if (!saved) throw IOException("Userdata session ended before the save")
+        }
+    }
+
     override suspend fun pend(): Boolean = io { readFileBlocking().pend }
 
     override suspend fun setPend(value: Boolean) {
@@ -200,6 +241,14 @@ class InMemoryUserDataLocalStore(
 
     override suspend fun readCurrent(): JsonObject = mutex.withLock { current }
     override suspend fun writeCurrent(sections: JsonObject) = mutex.withLock { current = sections }
+
+    override suspend fun commitCurrent(sections: JsonObject, pendingKey: String?) = mutex.withLock {
+        current = sections
+        if (pendingKey != null) {
+            pend = true
+            pendingKeys += pendingKey
+        }
+    }
 
     override suspend fun pend(): Boolean = mutex.withLock { pend }
     override suspend fun setPend(value: Boolean) = mutex.withLock { pend = value }

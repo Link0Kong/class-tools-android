@@ -1,14 +1,6 @@
 package com.furina.classtools.ui.screens.home
 
-import com.furina.classtools.ui.components.CtToastBus
-
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import com.furina.classtools.ui.components.CtButton
 import com.furina.classtools.ui.components.CtButtonStyle
@@ -44,7 +36,6 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.QrCodeScanner
-import com.furina.classtools.ui.components.light.CtLightAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -59,33 +50,34 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.furina.classtools.data.homework.HomeworkRepository
 import com.furina.classtools.data.tasks.TaskRepository
 import com.furina.classtools.data.tasks.pendingTasks
 import com.furina.classtools.data.tasks.text
 import com.furina.classtools.data.marks.MarksRepository
 import com.furina.classtools.data.marks.MarksSnapshot
 import com.furina.classtools.data.notices.NoticesData
-import com.furina.classtools.data.notices.NoticesLoadResult
 import com.furina.classtools.data.notices.NoticesRepository
 import com.furina.classtools.data.power.PowerRepository
 import com.furina.classtools.data.power.PowerRow
-import com.furina.classtools.data.power.PowerRowResult
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.data.timetable.SessionInfo
@@ -93,8 +85,7 @@ import com.furina.classtools.data.timetable.SessionState
 import com.furina.classtools.data.timetable.TimetableRepository
 import com.furina.classtools.data.timetable.TodayState
 import com.furina.classtools.data.timetable.TtCalendar
-import com.furina.classtools.data.timetable.TtLoadResult
-import com.furina.classtools.data.timetable.TtSnapshot
+import com.furina.classtools.data.timetable.TtLocal
 import com.furina.classtools.data.timetable.TtPlan
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
@@ -132,7 +123,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -146,11 +136,12 @@ import com.furina.classtools.ui.components.ctHeaderCollapseProgress
 fun HomeScreen(
     session: Session,
     onOpenTool: (AppTool) -> Unit,
-    onHomeToolsChange: (List<String>) -> Unit,
+    onHomeToolsChange: (List<String>) -> Unit = {},
     modifier: Modifier = Modifier,
     quickToolIds: List<String> = ToolCatalog.defaultQuickIds,
     taskRepository: TaskRepository? = null,
     timetableRepository: TimetableRepository? = null,
+    homeworkRepository: HomeworkRepository? = null,
     marksRepository: MarksRepository? = null,
     powerRepository: PowerRepository? = null,
     noticesRepository: NoticesRepository? = null,
@@ -171,9 +162,8 @@ fun HomeScreen(
     initialPowerRow: PowerRow? = null,
     /** 预览/测试：强制显示「尚未勾选常用工具」空态（真实用户空选择由 Lead 传空 quickToolIds）。 */
     forceEmptyQuickTools: Boolean = false,
+    editSession: HomeToolsEditSession? = null,
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val spec = rememberCtAdaptiveSpec()
     val zone = remember { ZoneId.systemDefault() }
     // 仅在工作台可见时按分钟更新课程及期限。
@@ -192,33 +182,13 @@ fun HomeScreen(
     val currentTime = nowMillis ?: liveTime
     val today = remember(currentTime) { Instant.ofEpochMilli(currentTime).atZone(zone).toLocalDate() }
 
-    var refreshToken by remember { mutableIntStateOf(0) }
-    var refreshing by remember { mutableStateOf(false) }
-    LaunchedEffect(refreshToken) {
-        if (refreshToken > 0) {
-            delay(1000)
-            refreshing = false
-        }
-    }
-
-    // ---- 数据状态 -----------------------------------------------------------
-    var ttSnapshot by remember(timetableRepository) { mutableStateOf<TtSnapshot?>(null) }
-    val ttPlan = remember(ttSnapshot, currentTime, initialTtPlan) {
-        ttSnapshot?.let { TtCalendar.plan(it, currentTime, zone) } ?: initialTtPlan
-    }
-    var ttLoading by remember { mutableStateOf(timetableRepository != null && initialTtPlan == null) }
-    var noticesData by remember(session.sid, noticesRepository) { mutableStateOf(initialNoticesData) }
-    var noticesState by remember(session.sid, noticesRepository) {
-        mutableStateOf(if (initialNoticesData != null) NoticeHomeState.READY else NoticeHomeState.LOADING)
-    }
-    var noticesFailedMessage by remember { mutableStateOf("") }
-    var powerRow by remember { mutableStateOf(initialPowerRow) }
-    var powerLoading by remember { mutableStateOf(false) }
-
     val marksFlow = remember(marksRepository) {
         marksRepository?.marks ?: MutableStateFlow(MarksSnapshot())
     }
-    val marks by marksFlow.collectAsState()
+    val marksSnapshot by marksFlow.collectAsState()
+    val marks = remember(marksSnapshot, session.sid) {
+        marksSnapshot.takeIf { it.ownerSid == null || it.ownerSid == session.sid } ?: MarksSnapshot()
+    }
 
     val sections: JsonObject = userDataRepository?.currentSections?.collectAsState()?.value ?: JsonObject(emptyMap())
     val powerSel = remember(sections) {
@@ -234,62 +204,38 @@ fun HomeScreen(
     // 预览/测试注入：没有 userdata 时也能量化展示电费卡（真实运行时以 userdata.power.sel 为准）。
     val effectivePowerSel = powerSel.ifBlank { initialPowerSel?.trim().orEmpty() }
 
-    // 懒加载：课表（缓存优先 → 网络）
-    LaunchedEffect(timetableRepository, refreshToken, isPageActive) {
-        if (!isPageActive) return@LaunchedEffect
-        val repo = timetableRepository ?: return@LaunchedEffect
-        ttLoading = true
-        runCatching { repo.cached() }.getOrNull()?.let { snapshot ->
-            ttSnapshot = snapshot
-        }
-        val result = runCatching { repo.load(force = refreshToken > 0) }.getOrNull()
-        if (result is TtLoadResult.Success) {
-            ttSnapshot = result.snapshot
-        }
-        ttLoading = false
+    val loads = rememberHomeDataLoads(
+        session = session,
+        active = isPageActive && lifecycleResumed,
+        timetableRepository = timetableRepository,
+        taskRepository = taskRepository,
+        homeworkRepository = homeworkRepository,
+        noticesRepository = noticesRepository,
+        marksRepository = marksRepository,
+        powerRepository = powerRepository,
+        personalTimetable = (sections[TtLocal.SECTION_KEY] as? JsonObject)?.get(TtLocal.FIELD_KEY),
+        room = effectivePowerSel,
+        initialNotices = initialNoticesData,
+    )
+    val timetableState = loads.timetable?.state
+    val ttSnapshot = timetableState?.data
+    val ttLoading = timetableState?.loading == true
+    val ttPlan = remember(ttSnapshot, currentTime, initialTtPlan) {
+        ttSnapshot?.let { TtCalendar.plan(it, currentTime, zone) } ?: initialTtPlan
     }
-
-    // 懒加载：通知（缓存优先 → 网络；失败有缓存则离线态）
-    LaunchedEffect(noticesRepository, refreshToken, isPageActive, lifecycleResumed) {
-        if (!isPageActive || !lifecycleResumed) return@LaunchedEffect
-        val repo = noticesRepository ?: return@LaunchedEffect
-        noticesState = NoticeHomeState.LOADING
-        noticesData = runCatching { repo.cached() }.getOrNull()
-        if (noticesData != null) noticesState = NoticeHomeState.READY
-        when (val result = runCatching { repo.load(force = refreshToken > 0) }.getOrNull()) {
-            is NoticesLoadResult.Success -> {
-                noticesData = result.data
-                noticesState = if (result.data.refreshError != null) NoticeHomeState.OFFLINE else NoticeHomeState.READY
-            }
-
-            is NoticesLoadResult.Failure -> {
-                noticesData = repo.cached()
-                noticesFailedMessage = result.message
-                noticesState = if (noticesData != null) NoticeHomeState.OFFLINE else NoticeHomeState.ERROR
-            }
-
-            null -> noticesState = if (noticesData != null) NoticeHomeState.OFFLINE else NoticeHomeState.ERROR
-        }
-    }
-
-    // 懒加载：电费（只有关注宿舍才请求）
-    LaunchedEffect(powerRepository, effectivePowerSel, refreshToken) {
-        val repo = powerRepository ?: return@LaunchedEffect
-        if (effectivePowerSel.isBlank()) {
-            if (initialPowerRow == null) powerRow = null
-            powerLoading = false
-            return@LaunchedEffect
-        }
-        powerLoading = powerRow == null
-        val result = runCatching { repo.loadRow(effectivePowerSel, force = refreshToken > 0) }.getOrNull()
-        (result as? PowerRowResult.Success)?.row?.let { powerRow = it }
-        powerLoading = false
-    }
+    val noticesState = loads.notices?.state
+    val noticesData = if (noticesState != null) noticesState.data else initialNoticesData
+    val marksState = loads.marks?.state
+    val noticesLoading = noticesState?.loading == true || marksState?.loading == true
+    val noticesError = (noticesState?.error ?: marksState?.error).takeUnless { noticesLoading }
+    val noticeStatusLabel = if (noticesState?.error == null && marksState?.error != null) "通知处理状态" else "通知"
+    val powerState = loads.power?.state
+    val powerRow = powerState?.data ?: initialPowerRow.takeIf { effectivePowerSel == initialPowerSel?.trim() }
 
     // ---- 卡片摘要与可定位条目 ----------------------------------------------------
     val personal = taskRepository?.snapshot?.collectAsState()?.value
-    val taskStatus = taskRepository?.syncStatus?.collectAsState()?.value
-    LaunchedEffect(taskRepository, refreshToken) { taskRepository?.sync() }
+    val taskState = loads.tasks?.state
+    val homeworkState = loads.homework?.state
     val hwItems = remember(personal, today) {
         personal?.pendingTasks().orEmpty().sortedWith(taskPriorityOrder(today.toString())).map {
             HomeRotationItem(it.text("id"), it.text("title"), taskDueLabel(it, today.toString()).ifBlank { "未设置截止" })
@@ -301,6 +247,7 @@ fun HomeScreen(
         val hiddenIds = hiddenNotices.orEmpty().filterValues { (it as? JsonPrimitive)?.booleanOrNull == true }.keys
         HomeWorkbenchLogic.noticeRotation(noticesData?.auto.orEmpty(), marks, currentTime, hiddenIds)
     }
+    val noticeBadge = !noticesLoading && noticesError == null && ntItems.isNotEmpty()
     // G13：通知卡展示最后更新时间，便于判断数据是否过期。
     val noticesUpdatedText = remember(noticesData?.fetchedAt) {
         noticesData?.fetchedAt?.takeIf { it > 0 }?.let { ts ->
@@ -314,59 +261,7 @@ fun HomeScreen(
 
     val reduceMotion = rememberReduceMotion()
 
-    // ---- 常用工具编辑 -------------------------------------------------------
-    var editing by rememberSaveable { mutableStateOf(false) }
-    var draft by rememberSaveable { mutableStateOf(quickToolIds) }
-    LaunchedEffect(quickToolIds, editing) {
-        if (!editing) draft = quickToolIds
-    }
-    // H-03：编辑态按返回键先确认是否放弃修改，避免误触丢草稿。
-    var showDiscardEdit by remember { mutableStateOf(false) }
-    androidx.activity.compose.BackHandler(enabled = editing) { showDiscardEdit = true }
-    if (showDiscardEdit) {
-        CtLightAlertDialog(
-            onDismissRequest = { showDiscardEdit = false },
-            title = { Text("放弃本次修改？") },
-            text = { Text("首页常用工具的改动尚未保存。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDiscardEdit = false
-                    draft = quickToolIds
-                    editing = false
-                }) { Text("放弃") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDiscardEdit = false }) { Text("继续编辑") }
-            },
-        )
-    }
-    // 本地乐观顺序：保存回调是异步的，先更新 UI，避免「点完成没反应」。
-    var quickOrder by rememberSaveable { mutableStateOf(quickToolIds) }
-    LaunchedEffect(quickToolIds) {
-        if (!editing) quickOrder = quickToolIds
-    }
-    val quickTools = remember(quickOrder, forceEmptyQuickTools) {
-        if (forceEmptyQuickTools) emptyList() else ToolCatalog.quickTools(quickOrder)
-    }
-    val editableTools = remember { ToolCatalog.tools.filter { !it.adminOnly && it.id != "settings" } }
-
-    fun toggleTool(id: String) {
-        draft = if (id in draft) {
-            draft - id
-        } else if (draft.size >= HomeToolsEditor.MAX_QUICK_TOOLS) {
-            CtToastBus.show("最多选 ${HomeToolsEditor.MAX_QUICK_TOOLS} 个常用工具")
-            draft
-        } else {
-            draft + id
-        }
-    }
-
-    fun finishEditing() {
-        val saved = draft.take(HomeToolsEditor.MAX_QUICK_TOOLS)
-        quickOrder = saved
-        onHomeToolsChange(saved)
-        editing = false
-    }
+    val editor = editSession ?: rememberPreviewHomeToolsEditSession(0, quickToolIds, onSaved = onHomeToolsChange)
 
     fun openToolId(id: String) {
         ToolCatalog.byId(id)?.let(onOpenTool)
@@ -374,11 +269,6 @@ fun HomeScreen(
 
     fun openCard(tool: String, focus: String? = null) {
         if (onCardOpen != null) onCardOpen(tool, focus) else openToolId(if (tool == "class-homework") "hw" else tool)
-    }
-
-    fun retry() {
-        refreshToken += 1
-        scope.launch { runCatching { marksRepository?.refresh(force = true) } }
     }
 
     // 预览渲染（android.exe preview / Android Studio）不播放首屏错峰动画，避免首帧全透明。
@@ -399,11 +289,8 @@ fun HomeScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
                 PullToRefreshBox(
-                    isRefreshing = refreshing,
-                    onRefresh = {
-                        refreshing = true
-                        refreshToken += 1
-                    },
+                    isRefreshing = loads.isRefreshing,
+                    onRefresh = loads::refresh,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     BoxWithConstraints(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -436,7 +323,7 @@ fun HomeScreen(
                                         CtGlassIconButton(
                                             icon = Icons.Rounded.Notifications,
                                             contentDescription = "通知待处理",
-                                            badge = ntItems.isNotEmpty(),
+                                            badge = noticeBadge,
                                             onClick = { openToolId("nt") },
                                         )
                                         CtGlassIconButton(
@@ -454,7 +341,7 @@ fun HomeScreen(
                                         plan = ttPlan,
                                         loading = ttLoading,
                                         nowMillis = currentTime,
-                                        onOpenTimetable = { openCard("tt", pinnedCourse?.let { CourseFocus.of(it).encode() }) },
+                                        onOpenTimetable = { openCard("tt", (pinnedCourse?.let { CourseFocus.of(it) } ?: CourseFocus(today.toString())).encode()) },
                                     )
                                 }
                                 if (showNotificationPermissionBanner && onOpenPermissions != null) {
@@ -471,6 +358,8 @@ fun HomeScreen(
                                         plan = ttPlan,
                                         nowMillis = currentTime,
                                         loading = ttLoading,
+                                        error = timetableState?.error,
+                                        onRetry = { loads.retry(loads.timetable) },
                                         pinnedCourse = pinnedCourse,
                                         onOpen = { openCard("tt", CourseFocus(today.toString()).encode()) },
                                         onCourse = { openCard("tt", CourseFocus.of(it).encode()) },
@@ -479,7 +368,10 @@ fun HomeScreen(
                                 HomeReveal(enabled = animateEntrance, index = 4) {
                                     HomePowerCard(
                                         card = powerCard,
-                                        loading = powerLoading,
+                                        loading = powerState?.loading == true,
+                                        error = powerState?.error,
+                                        hasCache = powerRow != null,
+                                        onRetry = { loads.retry(loads.power) },
                                         onOpen = {
                                             if (powerCard == null && onOpenPowerPicker != null) {
                                                 onOpenPowerPicker()
@@ -491,38 +383,36 @@ fun HomeScreen(
                                 }
                             }, tasks = {
                                 HomeReveal(enabled = animateEntrance, index = 5) {
-                                    HomeHomeworkCard("待办任务", hwItems, taskStatus == "同步中…", taskStatus == "仅本机",
-                                        onOpen = { openCard("hw") }, onItem = { openCard("hw", it.id) })
+                                    HomeHomeworkCard(
+                                        items = hwItems,
+                                        task = taskState,
+                                        homework = homeworkState,
+                                        onOpen = { openCard("hw") },
+                                        onItem = { openCard("hw", it.id) },
+                                        onRetryTasks = { loads.retry(loads.tasks) },
+                                        onRetryHomework = { loads.retry(loads.homework, loads.marks) },
+                                    )
                                 }
                                 HomeReveal(enabled = animateEntrance, index = 6) {
                                     HomeNoticesCard(
                                         items = ntItems,
-                                        state = noticesState,
-                                        errorText = noticesFailedMessage,
+                                        loading = noticesLoading,
+                                        error = noticesError,
+                                        hasData = noticesData != null,
+                                        usingCache = noticesState?.error != null && noticesData != null,
+                                        statusLabel = noticeStatusLabel,
                                         updatedText = noticesUpdatedText,
                                         onOpen = { openCard("nt") },
                                         onItem = { openCard("nt", it.id) },
-                                        onRetry = ::retry,
+                                        onRetry = loads::retryNotices,
                                     )
                                 }
                                 HomeReveal(enabled = animateEntrance, index = 7) {
                                     HomeQuickToolsSection(
-                                        quickTools = quickTools,
-                                        editing = editing,
-                                        draft = draft,
-                                        editableTools = editableTools,
-                                        columns = 4,
+                                        editor = editor,
+                                        quickToolIds = if (forceEmptyQuickTools) emptyList() else quickToolIds,
+                                        isPageActive = isPageActive && lifecycleResumed,
                                         reduceMotion = reduceMotion,
-                                        onToggle = ::toggleTool,
-                                        onStartEdit = {
-                                            draft = quickOrder
-                                            editing = true
-                                        },
-                                        onFinishEdit = ::finishEditing,
-                                        onReorder = { ids ->
-                                            quickOrder = ids
-                                            onHomeToolsChange(ids)
-                                        },
                                         onOpenTool = onOpenTool,
                                         onOpenAll = onOpenAll,
                                     )
@@ -547,7 +437,7 @@ fun HomeScreen(
                     CtGlassIconButton(
                         icon = Icons.Rounded.Notifications,
                         contentDescription = "通知待处理",
-                        badge = ntItems.isNotEmpty(),
+                        badge = noticeBadge,
                         onClick = { openToolId("nt") },
                     )
                 },
@@ -575,9 +465,6 @@ private fun HomeWorkbenchColumns(
     }
 }
 
-/** 通知卡的数据状态（同步中/就绪/失败/离线缓存）。 */
-private enum class NoticeHomeState { LOADING, READY, OFFLINE, ERROR }
-
 // =============================================================================
 // 今日课程卡（v5 玻璃卡 + 分类色图标 + 课程时间线）
 // =============================================================================
@@ -587,6 +474,8 @@ private fun HomeTodayCoursesCard(
     plan: TtPlan?,
     nowMillis: Long,
     loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
     pinnedCourse: SessionInfo?,
     onCourse: (SessionInfo) -> Unit,
     onOpen: () -> Unit,
@@ -646,9 +535,7 @@ private fun HomeTodayCoursesCard(
                 }
             }
         }
-        if (loading && plan != null) {
-            HomeRefreshingRow("更新课表…")
-        }
+        HomeModuleStatus("课表", loading && plan != null, error, plan?.hasData == true, onRetry)
     }
 }
 
@@ -701,7 +588,14 @@ private fun CourseRow(sessionInfo: SessionInfo, nowMillis: Long, isNext: Boolean
 // =============================================================================
 
 @Composable
-private fun HomePowerCard(card: HomePowerCard?, loading: Boolean, onOpen: () -> Unit) {
+private fun HomePowerCard(
+    card: HomePowerCard?,
+    loading: Boolean,
+    error: String?,
+    hasCache: Boolean,
+    onRetry: () -> Unit,
+    onOpen: () -> Unit,
+) {
     HomeInfoCard(
         icon = Icons.Rounded.Bolt,
         title = "宿舍电费",
@@ -720,6 +614,7 @@ private fun HomePowerCard(card: HomePowerCard?, loading: Boolean, onOpen: () -> 
                     color = stateColor(card.stateKey))
                 val update = when {
                     loading && !card.hasReading -> "读取电量…"
+                    error != null && !card.hasReading -> "读数不可用"
                     !card.hasReading -> "暂缺读数，点开刷新"
                     card.updText.isNotBlank() -> "更新 ${card.updText}"
                     else -> ""
@@ -728,6 +623,7 @@ private fun HomePowerCard(card: HomePowerCard?, loading: Boolean, onOpen: () -> 
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        HomeModuleStatus("电费", loading && hasCache, error, hasCache, onRetry)
     }
 }
 
@@ -744,32 +640,79 @@ private fun stateColor(stateKey: String): Color = when (stateKey) {
 // =============================================================================
 
 @Composable
-internal fun HomeHomeworkCard(title: String, items: List<HomeRotationItem>, loading: Boolean, failed: Boolean,
-    onOpen: () -> Unit, onItem: (HomeRotationItem) -> Unit) {
-    HomeInfoCard(Icons.AutoMirrored.Rounded.Assignment, title, MaterialTheme.colorScheme.primary, onOpen,
+private fun HomeHomeworkCard(
+    items: List<HomeRotationItem>,
+    task: HomeLoadState<Unit>?,
+    homework: HomeLoadState<*>?,
+    onOpen: () -> Unit,
+    onItem: (HomeRotationItem) -> Unit,
+    onRetryTasks: () -> Unit,
+    onRetryHomework: () -> Unit,
+) {
+    val loading = task?.loading == true
+    HomeInfoCard(Icons.AutoMirrored.Rounded.Assignment, "待办任务", MaterialTheme.colorScheme.primary, onOpen,
         badge = "${items.size} 项") {
         if (items.isEmpty()) {
-            if (loading) HomeLoadingRow("正在同步…") else HomeMutedLine(if (failed) "同步失败，点开重试" else "暂无待完成事项")
+            if (loading) HomeLoadingRow("同步个人待办…")
+            else if (task?.error == null) HomeMutedLine("暂无待完成事项")
         } else {
             items.take(2).forEach { CardItemRow(it) { onItem(it) } }
-            if (failed) HomeMutedLine("显示本机缓存")
         }
+        HomeModuleStatus("个人待办", loading && items.isNotEmpty(), task?.error, task?.data != null, onRetryTasks)
+        HomeModuleStatus("班级作业", homework?.loading == true, homework?.error, homework?.data != null, onRetryHomework,
+            cacheMessage = "已保留上次作业数据")
     }
 }
 
 @Composable
-private fun HomeNoticesCard(items: List<HomeRotationItem>, state: NoticeHomeState, errorText: String,
-    onOpen: () -> Unit, onItem: (HomeRotationItem) -> Unit, onRetry: () -> Unit, updatedText: String) {
+private fun HomeNoticesCard(
+    items: List<HomeRotationItem>,
+    loading: Boolean,
+    error: String?,
+    hasData: Boolean,
+    usingCache: Boolean,
+    statusLabel: String,
+    updatedText: String,
+    onOpen: () -> Unit,
+    onItem: (HomeRotationItem) -> Unit,
+    onRetry: () -> Unit,
+) {
     HomeInfoCard(Icons.Rounded.Notifications, "班级通知", MaterialTheme.colorScheme.primary, onOpen,
-        badge = "${items.size} 待处理") {
+        badge = if (!loading && error == null) "${items.size} 待处理" else null) {
         items.take(2).forEach { CardItemRow(it) { onItem(it) } }
-        when (state) {
-            NoticeHomeState.LOADING -> if (items.isEmpty()) HomeLoadingRow("通知同步中…")
-            NoticeHomeState.OFFLINE, NoticeHomeState.ERROR -> {
-                HomeMutedLine(if (state == NoticeHomeState.OFFLINE) "显示本机缓存 · $updatedText" else errorText.ifBlank { "通知同步失败" })
-                TextButton(onClick = onRetry) { Text("重试") }
-            }
-            NoticeHomeState.READY -> if (items.isEmpty()) HomeMutedLine("暂无待处理通知")
+        when {
+            loading && !hasData -> HomeLoadingRow("同步通知…")
+            !loading && error == null && items.isEmpty() -> HomeMutedLine("暂无待处理通知")
+        }
+        HomeModuleStatus(
+            statusLabel,
+            loading && hasData,
+            error,
+            usingCache,
+            onRetry,
+            cacheTime = updatedText,
+        )
+    }
+}
+
+@Composable
+private fun HomeModuleStatus(
+    label: String,
+    loading: Boolean,
+    error: String?,
+    hasCache: Boolean,
+    onRetry: () -> Unit,
+    cacheTime: String = "",
+    cacheMessage: String = "显示本机缓存",
+) {
+    when {
+        loading -> HomeRefreshingRow("更新$label…")
+        error != null -> {
+            val cacheInfo = if (hasCache) listOf(cacheMessage, cacheTime).filter(String::isNotBlank) else emptyList()
+            val text = (listOf("${label}未更新", error) + cacheInfo).joinToString(" · ")
+            Text(text, style = CtText.caption, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            TextButton(onClick = onRetry) { Text("重试$label") }
         }
     }
 }
@@ -801,19 +744,15 @@ private fun CardItemRow(item: HomeRotationItem, onClick: () -> Unit) {
 
 @Composable
 private fun HomeQuickToolsSection(
-    quickTools: List<AppTool>,
-    editing: Boolean,
-    draft: List<String>,
-    editableTools: List<AppTool>,
-    columns: Int,
+    editor: HomeToolsEditSession,
+    quickToolIds: List<String>,
+    isPageActive: Boolean,
     reduceMotion: Boolean,
-    onToggle: (String) -> Unit,
-    onStartEdit: () -> Unit,
-    onFinishEdit: () -> Unit,
-    onReorder: (List<String>) -> Unit = {},
     onOpenTool: (AppTool) -> Unit,
     onOpenAll: () -> Unit,
 ) {
+    val editing = editor.isEditing(0)
+    val ids = HomeToolsEditor.availableIds(quickToolIds)
     Column(verticalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -822,42 +761,38 @@ private fun HomeQuickToolsSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            if (!editing && quickTools.isNotEmpty()) {
-                Text(
-                    text = "${quickTools.size}/${HomeToolsEditor.MAX_QUICK_TOOLS}",
-                    style = CtText.caption,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.width(CtTokens.Spacing.elementGap))
+            if (editing) {
+                TextButton(onClick = editor::discard, enabled = editor.canEdit) {
+                    Text("取消", style = CtText.label)
+                }
+                TextButton(onClick = editor::save, enabled = editor.canEdit) {
+                    Text(if (editor.saving) "保存中" else "完成", style = CtText.label)
+                }
+            } else {
+                TextButton(onClick = { editor.begin(0, quickToolIds) }) {
+                    Text("编辑", style = CtText.label)
+                }
             }
-            TextButton(onClick = { if (editing) onFinishEdit() else onStartEdit() }) {
-                Text(if (editing) "完成" else "编辑", style = CtText.label)
-            }
-            TextButton(onClick = onOpenAll) {
+            TextButton(onClick = onOpenAll, enabled = !editor.saving) {
                 Text("全部 ›", style = CtText.label)
             }
         }
 
+        HomeQuickToolsRow(editor, 0, quickToolIds, isPageActive, reduceMotion, onOpenTool)
         if (editing) {
-            Text(
-                text = "首页快捷 ${draft.size}/${HomeToolsEditor.MAX_QUICK_TOOLS}",
-                style = CtText.caption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            HomeToolsEditHint(editor, quickToolIds)
             HomeEditableToolGrid(
-                tools = editableTools,
-                columns = columns,
-                draft = draft,
+                tools = HomeToolsEditor.availableTools,
+                columns = 4,
+                draft = editor.draft?.ids.orEmpty(),
+                enabled = editor.canEdit,
                 reduceMotion = reduceMotion,
-                onToggle = onToggle,
+                onToggle = { editor.toggle(0, it) },
             )
-        } else if (quickTools.isEmpty()) {
-            CtGlassCard(
-                onClick = onOpenAll,
-                shape = HomeCardShape,
-            ) {
+        } else if (ids.isEmpty()) {
+            CtGlassCard(onClick = onOpenAll, shape = HomeCardShape) {
                 Row(
-                    modifier = Modifier.padding(horizontal = CtTokens.Spacing.cardPadding, vertical = CtTokens.Spacing.cardPadding),
+                    modifier = Modifier.padding(CtTokens.Spacing.cardPadding),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -867,7 +802,7 @@ private fun HomeQuickToolsSection(
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = "去全部工具页勾选想放在首页的工具（最多 4 个）",
+                            text = "在全部工具页选择常用工具（最多 4 个）",
                             style = CtText.caption,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -879,85 +814,16 @@ private fun HomeQuickToolsSection(
                     )
                 }
             }
-        } else {
-            CtGlassCard(shape = HomeCardShape) {
-                // 首页快捷栏：不进入编辑态也可长按左右拖动排序（松手写回 userdata）。
-                var dragOrder by remember(quickTools) { mutableStateOf(quickTools.map { it.id }) }
-                var draggingId by remember { mutableStateOf<String?>(null) }
-                var dragCenterX by remember { mutableFloatStateOf(0f) }
-                val density = androidx.compose.ui.platform.LocalDensity.current
-                val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
-                val orderedTools = dragOrder.mapNotNull { id -> quickTools.firstOrNull { it.id == id } }
-                    .ifEmpty { quickTools }
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val itemWidthPx = with(density) { (maxWidth / HomeToolsEditor.MAX_QUICK_TOOLS).toPx() }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        orderedTools.forEachIndexed { index, tool ->
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .graphicsLayer { alpha = if (draggingId == tool.id) 0.35f else 1f }
-                                    .pointerInput(tool.id) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = {
-                                                if (orderedTools.size < 2) return@detectDragGesturesAfterLongPress
-                                                draggingId = tool.id
-                                                dragCenterX = (index + 0.5f) * itemWidthPx
-                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            },
-                                            onDrag = { change, amount ->
-                                                if (draggingId != tool.id) return@detectDragGesturesAfterLongPress
-                                                change.consume()
-                                                dragCenterX += amount.x
-                                                val target = (dragCenterX / itemWidthPx).toInt()
-                                                    .coerceIn(0, orderedTools.size - 1)
-                                                val from = dragOrder.indexOf(tool.id)
-                                                if (from >= 0 && target != from) {
-                                                    val next = dragOrder.toMutableList().apply {
-                                                        removeAt(from)
-                                                        add(target, tool.id)
-                                                    }
-                                                    dragOrder = next
-                                                    dragCenterX = (target + 0.5f) * itemWidthPx
-                                                }
-                                            },
-                                            onDragEnd = {
-                                                if (draggingId != null) onReorder(dragOrder)
-                                                draggingId = null
-                                            },
-                                            onDragCancel = { draggingId = null },
-                                        )
-                                    },
-                            ) {
-                                QuickToolTile(
-                                    tool = tool,
-                                    onClick = { if (draggingId == null) onOpenTool(tool) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    reduceMotion = reduceMotion,
-                                )
-                            }
-                        }
-                        repeat((HomeToolsEditor.MAX_QUICK_TOOLS - orderedTools.size).coerceAtLeast(0)) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
         }
     }
 }
-
 /** 编辑网格：2/3/4 列（随窗口），点击加入/移出逻辑由 [onToggle] 保持原样。 */
 @Composable
 private fun HomeEditableToolGrid(
     tools: List<AppTool>,
     columns: Int,
     draft: List<String>,
+    enabled: Boolean,
     reduceMotion: Boolean,
     onToggle: (String) -> Unit,
 ) {
@@ -968,11 +834,15 @@ private fun HomeEditableToolGrid(
             horizontalArrangement = Arrangement.spacedBy(CtTokens.Spacing.cardGapCompact),
         ) {
             rowTools.forEach { tool ->
+                val isSelected = tool.id in draft
                 EditableToolTile(
                     tool = tool,
-                    selected = tool.id in draft,
+                    selected = isSelected,
                     onClick = { onToggle(tool.id) },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).semantics {
+                        selected = isSelected
+                        if (!enabled) disabled()
+                    },
                     reduceMotion = reduceMotion,
                 )
             }

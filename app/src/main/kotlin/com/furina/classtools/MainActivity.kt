@@ -11,15 +11,18 @@ import com.furina.classtools.data.reminder.ReminderIntentFactory
 import com.furina.classtools.data.reminder.ReminderRuntime
 import com.furina.classtools.ui.ClassToolsRoot
 import com.furina.classtools.ui.ClassToolsThemeHost
+import com.furina.classtools.ui.navigation.IncomingNavigation
+import com.furina.classtools.ui.navigation.Routes
+import com.furina.classtools.ui.navigation.navigationAccount
 import com.furina.classtools.ui.platform.VolumeKeyBridge
 import com.furina.classtools.ui.platform.enableClassToolsEdgeToEdge
 
 class MainActivity : ComponentActivity() {
 
-    private val pendingRoute = mutableStateOf<String?>(null)
+    private val incoming = mutableStateOf<IncomingNavigation?>(null)
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putString("pendingCardRoute", pendingRoute.value)
+        outState.putBundle(IncomingNavigation.KEY, incoming.value?.save())
         super.onSaveInstanceState(outState)
     }
 
@@ -32,15 +35,15 @@ class MainActivity : ComponentActivity() {
                 com.furina.classtools.widget.DesktopWidgets.publishPickerPreviews(applicationContext)
             }
         }
-        pendingRoute.value = if (savedInstanceState == null) routeFrom(intent) else savedInstanceState.getString("pendingCardRoute")
+        incoming.value = if (savedInstanceState == null) routeFrom(intent) else IncomingNavigation.restore(savedInstanceState)
         val container = (application as ClassToolsApp).container
         setContent {
             // 主题/外观/背景/系统栏与 ToolActivity 共用同一宿主，保证共享元素两端视觉一致。
             ClassToolsThemeHost(container) {
                 ClassToolsRoot(
                     container = container,
-                    pendingRoute = pendingRoute.value,
-                    onRouteConsumed = { pendingRoute.value = null },
+                    incoming = incoming.value,
+                    onRouteConsumed = { id -> if (incoming.value?.id == id) incoming.value = null },
                 )
             }
         }
@@ -49,7 +52,9 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        routeFrom(intent)?.let { pendingRoute.value = it }
+        routeFrom(intent)?.let { request ->
+            if (incoming.value?.sameDestination(request) != true) incoming.value = request
+        }
     }
 
     override fun onResume() {
@@ -73,33 +78,39 @@ class MainActivity : ComponentActivity() {
         return handled || super.onKeyDown(keyCode, event)
     }
 
-    private fun routeFrom(intent: Intent?): String? {
+    private fun routeFrom(intent: Intent?): IncomingNavigation? {
         if (intent == null) return null
-        val routes = com.furina.classtools.ui.navigation.Routes
         val widgetTool = intent.action?.removePrefix(WIDGET_ACTION)?.takeIf { intent.action == WIDGET_ACTION + it }
-        val focus = intent.getStringExtra(CARD_FOCUS)
+        val focus = intent.getStringExtra(CARD_FOCUS)?.takeIf(String::isNotBlank)?.let { if (it.length <= 4096) it else "invalid" }
+        val owner = (application as ClassToolsApp).container.currentSession
+        val account = intent.getStringExtra(CARD_ACCOUNT) ?: owner?.navigationAccount
+        fun request(route: String, courseFocus: String? = null) =
+            IncomingNavigation(route, courseFocus, account, issuedAt = owner?.issuedAt)
         when (widgetTool) {
-            "home" -> return routes.ROOT
-            "tt", "nt", "hw" -> return routes.tool(widgetTool, focus = focus)
-            "new-task" -> return routes.tool("hw", createTask = true)
-            "class-homework" -> return routes.tool("hw", pick = true, focus = focus)
+            "home" -> return request(Routes.ROOT)
+            "tt" -> return request(Routes.tool("tt"), focus)
+            "nt", "hw" -> return request(Routes.tool(widgetTool, focus = focus))
+            "new-task" -> return request(Routes.tool("hw", createTask = true))
+            "class-homework" -> return request(Routes.tool("hw", pick = true, focus = focus))
         }
         val notice = noticeIdFrom(intent)
-        if (notice != null) return routes.tool("nt", focus = notice)
+        if (notice != null) return request(Routes.tool("nt", focus = notice))
         if (intent.action == Intent.ACTION_VIEW && intent.dataString == com.furina.classtools.data.timetable.XiaobuCourseCard.TIMETABLE_LINK) {
-            return routes.tool("tt")
+            return request(Routes.tool("tt"))
         }
         val id = ReminderIntentFactory.toolIdFromExtras(intent.getStringExtra(ReminderIntentFactory.EXTRA_TOOL_ID)) ?: return null
-        if (id == "vote") return routes.VOTE
+        if (id == "vote") return request(Routes.VOTE)
+        if (id == "tt") return request(Routes.tool("tt"))
         val key = intent.getStringExtra(ReminderIntentFactory.EXTRA_REMINDER_KEY).orEmpty()
         val detail = ReminderIntentFactory.focusFor(key)
-        return routes.tool(id, pick = id == "hw" && intent.getStringExtra(ReminderIntentFactory.EXTRA_REMINDER_KIND) !=
-            com.furina.classtools.data.reminder.ReminderKind.PERSONAL_TASK.name, focus = detail)
+        return request(Routes.tool(id, pick = id == "hw" && intent.getStringExtra(ReminderIntentFactory.EXTRA_REMINDER_KIND) !=
+            com.furina.classtools.data.reminder.ReminderKind.PERSONAL_TASK.name, focus = detail))
     }
 
     companion object {
         internal const val WIDGET_ACTION = "com.furina.classtools.widget.OPEN."
         internal const val CARD_FOCUS = "com.furina.classtools.card.FOCUS"
+        internal const val CARD_ACCOUNT = "com.furina.classtools.card.ACCOUNT"
     }
 
     /**

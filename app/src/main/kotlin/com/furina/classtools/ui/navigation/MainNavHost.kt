@@ -14,6 +14,7 @@ import androidx.compose.animation.ExitTransition
 import android.Manifest
 import android.graphics.Bitmap
 import android.os.Build
+import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -54,11 +55,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -71,6 +73,7 @@ import kotlinx.coroutines.CancellationException
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.furina.classtools.AppContainer
@@ -120,6 +123,7 @@ import com.furina.classtools.ui.components.dock.CtPageTransitions
 import com.furina.classtools.ui.components.dock.CtTabPager
 import com.furina.classtools.ui.components.dock.rememberCtTabPagerState
 import com.furina.classtools.ui.motion.SharedViewMotion
+import com.furina.classtools.ui.BootSplash
 import com.furina.classtools.ui.screens.all.AllToolsScreen
 import com.furina.classtools.ui.screens.cloudspace.CloudSpaceScreen
 import com.furina.classtools.ui.screens.data.DataPrivacyScreen
@@ -132,6 +136,9 @@ import com.furina.classtools.ui.screens.express.ExpressScreen
 import com.furina.classtools.ui.screens.guide.UserGuideScreen
 import com.furina.classtools.ui.screens.stats.StatsScreen
 import com.furina.classtools.ui.screens.home.HomeScreen
+import com.furina.classtools.ui.screens.home.HomeToolsEditDialogs
+import com.furina.classtools.ui.screens.home.HomeToolsEditSession
+import com.furina.classtools.ui.screens.home.rememberHomeToolsEditSession
 import com.furina.classtools.ui.screens.jw.JwEntryScreen
 import com.furina.classtools.ui.screens.map.CampusMapScreen
 import com.furina.classtools.ui.screens.me.MeStats
@@ -153,6 +160,7 @@ import com.furina.classtools.ui.screens.scan.ScanScreen
 import com.furina.classtools.ui.screens.settings.PermissionSettingsScreen
 import com.furina.classtools.ui.screens.settings.ReminderSettingsScreen
 import com.furina.classtools.ui.screens.timetable.TimetableViewScreen
+import com.furina.classtools.ui.screens.timetable.TimetableFocusRequest
 import com.furina.classtools.ui.screens.vote.VoteCreateScreen
 import com.furina.classtools.ui.screens.vote.VoteDetailScreen
 import com.furina.classtools.ui.screens.vote.VoteListScreen
@@ -161,10 +169,7 @@ import com.furina.classtools.ui.screens.water.WaterScreen
 import com.furina.classtools.ui.theme.findActivity
 import kotlinx.coroutines.launch
 import com.furina.classtools.ui.theme.rememberReduceMotion
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import com.furina.classtools.data.member.ClassRosterSource
 
 /**
@@ -180,15 +185,15 @@ fun MainNavHost(
     session: Session,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
-    pendingRoute: String? = null,
-    onRouteConsumed: () -> Unit = {},
+    incoming: IncomingNavigation? = null,
+    onRouteConsumed: (String) -> Unit = {},
     /**
      * 独立工具页启动（金标 SharedView 的 Activity 目标）：直接把 NavHost 起点设为该工具，
      * 不再先渲染根页。为空 = 正常 MainActivity 根导航。
      */
     startToolId: String? = null,
     startToolPick: Boolean = false,
-    /** true = ToolActivity 独立宿主：不渲染根 Tab、不显示容器变换覆盖层、返回起点工具时结束 Activity。 */
+    /** ToolActivity 已有下层主宿主，到起点工具时交还给该宿主。 */
     standaloneTool: Boolean = false,
     /** 独立宿主从起点工具返回时调用（由 ToolActivity 执行 SharedView override + finish）。 */
     onCloseStandaloneTool: () -> Unit = {},
@@ -202,25 +207,9 @@ fun MainNavHost(
     val rootView = LocalView.current
     val scope = rememberCoroutineScope()
 
-    // 本机外观偏好：壁纸取色开关（Profile → 外观）。
-    // 常用工具来自同步的 userdata v6 homeTools（原始值：空列表 = 小程序同款空态引导）。
-    // 2026-11-22：先把跨端同步 id 换回本机 id（ft→fit、committee/bz→roster），
-    // 否则网页/小程序写入的体测、名单会被 byId 过滤掉，换端后首页少两个工具。
     val sections by container.userDataRepository.currentSections.collectAsStateWithLifecycle()
-    val sectionsQuickToolIds = remember(sections) {
-        val array = sections["homeTools"] as? JsonArray
-        array
-            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-            ?.mapNotNull { ToolCatalog.bySyncId(it)?.id }
-            ?.distinct()
-            .orEmpty()
-    }
-    // 本机乐观值：AllTools/Home 编辑后立即同步到「工作台」，不等待 updateCurrent 回写 Flow。
-    var optimisticQuickToolIds by remember { mutableStateOf<List<String>?>(null) }
-    LaunchedEffect(sectionsQuickToolIds) {
-        optimisticQuickToolIds = sectionsQuickToolIds
-    }
-    val quickToolIds = optimisticQuickToolIds ?: sectionsQuickToolIds
+    val quickToolIds = remember(sections) { HomeToolsEditor.read(sections) }
+    val homeToolsEdit = rememberHomeToolsEditSession(session, container.userDataRepository)
 
     // 云同步开关状态（我的页展示/切换）。
     var syncEnabled by remember { mutableStateOf(true) }
@@ -242,48 +231,62 @@ fun MainNavHost(
     // 根页 Pager 状态 hoist 到 NavHost 外层：进入工具页再返回时保持当前 Tab。
     val pagerState = rememberCtTabPagerState(pageCount = TOP_LEVEL_COUNT)
 
-    // 工具卡 → 工具页的**共享容器变换**状态（M3 Expressive container transform）。
+    val currentEntry by navController.currentBackStackEntryAsState()
     val toolTransitionAnchors = remember { ToolTransitionAnchors() }
-    var transitionTool by remember { mutableStateOf<AppTool?>(null) }
-    var transitionStart by remember { mutableStateOf<Rect?>(null) }
-    var transitionRoute by remember { mutableStateOf<String?>(null) }
-    // 返回：覆盖层从全屏经同一弹簧缩回卡片（reverse）。pop 在动画开始前完成，
-    // 底层始终是干净的根页；不再捕获界面快照（旧「快照遮底」补丁已移除）。
-    var transitionReverse by remember { mutableStateOf(false) }
-    var transitionPendingPop by remember { mutableStateOf(false) }
-    val reduceMotion = rememberReduceMotion()
+    var cardReturn by remember { mutableStateOf<ToolCardReturn?>(null) }
+    var cardAnimation by remember { mutableStateOf<ToolCardAnimation?>(null) }
+    val reduceMotion by rememberUpdatedState(rememberReduceMotion())
+    val activity = context.findActivity()
 
-    // Keep the graph's start stable after consumption and process recreation.
-    val startRoute = androidx.compose.runtime.saveable.rememberSaveable {
-        if (standaloneTool && startToolId != null) Routes.tool(startToolId, startToolPick)
-        else pendingRoute ?: Routes.ROOT
+    val startRoute = if (standaloneTool && startToolId != null) Routes.tool(startToolId, startToolPick) else Routes.ROOT
+    var startupRoute by remember { mutableStateOf(incoming?.takeIf { it.isFor(session) }?.route) }
+
+    fun isWorkbenchCurrent() = navController.currentDestination?.route == Routes.ROOT
+
+    fun fromWorkbench(action: () -> Unit) {
+        if (!isWorkbenchCurrent() || SharedViewMotion.isToolOpeningFrom(activity)) return
+        homeToolsEdit.requestLeave { if (isWorkbenchCurrent()) action() }
     }
-    var initialDelivery by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(pendingRoute != null) }
-    LaunchedEffect(pendingRoute) {
-        val target = pendingRoute ?: return@LaunchedEffect
-        if (!initialDelivery || target != startRoute) {
-            if (target == Routes.ROOT) {
-                if (!navController.popBackStack(Routes.ROOT, inclusive = false)) {
-                    navController.navigate(Routes.ROOT) { launchSingleTop = true }
-                }
-                pagerState.scrollToPage(0)
-            } else {
-                val current = navController.currentBackStackEntry
-                navController.navigate(target) {
-                    if (current?.destination?.route == Routes.TOOL &&
-                        current.arguments?.getString(Routes.TOOL_ARG) == target.substringBefore('?').removePrefix("tool/")) {
-                        popUpTo(current.destination.id) { inclusive = true }
+
+    LaunchedEffect(incoming?.id, standaloneTool) {
+        startupRoute = null
+        if (standaloneTool) return@LaunchedEffect
+        navController.repairWorkbenchParent()
+        val request = incoming ?: return@LaunchedEffect
+        if (request.isFor(session)) {
+            homeToolsEdit.requestLeave(replacePending = true) {
+                cardReturn = null
+                cardAnimation = null
+                val target = request.route
+                when (target) {
+                    Routes.ROOT -> {
+                        navController.showWorkbench()
+                        pagerState.requestScrollToPage(0)
                     }
-                    launchSingleTop = true
+                    Routes.tool("tt") -> {
+                        navController.openIncomingTimetable(request)
+                        pagerState.requestScrollToPage(0)
+                    }
+                    else -> {
+                        val current = navController.currentBackStackEntry
+                        navController.navigate(target) {
+                            if (current?.destination?.route == Routes.TOOL &&
+                                current.arguments?.getString(Routes.TOOL_ARG) == target.substringBefore('?').removePrefix("tool/")) {
+                                popUpTo(current.destination.id) { inclusive = true }
+                            }
+                            // Tool ids are arguments of one destination. Preserve different tool entries.
+                            launchSingleTop = current?.destination?.route != Routes.TOOL
+                        }
+                    }
                 }
             }
-        }
-        initialDelivery = false
-        onRouteConsumed()
+        } else CtToastBus.show("入口对应的登录已失效，请在应用内重新打开")
+        onRouteConsumed(request.id)
     }
 
     fun selectTab(index: Int) {
-        scope.launch { pagerState.animateScrollToPage(index.coerceIn(0, TOP_LEVEL_COUNT - 1)) }
+        if (index !in 0 until TOP_LEVEL_COUNT || pagerState.settledPage == index) return
+        fromWorkbench { scope.launch { pagerState.animateScrollToPage(index) } }
     }
 
     // 轻量 Toast 反馈（导出/同步结果）。
@@ -293,84 +296,45 @@ fun MainNavHost(
 
     /** 打开工具；「设置」工具卡已移除，设置入口统一在「我的」页。 */
     fun openTool(tool: AppTool) {
-        if (transitionTool != null || navController.currentDestination?.route != Routes.ROOT) return
-        val route = when (tool.id) {
-            "vote" -> Routes.VOTE
-            else -> Routes.tool(tool.id)
-        }
-        // 有卡片锚点且未移除动画时，走容器变换「卡片长成页面」；否则直接导航。
-        val anchor = toolTransitionAnchors.get(tool.id)
-        if (!reduceMotion && anchor != null && transitionTool == null) {
-            // 金标 SharedView：仅支持「工具卡 → 工具页」这种可直接映射到 ToolActivity 的路径。
-            // 投票是独立 Routes.VOTE 页面，映射不到 tool/{id}，继续走现有 Compose 容器变换。
-            val sharedViewStarted = tool.id != "vote" && SharedViewMotion.tryLaunchTool(
-                activity = context.findActivity(),
-                rootView = rootView,
-                tool = tool,
-                anchor = anchor,
-                session = session,
-            )
-            if (sharedViewStarted) return
-            transitionStart = anchor.bounds
-            transitionTool = tool
-            transitionRoute = route
-            transitionReverse = false
-            transitionPendingPop = false
-        } else {
+        val origin = toolTransitionAnchors.openingCard(tool.id)
+        val page = pagerState.settledPage
+        fromWorkbench {
+            val rootId = navController.currentBackStackEntry?.id ?: return@fromWorkbench
+            if (page != pagerState.settledPage || pagerState.isScrollInProgress) return@fromWorkbench
+            val anchor = origin?.takeIf { !reduceMotion && toolTransitionAnchors.hasSameAnchor(it) }
+            if (anchor != null && tool.id != "vote" && !standaloneTool && SharedViewMotion.tryLaunchTool(
+                    activity, rootView, tool, anchor, toolTransitionAnchors, session,
+                )) return@fromWorkbench
+            val route = if (tool.id == "vote") Routes.VOTE else Routes.tool(tool.id)
+            cardAnimation = anchor?.let { ToolCardAnimation(tool, it, reverse = false) }
             navController.navigate(route) { launchSingleTop = true }
-        }
-    }
-
-    /**
-     * 工具页返回：容器变换「页面收回卡片」。
-     *
-     * 顺序：1) 立即 `popBackStack()` 回根页（此后底层一直是干净的根页）；
-     * 2) 覆盖层从全屏经同一弹簧缩回卡片 bounds 并淡出，结束撤层。
-     *
-     * 与旧实现（捕获界面快照再缩小）相比：不做 View.draw 快照，无「遮底」层，
-     * WebView/SurfaceView 页面也不会出现快照空白。
-     * 无锚点/移除动画/已有转场进行中时直接 pop。
-     */
-    fun popTool(toolId: String) {
-        // 独立 ToolActivity：起点工具没有上一页，直接结束 Activity（由 SharedView override 回卡片）；
-        // 工具内部再打开的页面（如 课表 → 地图）仍有上一页，正常 pop。
-        if (standaloneTool) {
-            if (navController.previousBackStackEntry == null) {
-                onCloseStandaloneTool()
-            } else {
-                navController.popBackStack()
+            cardReturn = navController.currentBackStackEntry?.id?.let { targetId ->
+                anchor?.let { ToolCardReturn(rootId, targetId, page, tool, it) }
             }
-            return
         }
-        if (navController.previousBackStackEntry == null) {
-            context.findActivity()?.finish()
-            return
-        }
-        val tool = ToolCatalog.byId(toolId)
-        val anchor = toolTransitionAnchors.get(toolId)
-        if (reduceMotion || tool == null || anchor == null || transitionTool != null) {
-            navController.popBackStack()
-            return
-        }
-        // 先 pop：底层回到根页；pendingPop 仅作 onDone 兜底（pop 失败时强制再 pop 一次）。
-        val popped = runCatching { navController.popBackStack() }.getOrDefault(false)
-        transitionPendingPop = !popped
-        transitionStart = anchor.bounds
-        transitionTool = tool
-        transitionRoute = null
-        transitionReverse = true
     }
 
-    // 独立 ToolActivity 的返回兜底：
-    // - 工具内部 push 了其它页面（如 课表 → 地图）→ 先 pop；
-    // - 已在起点工具 → 结束 Activity（SharedView override 回卡片）；
-    // - 弹层/对话框自己的 BackHandler 后注册，优先消费，不会走到这里。
-    if (standaloneTool) {
-        BackHandler {
-            if (navController.previousBackStackEntry == null) {
-                onCloseStandaloneTool()
-            } else {
-                navController.popBackStack()
+    fun popTool(entryId: String) {
+        if (navController.currentBackStackEntry?.id != entryId) return
+        val parent = navController.previousBackStackEntry
+        if (parent == null) {
+            if (standaloneTool) onCloseStandaloneTool() else navController.showWorkbench()
+            return
+        }
+        val origin = cardReturn?.takeIf { it.targetId == entryId }
+        if (origin != null) cardReturn = null
+        cardAnimation = null
+        navController.popBackStack()
+        if (origin != null && origin.rootId == parent.id && !reduceMotion) {
+            scope.launch {
+                // The workbench can be recomposed after the pop. Require the same placed card.
+                withFrameNanos { }
+                withFrameNanos { }
+                if (navController.currentBackStackEntry?.id == origin.rootId && !reduceMotion &&
+                    pagerState.settledPage == origin.page && !pagerState.isScrollInProgress &&
+                    toolTransitionAnchors.hasSameAnchor(origin.anchor)) {
+                    cardAnimation = ToolCardAnimation(origin.tool, origin.anchor, reverse = true)
+                }
             }
         }
     }
@@ -471,13 +435,24 @@ fun MainNavHost(
             exitTransition = { ExitTransition.None },
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { ExitTransition.None },
-        ) {
+        ) { entry ->
+            val coldTarget = startupRoute
+            if (coldTarget != null && coldTarget != Routes.ROOT) {
+                BootSplash(coldTarget)
+                return@composable
+            }
+            val rootActive = currentEntry?.id == entry.id
+            BackHandler(enabled = rootActive && homeToolsEdit.isEditing(pagerState.settledPage)) {
+                homeToolsEdit.requestLeave()
+            }
             RootTabs(
                 container = container,
                 session = session,
-                onSignOut = onSignOut,
+                onSignOut = { fromWorkbench(onSignOut) },
                 pagerState = pagerState,
                 quickToolIds = quickToolIds,
+                homeToolsEdit = homeToolsEdit,
+                rootActive = rootActive,
                 sections = sections,
                 syncEnabled = syncEnabled,
                 onSyncEnabledChange = { enabled ->
@@ -487,34 +462,24 @@ fun MainNavHost(
                 onClearLocalCache = {
                     scope.launch { runCatching { container.clearLocalCaches() } }
                 },
-                onOpenDataPrivacy = { navController.navigate(Routes.DATA_PRIVACY) },
-                onOpenPermissions = { navController.navigate(Routes.PERMISSIONS) },
-                onOpenReminderSettings = { navController.navigate(Routes.REMINDER_SETTINGS) },
-                onOpenFeedback = { navController.navigate(Routes.FEEDBACK) },
-                onOpenGuide = { navController.navigate(Routes.GUIDE) },
+                onOpenDataPrivacy = { fromWorkbench { navController.navigate(Routes.DATA_PRIVACY) } },
+                onOpenPermissions = { fromWorkbench { navController.navigate(Routes.PERMISSIONS) } },
+                onOpenReminderSettings = { fromWorkbench { navController.navigate(Routes.REMINDER_SETTINGS) } },
+                onOpenFeedback = { fromWorkbench { navController.navigate(Routes.FEEDBACK) } },
+                onOpenGuide = { fromWorkbench { navController.navigate(Routes.GUIDE) } },
                 onSelectTab = ::selectTab,
                 onOpenTool = ::openTool,
                 onCardOpen = { tool, focus ->
-                    if (navController.currentDestination?.route == Routes.ROOT) {
+                    fromWorkbench {
                         navController.navigate(Routes.tool(if (tool == "class-homework") "hw" else tool,
                             pick = tool == "class-homework", focus = focus)) { launchSingleTop = true }
                     }
                 },
-                onHomeToolsChange = { ids ->
-                    optimisticQuickToolIds = ids
-                    scope.launch {
-                        val saved = runCatching {
-                            container.userDataRepository.updateCurrent(
-                                HomeToolsEditor.apply(sections, ids),
-                            )
-                        }.isSuccess
-                        if (saved) toast(context, "首页快捷已保存")
-                    }
-                },
-                onOpenPowerPicker = { navController.navigate(Routes.tool("power", pick = true)) },
+                onOpenPowerPicker = { fromWorkbench { navController.navigate(Routes.tool("power", pick = true)) } },
                 onShareCard = { card -> shareCard = card },
-                onScan = { navController.navigate(Routes.SCAN) },
+                onScan = { fromWorkbench { navController.navigate(Routes.SCAN) } },
             )
+            if (rootActive) HomeToolsEditDialogs(homeToolsEdit)
         }
 
         composable(Routes.SCAN) {
@@ -541,28 +506,29 @@ fun MainNavHost(
                     defaultValue = null
                 },
             ),
-            // MainActivity 内：进入/返回由 ToolTransitionOverlay 负责，NavHost 不再叠加位移。
-            // ToolActivity 独立宿主：起点工具没有栈内转场；工具内部 push（如 课表 → 地图）用统一页间转场。
             enterTransition = {
-                if (standaloneTool) CtPageTransitions.harmonyPushEnter() else EnterTransition.None
+                if (reduceMotion || cardAnimation != null) EnterTransition.None else CtPageTransitions.harmonyPushEnter()
             },
             exitTransition = {
-                if (standaloneTool) CtPageTransitions.harmonyPushExit() else ExitTransition.None
+                if (reduceMotion || cardAnimation != null) ExitTransition.None else CtPageTransitions.harmonyPushExit()
             },
             popEnterTransition = {
-                if (standaloneTool) CtPageTransitions.harmonyPopEnter() else EnterTransition.None
+                if (reduceMotion) EnterTransition.None else CtPageTransitions.harmonyPopEnter()
             },
             popExitTransition = {
-                if (standaloneTool) CtPageTransitions.harmonyPopExit() else ExitTransition.None
+                if (reduceMotion) ExitTransition.None else CtPageTransitions.harmonyPopExit()
             },
         ) { entry ->
             val toolId = entry.arguments?.getString(Routes.TOOL_ARG).orEmpty()
             val pickInTool = entry.arguments?.getBoolean(Routes.TOOL_PICK_ARG) == true
             val focus = entry.arguments?.getString(Routes.FOCUS_ARG)
-            // 工具页系统返回也播放「收回卡片」退场动画（屏幕内弹层自己的 BackHandler 后注册，优先处理）。
-            BackHandler { popTool(toolId) }
+            val active = currentEntry?.id == entry.id
+            fun back() { popTool(entry.id) }
+            BackHandler(enabled = active, onBack = ::back)
             if (ToolCatalog.byId(toolId)?.adminOnly == true && !session.isAdmin) {
-                LaunchedEffect(toolId) { CtToastBus.show("当前账号无法访问此工具"); popTool(toolId) }
+                LaunchedEffect(toolId, active) {
+                    if (active) { CtToastBus.show("当前账号无法访问此工具"); back() }
+                }
                 return@composable
             }
             when (toolId) {
@@ -578,7 +544,7 @@ fun MainNavHost(
                         DrawScreen(
                             memberSource = memberSource,
                             publishProof = if (session.debug) null else { result -> container.submitDrawRecord(session, result) },
-                            onBack = { popTool(toolId) },
+                            onBack = ::back,
                             session = session,
                             userDataRepository = container.userDataRepository,
                             onExport = { payload ->
@@ -611,7 +577,7 @@ fun MainNavHost(
                     androidx.compose.runtime.key(session.sid, session.debug) {
                         GroupScreen(
                             memberSource = memberSource,
-                            onBack = { popTool(toolId) },
+                            onBack = ::back,
                             session = session,
                             userDataRepository = container.userDataRepository,
                             rosterMembers = roster,
@@ -622,12 +588,12 @@ fun MainNavHost(
                 }
 
                 "map" -> CampusMapScreen(
-                    onBack = { popTool(toolId) },
+                    onBack = ::back,
+                    isPageActive = active,
                     onOpenTimetable = {
-                        if (navController.previousBackStackEntry?.arguments?.getString(Routes.TOOL_ARG) == "tt") {
-                            popTool(toolId)
-                        } else {
-                            navController.navigate(Routes.tool("tt"))
+                        if (navController.currentBackStackEntry?.id == entry.id) {
+                            if (navController.previousBackStackEntry?.arguments?.getString(Routes.TOOL_ARG) == "tt") back()
+                            else navController.navigate(Routes.tool("tt"))
                         }
                     },
                     room = entry.arguments?.getString(Routes.MAP_ROOM_ARG),
@@ -643,7 +609,7 @@ fun MainNavHost(
                         runCatching { container.fitRecsRepository.flushPending() }
                     }
                     FitScreen(
-                        onBack = { popTool(toolId) },
+                        onBack = ::back,
                         session = session,
                         userDataRepository = container.userDataRepository,
                         initialHistory = fitHistory,
@@ -721,8 +687,8 @@ fun MainNavHost(
                         val taskAiClient = remember(session) { TaskAiClient { session.token } }
                         com.furina.classtools.ui.screens.tasks.TaskCacheRecovery(tasks)
                         TaskScreen(tasks, sessionSid = session.sid, createFromWidget = entry.arguments?.getBoolean(Routes.CREATE_TASK_ARG) == true, openTaskId = openTaskId, onTaskOpened = { openTaskId = null }, taskAiClient = taskAiClient,
-                            onCloseFocused = focus?.takeUnless { pickInTool }?.let { { popTool(toolId) } },
-                            onBack = { popTool(toolId) }, onHomework = { showHomework = true },
+                            onCloseFocused = focus?.takeUnless { pickInTool }?.let { { back() } },
+                            onBack = ::back, onHomework = { showHomework = true },
                             onSource = { task ->
                                 val notice = (task["sourceNoticeId"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
                                 if (notice.isNotEmpty()) {
@@ -757,7 +723,7 @@ fun MainNavHost(
                         }
                         HomeworkScreen(
                             initialDetailId = detailHomeworkId,
-                            onBack = { if (pickInTool) popTool(toolId) else { detailHomeworkId = null; showHomework = false } },
+                            onBack = { if (pickInTool) back() else { detailHomeworkId = null; showHomework = false } },
                             importedHomework = taskSnapshot.importedHomeworkIds(),
                             reminderTimes = reminderTimes,
                             onAddTask = { row ->
@@ -776,7 +742,7 @@ fun MainNavHost(
                             onRemindHomework = { row -> remindTarget = row },
                         )
                     }
-                    BackHandler(enabled = showHomework && remindTarget == null) { if (pickInTool) popTool(toolId) else { detailHomeworkId = null; showHomework = false } }
+                    BackHandler(enabled = active && showHomework && remindTarget == null) { if (pickInTool) back() else { detailHomeworkId = null; showHomework = false } }
                     remindTarget?.let { row ->
                         val title = row.subject.ifBlank { row.content.lineSequence().firstOrNull().orEmpty() }.ifBlank { "作业" }
                         UserReminderDialog(
@@ -800,7 +766,7 @@ fun MainNavHost(
                         mutableStateOf<com.furina.classtools.data.notices.NoticeGroupDto?>(null)
                     }
                     NoticesScreen(
-                        onBack = { popTool(toolId) },
+                        onBack = ::back,
                         session = session,
                         marksRepository = container.marksRepository,
                         noticesRepository = container.noticesRepository,
@@ -809,7 +775,7 @@ fun MainNavHost(
                         imageLoader = container.pptImageLoader,
                         // OPPO PUSH 点击带入的通知：加载完成后定位并展开该通知详情
                         initialFocusNoticeId = focus,
-                        onCloseFocused = { popTool(toolId) },
+                        onCloseFocused = { back() },
                         onAddToCalendar = { group ->
                             if (NoticeCalendarMapper.eligible(group)) {
                                 writeCalendarEvent(NoticeCalendarMapper.eventFor(group))
@@ -844,21 +810,31 @@ fun MainNavHost(
                     }
                 }
 
-                "tt" -> TimetableViewScreen(
-                    focus = com.furina.classtools.data.timetable.CourseFocus.decode(focus),
-                    onBack = { popTool(toolId) },
-                    onOpenMap = { room -> navController.navigate(Routes.campusMap(room)) },
-                    repository = container.timetableRepository,
-                    loginRepository = container.timetableLoginRepository,
-                    sessionSid = session.sid,
-                    onAddToCalendar = { course, week, termStart ->
-                        writeCalendarEvent(CourseCalendarMapper.eventFor(course, week, termStart))
-                    },
-                    onExportTimetable = { spec -> launchExport(spec, com.furina.classtools.features.share.ShareKind.TIMETABLE) },
-                )
+                "tt" -> {
+                    val delivery by entry.savedStateHandle.getStateFlow<Bundle?>(TIMETABLE_DELIVERY, null).collectAsState()
+                    val focusRequest = delivery?.getString("id")?.let { TimetableFocusRequest(it, delivery?.getString("focus")) }
+                        ?: focus?.let { TimetableFocusRequest(entry.id, it) }
+                    TimetableViewScreen(
+                        focusRequest = focusRequest,
+                        isPageActive = active,
+                        onBack = ::back,
+                        onOpenMap = { room ->
+                            if (navController.currentBackStackEntry?.id == entry.id) {
+                                navController.navigate(Routes.campusMap(room))
+                            }
+                        },
+                        repository = container.timetableRepository,
+                        loginRepository = container.timetableLoginRepository,
+                        sessionSid = session.sid,
+                        onAddToCalendar = { course, week, termStart ->
+                            writeCalendarEvent(CourseCalendarMapper.eventFor(course, week, termStart))
+                        },
+                        onExportTimetable = { spec -> launchExport(spec, com.furina.classtools.features.share.ShareKind.TIMETABLE) },
+                    )
+                }
 
                 "power" -> PowerScreen(
-                    onBack = { popTool(toolId) },
+                    onBack = ::back,
                     repository = container.powerRepository,
                     directoryRepository = container.powerDirectoryRepository,
                     userDataRepository = container.userDataRepository,
@@ -868,7 +844,7 @@ fun MainNavHost(
 
                 "water" -> androidx.compose.runtime.key(session.sid, session.token) {
                     WaterScreen(
-                        onBack = { popTool(toolId) },
+                        onBack = ::back,
                         session = session,
                         userDataRepository = container.userDataRepository,
                         directoryRepository = container.powerDirectoryRepository,
@@ -878,7 +854,7 @@ fun MainNavHost(
 
                 "roster" -> RosterScreen(
                     memberSource = memberSource,
-                    onBack = { popTool(toolId) },
+                    onBack = ::back,
                     session = session,
                     classMembersRepository = container.classMembersRepository,
 
@@ -887,14 +863,14 @@ fun MainNavHost(
 
                 "roll" -> RollCallScreen(
                     memberSource = memberSource,
-                    onBack = { popTool(toolId) },
+                    onBack = ::back,
                     session = session,
                     classMembersRepository = container.classMembersRepository,
                     userDataRepository = container.userDataRepository,
                 )
 
                 "diag" -> DiagScreen(
-                    onBack = { popTool(toolId) },
+                    onBack = ::back,
                     session = session,
                     repository = container.diagRepository,
                     deviceProbe = container.deviceProbe,
@@ -903,13 +879,13 @@ fun MainNavHost(
                 )
 
                 "stats" -> StatsScreen(
-                    onBack = { popTool(toolId) },
+                    onBack = ::back,
                     isAdmin = session.isAdmin,
                     repository = container.visitsRepository,
                 )
 
                 "ppt" -> PptListScreen(
-                    onBack = { popTool(toolId) },
+                    onBack = ::back,
                     onOpenDetail = { deck -> navController.navigate(Routes.pptDetail(deck.id)) },
                     repository = container.pptRepository,
                     imageLoader = container.pptImageLoader,
@@ -919,12 +895,12 @@ fun MainNavHost(
 
                 "jw" -> JwEntryScreen(
                     sid = session.sid,
-                    onBack = { popTool(toolId) },
+                    onBack = ::back,
                 )
 
                 "file" -> androidx.compose.runtime.key(container.cloudSpaceRepository) {
                     CloudSpaceScreen(
-                        onBack = { popTool(toolId) },
+                        onBack = ::back,
                         onOpenClassDecks = {
                             if (navController.currentBackStackEntry?.arguments?.getString(Routes.TOOL_ARG) == "file") {
                                 navController.navigate(Routes.tool("ppt"))
@@ -935,14 +911,14 @@ fun MainNavHost(
                 }
 
                 "express" -> ExpressScreen(
-                    onBack = { popTool(toolId) },
+                    onBack = ::back,
                 )
 
                 else -> {
                     val tool = ToolCatalog.byId(toolId) ?: ToolCatalog.allEntry
                     ToolPlaceholderScreen(
                         tool = tool,
-                        onBack = { popTool(toolId) },
+                        onBack = ::back,
                     )
                 }
             }
@@ -1138,10 +1114,12 @@ fun MainNavHost(
             exitTransition = { CtPageTransitions.harmonyPushExit() },
             popEnterTransition = { CtPageTransitions.harmonyPopEnter() },
             popExitTransition = { CtPageTransitions.harmonyPopExit() },
-        ) {
+        ) { entry ->
+            fun back() { popTool(entry.id) }
+            BackHandler(enabled = currentEntry?.id == entry.id, onBack = ::back)
             VoteListScreen(
                 repository = container.voteRepository,
-                onBack = { popTool("vote") },
+                onBack = ::back,
                 onOpenDetail = { id -> navController.navigate(Routes.voteDetail(id)) },
                 onCreate = { navController.navigate(Routes.voteCreate()) },
             )
@@ -1194,32 +1172,12 @@ fun MainNavHost(
             }
         }
         if (!standaloneTool) {
+            val animation = cardAnimation
             ToolTransitionOverlay(
-                tool = transitionTool,
-                startBounds = transitionStart,
-                reverse = transitionReverse,
-                onHalfway = {
-                    if (transitionPendingPop) {
-                        transitionPendingPop = false
-                        navController.popBackStack()
-                    } else {
-                        transitionRoute?.let { route ->
-                            transitionRoute = null
-                            navController.navigate(route) { launchSingleTop = true }
-                        }
-                    }
-                },
-                onDone = {
-                    // 兜底：若开始返回时 pop 未成功（当前仍在工具页），动画结束后强制 pop，绝不把工具内部界面留在屏上。
-                    if (transitionPendingPop) {
-                        transitionPendingPop = false
-                        runCatching { navController.popBackStack() }
-                    }
-                    transitionTool = null
-                    transitionStart = null
-                    transitionRoute = null
-                    transitionReverse = false
-                },
+                tool = animation?.tool,
+                startBounds = animation?.anchor?.bounds,
+                reverse = animation?.reverse == true,
+                onDone = { if (cardAnimation === animation) cardAnimation = null },
             )
         }
 
@@ -1236,6 +1194,12 @@ fun MainNavHost(
 
 private const val TOP_LEVEL_COUNT = 3
 
+private data class ToolCardReturn(
+    val rootId: String, val targetId: String, val page: Int, val tool: AppTool, val anchor: ToolTransitionAnchor,
+)
+
+private data class ToolCardAnimation(val tool: AppTool, val anchor: ToolTransitionAnchor, val reverse: Boolean)
+
 /**
  * 根页三 Tab：浮岛底栏 + 横向 Pager。
  *
@@ -1248,6 +1212,8 @@ private fun RootTabs(
     onSignOut: () -> Unit,
     pagerState: PagerState,
     quickToolIds: List<String>,
+    homeToolsEdit: HomeToolsEditSession,
+    rootActive: Boolean,
     sections: JsonObject,
     syncEnabled: Boolean,
     onSyncEnabledChange: (Boolean) -> Unit,
@@ -1260,7 +1226,6 @@ private fun RootTabs(
     onSelectTab: (Int) -> Unit,
     onOpenTool: (AppTool) -> Unit,
     onCardOpen: (String, String?) -> Unit,
-    onHomeToolsChange: (List<String>) -> Unit,
     onOpenPowerPicker: () -> Unit,
     /** 根页「扫一扫」：电脑扫码登录 / 抽签存证核验。 */
     onScan: () -> Unit = {},
@@ -1470,6 +1435,8 @@ private fun RootTabs(
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
         CtTabPager(
             pagerState = pagerState,
+            userScrollEnabled = !homeToolsEdit.isEditing(pagerState.settledPage),
+            onBlockedSwipe = { direction -> onSelectTab(pagerState.settledPage + direction) },
             modifier = Modifier
                 .fillMaxSize()
                 .hazeSource(hazeState),
@@ -1485,12 +1452,13 @@ private fun RootTabs(
                     marksRepository = container.marksRepository,
                     powerRepository = container.powerRepository,
                     noticesRepository = container.noticesRepository,
+                    homeworkRepository = container.homeworkRepository,
                     userDataRepository = container.userDataRepository,
                     onOpenAll = { onSelectTab(1) },
                     showNotificationPermissionBanner = showNotificationPermissionBanner,
                     onOpenPermissions = onOpenPermissions,
-                    isPageActive = pagerState.currentPage == 0,
-                    onHomeToolsChange = onHomeToolsChange,
+                    isPageActive = rootActive && pagerState.settledPage == 0 && !pagerState.isScrollInProgress,
+                    editSession = homeToolsEdit,
                     onOpenPowerPicker = onOpenPowerPicker,
                     onScan = onScan,
                 )
@@ -1498,9 +1466,10 @@ private fun RootTabs(
                 1 -> AllToolsScreen(
                     onOpenTool = onOpenTool,
                     isAdmin = session.isAdmin,
-                    userDataRepository = container.userDataRepository,
+                    userDataRepository = container.userDataRepository.boundTo(session),
                     quickToolIds = quickToolIds,
-                    onQuickToolsChange = onHomeToolsChange,
+                    editSession = homeToolsEdit,
+                    isPageActive = rootActive && pagerState.settledPage == 1 && !pagerState.isScrollInProgress,
                     onRefresh = {
                         scope.launch {
                             runCatching { container.userDataRepository.pull(force = true) }

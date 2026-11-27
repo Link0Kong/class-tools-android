@@ -57,7 +57,7 @@ internal object WidgetViews {
         colors.paintPaper(views)
         val inset = (layout.inset * context.resources.displayMetrics.density).roundToInt()
         views.setViewPadding(R.id.widget_body, inset, 0, inset, 0)
-        val overview = WidgetIntents.open(context, kind.destination)
+        val overview = WidgetIntents.open(context, kind.destination, owner = owner)
         val primary = model.first
         val refresh = owner != null && kind == WidgetKind.NOTICES && layout.extraControl
         val create = model.createTask && layout.extraControl
@@ -105,7 +105,7 @@ internal object WidgetViews {
                 if (stackedDetail.isNotBlank()) 1 else layout.summaryTitleLines)
             label(views, colors, R.id.widget_side_details, primary.detail.takeIf { side }.orEmpty())
             label(views, colors, R.id.widget_details, stackedDetail)
-            views.setOnClickPendingIntent(R.id.widget_primary, WidgetIntents.target(context, primary, kind))
+            views.setOnClickPendingIntent(R.id.widget_primary, WidgetIntents.target(context, primary, kind, owner))
             fullEntry(views, colors, R.id.widget_summary_open, kind, overview)
             actions(context, views, colors, R.id.widget_summary_add, R.id.widget_summary_refresh, create && !check, refresh, owner)
             views.setViewVisibility(R.id.widget_primary_check, visible(check))
@@ -132,7 +132,7 @@ internal object WidgetViews {
         view.setViewVisibility(refreshId, visible(refresh))
         if (create) {
             colors.text(view, addId, colors.accent)
-            view.setOnClickPendingIntent(addId, WidgetIntents.open(context, "new-task"))
+            view.setOnClickPendingIntent(addId, WidgetIntents.open(context, "new-task", owner = owner))
         }
         if (refresh && owner != null) {
             view.setInt(refreshId, "setColorFilter", colors.accent)

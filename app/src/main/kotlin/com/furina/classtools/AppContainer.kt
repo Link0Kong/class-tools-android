@@ -195,7 +195,7 @@ class AppContainer(context: Context) {
         if (credentialsChanged || previous?.issuedAt != session?.issuedAt) {
             val owner = ApiIdentity(session?.takeUnless { it.debug }?.token, identity.generation + 1)
             identity = owner
-            userDataRepository.switchTo(session?.sid) { files, publish ->
+            userDataRepository.switchTo(session?.sid, session) { files, publish ->
                 DefaultUserDataRepository(
                     api = apiClient.forIdentity(owner),
                     local = FileUserDataLocalStore(File(appContext.filesDir, "userdata"), { files.sid }, commit = files::commit),

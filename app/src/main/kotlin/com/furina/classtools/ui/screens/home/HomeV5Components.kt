@@ -48,7 +48,7 @@ import com.furina.classtools.ui.components.CtPill
 import com.furina.classtools.ui.components.CtPressLayer
 import com.furina.classtools.ui.components.CtTag
 import com.furina.classtools.ui.components.background.CtGlassSurface
-import com.furina.classtools.ui.navigation.ctToolTransitionSource
+import com.furina.classtools.ui.navigation.rememberToolCardTransition
 import com.furina.classtools.ui.theme.CtDarkGlassRole
 import com.furina.classtools.ui.theme.CtElevation
 import com.furina.classtools.ui.theme.CtMotion
@@ -202,9 +202,9 @@ internal fun QuickToolTile(
     val c = rememberCtColors()
     val interaction = remember { MutableInteractionSource() }
     val press = ctPressFeedback(interaction, reduceMotion)
-    val transitionSource = Modifier.ctToolTransitionSource(tool.id, CtRadius.input)
+    val (transitionSource, open) = rememberToolCardTransition(tool.id, CtRadius.input, onClick)
     Surface(
-        onClick = onClick,
+        onClick = open,
         modifier = modifier
             .then(transitionSource)
             .graphicsLayer {

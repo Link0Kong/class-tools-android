@@ -171,12 +171,7 @@ object ToolOrderPrefs {
         order: List<String>,
         now: Long = System.currentTimeMillis(),
     ): JsonObject {
-        val oldPrefs = sections["prefs"].asObjectOrNull()
         val oldAt = sections["at"].asObjectOrNull()
-        val prefs = buildJsonObject {
-            oldPrefs?.forEach { (key, value) -> if (key != PREF_KEY) put(key, value) }
-            put(PREF_KEY, JsonArray(ToolCatalog.toSyncIds(order).map { JsonPrimitive(it) }))
-        }
         val at = buildJsonObject {
             oldAt?.forEach { (key, value) -> put(key, value) }
             put("prefs", JsonPrimitive(maxOf(atOf(sections), now)))
@@ -185,9 +180,14 @@ object ToolOrderPrefs {
             sections.forEach { (key, value) ->
                 if (key != "prefs" && key != "at") put(key, value)
             }
-            put("prefs", prefs)
+            put("prefs", withOrder(sections["prefs"], order))
             put("at", at)
         }
+    }
+
+    fun withOrder(prefs: JsonElement?, order: List<String>): JsonObject = buildJsonObject {
+        prefs.asObjectOrNull()?.forEach { (key, value) -> if (key != PREF_KEY) put(key, value) }
+        put(PREF_KEY, JsonArray(ToolCatalog.toSyncIds(order).map { JsonPrimitive(it) }))
     }
 
     /** 人类可读的拖拽落位描述（调试/无障碍提示用）。 */

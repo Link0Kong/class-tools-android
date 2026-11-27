@@ -10,6 +10,7 @@ import com.furina.classtools.data.network.parseJsonOrNull
 import java.net.URLEncoder
 import java.time.Instant
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -27,6 +28,8 @@ import kotlinx.serialization.json.contentOrNull
  */
 interface PowerRepository {
     suspend fun loadRow(rv: String, force: Boolean = false): PowerRowResult
+
+    suspend fun cachedRow(rv: String): PowerRow? = null
 
     suspend fun loadHistory(rv: String, range: PowerRange, force: Boolean = false): PowerHistoryResult
 
@@ -57,6 +60,10 @@ class DefaultPowerRepository(
     private val mutex = Mutex()
     private val rowCache = HashMap<String, Timed<PowerRow>>()
     private val historyCache = HashMap<String, Timed<List<PowerPoint>>>()
+
+    override suspend fun cachedRow(rv: String): PowerRow? = mutex.withLock {
+        rowCache[PowerRooms.normalizeSel(rv)]?.value
+    }
 
     override suspend fun loadRow(rv: String, force: Boolean): PowerRowResult {
         val room = PowerRooms.normalizeSel(rv)
@@ -161,7 +168,7 @@ class DefaultPowerRepository(
         cached: Timed<PowerRow>?,
         message: String,
     ): PowerRowResult = if (cached != null) {
-        PowerRowResult.Success(cached.value, fromCache = true)
+        PowerRowResult.Success(cached.value, fromCache = true, refreshError = message)
     } else {
         PowerRowResult.Failure(message)
     }

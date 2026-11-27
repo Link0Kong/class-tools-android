@@ -7,6 +7,8 @@ import com.furina.classtools.data.network.ApiResponse
 import com.furina.classtools.data.network.HttpMethod
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import java.io.IOException
 import kotlinx.serialization.json.*
@@ -31,6 +33,25 @@ class TaskRepositoryTest {
     private val sid = "3260799999"
     private fun row(ts: Long, data: JsonObject) = buildJsonObject { put("id", sid); put("ts", ts); put("blob", data.toString()) }
     private fun doc(vararg items: JsonObject) = emptyTasks.withFields { put("items", JsonArray(items.toList())) }
+
+    @Test fun cancelledRefreshSettlesAndAConfirmedEmptyAccountCanBeRetried() = runTest {
+        val started = CompletableDeferred<Unit>()
+        val transport = FakeTransport {
+            started.complete(Unit)
+            awaitCancellation()
+        }
+        val repository = TaskRepository(sid, MemoryStorage(), testApiClient(transport), backgroundScope) { true }
+        val sync = launch { repository.sync() }
+        started.await()
+        assertEquals("同步中…", repository.syncStatus.value)
+
+        sync.cancelAndJoin()
+        assertEquals("本机缓存", repository.syncStatus.value)
+
+        transport.responder = { ApiResponse(200, "[]") }
+        assertEquals(emptyTasks, repository.syncSnapshot())
+        assertEquals("已同步", repository.syncStatus.value)
+    }
 
     @Test fun wrappedTextAndAdapterObjectsKeepThePathAndOtherFieldsOnConditionalWrite() = runTest {
         for (adapterObject in listOf(false, true)) {

@@ -91,6 +91,7 @@ fun CampusMapScreen(
     onBack: () -> Unit,
     onOpenTimetable: () -> Unit = {},
     room: String? = null,
+    isPageActive: Boolean = true,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -222,7 +223,7 @@ fun CampusMapScreen(
             if (closed != "true" && webView.isAttachedToWindow && currentUrl == backUrl) closeMap()
         }
     }
-    BackHandler(onBack = ::handleBack)
+    BackHandler(enabled = isPageActive, onBack = ::handleBack)
 
     Column(
         modifier = Modifier

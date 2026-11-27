@@ -8,6 +8,8 @@ import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -57,6 +59,7 @@ class HomeworkRepositoryTest {
 
         assertEquals(1, transport.requests.size)
         assertTrue(second.fromCache)
+        assertNull(second.refreshError)
     }
 
     @Test
@@ -103,6 +106,22 @@ class HomeworkRepositoryTest {
 
         assertTrue(result.fromCache)
         assertEquals(2, result.rows.size)
+        assertNotNull(result.refreshError)
+    }
+
+    @Test
+    fun previouslySyncedEmptyAssignmentsStayAvailableWhenTheNextRequestFails() = runTest {
+        val transport = FakeTransport { ApiResponse(200, "[]") }
+        val repository = repository(transport)
+        assertNull(repository.cachedSnapshot())
+        repository.load(force = true)
+        transport.responder = { throw IOException("offline") }
+
+        val offline = repository.load(force = true) as HomeworkLoadResult.Success
+
+        assertEquals(emptyList<HomeworkRow>(), repository.cachedSnapshot())
+        assertTrue(offline.rows.isEmpty())
+        assertNotNull(offline.refreshError)
     }
 
     @Test

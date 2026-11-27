@@ -10,6 +10,7 @@ import com.furina.classtools.data.network.asObjectOrNull
 import com.furina.classtools.data.network.asStringOrNull
 import com.furina.classtools.data.network.parseJsonOrNull
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -118,8 +119,13 @@ class DefaultTimetableRepository(
         }
     }
 
-    private suspend fun personalSnapshot(): TtSnapshot? =
-        runCatching { personalStore?.read() }.getOrNull()?.takeIf { it.c.isNotEmpty() }
+    private suspend fun personalSnapshot(): TtSnapshot? = try {
+        personalStore?.read()?.takeIf { it.c.isNotEmpty() }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        null
+    }
 
     private fun cachedFallback(
         cached: FileTimetableCache.Cached?,
@@ -132,6 +138,7 @@ class DefaultTimetableRepository(
                 fromCache = true,
                 fetchedAt = cached.savedAt,
                 source = TtSource.CACHE,
+                refreshError = message,
             )
         } else {
             TtLoadResult.Failure(message, kind)

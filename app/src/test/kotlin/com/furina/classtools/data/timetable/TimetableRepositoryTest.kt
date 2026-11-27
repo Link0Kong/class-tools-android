@@ -101,6 +101,7 @@ class TimetableRepositoryTest {
         now += 60_000L
         val second = repo.load()
         assertTrue((second as TtLoadResult.Success).fromCache)
+        assertNull(second.refreshError)
         assertEquals(1, transport.requests.size)
 
         // TTL 过期 force：重新请求
@@ -128,6 +129,7 @@ class TimetableRepositoryTest {
         assertTrue(fallback is TtLoadResult.Success)
         assertTrue((fallback as TtLoadResult.Success).fromCache)
         assertEquals(2, fallback.snapshot.c.size)
+        assertNotNull(fallback.refreshError)
     }
 
     @Test

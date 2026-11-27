@@ -48,7 +48,7 @@ internal object WidgetRows {
             tone = entry.quadrant?.let(colors::quadrant) ?: colors.lane(entry.line, kind))
         is WidgetEntry.Header -> RemoteViews(context.packageName, R.layout.widget_section).apply {
             WidgetViews.label(this, colors, R.id.widget_section_title, entry.section.title, accent = true)
-            if (interactive) setOnClickFillInIntent(R.id.widget_section_title, WidgetIntents.line(entry.section.link, kind))
+            if (interactive) setOnClickFillInIntent(R.id.widget_section_title, WidgetIntents.line(entry.section.link, kind, owner))
         }
         is WidgetEntry.Tiles -> {
             fun tile(section: WidgetSection, index: Int): RemoteViews {
@@ -85,12 +85,12 @@ internal object WidgetRows {
         setViewVisibility(R.id.widget_row_side, WidgetViews.visible(side))
         WidgetViews.label(this, colors, R.id.widget_row_side_detail, line.detail.takeIf { side }.orEmpty())
         WidgetViews.label(this, colors, R.id.widget_row_excerpt, line.excerpt.takeIf { side && style.excerpt }.orEmpty())
-        if (interactive) setOnClickFillInIntent(R.id.widget_row, WidgetIntents.line(line, kind))
+        if (interactive) setOnClickFillInIntent(R.id.widget_row, WidgetIntents.line(line, kind, owner))
         setViewVisibility(R.id.widget_row_open, WidgetViews.visible(overview != null))
         if (overview != null) {
             colors.text(this, R.id.widget_row_open, colors.accent)
             setContentDescription(R.id.widget_row_open, "打开" + caption)
-            if (interactive) setOnClickFillInIntent(R.id.widget_row_open, WidgetIntents.line(overview, kind))
+            if (interactive) setOnClickFillInIntent(R.id.widget_row_open, WidgetIntents.line(overview, kind, owner))
         }
         val check = owner != null && style.check && line.destination == "hw" && line.canComplete && line.focus.isNotBlank()
         setViewVisibility(R.id.widget_row_check, WidgetViews.visible(check))

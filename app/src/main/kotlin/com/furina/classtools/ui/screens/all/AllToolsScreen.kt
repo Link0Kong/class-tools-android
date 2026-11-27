@@ -1,12 +1,8 @@
 package com.furina.classtools.ui.screens.all
 
-import com.furina.classtools.ui.components.CtToastBus
-
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import com.furina.classtools.ui.components.CtGlassIconButton
 import com.furina.classtools.ui.components.CtRootHeader
@@ -15,7 +11,6 @@ import com.furina.classtools.ui.components.ctStickyHeaderProgress
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +29,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -57,21 +53,30 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.furina.classtools.data.sync.UserDataRepository
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.data.tool.ToolCatalog
+import com.furina.classtools.features.home.HomeToolsEditor
 import com.furina.classtools.ui.components.ExpressiveBackground
 import com.furina.classtools.ui.components.reorderableSemantics
+import com.furina.classtools.ui.screens.home.HomeQuickToolsRow
+import com.furina.classtools.ui.screens.home.HomeToolsEditHint
+import com.furina.classtools.ui.screens.home.HomeToolsEditSession
+import com.furina.classtools.ui.screens.home.rememberPreviewHomeToolsEditSession
 import com.furina.classtools.ui.theme.CtAnimatedEntrance
 import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.CtText
@@ -101,7 +106,7 @@ import com.furina.classtools.ui.components.ctHeaderCollapseProgress
  *
  * 交互：
  * - 普通态：点卡片打开工具；**长按卡片直接拖动排序**（不进入配置态），松手写 `userdata.toolOrder`；
- * - 编辑态（点右上「编辑首页」）：点卡片加入/移出首页快捷（≤4，✓ 角标，第 5 个 toast）；
+ * - 编辑态（点右上「编辑首页」）：点卡片选择首页快捷，在快捷行调整顺序，点完成保存草稿。
  *
  * 原有的顺序恢复/持久化、转场锚点、读屏语义、拖动几何全部保留。
  */
@@ -120,13 +125,14 @@ fun AllToolsScreen(
     previewDragOffset: Offset = Offset(190f, 340f),
     /** 当前首页快捷工具 id（编辑态 ✓ 角标；≤4）。 */
     quickToolIds: List<String> = emptyList(),
-    /** 编辑态点卡片后回调新的快捷列表（由调用方写 userdata.homeTools）。 */
+    /** Preview callback invoked after completing a draft. Production uses the shared edit session. */
     onQuickToolsChange: ((List<String>) -> Unit)? = null,
     onRefresh: () -> Unit = {},
     /** 预览/测试：初始进入编辑态。 */
     initialEditing: Boolean = false,
+    editSession: HomeToolsEditSession? = null,
+    isPageActive: Boolean = true,
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
@@ -145,9 +151,11 @@ fun AllToolsScreen(
     val contentMaxWidth = if (screenWidthDp >= 900) HarmonyTokens.ContentMaxWidthWide else HarmonyTokens.ContentMaxWidthPhone
     val pagePadding = HarmonyTokens.PagePadding
 
-    var editing by remember { mutableStateOf(initialEditing) }
-    var quickDraft by remember { mutableStateOf(quickToolIds) }
-    LaunchedEffect(quickToolIds) { quickDraft = quickToolIds }
+    val editor = editSession ?: rememberPreviewHomeToolsEditSession(1, quickToolIds, initialEditing) {
+        onQuickToolsChange?.invoke(it)
+    }
+    val editing = editor.isEditing(1)
+    val quickDraft = editor.draft?.takeIf { editing }?.ids.orEmpty()
 
     var order by remember { mutableStateOf(ToolOrderLogic.normalize(initialOrder, naturalIds)) }
     var restored by remember { mutableStateOf(skipRestore || initialOrder.isNotEmpty()) }
@@ -211,11 +219,9 @@ fun AllToolsScreen(
     fun persistOrder(newOrder: List<String>) {
         onToolOrderChange?.invoke(newOrder)
         val repository = userDataRepository ?: return
-        val now = System.currentTimeMillis()
         scope.launch {
             runCatching {
-                val sections = repository.currentSections.first()
-                repository.updateCurrent(ToolOrderPrefs.apply(sections, newOrder, now))
+                repository.updateCurrentSection("prefs") { ToolOrderPrefs.withOrder(it, newOrder) }
             }
         }
     }
@@ -241,6 +247,9 @@ fun AllToolsScreen(
             lastDragEndAt = System.currentTimeMillis()
         }
     }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { cancelDrag() }
+    LaunchedEffect(isPageActive, editing, columns) { cancelDrag() }
 
     fun moveCardBy(id: String, delta: Int) {
         val newOrder = ToolOrderLogic.moveBy(order, id, delta)
@@ -307,15 +316,14 @@ fun AllToolsScreen(
     }
 
     fun toggleQuick(tool: AppTool) {
-        val current = quickDraft
-        val next = if (current.contains(tool.id)) current - tool.id else current + tool.id
-        if (next.size > HomeToolsEditorMax) {
-            CtToastBus.show("首页最多 4 个")
-            return
+        if (tool in HomeToolsEditor.availableTools && editor.toggle(1, tool.id)) {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         }
-        quickDraft = next
-        onQuickToolsChange?.invoke(next)
-        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
+
+    fun beginEditing() {
+        cancelDrag()
+        editor.begin(1, quickToolIds)
     }
 
     // 2026-11-20 页面骨架 v2：常驻悬浮玻璃条（渐变模糊）需要页面级 Haze 源。
@@ -353,14 +361,7 @@ fun AllToolsScreen(
                         .fillMaxWidth()
                         .zIndex(2f),
                     actions = {
-                        CtGlassIconButton(
-                            icon = if (editing) Icons.Rounded.Check else Icons.Rounded.Tune,
-                            contentDescription = if (editing) "完成编辑" else "编辑首页快捷",
-                            onClick = {
-                                editing = !editing
-                                if (!editing) draggingId = null
-                            },
-                        )
+                        AllToolsEditActions(editor, ::beginEditing)
                     },
                 )
                 Column(
@@ -380,13 +381,13 @@ fun AllToolsScreen(
                         toolCount = toolsInOrder.size,
                         columns = columns,
                         dragging = effectiveDraggingId != null,
-                        onToggleEdit = {
-                            editing = !editing
-                            if (!editing) {
-                                draggingId = null
-                            }
-                        },
+                        actions = { AllToolsEditActions(editor, ::beginEditing) },
                     )
+
+                    if (editing) {
+                        HomeToolsEditHint(editor, quickToolIds)
+                        HomeQuickToolsRow(editor, 1, quickToolIds, isPageActive, reduceMotion, onOpenTool)
+                    }
 
                     // 不分类平铺：顺序即用户/多端同步的自定义顺序；长按直接拖动排序。
                     Layout(
@@ -397,7 +398,8 @@ fun AllToolsScreen(
                                         Box(
                                             modifier = Modifier
                                                 .alpha(if (tool.id == effectiveDraggingId) 0.22f else 1f)
-                                                .pointerInput(tool.id, columns) {
+                                                .pointerInput(tool.id, columns, editing, isPageActive) {
+                                                    if (editing || !isPageActive) return@pointerInput
                                                     detectDragGesturesAfterLongPress(
                                                         onDragStart = { local ->
                                                             if (draggingId != null) return@detectDragGesturesAfterLongPress
@@ -433,21 +435,28 @@ fun AllToolsScreen(
                                                 tool = tool,
                                                 onClick = {
                                                     val now = System.currentTimeMillis()
-                                                    if (draggingId == null &&
+                                                    if (isPageActive && draggingId == null &&
                                                         now - lastDragEndAt > AllToolsDragGeometry.TAP_SUPPRESSION_MS
                                                     ) {
                                                         if (editing) toggleQuick(tool) else onOpenTool(tool)
                                                     }
                                                 },
                                                 modifier = Modifier.fillMaxSize(),
-                                                contentSemantics = Modifier.reorderableSemantics(
-                                                    index = displayIndex,
-                                                    total = toolsInOrder.size,
-                                                    itemLabel = tool.name,
-                                                    dragging = tool.id == effectiveDraggingId,
-                                                    onMoveUp = { moveCardBy(tool.id, -1) },
-                                                    onMoveDown = { moveCardBy(tool.id, +1) },
-                                                ),
+                                                contentSemantics = if (editing) {
+                                                    Modifier.semantics {
+                                                        selected = tool.id in quickDraft
+                                                        if (tool !in HomeToolsEditor.availableTools) disabled()
+                                                    }
+                                                } else {
+                                                    Modifier.reorderableSemantics(
+                                                        index = displayIndex,
+                                                        total = toolsInOrder.size,
+                                                        itemLabel = tool.name,
+                                                        dragging = tool.id == effectiveDraggingId,
+                                                        onMoveUp = { moveCardBy(tool.id, -1) },
+                                                        onMoveDown = { moveCardBy(tool.id, +1) },
+                                                    )
+                                                },
                                                 reduceMotion = reduceMotion,
                                                 editing = editing,
                                                 selected = quickDraft.contains(tool.id),
@@ -528,8 +537,19 @@ fun AllToolsScreen(
     }
 }
 
-/** 首页快捷上限（与 userdata.homeTools 契约一致）。 */
-private const val HomeToolsEditorMax: Int = 4
+@Composable
+private fun AllToolsEditActions(editor: HomeToolsEditSession, onBegin: () -> Unit) {
+    if (editor.isEditing(1)) {
+        Row {
+            TextButton(onClick = editor::discard, enabled = editor.canEdit) { Text("取消") }
+            TextButton(onClick = editor::save, enabled = editor.canEdit) {
+                Text(if (editor.saving) "保存中" else "完成")
+            }
+        }
+    } else {
+        CtGlassIconButton(icon = Icons.Rounded.Tune, contentDescription = "编辑首页快捷", onClick = onBegin)
+    }
+}
 
 /** 页头（2026-11-20 重做）：大标题「全部工具」+ 玻璃动作（编辑/完成）+ 副标题统计。 */
 @Composable
@@ -539,7 +559,7 @@ private fun HarmonyAllToolsHeader(
     toolCount: Int,
     columns: Int,
     dragging: Boolean,
-    onToggleEdit: () -> Unit,
+    actions: @Composable () -> Unit,
 ) {
     CtRootHeader(
         title = "全部工具",
@@ -550,14 +570,7 @@ private fun HarmonyAllToolsHeader(
             editing -> "点工具加入或移出首页快捷（最多 4 个）"
             else -> "$toolCount 个工具 · $columns 列 · 长按拖动排序"
         },
-        actions = {
-            CtGlassIconButton(
-                icon = if (editing) Icons.Rounded.Check else Icons.Rounded.Tune,
-                contentDescription = if (editing) "完成编辑" else "编辑首页快捷",
-                onClick = onToggleEdit,
-                tint = if (editing) MaterialTheme.colorScheme.primary else null,
-            )
-        },
+        actions = actions,
     )
 }
 

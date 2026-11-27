@@ -7,9 +7,11 @@ import com.furina.classtools.data.network.NetJson
 import com.furina.classtools.data.network.asObjectOrNull
 import com.furina.classtools.data.network.asStringOrNull
 import com.furina.classtools.data.network.parseJsonOrNull
+import com.furina.classtools.data.session.Session
 import java.net.URLEncoder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -58,6 +61,12 @@ sealed interface UserdataPushResult {
     data class Failure(val error: ApiError) : UserdataPushResult
 }
 
+sealed interface UserdataSectionUpdate {
+    data class Saved(val syncPending: Boolean) : UserdataSectionUpdate
+    data class Conflict(val value: JsonElement?) : UserdataSectionUpdate
+    data object Inactive : UserdataSectionUpdate
+}
+
 /**
  * userdata v6 双向同步仓库（契约：docs/BACKEND_CONTRACT.md §4 + docs/api/USERDATA_V6.md）。
  *
@@ -82,6 +91,10 @@ interface UserDataRepository {
 
     /** 本机同步内容变更入口：持久化 sections → 更新 Flow → 防抖推送。 */
     suspend fun updateCurrent(sections: JsonObject)
+
+    /** Read, compare and durably write one section. A null transform result leaves it unchanged. */
+    suspend fun updateCurrentSection(key: String, change: (JsonElement?) -> JsonElement?): UserdataSectionUpdate =
+        UserdataSectionUpdate.Inactive
 
     /** 本机数据变了（业务层在 `store.save()` 等价位置调用）：内部做脏检测。 */
     fun touch()
@@ -122,15 +135,27 @@ class SessionUserdataRepository : UserDataRepository {
     override val currentSections = sections.asStateFlow()
     @Volatile private var repository: DefaultUserDataRepository? = null
     private var session: UserdataSession? = null
+    private var boundSession: Session? = null
 
     @Synchronized
-    fun switchTo(sid: String?, create: (UserdataSession, (JsonObject) -> Unit) -> DefaultUserDataRepository) {
+    fun switchTo(sid: String?, owner: Session? = null, create: (UserdataSession, (JsonObject) -> Unit) -> DefaultUserDataRepository) {
         session?.retire()
         repository?.stop()
         repository = null
+        boundSession = owner
         sections.value = JsonObject(emptyMap())
         session = sid?.let { UserdataSession(it) }?.also { owner ->
             repository = create(owner) { value -> owner.commit { sections.value = value } }
+        }
+    }
+
+    /** Start a user action against the repository belonging to that login, even if the UI outlives it. */
+    @Synchronized
+    fun boundTo(owner: Session): UserDataRepository? {
+        val bound = boundSession ?: return null
+        return repository.takeIf {
+            bound.sid == owner.sid && bound.token == owner.token &&
+                bound.issuedAt == owner.issuedAt && bound.debug == owner.debug
         }
     }
 
@@ -139,6 +164,8 @@ class SessionUserdataRepository : UserDataRepository {
         repository?.push(force, forceKeys) ?: UserdataPushResult.Disabled
     override suspend fun flush() = repository?.flush() ?: UserdataPushResult.Disabled
     override suspend fun updateCurrent(sections: JsonObject) { repository?.updateCurrent(sections) }
+    override suspend fun updateCurrentSection(key: String, change: (JsonElement?) -> JsonElement?) =
+        repository?.updateCurrentSection(key, change) ?: UserdataSectionUpdate.Inactive
     override fun touch() { repository?.touch() }
     override suspend fun setSyncEnabled(enabled: Boolean) { repository?.setSyncEnabled(enabled) }
     override suspend fun syncEnabled() = repository?.syncEnabled() == true
@@ -168,7 +195,8 @@ class DefaultUserDataRepository(
     @Volatile
     private var sectionsSid: String? = null
 
-    private val pushMutex = Mutex()
+    private val syncMutex = Mutex()
+    private val currentMutex = Mutex()
     private var debounceJob: Job? = null
     private var recovering = false
 
@@ -184,11 +212,45 @@ class DefaultUserDataRepository(
     override suspend fun updateCurrent(sections: JsonObject) {
         val sid = sidOrNull() ?: return
         val normalized = UserdataV6.sectionsOf(sections)
-        local.writeCurrent(normalized)
-        if (sid != sidOrNull()) return
-        sectionsSid = sid
-        publish(normalized)
+        currentMutex.withLock {
+            if (sid != sidOrNull()) return
+            local.writeCurrent(normalized)
+            if (sid != sidOrNull()) return
+            sectionsSid = sid
+            publish(normalized)
+        }
         onLocalChanged()
+    }
+
+    override suspend fun updateCurrentSection(key: String, change: (JsonElement?) -> JsonElement?): UserdataSectionUpdate {
+        require(key in ownedSections)
+        val sid = sidOrNull() ?: return UserdataSectionUpdate.Inactive
+        return currentMutex.withLock {
+            if (sid != sidOrNull()) return@withLock UserdataSectionUpdate.Inactive
+            val current = UserdataV6.sectionsOf(local.readCurrent())
+            val next = change(current[key]) ?: return@withLock UserdataSectionUpdate.Conflict(current[key])
+            val enabled = syncEnabled()
+            val changed = next != current[key]
+            val durablePendingKey = key.takeIf { it == "homeTools" }
+            val schedule = changed && enabled && clock() >= local.holdUntil() &&
+                (durablePendingKey != null || local.readCache() != null)
+            if (changed) {
+                val updated = JsonObject(current + (key to next))
+                withContext(NonCancellable) {
+                    // Preserve an intentional empty homeTools selection even when there is no cloud baseline yet.
+                    local.commitCurrent(updated, durablePendingKey)
+                    if (sid == sidOrNull()) {
+                        sectionsSid = sid
+                        publish(updated)
+                        if (schedule) schedulePush()
+                    }
+                }
+            }
+            if (sid != sidOrNull()) UserdataSectionUpdate.Inactive
+            else UserdataSectionUpdate.Saved(
+                syncPending = schedule || (enabled && durablePendingKey != null && key in local.pendingKeys()),
+            )
+        }
     }
 
     override fun touch() {
@@ -199,28 +261,27 @@ class DefaultUserDataRepository(
         if (sidOrNull() == null) return
         if (!syncEnabled()) return
 
-        val current = normalizedCurrent()
-        publish(current)
-        val base = local.readCache()
-
-        if (base == null) {
-            // 无基线：只把「与默认值不同的 section」记为待补发，并先 pull 一次建基线（防默认值覆盖云端）。
+        currentMutex.withLock {
+            if (sidOrNull() == null) return
+            val current = normalizedCurrent()
+            publish(current)
+            val base = local.readCache()
+            if (base != null) {
+                if (UserdataMerge.dirtySections(base, current, ownedSections).isNotEmpty()) schedulePush()
+                return
+            }
+            // 无基线时只标记实际改动的 section，以免用默认值覆盖云端。
             val changed = UserdataMerge.changedKeysVsDefaults(current, ownedSections)
             if (changed.isEmpty()) return
             local.markPending(changed)
-            if (!recovering) {
-                recovering = true
-                try {
-                    pull(force = true)
-                } finally {
-                    recovering = false
-                }
-            }
-            return
+            if (recovering) return
+            recovering = true
         }
-
-        val dirty = UserdataMerge.dirtySections(base, current, ownedSections)
-        if (dirty.isNotEmpty()) schedulePush()
+        try {
+            pull(force = true)
+        } finally {
+            withContext(NonCancellable) { currentMutex.withLock { recovering = false } }
+        }
     }
 
     private suspend fun normalizedCurrent(): JsonObject {
@@ -245,13 +306,18 @@ class DefaultUserDataRepository(
         debounceJob?.cancel()
         debounceJob = scope.launch {
             delay(config.debounceMs)
-            push()
+            // Only the waiting timer is debounced. An already submitted POST must finish and reconcile.
+            scope.launch {
+                if (local.readCache() == null) pull(force = true) else push()
+            }
         }
     }
 
     // ------------------------------------------------------------ 拉取
 
-    override suspend fun pull(force: Boolean): UserdataPullResult {
+    override suspend fun pull(force: Boolean): UserdataPullResult = syncMutex.withLock { performPull(force) }
+
+    private suspend fun performPull(force: Boolean): UserdataPullResult {
         val sid = sidOrNull() ?: return UserdataPullResult.Disabled
         if (!syncEnabled()) return UserdataPullResult.Disabled
 
@@ -269,42 +335,31 @@ class DefaultUserDataRepository(
         if (sid != sidOrNull()) return UserdataPullResult.Disabled
         val wasV5 = remote != null && UserdataV6.numMs(remote["v"]) == 5L
 
-        val base = local.readCache()
-        val current = normalizedCurrent()
-        val wasDirty = if (base != null) {
-            UserdataMerge.dirtySections(base, current, ownedSections)
-        } else {
-            emptySet()
-        }
-
-        val pending = local.pendingKeys()
         val forceKeys = LinkedHashSet<String>()
-        if (local.pend() || pending.isNotEmpty()) {
-            forceKeys.addAll(pending)
-            // 竞态加固：无基线但用户已产生改动时至少保住 power（契约 §4.3 web 同款兜底）。
-            if (base == null) forceKeys.add("power")
-            forceKeys.remove("prefs")
+        val (changed, shouldPush) = currentMutex.withLock {
+            if (sid != sidOrNull()) return UserdataPullResult.Disabled
+            val base = local.readCache()
+            val current = normalizedCurrent()
+            val wasDirty = UserdataMerge.dirtySections(base, current, ownedSections)
+            val pending = local.pendingKeys()
+            if (local.pend() || pending.isNotEmpty()) {
+                forceKeys.addAll(pending)
+                // 无基线但用户已产生改动时至少保住 power（契约 §4.3 web 同款兜底）。
+                if (base == null) forceKeys.add("power")
+                forceKeys.remove("prefs")
+            }
+
+            val localView = UserdataMerge.localView(base, current, remote, forceKeys, now, ownedSections)
+            val merged = UserdataMerge.merge(remote, localView)
+            persistApplied(merged)
+            local.setLastPullAt(now)
+
+            val dirtyAfter = UserdataMerge.dirtySections(merged, normalizedCurrent(), ownedSections)
+            sectionsDiffer(current, merged) to (wasV5 || wasDirty.isNotEmpty() || dirtyAfter.isNotEmpty() ||
+                local.pend() || pending.isNotEmpty())
         }
-
-        val localView = UserdataMerge.localView(
-            base = base,
-            current = current,
-            remote = remote,
-            forceKeys = forceKeys,
-            now = now,
-            ownedSections = ownedSections,
-        )
-        val merged = UserdataMerge.merge(remote, localView)
-        val changed = sectionsDiffer(current, merged)
-
-        applyMerged(merged)
-        local.setLastPullAt(now)
-
-        val dirtyAfter = UserdataMerge.dirtySections(merged, normalizedCurrent(), ownedSections)
-        val shouldPush = wasV5 || wasDirty.isNotEmpty() || dirtyAfter.isNotEmpty() ||
-            local.pend() || pending.isNotEmpty()
         if (shouldPush) {
-            val pushResult = push(force = true, forceKeys = forceKeys)
+            val pushResult = performPush(force = true, forceKeys = forceKeys)
             return UserdataPullResult.Success(
                 changed = changed || wasV5,
                 pushed = pushResult is UserdataPushResult.Success && pushResult.pushed,
@@ -317,36 +372,36 @@ class DefaultUserDataRepository(
 
     // ------------------------------------------------------------ 推送
 
-    override suspend fun push(force: Boolean, forceKeys: Set<String>): UserdataPushResult {
+    override suspend fun push(force: Boolean, forceKeys: Set<String>): UserdataPushResult =
+        syncMutex.withLock { performPush(force, forceKeys) }
+
+    private suspend fun performPush(force: Boolean, forceKeys: Set<String>): UserdataPushResult {
         val sid = sidOrNull() ?: return UserdataPushResult.Disabled
         if (!syncEnabled()) return UserdataPushResult.Disabled
         if (clock() < local.holdUntil()) return UserdataPushResult.Held
 
-        // Mutex.withLock 的 action 不是 suspend，这里手动 lock/unlock 以支持挂起调用。
-        pushMutex.lock()
-        return try {
-            val base = local.readCache()
-            if (base == null && !force && forceKeys.isEmpty()) {
-                return UserdataPushResult.Skipped
-            }
+        val base = local.readCache()
+        if (base == null && !force && forceKeys.isEmpty()) return UserdataPushResult.Skipped
 
-            val response = fetchRemote(sid)
+        val response = fetchRemote(sid)
+        if (sid != sidOrNull()) return UserdataPushResult.Disabled
+        val remote = when (val result = response) {
+            is ApiResult.Failure -> {
+                local.setPend(true)
+                return UserdataPushResult.Failure(result.error)
+            }
+            is ApiResult.Success -> result.value
+        }
+        val now = clock()
+        val (current, merged) = currentMutex.withLock {
             if (sid != sidOrNull()) return UserdataPushResult.Disabled
-            val remote = when (val result = response) {
-                is ApiResult.Failure -> {
-                    local.setPend(true)
-                    return UserdataPushResult.Failure(result.error)
-                }
-                is ApiResult.Success -> result.value
-            }
-
-            val now = clock()
             val current = normalizedCurrent()
+            val pending = local.pendingKeys()
             val localView = UserdataMerge.localView(
                 base = base,
                 current = current,
                 remote = remote,
-                forceKeys = forceKeys,
+                forceKeys = forceKeys + pending.filterNot { it == "prefs" },
                 now = now,
                 ownedSections = ownedSections,
             )
@@ -359,35 +414,37 @@ class DefaultUserDataRepository(
                 local.clearPending()
                 return UserdataPushResult.Success(pushed = false)
             }
+            current to merged
+        }
 
-            val body = buildJsonArray {
-                add(
-                    buildJsonObject {
-                        put("id", JsonPrimitive(sid))
-                        put("blob", JsonPrimitive(UserdataV6.encode(merged, json)))
-                        put("ts", JsonPrimitive(now))
-                    },
-                )
-            }.toString()
+        val body = buildJsonArray {
+            add(
+                buildJsonObject {
+                    put("id", JsonPrimitive(sid))
+                    put("blob", JsonPrimitive(UserdataV6.encode(merged, json)))
+                    put("ts", JsonPrimitive(now))
+                },
+            )
+        }.toString()
 
-            if (sid != sidOrNull()) return UserdataPushResult.Disabled
-            val write = api.post(path = USERDATA_PATH, body = body, prefer = UPSERT_PREFER)
-            if (sid != sidOrNull()) return UserdataPushResult.Disabled
-            when (val result = write) {
+        if (sid != sidOrNull()) return UserdataPushResult.Disabled
+        val write = api.post(path = USERDATA_PATH, body = body, prefer = UPSERT_PREFER)
+        return currentMutex.withLock {
+            if (sid != sidOrNull()) return@withLock UserdataPushResult.Disabled
+            when (write) {
                 is ApiResult.Failure -> {
-                    val dirty = UserdataMerge.dirtySections(base, current, ownedSections)
-                    local.markPending(if (forceKeys.isNotEmpty()) forceKeys else dirty)
-                    local.setPend(true)
-                    UserdataPushResult.Failure(result.error)
+                    val dirty = UserdataMerge.dirtySections(base, normalizedCurrent(), ownedSections)
+                    local.markPending(forceKeys + dirty)
+                    UserdataPushResult.Failure(write.error)
                 }
                 is ApiResult.Success -> {
-                    persistApplied(merged)
-                    local.clearPending()
+                    val latest = normalizedCurrent()
+                    val changedDuringPost = latest.filter { (key, value) -> current[key] != value }
+                    persistApplied(merged, changedDuringPost)
+                    if (changedDuringPost.isEmpty()) local.clearPending()
                     UserdataPushResult.Success(pushed = true)
                 }
             }
-        } finally {
-            pushMutex.unlock()
         }
     }
 
@@ -432,27 +489,27 @@ class DefaultUserDataRepository(
     override suspend fun cachedBlob(): JsonObject? = local.readCache()
 
     override suspend fun hydrateFromLocal() {
-        val sid = sidOrNull() ?: return
-        if (sectionsSid == sid && _currentSections.value.isNotEmpty()) return
-        val stored = local.readCurrent()
-        if (sid != sidOrNull()) return
-        sectionsSid = sid
-        publish(if (stored.isEmpty()) stored else UserdataV6.sectionsOf(stored))
+        currentMutex.withLock {
+            val sid = sidOrNull() ?: return
+            if (sectionsSid == sid && _currentSections.value.isNotEmpty()) return
+            val stored = local.readCurrent()
+            if (sid != sidOrNull()) return
+            sectionsSid = sid
+            publish(if (stored.isEmpty()) stored else UserdataV6.sectionsOf(stored))
+        }
     }
 
     // ------------------------------------------------------------ 内部工具
 
-    private suspend fun persistApplied(merged: JsonObject) {
+    private suspend fun persistApplied(merged: JsonObject, retain: Map<String, JsonElement> = emptyMap()) {
         val sid = sidOrNull()
-        val sections = UserdataV6.sectionsOf(merged)
+        val sections = JsonObject(UserdataV6.sectionsOf(merged) + retain)
         local.writeCache(merged)
         local.writeCurrent(sections)
         if (sid != sidOrNull()) return
         sectionsSid = sid
         publish(sections)
     }
-
-    private suspend fun applyMerged(merged: JsonObject) = persistApplied(merged)
 
     private suspend fun fetchRemote(sid: String): ApiResult<JsonObject?> {
         val path = "userdata?select=*&id=eq." + URLEncoder.encode(sid, "UTF-8")

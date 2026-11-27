@@ -51,6 +51,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.ExpandLess
@@ -74,6 +75,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -142,8 +144,10 @@ import java.time.ZoneId
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** 课表视图模式（周/日只由按钮切换，不参与左右滑动）。 */
 enum class TimetableViewMode { WEEK, DAY }
@@ -188,7 +192,8 @@ fun TimetableViewScreen(
     initialErrorKind: TtFailureKind? = null,
     initialDayView: Boolean = false,
     initialWeekOffset: Int = 0,
-    focus: CourseFocus? = null,
+    focusRequest: TimetableFocusRequest? = null,
+    isPageActive: Boolean = true,
     initialSwipeOffsetPx: Float = 0f,
     skipLoad: Boolean = false,
     nowMillis: Long = System.currentTimeMillis(),
@@ -220,6 +225,7 @@ fun TimetableViewScreen(
     var loadToken by remember { mutableIntStateOf(0) }
     var refreshToken by remember { mutableIntStateOf(0) }
     var pullRefreshing by remember { mutableStateOf(false) }
+    var loadComplete by remember { mutableStateOf(skipLoad) }
     var showLoginDialog by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showWeekPicker by remember { mutableStateOf(false) }
@@ -228,13 +234,23 @@ fun TimetableViewScreen(
 
     LaunchedEffect(loadToken, refreshToken) {
         if (skipLoad) return@LaunchedEffect
-        phase = TtPhase.LOADING
-        repository.cached()?.takeIf { it.c.isNotEmpty() }?.let {
-            snapshot = it
-            fromCache = true
-            phase = TtPhase.READY
+        loadComplete = false
+        if (snapshot.c.isEmpty()) phase = TtPhase.LOADING
+        val result = try {
+            withTimeoutOrNull(15_000L) {
+                if (snapshot.c.isEmpty()) repository.cached()?.takeIf { it.c.isNotEmpty() }?.let {
+                    snapshot = it
+                    fromCache = true
+                    phase = TtPhase.READY
+                }
+                repository.load(force = refreshToken > 0)
+            } ?: TtLoadResult.Failure("课表同步超时，请重试", TtFailureKind.NETWORK)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            TtLoadResult.Failure("暂时无法读取课表，请重试", TtFailureKind.NETWORK)
         }
-        when (val result = repository.load(force = refreshToken > 0)) {
+        when (result) {
             is TtLoadResult.Success -> {
                 snapshot = result.snapshot
                 fromCache = result.fromCache
@@ -249,6 +265,7 @@ fun TimetableViewScreen(
                 phase = if (snapshot.c.isEmpty()) TtPhase.ERROR else TtPhase.READY
             }
         }
+        loadComplete = true
         pullRefreshing = false
     }
 
@@ -258,8 +275,7 @@ fun TimetableViewScreen(
     val termStart = remember(snapshot) { TtCalendar.parseTermStart(snapshot.termStart) }
     val today = remember(nowMillis) { Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate() }
     val todayIndex = remember(today) { TtCalendar.dayIndex(today) }
-    val focusDate = remember(focus) { focus?.let { LocalDate.parse(it.date) } }
-    val currentWeek = plan?.week ?: focusDate?.let { TtCalendar.weekOf(termStart, it) }
+    val currentWeek = plan?.week ?: termStart?.takeIf { focusRequest != null }?.let { TimetableWeekLogic.MIN_WEEK }
     val maxWeek = remember(snapshot, currentWeek) { TimetableWeekLogic.maxWeekOf(snapshot.c, currentWeek) }
 
     var weekOffset by rememberSaveable { mutableIntStateOf(initialWeekOffset) }
@@ -271,25 +287,47 @@ fun TimetableViewScreen(
         restore = { Json.decodeFromString<Course>(it) },
     )) { mutableStateOf<Course?>(null) }
 
-    var focusApplied by rememberSaveable(focus?.encode()) { mutableStateOf(false) }
-    var focusDetail by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(focus, phase, snapshot) {
-        if (focus == null || focusApplied || phase != TtPhase.READY) return@LaunchedEffect
-        val day = LocalDate.parse(focus.date)
-        val week = TtCalendar.weekOf(termStart, day)
-        if (week != null && currentWeek != null) weekOffset = (week - currentWeek).coerceIn(1 - currentWeek, maxWeek - currentWeek)
-        selectedDay = TtCalendar.dayIndex(day)
-        viewMode = TimetableViewMode.DAY
-        focusDetail = focus.start > 0 && focus.match(snapshot, day) != null
-        focusApplied = true
-        if (focus.start > 0 && !focusDetail) CtToastBus.show("这节课已变动，显示当天安排")
+    var lastFocusId by rememberSaveable { mutableStateOf<String?>(null) }
+    var openedFrom by rememberSaveable { mutableStateOf<String?>(null) }
+    var detailVersion by rememberSaveable { mutableIntStateOf(0) }
+
+    fun selectCourse(course: Course?, fromFocus: String? = null) {
+        selectedCourse = course
+        openedFrom = fromFocus
+        detailVersion += 1
     }
-    val focusedCourse = if (focusDetail && focus != null) focus.match(snapshot, LocalDate.parse(focus.date)) else null
+
+    LaunchedEffect(focusRequest, loadComplete, snapshot, isPageActive) {
+        if (!loadComplete || !isPageActive) return@LaunchedEffect
+        val request = focusRequest
+        if (request != null && request.shouldApply(lastFocusId, openedFrom)) {
+            val target = request.resolve(snapshot, today, currentWeek, maxWeek)
+            lastFocusId = request.id
+            weekOffset = target.weekOffset
+            selectedDay = target.day
+            viewMode = TimetableViewMode.DAY
+            showLoginDialog = false
+            showSettingsSheet = false
+            showWeekPicker = false
+            showLinkSheet = false
+            selectCourse(target.course, request.raw.takeIf { target.course != null })
+            target.message?.let(CtToastBus::show)
+        } else {
+            // A second delivery of the visible course shares the sheet, including after dismissal.
+            if (request != null) lastFocusId = request.id
+            val openFocus = openedFrom?.let(CourseFocus::decode) ?: return@LaunchedEffect
+            val course = openFocus.match(snapshot, LocalDate.parse(openFocus.date))
+            if (course == null) {
+                selectCourse(null)
+                CtToastBus.show("这节课已变动，显示当天安排")
+            }
+        }
+    }
     val displayWeek = remember(currentWeek, weekOffset, maxWeek) {
         TimetableWeekLogic.displayWeek(currentWeek, weekOffset, maxWeek)
     }
     val monday = remember(termStart, displayWeek, today, todayIndex) {
-        displayWeek?.let { TtCalendar.mondayOf(termStart, it) } ?: (focusDate ?: today).let { it.minusDays(TtCalendar.dayIndex(it).toLong()) }
+        displayWeek?.let { TtCalendar.mondayOf(termStart, it) } ?: today.minusDays(todayIndex.toLong())
     }
 
     // 滑动切周状态
@@ -398,7 +436,7 @@ fun TimetableViewScreen(
         onCourseClick = { course ->
             if (System.currentTimeMillis() >= suppressClickUntil) {
                 if (twoPane) selectedDay = course.day
-                selectedCourse = course
+                selectCourse(course)
             }
         },
         onSelectDay = { day ->
@@ -579,17 +617,20 @@ fun TimetableViewScreen(
             }
         }
 
-        (focusedCourse ?: selectedCourse)?.let { course ->
-            CtBottomSheet(onDismissRequest = { if (focusDetail) onBack() else selectedCourse = null }) {
-                TimetableCourseDetailContent(
-                    course = course,
-                    displayWeek = displayWeek,
-                    termStart = termStart,
-                    onAddToCalendar = onAddToCalendar,
-                    onOpenMap = onOpenMap?.let { open ->
-                        { if (!focusDetail) selectedCourse = null; open(course.room) }
-                    },
-                )
+        if (isPageActive) selectedCourse?.let { course ->
+            val version = detailVersion
+            val closeDetail = { if (detailVersion == version) selectCourse(null) }
+            key(version) {
+                CtBottomSheet(onDismissRequest = closeDetail) {
+                    TimetableCourseDetailContent(
+                        course = course,
+                        displayWeek = displayWeek,
+                        termStart = termStart,
+                        onAddToCalendar = onAddToCalendar,
+                        onOpenMap = onOpenMap?.let { open -> { open(course.room) } },
+                        onClose = closeDetail,
+                    )
+                }
             }
         }
 
@@ -2029,6 +2070,7 @@ fun TimetableCourseDetailContent(
     onAddToCalendar: ((Course, Int, LocalDate) -> Unit)? = null,
     termStart: LocalDate? = null,
     onOpenMap: (() -> Unit)? = null,
+    onClose: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val content = scheme.onPrimaryContainer
@@ -2047,11 +2089,15 @@ fun TimetableCourseDetailContent(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(
-                    text = course.name.ifBlank { "未命名课程" },
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = content,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = course.name.ifBlank { "未命名课程" },
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = content,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (onClose != null) IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "关闭课程详情") }
+                }
                 Text(
                     text = buildString {
                         append(TimetableDetail.periodText(course.start, course.end))

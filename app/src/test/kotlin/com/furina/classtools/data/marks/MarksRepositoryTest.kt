@@ -3,8 +3,11 @@ package com.furina.classtools.data.marks
 import com.furina.classtools.FakeTransport
 import com.furina.classtools.Fixtures
 import com.furina.classtools.data.network.ApiResponse
+import com.furina.classtools.data.network.ApiResult
 import com.furina.classtools.data.network.HttpMethod
 import com.furina.classtools.testApiClient
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -46,6 +49,28 @@ class MarksRepositoryTest {
         repo.refresh()
         assertFalse(repo.marks.value.isDone(MarkKind.HW, "hw_test1"))
         assertTrue(transport.lastRequest().url.contains("seat=eq." + account))
+    }
+
+    @Test
+    fun aLateRefreshCannotPublishCompletionAfterTheAccountChanges() = runTest {
+        var account = "3260799999"
+        val oldAccount = account
+        val started = CompletableDeferred<Unit>()
+        val finish = CompletableDeferred<Unit>()
+        val transport = FakeTransport {
+            started.complete(Unit)
+            finish.await()
+            ApiResponse(200, """[{"seat":"$oldAccount","kind":"hw","ref":"old-homework","val":true}]""")
+        }
+        val repo = DefaultMarksRepository(testApiClient(transport), currentSid = { account }, clock = { fixedNow })
+
+        val refresh = async { repo.refresh(force = true) }
+        started.await()
+        account = "3260799998"
+        finish.complete(Unit)
+
+        assertTrue(refresh.await() is ApiResult.Failure)
+        assertFalse(repo.marks.value.isDone(MarkKind.HW, "old-homework"))
     }
 
     private fun postRow(transport: FakeTransport): JsonObject {

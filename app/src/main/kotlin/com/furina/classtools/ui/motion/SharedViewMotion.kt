@@ -1,5 +1,7 @@
 package com.furina.classtools.ui.motion
 
+import android.animation.ValueAnimator
+import android.os.SystemClock
 import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -9,6 +11,8 @@ import com.furina.classtools.ToolActivity
 import com.furina.classtools.data.session.Session
 import com.furina.classtools.data.tool.AppTool
 import com.furina.classtools.ui.navigation.ToolTransitionAnchor
+import com.furina.classtools.ui.navigation.ToolTransitionAnchors
+import java.util.UUID
 import com.itgsa.animation.sharedview.ViewAnimationConfig
 import com.itgsa.animation.sharedview.ViewAnimationExtras
 import com.itgsa.animation.sharedview.ViewAnimationListener
@@ -60,14 +64,16 @@ object SharedViewMotion {
      *
      * @return true = 已成功 `startActivity`（调用方不要再导航）；false = 调用方走原 Compose 转场。
      */
-    fun tryLaunchTool(
+    internal fun tryLaunchTool(
         activity: Activity?,
         rootView: View,
         tool: AppTool,
         anchor: ToolTransitionAnchor,
+        anchors: ToolTransitionAnchors,
         session: Session,
     ): Boolean {
         if (activity == null || activity.isFinishing || activity.isDestroyed) return false
+        if (isToolOpeningFrom(activity)) return true
         if (supportVersion() <= 0) return false
         if (rootView.width <= 0 || rootView.height <= 0) return false
         if (!SharedViewBounds.isFullyVisible(anchor.bounds, rootView.width, rootView.height)) {
@@ -121,18 +127,24 @@ object SharedViewMotion {
             return false
         }
 
+        val requestId = UUID.randomUUID().toString()
         SharedViewReturnStore.begin(
+            id = requestId,
             source = activity,
+            rootView = rootView,
+            anchors = anchors,
+            card = anchor,
+            coordinateToken = coordinateToken,
             bounds = kitRect,
             radiusPx = radiusPx,
         )
         return try {
-            val intent = ToolActivity.createIntent(activity, tool.id, pick = false, session = session)
+            val intent = ToolActivity.createIntent(activity, tool.id, pick = false, session = session, transitionId = requestId)
             activity.startActivity(intent, options.toBundle())
             true
         } catch (t: Throwable) {
             Log.w(TAG, "skip: startActivity failed tool=${tool.id}", t)
-            SharedViewReturnStore.clear()
+            SharedViewReturnStore.take(requestId)
             false
         }
     }
@@ -141,14 +153,15 @@ object SharedViewMotion {
      * 目标 Activity 返回前调用：把返回落点刷新为原工具卡 bounds，再 `finish()`。
      * 必须在 `onCreate` 之后、`finish()` 之前调用（官方 README §返回前刷新配置）。
      */
-    fun finishWithSharedView(activity: Activity) {
+    fun finishWithSharedView(activity: Activity, requestId: String?) {
         if (activity.isFinishing) return
-        val session = SharedViewReturnStore.take()
-        if (session != null && supportVersion() > 0) {
+        val session = SharedViewReturnStore.take(requestId)
+        if (session != null && ValueAnimator.areAnimatorsEnabled() && supportVersion() > 0) {
             val source = session.source.get()
             val alive = source != null && !source.isDestroyed && !source.isFinishing
             val metrics = source?.resources?.displayMetrics
-            val reusable = alive && metrics != null && SharedViewBounds.canReuseReturnBounds(
+            val reusable = alive && source.taskId == activity.taskId && metrics != null && session.cardStillPlaced() &&
+                SharedViewBounds.canReuseReturnBounds(
                 sourceAlive = true,
                 sourceWidth = metrics.widthPixels,
                 sourceHeight = metrics.heightPixels,
@@ -172,6 +185,12 @@ object SharedViewMotion {
         }
         activity.finish()
     }
+
+    internal fun isToolOpeningFrom(activity: Activity?): Boolean = activity != null && SharedViewReturnStore.isOpeningFrom(activity)
+
+    internal fun toolCreated(id: String?) { SharedViewReturnStore.markStarted(id) }
+
+    internal fun toolDestroyed(id: String?) { SharedViewReturnStore.take(id) }
 
     /** 仅测试/诊断用：当前是否有待消费的返回会话。 */
     internal fun hasPendingReturnSession(): Boolean = SharedViewReturnStore.peek() != null
@@ -225,10 +244,18 @@ object SharedViewMotion {
 internal object SharedViewReturnStore {
     private var session: ReturnSession? = null
 
-    fun begin(source: Activity, bounds: android.graphics.Rect, radiusPx: Float) {
+    fun begin(
+        id: String, source: Activity, rootView: View, anchors: ToolTransitionAnchors,
+        card: ToolTransitionAnchor, coordinateToken: String, bounds: android.graphics.Rect, radiusPx: Float,
+    ) {
         val metrics = source.resources.displayMetrics
         session = ReturnSession(
+            id = id,
             source = WeakReference(source),
+            rootView = WeakReference(rootView),
+            anchors = WeakReference(anchors),
+            card = card,
+            coordinateToken = coordinateToken,
             bounds = android.graphics.Rect(bounds),
             radiusPx = radiusPx,
             screenWidth = metrics.widthPixels,
@@ -238,21 +265,44 @@ internal object SharedViewReturnStore {
 
     fun peek(): ReturnSession? = session
 
-    fun take(): ReturnSession? {
-        val current = session
+    fun take(id: String?): ReturnSession? {
+        val current = session?.takeIf { it.id == id } ?: return null
         session = null
         return current
     }
 
-    fun clear() {
+    fun markStarted(id: String?) {
+        session?.takeIf { it.id == id }?.started = true
+    }
+
+    fun isOpeningFrom(source: Activity): Boolean {
+        val current = session ?: return false
+        if (current.source.get() !== source) return false
+        if (current.started || SystemClock.elapsedRealtime() - current.launchedAt < 2_000L) return true
         session = null
+        return false
     }
 }
 
 internal data class ReturnSession(
+    val id: String,
     val source: WeakReference<Activity>,
+    val rootView: WeakReference<View>,
+    val anchors: WeakReference<ToolTransitionAnchors>,
+    val card: ToolTransitionAnchor,
+    val coordinateToken: String,
     val bounds: android.graphics.Rect,
     val radiusPx: Float,
     val screenWidth: Int,
     val screenHeight: Int,
-)
+    val launchedAt: Long = SystemClock.elapsedRealtime(),
+    var started: Boolean = false,
+) {
+    fun cardStillPlaced(): Boolean {
+        val view = rootView.get()?.takeIf { it.isAttachedToWindow } ?: return false
+        if (anchors.get()?.hasSameAnchor(card) != true) return false
+        val location = IntArray(2)
+        if (coordinateToken == SharedViewBounds.WINDOW) view.getLocationInWindow(location) else view.getLocationOnScreen(location)
+        return SharedViewBounds.toKitBounds(card.bounds, location[0], location[1]).toAndroidRect() == bounds
+    }
+}

@@ -144,6 +144,8 @@ sealed interface TtLoadResult {
         val fetchedAt: Long,
         /** 数据来源；默认 PUBLIC 保持既有调用方/预览兼容。 */
         val source: TtSource = TtSource.PUBLIC,
+        /** 缓存兜底时的请求错误。命中有效缓存时为空。 */
+        val refreshError: String? = null,
     ) : TtLoadResult
 
     /**

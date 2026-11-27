@@ -13,6 +13,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
@@ -22,12 +23,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import com.furina.classtools.ui.theme.CtMotion
 import com.furina.classtools.ui.theme.HarmonyMotion
 import kotlin.math.abs
@@ -85,11 +91,28 @@ fun CtTabPager(
     userScrollEnabled: Boolean = true,
     beyondViewportPageCount: Int = 1,
     pageBackground: Color = Color.Transparent,
+    onBlockedSwipe: ((direction: Int) -> Unit)? = null,
     content: @Composable (page: Int) -> Unit,
 ) {
+    val onSwipe by rememberUpdatedState(onBlockedSwipe)
+    val order = LocalLayoutDirection.current
+    val swipeGuard = if (!userScrollEnabled && onBlockedSwipe != null) Modifier.pointerInput(order) {
+        val threshold = 64.dp.toPx()
+        var distance = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { distance = 0f },
+            onHorizontalDrag = { _, amount -> distance += amount },
+            onDragEnd = {
+                if (abs(distance) >= threshold) {
+                    val towardNext = (distance < 0f) == (order == LayoutDirection.Ltr)
+                    onSwipe?.invoke(if (towardNext) 1 else -1)
+                }
+            },
+        )
+    } else Modifier
     HorizontalPager(
         state = pagerState,
-        modifier = modifier,
+        modifier = modifier.then(swipeGuard),
         userScrollEnabled = userScrollEnabled,
         beyondViewportPageCount = beyondViewportPageCount,
         key = { page -> page },

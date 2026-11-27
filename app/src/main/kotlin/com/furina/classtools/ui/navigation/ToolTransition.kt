@@ -16,19 +16,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.furina.classtools.data.tool.AppTool
@@ -42,6 +45,7 @@ import com.furina.classtools.ui.theme.CtSpace
 import com.furina.classtools.ui.theme.rememberCtColors
 import com.furina.classtools.ui.theme.rememberReduceMotion
 import com.furina.classtools.ui.theme.uiAccentOf
+import java.util.UUID
 
 /**
  * 工具卡 → 工具页的**共享容器变换**（Shared Transition）。
@@ -52,7 +56,7 @@ import com.furina.classtools.ui.theme.uiAccentOf
  *   而不是「两个页面互相推挤」。
  *
  * 实现（不引入实验性 shared-element API，行为稳定可控）：
- *  - 卡片 `onGloballyPositioned` 把工具 id → 根坐标 bounds 登记到 [ToolTransitionAnchors]；
+ *  - 卡片把自己的布局坐标登记到 [ToolTransitionAnchors]；点击只携带该卡片的实例。
  *  - 点击卡片：覆盖层从卡片 bounds **经弹簧**长成全屏圆角容器，同时 NavHost push 目标页
  *    （目标页自身 push 转场关闭，因此不会和覆盖层叠加出两重动画）；
  *  - 返回：工具页仍在前台时直接 pop，NavHost 的 pop 转场关闭；覆盖层以全屏开始、
@@ -62,16 +66,38 @@ import com.furina.classtools.ui.theme.uiAccentOf
  * 与旧实现的差别（2026-11-19 重构）：**不再捕获界面快照 Bitmap**（旧做法把工具页
  * `View.draw()` 成图片再缩小，属于补丁式遮底，且在 WebView/SurfaceView 页会空白）。
  */
-class ToolTransitionAnchors {
-    private val anchors = mutableStateMapOf<String, ToolTransitionAnchor>()
+internal class ToolTransitionAnchors {
+    private val cards = mutableMapOf<String, ToolCardCoordinates>()
+    private var clickedCard: String? = null
 
-    fun put(id: String, bounds: Rect, radius: Dp) {
-        if (id.isBlank()) return
-        if (bounds.width <= 0f || bounds.height <= 0f) return
-        anchors[id] = ToolTransitionAnchor(bounds = bounds, radius = radius)
+    fun put(id: String, card: ToolCardCoordinates) { cards[id] = card }
+
+    fun remove(id: String, card: ToolCardCoordinates) {
+        if (cards[id] === card) cards.remove(id)
     }
 
-    fun get(id: String): ToolTransitionAnchor? = anchors[id]
+    fun click(id: String, onClick: () -> Unit) {
+        clickedCard = id
+        try {
+            onClick()
+        } finally {
+            clickedCard = null
+        }
+    }
+
+    fun openingCard(toolId: String): ToolTransitionAnchor? = clickedCard?.let(::anchor)?.takeIf { it.toolId == toolId }
+
+    fun hasSameAnchor(origin: ToolTransitionAnchor): Boolean = anchor(origin.cardId) == origin
+
+    private fun anchor(id: String): ToolTransitionAnchor? {
+        val card = cards[id] ?: return null
+        val coordinates = card.coordinates?.takeIf { it.isAttached } ?: return null
+        val root = coordinates.findRootCoordinates()
+        val bounds = root.localBoundingBoxOf(coordinates, clipBounds = true)
+        val fullBounds = root.localBoundingBoxOf(coordinates, clipBounds = false)
+        if (bounds != fullBounds || bounds.width <= 0f || bounds.height <= 0f) return null
+        return ToolTransitionAnchor(id, card.toolId, bounds, card.radius, root.size)
+    }
 }
 
 /**
@@ -80,20 +106,31 @@ class ToolTransitionAnchors {
  * SharedView Kit 的 Bitmap 源要求显式半径（px）；圆角传错会在 OPEN/CLOSE 之间跳闪。
  * Compose 覆盖层仍只用 bounds；圆角供独立 Activity 的共享元素路径使用。
  */
-data class ToolTransitionAnchor(
+internal data class ToolTransitionAnchor(
+    val cardId: String,
+    val toolId: String,
     val bounds: Rect,
     val radius: Dp,
+    val rootSize: IntSize,
 )
 
-val LocalToolTransitionAnchors = staticCompositionLocalOf<ToolTransitionAnchors?> { null }
+internal class ToolCardCoordinates(val toolId: String, val radius: Dp) {
+    var coordinates: LayoutCoordinates? = null
+}
+
+internal val LocalToolTransitionAnchors = staticCompositionLocalOf<ToolTransitionAnchors?> { null }
 
 /** 工具卡上登记转场起点（preview / 无覆盖层时是 no-op）。 */
 @Composable
-fun Modifier.ctToolTransitionSource(toolId: String, radius: Dp = CtRadius.card): Modifier {
-    val anchors = LocalToolTransitionAnchors.current ?: return this
-    return this.onGloballyPositioned { coordinates ->
-        anchors.put(toolId, coordinates.boundsInRoot(), radius)
+internal fun rememberToolCardTransition(toolId: String, radius: Dp, onClick: () -> Unit): Pair<Modifier, () -> Unit> {
+    val anchors = LocalToolTransitionAnchors.current ?: return Modifier to onClick
+    val id = rememberSaveable(toolId) { UUID.randomUUID().toString() }
+    val card = remember(id, toolId, radius) { ToolCardCoordinates(toolId, radius) }
+    DisposableEffect(anchors, id, card) {
+        anchors.put(id, card)
+        onDispose { anchors.remove(id, card) }
     }
+    return Modifier.onGloballyPositioned { card.coordinates = it } to { anchors.click(id, onClick) }
 }
 
 private fun lerp(from: Float, to: Float, fraction: Float): Float = from + (to - from) * fraction
@@ -102,14 +139,12 @@ private fun lerp(from: Float, to: Float, fraction: Float): Float = from + (to - 
  * 容器变换覆盖层：进入 = 卡片 bounds → 全屏；退出 = 全屏 → 卡片 bounds。
  *
  * @param reverse true = 返回方向（全屏 → 卡片）
- * @param onHalfway 进入方向：形变到 55% 时触发一次（此时导航 push 目标页，用户看不到空白）
  * @param onDone 动画结束（覆盖层撤除）
  */
 @Composable
 fun ToolTransitionOverlay(
     tool: AppTool?,
     startBounds: Rect?,
-    onHalfway: () -> Unit,
     onDone: () -> Unit,
     reverse: Boolean = false,
 ) {
@@ -117,7 +152,6 @@ fun ToolTransitionOverlay(
     val reduceMotion = rememberReduceMotion()
     if (reduceMotion) {
         LaunchedEffect(tool, reverse) {
-            onHalfway()
             onDone()
         }
         return
@@ -126,19 +160,8 @@ fun ToolTransitionOverlay(
     val accent = uiAccentOf(tool)
     val progress = remember(tool, reverse) { Animatable(0f) }
     LaunchedEffect(tool, reverse) {
-        try {
-            // 单一弹簧驱动整段形变（M3 Expressive spatial fast 0.75/600：≈300ms 成形，收得住、有弹性但不拖沓）
-            progress.animateTo(targetValue = 1f, animationSpec = CtMotion.spatialFast)
-        } finally {
-            onDone()
-        }
-    }
-    LaunchedEffect(tool, reverse) {
-        if (!reverse) {
-            // 进入：形变过半后开始 push 目标页，覆盖层在尾部淡出与之交接。
-            kotlinx.coroutines.delay(CtMotionTokens.standardMs / 2L)
-            onHalfway()
-        }
+        progress.animateTo(targetValue = 1f, animationSpec = CtMotion.spatialFast)
+        onDone()
     }
 
     val density = LocalDensity.current

@@ -388,7 +388,7 @@ enum class PowerRange(
 
 /** 电费行加载结果。 */
 sealed interface PowerRowResult {
-    data class Success(val row: PowerRow, val fromCache: Boolean) : PowerRowResult
+    data class Success(val row: PowerRow, val fromCache: Boolean, val refreshError: String? = null) : PowerRowResult
     data class Failure(val message: String) : PowerRowResult
 }
 

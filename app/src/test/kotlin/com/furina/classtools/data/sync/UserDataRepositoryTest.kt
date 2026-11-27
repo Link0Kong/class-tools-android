@@ -9,6 +9,8 @@ import com.furina.classtools.FakeTransport
 import com.furina.classtools.Fixtures
 import com.furina.classtools.data.network.ApiResponse
 import com.furina.classtools.data.network.HttpMethod
+import com.furina.classtools.data.session.Session
+import com.furina.classtools.features.home.HomeToolsEditor
 import com.furina.classtools.testApiClient
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -135,6 +137,115 @@ class UserDataRepositoryTest {
         assertEquals(UserdataPullResult.Disabled, oldRead.await())
         mux.hydrateFromLocal()
         assertEquals(JsonPrimitive("draft-a"), mux.currentSections.value["nick"])
+    }
+
+    @Test
+    fun shortcutCommitUsesLatestOtherSectionsAndDetectsChangedOrder() = runTest {
+        val local = InMemoryUserDataLocalStore(
+            current = buildJsonObject {
+                put("homeTools", HomeToolsEditor.section(listOf("nt", "tt")))
+                put("prefs", buildJsonObject { put("toolOrder", HomeToolsEditor.section(listOf("fit", "draw"))) })
+            },
+            syncEnabled = false,
+        )
+        val repo = repository(FakeTransport { userdataResponse(null) }, local, this)
+        fun sameOrder(value: JsonElement?) = HomeToolsEditor.readSection(value) == listOf("tt", "nt")
+
+        val conflict = repo.updateCurrentSection("homeTools") { value ->
+            HomeToolsEditor.section(listOf("hw")).takeIf { sameOrder(value) }
+        }
+        assertEquals(UserdataSectionUpdate.Conflict(HomeToolsEditor.section(listOf("nt", "tt"))), conflict)
+        assertEquals(listOf("nt", "tt"), HomeToolsEditor.read(local.readCurrent()))
+
+        val saved = repo.updateCurrentSection("homeTools") { HomeToolsEditor.section(emptyList()) }
+        assertEquals(UserdataSectionUpdate.Saved(syncPending = false), saved)
+        assertEquals(emptyList<String>(), HomeToolsEditor.read(local.readCurrent()))
+        val prefs = local.readCurrent()["prefs"] as JsonObject
+        assertEquals(listOf("fit", "draw"), HomeToolsEditor.readSection(prefs["toolOrder"]))
+        assertEquals(setOf("homeTools"), local.pendingKeys())
+    }
+
+    @Test
+    fun acknowledgementOfAnOlderPostKeepsTheNewerLocalShortcuts() = runTest {
+        val base = UserdataV6.empty()
+        val postStarted = CompletableDeferred<Unit>()
+        val postResponse = CompletableDeferred<ApiResponse>()
+        val transport = FakeTransport { request ->
+            if (request.method == HttpMethod.POST) {
+                postStarted.complete(Unit)
+                postResponse.await()
+            } else userdataResponse(UserdataV6.encode(base))
+        }
+        val local = InMemoryUserDataLocalStore(cache = base, current = UserdataV6.sectionsOf(base))
+        val repo = repository(transport, local, backgroundScope)
+
+        repo.updateCurrentSection("homeTools") { HomeToolsEditor.section(listOf("tt")) }
+        val earlierPost = async { repo.push(force = true) }
+        postStarted.await()
+        val next = repo.updateCurrentSection("homeTools") { HomeToolsEditor.section(listOf("hw")) }
+        assertEquals(UserdataSectionUpdate.Saved(syncPending = true), next)
+        postResponse.complete(ApiResponse(200, "[]"))
+        assertEquals(UserdataPushResult.Success(pushed = true), earlierPost.await())
+        assertEquals(listOf("tt"), HomeToolsEditor.read(local.readCache()))
+        assertEquals(listOf("hw"), HomeToolsEditor.read(local.readCurrent()))
+        assertEquals(listOf("hw"), HomeToolsEditor.read(repo.currentSections.value))
+        assertTrue("homeTools" in local.pendingKeys())
+    }
+
+    @Test
+    fun shortcutCommitReportsDiskFailureAndDoesNotPublishDraft() = runTest {
+        val directory = createTempDir()
+        val directoryBlockedByFile = directory.resolve("file-instead-of-directory").apply { writeText("blocked") }
+        val local = FileUserDataLocalStore(directoryBlockedByFile, { sid })
+        val repo = repository(FakeTransport { userdataResponse(null) }, local, this)
+
+        val result = runCatching { repo.updateCurrentSection("homeTools") { HomeToolsEditor.section(listOf("tt")) } }
+
+        assertTrue(result.exceptionOrNull() is java.io.IOException)
+        assertTrue(repo.currentSections.value.isEmpty())
+        assertFalse(local.pend())
+    }
+
+    @Test
+    fun holdKeepsTheDurableShortcutUploadPendingWithoutSchedulingAnUpload() = runTest {
+        val transport = FakeTransport { userdataResponse(null) }
+        val local = InMemoryUserDataLocalStore()
+        local.setHoldUntil(fixedNow + 10_000)
+        val repo = repository(transport, local, this)
+
+        val shortcuts = repo.updateCurrentSection("homeTools") { HomeToolsEditor.section(listOf("tt")) }
+        val order = repo.updateCurrentSection("prefs") { buildJsonObject { put("toolOrder", HomeToolsEditor.section(listOf("draw"))) } }
+        advanceTimeBy(5_000)
+        runCurrent()
+
+        assertEquals(UserdataSectionUpdate.Saved(syncPending = true), shortcuts)
+        assertEquals(UserdataSectionUpdate.Saved(syncPending = false), order)
+        assertEquals(setOf("homeTools"), local.pendingKeys())
+        assertTrue(transport.requests.isEmpty())
+    }
+
+    @Test
+    fun repositoryBoundToAnOldLoginCannotSaveIntoANewLoginOfTheSameStudent() = runTest {
+        val mux = SessionUserdataRepository()
+        val before = Session(sid, "测试", "first-login", debug = true)
+        val after = before.copy(token = "new-login")
+        val transport = FakeTransport { userdataResponse(null) }
+        fun activate(who: Session) {
+            mux.switchTo(who.sid, who) { owner, publish ->
+                DefaultUserDataRepository(testApiClient(transport), InMemoryUserDataLocalStore(syncEnabled = false),
+                    { owner.sid.takeIf { owner.active } }, backgroundScope, onSections = publish)
+            }
+        }
+        activate(before)
+        val original = requireNotNull(mux.boundTo(before))
+        activate(after)
+
+        assertEquals(UserdataSectionUpdate.Inactive, original.updateCurrentSection("homeTools") {
+            HomeToolsEditor.section(listOf("nt"))
+        })
+        assertNull(mux.boundTo(before))
+        assertTrue(mux.currentSections.value.isEmpty())
+        assertNotNull(mux.boundTo(after))
     }
 
     // ------------------------------------------------------------ pull

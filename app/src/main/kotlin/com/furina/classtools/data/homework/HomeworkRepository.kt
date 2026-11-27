@@ -17,6 +17,7 @@ sealed interface HomeworkLoadResult {
         val rows: List<HomeworkRow>,
         /** true = 本机缓存（TTL 内或网络失败降级）。 */
         val fromCache: Boolean,
+        val refreshError: String? = null,
     ) : HomeworkLoadResult
 
     data class Failure(val message: String) : HomeworkLoadResult
@@ -35,6 +36,9 @@ interface HomeworkRepository {
 
     /** 只读本机内存缓存，不发请求。 */
     suspend fun cached(): List<HomeworkRow>
+
+    /** null 表示尚无缓存。已成功同步过的空列表也是可用缓存。 */
+    suspend fun cachedSnapshot(): List<HomeworkRow>? = cached().takeIf { it.isNotEmpty() }
 
     /** 本轮只读：返回 false（保留接口给后续发布功能）。 */
     suspend fun publish(row: HomeworkRow): Boolean
@@ -61,20 +65,12 @@ class DefaultHomeworkRepository(
         }
         return@withLock when (val result = api.get(HOMEWORK_PATH)) {
             is ApiResult.Failure -> {
-                if (cache.isNotEmpty()) {
-                    HomeworkLoadResult.Success(cache, fromCache = true)
-                } else {
-                    HomeworkLoadResult.Failure(result.error.displayMessage)
-                }
+                fallback(result.error.displayMessage)
             }
             is ApiResult.Success -> {
                 val rows = parseRows(json, result.value)
                 if (rows == null) {
-                    if (cache.isNotEmpty()) {
-                        HomeworkLoadResult.Success(cache, fromCache = true)
-                    } else {
-                        HomeworkLoadResult.Failure("作业数据格式异常")
-                    }
+                    fallback("作业数据格式异常")
                 } else {
                     cache = rows
                     loadedOnce = true
@@ -86,6 +82,14 @@ class DefaultHomeworkRepository(
     }
 
     override suspend fun cached(): List<HomeworkRow> = mutex.withLock { cache }
+
+    override suspend fun cachedSnapshot(): List<HomeworkRow>? = mutex.withLock { cache.takeIf { loadedOnce } }
+
+    private fun fallback(message: String): HomeworkLoadResult = if (loadedOnce) {
+        HomeworkLoadResult.Success(cache, fromCache = true, refreshError = message)
+    } else {
+        HomeworkLoadResult.Failure(message)
+    }
 
     override suspend fun publish(row: HomeworkRow): Boolean = false
 

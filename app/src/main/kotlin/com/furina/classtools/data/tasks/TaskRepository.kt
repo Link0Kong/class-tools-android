@@ -254,25 +254,42 @@ class TaskRepository(
         if (!canSync()) { status.value = "仅本机"; return@withLock null }
         if (invalidCache) { status.value = "本机缓存格式异常 · 已保留原数据"; return@withLock null }
         status.value = "同步中…"
+        try {
+            syncLocked(approved)
+        } finally {
+            status.compareAndSet("同步中…", synchronized(this) {
+                if (current.value.taskCloudView() == base.taskCloudView()) "本机缓存" else "待同步 · 已保存本机"
+            })
+        }
+    }
+
+    private suspend fun syncLocked(approved: TaskRecovery?): JsonObject? {
         val path = "taskdata?id=eq." + URLEncoder.encode(sid, "UTF-8")
         repeat(4) {
             val read = api.getJson(path + "&select=blob,ts", coalesce = false)
-            if (!canSync()) return@withLock null
-            val rows = responseRows(read) ?: return@withLock null
+            if (!canSync()) return null
+            val rows = responseRows(read) ?: return null
             val row = rows.singleOrNull() as? JsonObject
             val stamp = row?.get("ts").taskStamp()
             val wire = if (rows.isEmpty()) TaskWire.empty else TaskWire.decode(row?.get("blob"), stamp)
             val wrongOwner = row != null && "id" in row && row["id"] != JsonPrimitive(sid)
             if (wire == null || (rows.isNotEmpty() && stamp == null) || wrongOwner) {
-                status.value = "云端格式异常 · 更改留在本机"; return@withLock null
+                status.value = "云端格式异常 · 更改留在本机"; return null
             }
             val remote = wire.snapshot.taskCloudView()
             val (previous, local) = synchronized(this) { base to current.value }
             if (rows.isEmpty() && hasConfirmedRow) {
-                status.value = "云端记录不可见 · 已保留本机"; return@withLock null
+                status.value = "云端记录不可见 · 已保留本机"; return null
             }
             if (rows.isEmpty() && local.taskCloudView().sameTaskContents(previous.taskCloudView())) {
-                status.value = "本机缓存"; return@withLock null
+                synchronized(this) {
+                    val currentSnapshot = current.value
+                    if (currentSnapshot.taskCloudView().sameTaskContents(previous.taskCloudView())) {
+                        status.value = "已同步"
+                        return currentSnapshot
+                    }
+                }
+                return@repeat
             }
             val pending = unconfirmed
             if (pending != null && stamp != null && stamp >= pending.stamp) {
@@ -283,10 +300,10 @@ class TaskRepository(
                     accept(pending.sent, remote)
                 } else if (reviewDraft(remote, pending.sent, false, approved, true)) {
                     return@repeat
-                } else return@withLock null
+                } else return null
             } else if (!knownBase && !local.taskCloudView().sameTaskContents(remote)) {
                 if (reviewDraft(remote, legacyAnchor ?: local, true, approved, row != null)) return@repeat
-                return@withLock null
+                return null
             } else if (pending == null && (local.taskCloudView() == previous.taskCloudView() ||
                     local.taskCloudView().sameTaskContents(remote))) {
                 accept(local, remote)
@@ -294,27 +311,27 @@ class TaskRepository(
                 val localStamp = local["updatedAt"]?.taskStamp()
                 val nextStamp = maxOf(System.currentTimeMillis(), localStamp ?: 0L, (stamp ?: 0L) + 1)
                 if (("updatedAt" in local && localStamp == null) || nextStamp !in 0..MAX_TASK_STAMP) {
-                    status.value = "云端版本异常 · 更改留在本机"; return@withLock null
+                    status.value = "云端版本异常 · 更改留在本机"; return null
                 }
                 val merged = mergeTasks(previous, local, remote).taskCloudView().withFields {
                     put("updatedAt", nextStamp)
                 }
                 val attempt = TaskAttempt(local, merged, wire.encode(merged), nextStamp)
-                if (!saveAttempt(attempt)) return@withLock null
+                if (!saveAttempt(attempt)) return null
                 val body = buildJsonObject {
                     put("id", sid); put("blob", attempt.blob); put("ts", nextStamp)
                 }.toString()
-                if (!canSync()) return@withLock null
+                if (!canSync()) return null
                 val write = if (row == null) api.postJson("taskdata", body, "resolution=ignore-duplicates,return=representation")
                     else api.patchJson(path + "&ts=eq." + stamp, body, "return=representation")
-                if (!canSync()) return@withLock null
+                if (!canSync()) return null
                 if (write is ApiResult.Failure && write.error !is ApiError.Parse) {
                     if (write.error is ApiError.TokenInvalid) saveAttempt(null)
-                    responseRows(write); return@withLock null
+                    responseRows(write); return null
                 }
                 val returned = (write as? ApiResult.Success)?.value as? JsonArray
                 if (returned != null && returned.isEmpty()) {
-                    if (!saveAttempt(null)) return@withLock null
+                    if (!saveAttempt(null)) return null
                     return@repeat
                 }
                 val saved = returned?.singleOrNull() as? JsonObject
@@ -322,10 +339,10 @@ class TaskRepository(
                     saved["blob"] != JsonPrimitive(attempt.blob)) return@repeat
                 accept(local, merged)
             }
-            if (synchronized(this) { current.value.taskCloudView() == base.taskCloudView() }) return@withLock snapshot.value
+            if (synchronized(this) { current.value.taskCloudView() == base.taskCloudView() }) return snapshot.value
         }
         status.value = "待同步 · 已保存本机"
-        null
+        return null
     }
 
     private fun responseRows(result: ApiResult<JsonElement>): JsonArray? {

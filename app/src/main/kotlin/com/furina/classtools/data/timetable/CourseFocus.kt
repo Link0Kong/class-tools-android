@@ -11,8 +11,12 @@ import kotlinx.serialization.json.Json
 data class CourseFocus(val date: String, val start: Int = 0, val end: Int = 0, val name: String = "", val room: String = "") {
     fun encode(): String = Json.encodeToString(this)
 
+    val isDateOnly: Boolean get() = start == 0 && end == 0 && name.isEmpty() && room.isEmpty()
+
     fun match(snapshot: TtSnapshot, day: LocalDate): Course? {
-        val week = TtCalendar.weekOf(TtCalendar.parseTermStart(snapshot.termStart), day)
+        if (isDateOnly || day.toString() != date) return null
+        val termStart = TtCalendar.parseTermStart(snapshot.termStart) ?: return null
+        val week = TtCalendar.weekOf(termStart, day) ?: return null
         return snapshot.c.singleOrNull {
             it.day == TtCalendar.dayIndex(day) && TtCalendar.isActive(it, week) &&
                 it.start == start && it.end == end && it.name.ifBlank { "课程" } == name && it.room.trim() == room
@@ -25,7 +29,13 @@ data class CourseFocus(val date: String, val start: Int = 0, val end: Int = 0, v
             session.start, session.end, session.name, session.fullRoom,
         )
         fun decode(raw: String?): CourseFocus? = raw?.let {
-            runCatching { Json.decodeFromString<CourseFocus>(it).also { focus -> LocalDate.parse(focus.date) } }.getOrNull()
+            runCatching {
+                Json.decodeFromString<CourseFocus>(it).takeIf { focus ->
+                    val year = LocalDate.parse(focus.date).year
+                    year in 1..9999 && (focus.isDateOnly ||
+                        (focus.start in 1..TtPeriods.COUNT && focus.end in focus.start..TtPeriods.COUNT && focus.name.isNotBlank()))
+                }
+            }.getOrNull()
         }
     }
 }
