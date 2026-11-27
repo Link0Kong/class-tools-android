@@ -57,7 +57,7 @@ import com.furina.classtools.ui.theme.LocalCtDarkTheme
 import kotlinx.coroutines.delay
 
 private const val OFFLINE_MAP = "file:///android_asset/map/campus_final_25d.html"
-private const val MAP_VERSION = "20261123-map2"
+private const val MAP_VERSION = "20261127-map3"
 private const val READY_SCRIPT = "window.zqMapReady === true"
 private const val DISMISS_SCRIPT = "typeof window.zqMapDismiss === 'function' && window.zqMapDismiss()"
 
