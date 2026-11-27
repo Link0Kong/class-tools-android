@@ -925,7 +925,11 @@ fun MainNavHost(
                 "file" -> androidx.compose.runtime.key(container.cloudSpaceRepository) {
                     CloudSpaceScreen(
                         onBack = { popTool(toolId) },
-                        onOpenClassDecks = { navController.navigate(Routes.tool("ppt")) { launchSingleTop = true } },
+                        onOpenClassDecks = {
+                            if (navController.currentBackStackEntry?.arguments?.getString(Routes.TOOL_ARG) == "file") {
+                                navController.navigate(Routes.tool("ppt"))
+                            }
+                        },
                         repository = container.cloudSpaceRepository,
                     )
                 }
