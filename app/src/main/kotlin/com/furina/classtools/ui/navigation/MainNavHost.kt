@@ -865,12 +865,15 @@ fun MainNavHost(
                     initialPickerOpen = pickInTool,
                 )
 
-                "water" -> WaterScreen(
-                    onBack = { popTool(toolId) },
-                    session = session,
-                    userDataRepository = container.userDataRepository,
-                    directoryRepository = container.powerDirectoryRepository,
-                )
+                "water" -> androidx.compose.runtime.key(session.sid, session.token) {
+                    WaterScreen(
+                        onBack = { popTool(toolId) },
+                        session = session,
+                        userDataRepository = container.userDataRepository,
+                        directoryRepository = container.powerDirectoryRepository,
+                        sharedLedger = remember(container, session) { container::sharedWater },
+                    )
+                }
 
                 "roster" -> RosterScreen(
                     memberSource = memberSource,

@@ -56,6 +56,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import com.furina.classtools.data.water.SharedWaterLedger
+import com.furina.classtools.data.water.SharedWaterValue
+import com.furina.classtools.data.water.WaterLedgerState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.awaitCancellation
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -144,6 +151,7 @@ fun WaterScreen(
     userDataRepository: UserDataRepository?,
     modifier: Modifier = Modifier,
     directoryRepository: PowerDirectoryRepository? = null,
+    sharedLedger: ((String) -> SharedWaterLedger)? = null,
     clock: () -> Long = System::currentTimeMillis,
     initialRooms: Map<String, WaterRoomState> = emptyMap(),
     initialDirectory: List<RoomInfo> = emptyList(),
@@ -177,10 +185,25 @@ fun WaterScreen(
         if (selectedRv.isNotBlank() && selectedRv != udSel) selectedRv = selectedRv // 本页选择优先
     }
 
-    var waterState by remember(initialRooms) { mutableStateOf(WaterState(initialRooms)) }
-    LaunchedEffect(sections) {
-        val remote = WaterCodec.fromJson(sections["water"])
-        if (waterState.rooms.isEmpty() && remote.rooms.isNotEmpty()) waterState = remote
+    val legacy = remember(sections) { WaterCodec.fromJson(sections["water"]) }
+    val ledger = remember(selectedRv, sharedLedger) { selectedRv.takeIf { it.isNotBlank() }?.let { sharedLedger?.invoke(it) } }
+    val ledgerView = ledger?.state?.collectAsState()?.value
+    val signal = ledger?.status?.collectAsState()?.value.orEmpty()
+    val lifecycle = LocalLifecycleOwner.current
+    LaunchedEffect(ledger, lifecycle) {
+        val active = ledger ?: return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            active.enter()
+            try { active.refresh(); awaitCancellation() } finally { active.leave() }
+        }
+    }
+    var previewState by remember(initialRooms) { mutableStateOf(WaterState(initialRooms)) }
+    val waterState = if (sharedLedger == null) previewState else
+        WaterState(ledgerView?.let { mapOf(selectedRv to it.room()) }.orEmpty())
+    var showHistory by remember(ledger) { mutableStateOf(false) }
+    var importChoice by remember(ledger) { mutableStateOf<Pair<String, SharedWaterValue>?>(null) }
+    LaunchedEffect(legacy) {
+        if (sharedLedger == null && previewState.rooms.isEmpty()) previewState = legacy
     }
 
     var loadingDone by remember {
@@ -224,8 +247,8 @@ fun WaterScreen(
         directoryLoading = false
     }
     // 目录 ∪ 本机已有抄表记录的宿舍（目录失败/新宿舍未同步时仍能切换和查看）。
-    val pickerRooms = remember(directory, waterState.rooms) {
-        PowerRooms.merge(directory, waterState.rooms.keys)
+    val pickerRooms = remember(directory, waterState.rooms, legacy) {
+        PowerRooms.merge(directory, waterState.rooms.keys + legacy.rooms.keys)
     }
 
     fun notify(message: String) {
@@ -248,7 +271,8 @@ fun WaterScreen(
     }
 
     fun persist(next: WaterState) {
-        waterState = next
+        if (sharedLedger != null) return
+        previewState = next
         scope.launch { runCatching { waterRepository?.save(next) } }
     }
 
@@ -283,12 +307,13 @@ fun WaterScreen(
     val isWide = false
 
     fun saveValid(valid: WaterRecordReview.Valid) {
-        persist(WaterMutator.put(waterState, selectedRv, valid.record))
+        if (ledger != null) scope.launch { ledger.edit(valid.record.month, SharedWaterValue(room.persons, valid.record.reading)) }
+        else persist(WaterMutator.put(waterState, selectedRv, valid.record))
         readingInput = ""
         inputError = null
         overwriteReview = null
         largeDiffReview = null
-        notify(if (valid.replaceExisting) "已更新 ${WaterMonth.label(valid.record.month)} 记录" else "已保存 ${WaterMonth.label(valid.record.month)} 记录")
+        if (ledger == null) notify(if (valid.replaceExisting) "已更新 ${WaterMonth.label(valid.record.month)} 记录" else "已保存 ${WaterMonth.label(valid.record.month)} 记录")
     }
 
     fun submitReading() {
@@ -336,6 +361,14 @@ fun WaterScreen(
                     onBack = onBack,
                 )
 
+                if (ledger != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(signal, modifier = Modifier.weight(1f).padding(start = 12.dp),
+                            style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { scope.launch { ledger.refresh() } }) { Text("刷新") }
+                        TextButton(onClick = { showHistory = true }) { Text("旧账本与待确认") }
+                    }
+                }
                 Box(modifier = Modifier.weight(1f)) {
                     val phase = when {
                         forcedErrorMessage != null -> WaterPhase.ERROR
@@ -404,13 +437,14 @@ fun WaterScreen(
                                                 RoomPickerRow(
                                                     selectedRv = selectedRv,
                                                     onPickRoom = { showRoomPicker = true },
-                                                    onClearRoom = { showClearRoomConfirm = true },
+                                                    onClearRoom = { if (ledger == null) showClearRoomConfirm = true else notify("请选择需要删除的具体月份") },
                                                 )
                                                 WaterHeroCard(stats = stats, latestStats = latestStats)
                                                 PersonsCard(
                                                     persons = room.persons,
                                                     onPersons = { persons ->
-                                                        persist(WaterMutator.withPersons(waterState, selectedRv, persons))
+                                                        if (ledger != null) scope.launch { ledger.edit(WaterLedgerState.PEOPLE, SharedWaterValue(persons)) }
+                                                    else persist(WaterMutator.withPersons(waterState, selectedRv, persons))
                                                     },
                                                 )
                                                 MonthSelector(
@@ -465,13 +499,14 @@ fun WaterScreen(
                                             RoomPickerRow(
                                                 selectedRv = selectedRv,
                                                 onPickRoom = { showRoomPicker = true },
-                                                onClearRoom = { showClearRoomConfirm = true },
+                                                onClearRoom = { if (ledger == null) showClearRoomConfirm = true else notify("请选择需要删除的具体月份") },
                                             )
                                             WaterHeroCard(stats = stats, latestStats = latestStats)
                                             PersonsCard(
                                                 persons = room.persons,
                                                 onPersons = { persons ->
-                                                    persist(WaterMutator.withPersons(waterState, selectedRv, persons))
+                                                    if (ledger != null) scope.launch { ledger.edit(WaterLedgerState.PEOPLE, SharedWaterValue(persons)) }
+                                                    else persist(WaterMutator.withPersons(waterState, selectedRv, persons))
                                                 },
                                             )
                                             MonthSelector(
@@ -598,8 +633,9 @@ fun WaterScreen(
                 TextButton(onClick = {
                     if (target != null) {
                         val before = waterState
-                        persist(WaterMutator.delete(waterState, selectedRv, target))
-                        notifyUndo("已删除 ${WaterMonth.label(target)} 记录") { persist(before) }
+                        if (ledger != null) scope.launch { ledger.edit(target, null) }
+                        else persist(WaterMutator.delete(waterState, selectedRv, target))
+                        if (ledger == null) notifyUndo("已删除 ${WaterMonth.label(target)} 记录") { persist(before) }
                     }
                     deletingMonth = null
                 }) { Text("删除") }
@@ -608,6 +644,46 @@ fun WaterScreen(
                 TextButton(onClick = { deletingMonth = null }) { Text("取消") }
             },
         )
+    }
+
+    if (showHistory && ledger != null && ledgerView != null) {
+        CtLightAlertDialog(onDismissRequest = { showHistory = false }, title = { Text("旧账本与待确认") },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+                fun valueText(v: SharedWaterValue?) = v?.let { if (it.reading == null) "人数 " + it.persons else
+                    WaterMutator.formatReading(it.reading) + " 吨 · " + it.persons + " 人" } ?: "无记录"
+                if (!ledgerView.denied) for (edit in ledgerView.pending.values) {
+                    Text(edit.key + " · 草稿 " + valueText(edit.target) + " · 共享 " + valueText(ledgerView.value(edit.key)))
+                    Row {
+                        TextButton(onClick = { scope.launch { ledger.edit(edit.key, edit.target) } }) { Text("按当前共享值重试") }
+                        TextButton(onClick = { scope.launch { ledger.discard(edit.key) } }) { Text("放弃草稿") }
+                    }
+                }
+                Text("个人旧账本（只读）")
+                val old = legacy.room(selectedRv)
+                if (old == null) Text("本账号没有此房间的旧记录")
+                else {
+                    TextButton(enabled = !ledgerView.denied,
+                        onClick = { importChoice = WaterLedgerState.PEOPLE to SharedWaterValue(old.persons) }) {
+                        Text("导入人数 " + old.persons + " · 共享 " + valueText(ledgerView.people))
+                    }
+                    for (record in old.records) {
+                        TextButton(enabled = !ledgerView.denied,
+                            onClick = { importChoice = record.month to SharedWaterValue(ledgerView.room().persons, record.reading) }) {
+                            Text(record.month + " · " + WaterMutator.formatReading(record.reading) + " 吨 · 共享 " +
+                                valueText(ledgerView.value(record.month)))
+                        }
+                    }
+                }
+            } }, confirmButton = { TextButton(onClick = { showHistory = false }) { Text("关闭") } })
+    }
+    importChoice?.let { (key, value) ->
+        CtLightAlertDialog(onDismissRequest = { importChoice = null }, title = { Text("确认导入此项？") },
+            text = { Text(selectedRv + " · " + key + " · " + (value.reading?.let { WaterMutator.formatReading(it) + " 吨" } ?: (value.persons.toString() + " 人"))) },
+            confirmButton = { TextButton(onClick = {
+                importChoice = null
+                scope.launch { ledger?.edit(key, value) }
+            }) { Text("导入共享账本") } },
+            dismissButton = { TextButton(onClick = { importChoice = null }) { Text("取消") } })
     }
 
     if (showClearRoomConfirm) {

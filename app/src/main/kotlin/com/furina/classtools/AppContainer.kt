@@ -286,6 +286,19 @@ class AppContainer(context: Context) {
 
     val userDataRepository = SessionUserdataRepository()
 
+    @Synchronized
+    fun sharedWater(room: String): com.furina.classtools.data.water.SharedWaterLedger {
+        val owner = identity
+        val sid = activeSession?.sid.orEmpty()
+        val cache = appContext.getSharedPreferences("water_shared_v2", Context.MODE_PRIVATE)
+        val key = android.net.Uri.encode(sid) + "/" + android.net.Uri.encode(room)
+        return com.furina.classtools.data.water.SharedWaterLedger(room, apiClient.forIdentity(owner),
+            { identity == owner && sid.isNotEmpty() && !owner.token.isNullOrBlank() },
+            { cache.getString(key, null) }, { encoded -> synchronized(this) {
+                if (identity == owner) cache.edit().putString(key, encoded).apply()
+            } })
+    }
+
     val marksRepository: MarksRepository = DefaultMarksRepository(
         api = apiClient,
         currentSid = { activeSession?.sid },
