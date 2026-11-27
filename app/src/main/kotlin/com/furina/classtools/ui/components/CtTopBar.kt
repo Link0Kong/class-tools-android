@@ -90,7 +90,7 @@ fun CtTopBar(
     scrollPx: Float = CT_TOP_BAR_FULL_SCROLL_PX,
 ) {
     // M3 small app bar：整宽、64dp、surface 容器（不再悬浮药丸/方形渐变）。
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth().ctFeedbackTopBarAnchor()) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -161,7 +161,7 @@ fun CtLightTopBar(
     onBack: (() -> Unit)? = null,
     actions: @Composable () -> Unit = {},
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth().ctFeedbackTopBarAnchor()) {
         CtTopBar(
             title = title,
             onBack = onBack,
@@ -209,7 +209,7 @@ fun ctTopBarRaw(
     onBack: (() -> Unit)? = null,
     actions: @Composable () -> Unit = {},
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth().ctFeedbackTopBarAnchor()) {
         CtTopBar(title = title, onBack = onBack, actions = actions)
         if (!subtitle.isNullOrBlank()) {
             val c = LocalCtColors.current
