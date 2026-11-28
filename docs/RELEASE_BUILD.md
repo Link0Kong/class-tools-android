@@ -535,3 +535,48 @@ Release 包**真实账号业务全链路**（真实身份登录 → 云端数据
 - 本轮未做模拟器安装/冷启动复验（Lead 统一执行）；签名与构建产物已验证。
 - 真实 `media_files` 需转换机 v2.3 完成抽取后才会出现在 manifest；无该字段的旧 deck 不显示分组（已兼容）。
 - 下载落应用外部下载目录（不申请存储权限红线），完成后 `ACTION_VIEW`（video/*|audio/*）交给系统播放器/WPS 或分享；详见 §5 已知限制。
+
+---
+
+## 17. 1.0.1 正式版发布（2026-11-28）
+
+> 版本：**versionName `1.0.1` / versionCode `190`**；本机模拟器冷启动复验通过。
+> 这是当前 1.0.x 线的正式版发布，更新说明以 `1.0.0` 为基线（见 `docs/CHANGELOG.md`）。
+
+### 17.1 构建与签名
+
+| 项 | 结果 |
+|---|---|
+| 构建命令 | `$env:JAVA_HOME='C:\AndroidToolchain\jdk17'; $env:ANDROID_HOME='C:\AndroidToolchain\sdk'; .\gradlew.bat :app:testDebugUnitTest :app:assembleRelease --console=plain "-Pct.skipUpdateChannel=true"` |
+| 结果 | **BUILD SUCCESSFUL in 1m 20s**（R8 + 资源压缩 + lintVitalRelease；OPPOSIGN `BEDF093E86536CB7DB36CCCDBFCB0EA0`） |
+| 单测 | **2,134 tests / 0 failures / 0 errors / 2 skipped（189 suites）** |
+| 构建产物 | `app\build\outputs\apk\release\app-release.apk` = **7,402,278 B** |
+| 交付副本 | `..\releases\android\1.0.1-vc190\classtools-1.0.1-vc190-release-signed.apk`（与构建产物一致） |
+| APK SHA-256 | **`D380C1910722DC06D6478C9489830EA58B64CEAA846C2B27C7DF1ECCA143A06B`** |
+| `apksigner verify --verbose --print-certs` | **Verifies**；APK Signature Scheme v2 = true；1 signer |
+| 签名证书 | `CN=ClassTools, OU=Furina, O=Furina, L=Zhangzhou, ST=Fujian, C=CN`；证书 SHA-256 `974854df1cbed0d2f4191a3eed0cf9465c8752d9e1895d7fd6c0bc748bec4a1a`；RSA 2048（同一 keystore，可覆盖升级） |
+| 包信息 | `com.furina.classtools`，versionName **1.0.1**，versionCode **190**，minSdk 26，targetSdk 37 |
+
+### 17.2 安装与冷启动
+
+| 项 | 结果 |
+|---|---|
+| `adb install -r` | **Success**（覆盖升级到 vc190） |
+| 冷启动 | `Status: ok`，`LaunchState: COLD`，`TotalTime: 1,659 ms` |
+| 进程 | `topResumedActivity=com.furina.classtools/.MainActivity` |
+| logcat | **FATAL/ANR = 0** |
+| 证据 | `artifacts/e2e/release_launch_v101_final.png`、`release_ui_v101_final.xml`、`release_logcat_v101_final.txt` |
+
+### 17.3 更新渠道与展示页
+
+| 项 | 结果 |
+|---|---|
+| 更新渠道 | `stable`（`latest.json` 的 `channel` 字段） |
+| 渠道清单 | `https://tool.furina.fun/android/latest.json` |
+| APK 直链 | `https://tool.furina.fun/android/classtools-1.0.1-vc190.apk` |
+| 展示页 | `class-tools-showcase/dist/index.html` 已替换为 1.0.1 正式版直链并部署到 `/showcase/` |
+
+### 17.4 边界
+
+- 真实班级账号的业务全链路（登录、云端数据、提醒实际到达、厂商推送授权）仍需用测试身份或真实账号另测。
+- 展示页工作台截图仍标注 beta62 拍摄环境，卡片版本与下载链接以本次 1.0.1 为准。
