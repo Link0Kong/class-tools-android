@@ -144,7 +144,7 @@ class HomeContextInteractionTest {
 
         if (landscape) {
             show(dark = false, session = englishSession) {
-                node(By.res("home_context_english"))
+                assertTrue(node(By.res("home_context_translation")).visibleBounds.top >= node(phraseLabel).visibleBounds.bottom)
                 shot(folder, "english-landscape.png")
             }
             return
@@ -169,7 +169,7 @@ class HomeContextInteractionTest {
             }
         }
         show(dark = false, session = englishSession) {
-            node(By.res("home_context_english"))
+            assertTrue(node(By.res("home_context_translation")).visibleBounds.top >= node(phraseLabel).visibleBounds.bottom)
             if (wideText) visibleText("尚未配置课表")
             shot(folder, if (wideText) "offline-narrow-large-font.png" else "english-inline.png")
         }

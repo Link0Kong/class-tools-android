@@ -230,15 +230,15 @@ internal fun HomeContextCard(
                             modifier = Modifier.testTag("home_context_greeting"))
                     }
                     if (phrase != null) {
-                        Text(phrase.translation ?: phrase.text,
+                        Text(phrase.text,
                             modifier = Modifier.testTag("home_context_phrase").onGloballyPositioned {
                                 onScreen = it.boundsInWindow().height > 0f
                             },
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onSurface)
-                        if (phrase.translation != null) {
-                            Text(phrase.text, style = CtText.caption, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.testTag("home_context_english"))
+                        phrase.translation?.takeIf { it.isNotBlank() }?.let { translation ->
+                            Text(translation, style = CtText.caption, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.testTag("home_context_translation"))
                         }
                     }
                 }
