@@ -234,7 +234,9 @@ internal fun HomeContextCard(
                             modifier = Modifier.testTag("home_context_phrase").onGloballyPositioned {
                                 onScreen = it.boundsInWindow().height > 0f
                             },
-                            style = MaterialTheme.typography.titleLarge,
+                            style = if (phrase.translation != null && preferences.onlineContent &&
+                                validContent?.englishTypography == "extraLarge"
+                            ) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onSurface)
                         phrase.translation?.takeIf { it.isNotBlank() }?.let { translation ->
                             Text(translation, style = CtText.caption, color = MaterialTheme.colorScheme.onSurfaceVariant,

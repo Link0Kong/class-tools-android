@@ -103,6 +103,7 @@ internal data class HomePhraseBatch(
     val generatedAt: String,
     val expiresAt: String,
     val entries: List<HomePhrase>,
+    val englishTypography: String = "large",
 ) {
     fun validAt(now: Long): Boolean {
         val from = instantOrNull(generatedAt)?.toEpochMilli() ?: return false

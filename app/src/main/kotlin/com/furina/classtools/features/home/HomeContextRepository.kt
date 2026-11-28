@@ -13,7 +13,6 @@ import java.net.URI
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
-import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -83,13 +82,11 @@ internal class HomeContextRepository(
         val current = batch?.takeIf { it.validAt(now) }
         val url = base?.newBuilder()?.addPathSegments("home-context/content/v1")?.build()?.toString()
             ?: return@withLock current
-        if (current != null && publicationDay(Instant.parse(current.generatedAt).toEpochMilli()) >= publicationDay(now)) {
-            return@withLock current
-        }
         if (lastContentAttempt?.let { now - it in 0 until CONTENT_RETRY_MS } == true) return@withLock current
         val incoming = read(url)?.let(::parseBatch)?.takeIf { it.validAt(now) }
         lastContentAttempt = now
-        if (incoming != null && (current == null || Instant.parse(incoming.generatedAt) > Instant.parse(current.generatedAt))) {
+        if (incoming != null && incoming != current &&
+            (current == null || Instant.parse(incoming.generatedAt) >= Instant.parse(current.generatedAt))) {
             batch = incoming
             withContext(Dispatchers.IO) { saveBatch(incoming) }
             return@withLock incoming
@@ -127,11 +124,8 @@ internal class HomeContextRepository(
 
     companion object {
         private const val MAX_BODY = 64 * 1024
-        private const val CONTENT_RETRY_MS = 60L * 60 * 1000
-        private val shanghai = ZoneId.of("Asia/Shanghai")
+        private const val CONTENT_RETRY_MS = 15L * 60 * 1000
         private val onlineId = Regex("ai-[a-f0-9]{24}")
-
-        private fun publicationDay(now: Long) = Instant.ofEpochMilli(now).atZone(shanghai).minusHours(6).toLocalDate()
 
         private fun parseBatch(raw: String): HomePhraseBatch? {
             val pack = runCatching { NetJson.decodeFromString<HomePhraseBatch>(raw) }.getOrNull() ?: return null

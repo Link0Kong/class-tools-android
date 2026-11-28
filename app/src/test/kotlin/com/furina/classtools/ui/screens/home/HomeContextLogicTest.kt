@@ -128,6 +128,28 @@ class HomeContextLogicTest {
         assertEquals(true, nextDay.focus?.isDateOnly)
     }
 
+    @Test fun englishTypographyRefreshesDuringTheSameContentBatch() = runTest {
+        val now = at(9)
+        val raw = """{
+          "generatedAt":"${iso(at(6))}", "expiresAt":"${iso(at(22))}",
+          "entries":[{"id":"ai-0123456789abcdef01234567","text":"读一页书，记下一个问题。","topic":"STUDY",
+            "tone":"GENTLE","sourceTitle":"Cornell","sourceUrl":"https://lsc.cornell.edu/how-to-study/"}]
+        }""".trimEnd()
+        var response = ApiResponse(200, raw)
+        val cache = files.newFolder().resolve("phrases.json")
+        val transport = HttpTransport { response }
+        val repository = HomeContextRepository("https://fixture.invalid", cache, transport)
+        assertEquals("large", repository.content(now)?.englishTypography)
+        response = ApiResponse(200, raw.dropLast(1) + ""","englishTypography":"extraLarge"}""")
+        assertEquals("large", repository.content(now + 60_000)?.englishTypography)
+        assertEquals("extraLarge", repository.content(now + 15 * 60_000)?.englishTypography)
+        response = ApiResponse(503)
+        val restarted = HomeContextRepository("https://fixture.invalid", cache, transport)
+        assertEquals("extraLarge", restarted.content(now + 16 * 60_000)?.englishTypography)
+        response = ApiResponse(200, raw)
+        assertEquals("large", repository.content(now + 30 * 60_000)?.englishTypography)
+    }
+
     @Test fun transportIsThrottledAndRejectsPreviousRegionOrMalformedSources() = runTest {
         val now = at(9)
         val requests = mutableListOf<String>()
