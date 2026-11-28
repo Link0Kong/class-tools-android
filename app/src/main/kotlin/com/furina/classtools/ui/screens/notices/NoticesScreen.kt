@@ -18,6 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,9 +38,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -76,23 +75,26 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -102,6 +104,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.furina.classtools.data.marks.MarkKind
@@ -134,6 +137,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -280,14 +284,6 @@ internal fun statusTone(status: NoticeStatus): NoticeTone = when (status.cls) {
     else -> NoticeTone.TEAL
 }
 
-/** `MM-dd HH:mm`（详情里的绝对时间）。 */
-internal fun formatTs(ts: Long): String {
-    if (ts <= 0) return ""
-    return DateTimeFormatter
-        .ofPattern("MM-dd HH:mm", Locale.CHINA)
-        .format(Instant.ofEpochMilli(ts).atZone(ZoneId.systemDefault()))
-}
-
 /** 列表卡片上的「什么时候发的」：今天 → HH:mm；昨天 → 昨天 HH:mm；更早 → `M月D日（相对周）`（§3）。 */
 internal fun formatPosted(
     ts: Long,
@@ -386,8 +382,6 @@ fun NoticesScreen(
     previewExpandedKey: String? = null,
     /** 预览：强制指定筛选 chip 处于弹性放大帧（NoticeFilter.name）。 */
     previewChipBounceKey: String? = null,
-    /** 预览：左右滑动中间帧（0.5 = 停在两页之间；null = 正常渲染）。 */
-    previewPagerOffset: Float? = null,
     forcedErrorMessage: String? = null,
     skipLoad: Boolean = false,
 ) {
@@ -444,48 +438,50 @@ fun NoticesScreen(
     var cardFilterKey by rememberSaveable { mutableStateOf<String?>(null) }
     val isAdmin = session?.isAdmin == true
     val noticeFilterOptions = NoticeFilter.entries.filter { it != NoticeFilter.HIDDEN || isAdmin }
-    // 左右滑动切筛选（跟手 + spring 吸附；reduceMotion 时禁用拖拽并直接用总开关的瞬时切换）
-    val noticePagerState = rememberPagerState(
-        initialPage = noticeFilterOptions.indexOfFirst { it.name == filterKey }.coerceAtLeast(0),
-        initialPageOffsetFraction = (previewPagerOffset ?: 0f).coerceIn(-0.5f, 0.5f),
-    ) { noticeFilterOptions.size }
-    LaunchedEffect(noticePagerState) {
-        snapshotFlow { noticePagerState.currentPage to noticePagerState.isScrollInProgress }
-            .collect { (page, scrolling) ->
-                noticeFilterOptions.getOrNull(page)?.let { filterKey = it.name; if (!scrolling) tabs?.edit()?.putString("notice", it.name)?.apply() }
-                // 滑动/程序化滚动停稳到非「全部」chips 页 → 顶部卡筛选取消（chips 与顶部卡互斥）
-                if (!scrolling && page != noticeFilterOptions.indexOf(NoticeFilter.ALL)) {
-                    cardFilterKey = null
-                }
-            }
+    val filter = noticeFilterOptions.firstOrNull { it.name == filterKey } ?: NoticeFilter.ALL
+    LaunchedEffect(tabs, filter) {
+        tabs?.edit()?.putString("notice", filter.name)?.apply()
     }
-    val filter = remember(filterKey) {
-        noticeFilterOptions.firstOrNull { it.name == filterKey } ?: NoticeFilter.ALL
-    }
-    val cardFilter = remember(cardFilterKey) {
-        cardFilterKey?.let { key -> NoticeCardFilter.entries.firstOrNull { it.name == key } }
+    val cardFilter = if (filter == NoticeFilter.ALL) {
+        NoticeCardFilter.entries.firstOrNull { it.name == cardFilterKey }
+    } else {
+        null
     }
     fun selectFilter(target: NoticeFilter) {
         cardFilterKey = null
         filterKey = target.name
-        val index = noticeFilterOptions.indexOf(target).coerceAtLeast(0)
-        scope.launch {
-            // reduceMotion：直接切；正常：250–300ms spring 吸附
-            if (reduceMotion) noticePagerState.scrollToPage(index) else noticePagerState.animateScrollToPage(index)
-        }
     }
 
     /** 点顶部数据卡：激活该口径；再点同一张 → 取消恢复「全部」。 */
     fun selectCardFilter(target: NoticeCardFilter) {
         cardFilterKey = if (cardFilter == target) null else target.name
         filterKey = NoticeFilter.ALL.name
-        scope.launch {
-            if (reduceMotion) noticePagerState.scrollToPage(0) else noticePagerState.animateScrollToPage(0)
-        }
+    }
+    // 每个筛选记住自己的纵向位置，横滑松手时只切换结果。
+    val listStates = noticeFilterOptions.associateWith { option ->
+        key(option) { rememberLazyGridState() }
+    }
+    val onSwipeFilter by rememberUpdatedState<(Int) -> Unit> { step ->
+        val index = noticeFilterOptions.indexOf(filter)
+        noticeFilterOptions.getOrNull(index + step)?.let { selectFilter(it) }
+    }
+    val layoutDirection = LocalLayoutDirection.current
+    val filterSwipe = if (reduceMotion) Modifier else Modifier.pointerInput(layoutDirection) {
+        val threshold = 48.dp.toPx()
+        var distance = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { distance = 0f },
+            onHorizontalDrag = { _, amount -> distance += amount },
+            onDragEnd = {
+                if (abs(distance) >= threshold) {
+                    val towardNext = (distance < 0f) == (layoutDirection == LayoutDirection.Ltr)
+                    onSwipeFilter(if (towardNext) 1 else -1)
+                }
+            },
+        )
     }
     var query by rememberSaveable { mutableStateOf(initialQuery) }
     var searchVisible by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
-    // 极简固定头方案：统计卡 / 分类筛选收进「筛选」底部弹层，单行筛选 chips 作为滚动内容第一项。
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     // 分类 chip 筛选（null = 全部；契约 §2.2：对所有视图生效）
     var categoryKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -754,154 +750,125 @@ fun NoticesScreen(
                         .fillMaxWidth(),
                     contentAlignment = Alignment.TopCenter,
                 ) {
-                    // TTL 内的正常缓存不是「离线」：只有真的刷新失败且还有旧数据时才提示本机缓存。
-                    val offline = errorMessage != null && data != null
-                    val offlineMessage = errorMessage?.let { "刷新失败，显示本机缓存" }
-                        ?: ("本机缓存 · 更新于 ${formatTs(data?.fetchedAt ?: 0L)}")
                     Column(
                         modifier = Modifier
                             .widthIn(max = spec.contentMaxWidth)
                             .fillMaxSize()
                             .padding(horizontal = spec.horizontalPadding),
                     ) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            when {
-                                phase == Phase.LOADING -> NoticeSkeletonList(
-                                    modifier = Modifier.fillMaxSize(),
-                                )
+                        when (phase) {
+                            Phase.LOADING -> NoticeSkeletonList(modifier = Modifier.fillMaxSize())
 
-                                phase == Phase.FAILED -> NoticeErrorState(
-                                    message = errorMessage ?: "加载失败",
-                                    onRetry = { reloadToken += 1 },
-                                    modifier = Modifier.fillMaxSize(),
-                                )
+                            Phase.FAILED -> NoticeErrorState(
+                                message = errorMessage ?: "加载失败",
+                                onRetry = { reloadToken += 1 },
+                                modifier = Modifier.fillMaxSize(),
+                            )
 
-                                else -> HorizontalPager(
-                                    state = noticePagerState,
+                            Phase.READY -> {
+                                val content = remember(allItems, filter, cardFilter, query, nowMillis, categoryKey) {
+                                    viewContentOf(
+                                        items = allItems,
+                                        chipFilter = filter,
+                                        cardFilter = cardFilter,
+                                        query = query,
+                                        nowMillis = nowMillis,
+                                        category = categoryKey,
+                                    )
+                                }
+                                val chips = buildList {
+                                    add(NoticeChip(NoticeFilter.ALL.name, "全部 ${allItems.count { !it.hidden }}"))
+                                    add(NoticeChip(NoticeFilter.PENDING.name, "未处理 $pendingCount"))
+                                    add(NoticeChip(NoticeFilter.EXPIRED.name, "已截止 ${overview.expired}"))
+                                    if (isAdmin) add(NoticeChip(NoticeFilter.HIDDEN.name, "已隐藏 ${data?.hiddenCount ?: 0}"))
+                                    add(NoticeChip(NoticeFilter.PINNED.name, "置顶 $pinnedCount"))
+                                    cardFilter?.let { add(NoticeChip(OUTSIDE_CARD_CHIP, "${it.label} ×")) }
+                                    categoryKey?.let { add(NoticeChip(OUTSIDE_CATEGORY_CHIP, "$it ×")) }
+                                }
+                                PullToRefreshBox(
+                                    isRefreshing = isRefreshing,
+                                    onRefresh = { refresh() },
                                     modifier = Modifier.fillMaxSize(),
-                                    userScrollEnabled = !reduceMotion,
-                                    key = { page -> noticeFilterOptions[page].name },
-                                ) { pageIndex ->
-                                    val pageFilter = noticeFilterOptions[pageIndex]
-                                    // 顶部卡只作用于「全部」chips 页（chips 与顶部卡互斥，§2.1）
-                                    val pageCardFilter = if (pageFilter == NoticeFilter.ALL) cardFilter else null
-                                    val content = remember(allItems, pageFilter, pageCardFilter, query, nowMillis, categoryKey) {
-                                        viewContentOf(
-                                            items = allItems,
-                                            chipFilter = pageFilter,
-                                            cardFilter = pageCardFilter,
-                                            query = query,
-                                            nowMillis = nowMillis,
-                                            category = categoryKey,
-                                        )
-                                    }
-                                    val hasMore = data?.hasMore == true
-                                    val remaining = data?.remainingCount ?: 0
-                                    val cardChipKey = OUTSIDE_CARD_CHIP
-                                    val categoryChipKey = OUTSIDE_CATEGORY_CHIP
-                                    val pageChips = buildList {
-                                        add(NoticeChip(NoticeFilter.ALL.name, "全部 ${allItems.count { !it.hidden }}"))
-                                        add(NoticeChip(NoticeFilter.PENDING.name, "未处理 $pendingCount"))
-                                        add(NoticeChip(NoticeFilter.EXPIRED.name, "已截止 ${overview.expired}"))
-                                        if (isAdmin) add(NoticeChip(NoticeFilter.HIDDEN.name, "已隐藏 ${data?.hiddenCount ?: 0}"))
-                                        add(NoticeChip(NoticeFilter.PINNED.name, "置顶 $pinnedCount"))
-                                        pageCardFilter?.let { add(NoticeChip(cardChipKey, "${it.label} ×")) }
-                                        categoryKey?.let { add(NoticeChip(categoryChipKey, "$it ×")) }
-                                    }
-                                    val selectedChipKey = if (pageCardFilter != null) cardChipKey else pageFilter.name
-                                    val onPageChipSelect: (String) -> Unit = { key ->
-                                        when (key) {
-                                            cardChipKey -> {
-                                                cardFilterKey = null
-                                                selectFilter(NoticeFilter.ALL)
-                                            }
-
-                                            categoryChipKey -> categoryKey = null
-                                            else -> NoticeFilter.entries
-                                                .firstOrNull { it.name == key }
-                                                ?.let { selectFilter(it) }
-                                        }
-                                    }
-                                    val pageContentHeader: @Composable () -> Unit = {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = 8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                                        ) {
-                                            // 数据卡与筛选按钮分块排列，中间固定 10dp 间距，避免叠在一起。
-                                            NoticeOverviewCards(
-                                                stats = overview,
-                                                active = cardFilter,
-                                                onPick = { selectCardFilter(it) },
-                                            )
-                                            NoticeFilterChips(
-                                                chips = pageChips,
-                                                singleRow = true,
-                                                selectedKey = selectedChipKey,
-                                                onSelect = onPageChipSelect,
-                                                reduceMotion = reduceMotion,
-                                                previewBounceKey = previewChipBounceKey,
-                                            )
-                                        }
-                                    }
-                                    val pageBanner: (@Composable () -> Unit)? = if (offline) {
-                                        {
-                                            NoticeOfflineBanner(
-                                                message = "刷新失败，正在显示上次获取的通知",
-                                                onRetry = { refresh() },
-                                                modifier = Modifier.padding(bottom = 8.dp),
-                                            )
-                                        }
-                                    } else {
-                                        null
-                                    }
-                                    PullToRefreshBox(
-                                        isRefreshing = isRefreshing,
-                                        onRefresh = { refresh() },
-                                        modifier = Modifier.fillMaxSize(),
-                                    ) {
-                                        NoticeList(
-                                            content = content,
-                                            columns = if (twoColumn) 2 else 1,
-                                            materialExpanded = materialExpanded,
-                                            onToggleMaterial = { materialExpanded = !materialExpanded },
-                                            expiredExpanded = expiredExpanded,
-                                            onToggleExpired = { expiredExpanded = !expiredExpanded },
-                                            onOpen = { selectedKey = it.key },
-                                            onToggleDone = { toggleDone(it) },
-                                            onTogglePin = { togglePin(it) },
-                                            onAddTask = addTaskFromNotice,
-                                            reduceMotion = reduceMotion,
-                                            appearedKeys = appearedKeys,
-                                            selectedKey = selectedKey,
-                                            previewEntranceProgress = previewEntranceProgress,
-                                            previewPressedKey = previewPressedKey,
-                                            previewExpandedKey = previewExpandedKey,
-                                            hasMore = hasMore,
-                                            remainingCount = remaining,
-                                            loadingMore = isLoadingMore,
-                                            loadMoreError = loadMoreError,
-                                            onLoadMore = { loadMoreOnce() },
-                                            header = pageContentHeader,
-                                            banner = pageBanner,
-                                            empty = {
-                                                NoticeEmptyState(
-                                                    filter = pageFilter,
-                                                    cardFilter = pageCardFilter,
-                                                    query = query,
-                                                    category = categoryKey,
-                                                    hasAny = allItems.isNotEmpty(),
-                                                    onClear = {
-                                                        query = ""
-                                                        categoryKey = null
-                                                        selectFilter(NoticeFilter.ALL)
-                                                    },
+                                ) {
+                                    NoticeList(
+                                        content = content,
+                                        columns = if (twoColumn) 2 else 1,
+                                        state = listStates.getValue(filter),
+                                        materialExpanded = materialExpanded,
+                                        onToggleMaterial = { materialExpanded = !materialExpanded },
+                                        expiredExpanded = expiredExpanded,
+                                        onToggleExpired = { expiredExpanded = !expiredExpanded },
+                                        onOpen = { selectedKey = it.key },
+                                        onToggleDone = { toggleDone(it) },
+                                        onTogglePin = { togglePin(it) },
+                                        onAddTask = addTaskFromNotice,
+                                        reduceMotion = reduceMotion,
+                                        appearedKeys = appearedKeys,
+                                        selectedKey = selectedKey,
+                                        previewEntranceProgress = previewEntranceProgress,
+                                        previewPressedKey = previewPressedKey,
+                                        previewExpandedKey = previewExpandedKey,
+                                        hasMore = data?.hasMore == true,
+                                        remainingCount = data?.remainingCount ?: 0,
+                                        loadingMore = isLoadingMore,
+                                        loadMoreError = loadMoreError,
+                                        onLoadMore = { loadMoreOnce() },
+                                        header = {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(bottom = 8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                            ) {
+                                                NoticeOverviewCards(
+                                                    stats = overview,
+                                                    active = cardFilter,
+                                                    onPick = { selectCardFilter(it) },
                                                 )
-                                            },
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
-                                    }
+                                                NoticeFilterChips(
+                                                    chips = chips,
+                                                    singleRow = true,
+                                                    selectedKey = if (cardFilter != null) OUTSIDE_CARD_CHIP else filter.name,
+                                                    onSelect = { chipKey ->
+                                                        when (chipKey) {
+                                                            OUTSIDE_CARD_CHIP -> selectFilter(NoticeFilter.ALL)
+                                                            OUTSIDE_CATEGORY_CHIP -> categoryKey = null
+                                                            else -> noticeFilterOptions.firstOrNull { it.name == chipKey }
+                                                                ?.let { selectFilter(it) }
+                                                        }
+                                                    },
+                                                    reduceMotion = reduceMotion,
+                                                    previewBounceKey = previewChipBounceKey,
+                                                )
+                                            }
+                                        },
+                                        banner = if (errorMessage != null && data != null) {
+                                            {
+                                                NoticeOfflineBanner(
+                                                    message = "刷新失败，正在显示上次获取的通知",
+                                                    onRetry = { refresh() },
+                                                    modifier = Modifier.padding(bottom = 8.dp),
+                                                )
+                                            }
+                                        } else {
+                                            null
+                                        },
+                                        empty = {
+                                            NoticeEmptyState(
+                                                filter = filter,
+                                                cardFilter = cardFilter,
+                                                query = query,
+                                                category = categoryKey,
+                                                hasAny = allItems.isNotEmpty(),
+                                                onClear = {
+                                                    query = ""
+                                                    categoryKey = null
+                                                    selectFilter(NoticeFilter.ALL)
+                                                },
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxSize().then(filterSwipe),
+                                    )
                                 }
                             }
                         }

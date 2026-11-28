@@ -422,9 +422,9 @@ private fun ToolV6NoticesListLightPreview() {
     }
 }
 
-@Preview(name = "211 通知 v6 · 左右滑动中间态", showBackground = true, widthDp = 412, heightDp = 915)
+@Preview(name = "211 通知 v6 · 未处理筛选", showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
-private fun ToolV6NoticesSwipeMidPreview() {
+private fun ToolV6NoticesPendingPreview() {
     ClassToolsTheme(darkTheme = false) {
         NoticesScreen(
             onBack = {},
@@ -433,8 +433,7 @@ private fun ToolV6NoticesSwipeMidPreview() {
             noticesRepository = null,
             initialData = v6NoticesData().copy(hasMore = true, remainingCount = 18, loadedRawCount = 20),
             initialMarks = v6NoticeMarks(),
-            initialFilter = NoticeFilter.ALL,
-            previewPagerOffset = 0.42f,
+            initialFilter = NoticeFilter.PENDING,
             skipLoad = true,
         )
     }

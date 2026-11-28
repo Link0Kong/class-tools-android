@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -116,6 +117,7 @@ private fun NoticeCardEntry(
 internal fun NoticeList(
     content: NoticesViewContent,
     columns: Int,
+    state: LazyGridState,
     materialExpanded: Boolean,
     onToggleMaterial: () -> Unit,
     expiredExpanded: Boolean,
@@ -173,6 +175,7 @@ internal fun NoticeList(
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
+        state = state,
         modifier = modifier,
         contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
